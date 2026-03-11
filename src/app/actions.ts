@@ -6,25 +6,26 @@ import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { revalidatePath } from "next/cache";
 import { hash } from "bcryptjs"; 
 import nodemailer from "nodemailer"; 
-import path from "path";
 
-// 1. Create an absolute path to the database file
-const dbPath = `file:${path.join(process.cwd(), "prisma", "dev.db")}`;
-
-const libsql = createClient({
-  url: dbPath,
+// 1. Create the LibSQL client pointing to your local file [cite: 11]
+const client = createClient({
+  url: "file:./prisma/dev.db",
 });
 
-const adapter = new PrismaLibSql(libsql);
+// 2. Pass it as an object property 'client' (Required for the Prisma 7 Config type) [cite: 11]
+const adapter = new PrismaLibSql({ client }); 
 
-// 2. Pass only the adapter
+// 3. Initialize Prisma with the adapter
 const prisma = new PrismaClient({ adapter });
 
-// --- HELPER: Clean URL ---
+// --- HELPER: Clean URL (Removes trailing slashes) ---
+// ... (Your functions like getMediaApps stay exactly the same)
+// ... (rest of your file remains the same)
 function cleanUrl(url: string): string {
     if (!url) return "";
     return url.replace(/\/$/, ""); 
 }
+// ... (Your functions like getMediaApps stay the same below)
 // --- SETTINGS ACTIONS ---
 export async function saveSettings(formData: FormData) {
   const smtpHost = formData.get("smtpHost") as string;
