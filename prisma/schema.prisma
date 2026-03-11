@@ -7,7 +7,6 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Settings {
@@ -22,8 +21,6 @@ model Settings {
   theme            String    @default("dark")
   autoSyncInterval Int       @default(6)
   lastAutoSync     DateTime?
-  monthlyFee       Float     @default(18.00)
-  yearlyFee        Float     @default(180.00)
 }
 
 model TautulliInstance {
