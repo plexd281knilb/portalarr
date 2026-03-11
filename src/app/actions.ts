@@ -1,11 +1,31 @@
 "use server";
 
 import { PrismaClient } from "@prisma/client";
+import { createClient } from "@libsql/client";
+import { PrismaLibSql } from "@prisma/adapter-libsql"; 
 import { revalidatePath } from "next/cache";
 import { hash } from "bcryptjs"; 
 import nodemailer from "nodemailer"; 
 
-const prisma = new PrismaClient();
+// 1. Point exactly to the 'prisma' folder where your database lives
+const libsql = createClient({
+  url: "file:./prisma/dev.db",
+});
+
+const adapter = new PrismaLibSql(libsql);
+
+// 2. Pass the adapter AND hardcode the URL so Next.js never loses it
+const prisma = new PrismaClient({ 
+    adapter,
+    datasources: {
+        db: {
+            url: "file:./prisma/dev.db"
+        }
+    }
+});
+
+// --- HELPER: Clean URL (Removes trailing slashes) ---
+// ... (keep the rest of your file exactly the same below this!)
 
 // --- HELPER: Clean URL (Removes trailing slashes) ---
 function cleanUrl(url: string): string {
