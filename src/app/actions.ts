@@ -1,25 +1,30 @@
 "use server";
 
 import { PrismaClient } from "@prisma/client";
+import { createClient } from "@libsql/client";
+import { PrismaLibSql } from "@prisma/adapter-libsql"; 
 import { revalidatePath } from "next/cache";
 import { hash } from "bcryptjs"; 
 import nodemailer from "nodemailer"; 
+import path from "path";
 
-// A perfectly clean initialization. The config file handles the rest!
-const prisma = new PrismaClient();
+// 1. Create an absolute path to the database file
+const dbPath = `file:${path.join(process.cwd(), "prisma", "dev.db")}`;
 
-// --- HELPER: Clean URL (Removes trailing slashes) ---
+const libsql = createClient({
+  url: dbPath,
+});
+
+const adapter = new PrismaLibSql(libsql);
+
+// 2. Pass only the adapter
+const prisma = new PrismaClient({ adapter });
+
+// --- HELPER: Clean URL ---
 function cleanUrl(url: string): string {
     if (!url) return "";
     return url.replace(/\/$/, ""); 
 }
-
-// ... (keep the rest of your file exactly the same below this!)
-// --- DATA FETCHERS ---
-export async function getSettings() {
-    return await prisma.settings.findFirst() || {};
-}
-
 // --- SETTINGS ACTIONS ---
 export async function saveSettings(formData: FormData) {
   const smtpHost = formData.get("smtpHost") as string;
@@ -149,10 +154,10 @@ export async function removeMediaApp(id: string) {
   revalidatePath("/settings");
 }
 
+
 export async function getMediaApps() {
     return await prisma.mediaApp.findMany();
 }
-
 
 // --- USER AUTHENTICATION ACTIONS ---
 export async function getAppUsers() {
