@@ -12,7 +12,7 @@ import {
     getTautulliInstances, addTautulliInstance, removeTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance,
     getMediaApps, addMediaApp, updateMediaApp, removeMediaApp 
-} from "@/app/actions";
+} from "../actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
