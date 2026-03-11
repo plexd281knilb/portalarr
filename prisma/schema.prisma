@@ -1,0 +1,132 @@
+generator client {
+  provider      = "prisma-client-js"
+  // "native" allows it to run on your Windows PC
+  // "linux-musl-openssl-3.0.x" allows it to run in the Docker container
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Settings {
+  id               String    @id @default("global")
+  mainPlexUrl      String?
+  mainPlexToken    String?
+  smtpHost         String?
+  smtpPort         Int?
+  smtpUser         String?
+  smtpPass         String?
+  refreshInterval  Int       @default(10)
+  theme            String    @default("dark")
+  autoSyncInterval Int       @default(6)
+  lastAutoSync     DateTime?
+  monthlyFee       Float     @default(18.00)
+  yearlyFee        Float     @default(180.00)
+}
+
+model TautulliInstance {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  apiKey    String
+  createdAt DateTime @default(now())
+}
+
+model GlancesInstance {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+}
+
+model Subscriber {
+  id                String    @id @default(cuid())
+  email             String?
+  name              String?
+  fullName          String?
+  plexId            String?   @unique
+  avatarUrl         String?
+  billingCycle      String    @default("Yearly")
+  status            String    @default("Active")
+  lastWatched       DateTime?
+  lastWatchedTitle  String?
+  lastPaymentDate   DateTime?
+  lastPaymentAmount Float     @default(0)
+  nextPaymentDate   DateTime?
+  isManual          Boolean   @default(false)
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  payments          Payment[]
+}
+
+model Service {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+}
+
+model MediaApp {
+  id          String   @id @default(cuid())
+  type        String
+  name        String
+  url         String   // Internal IP (e.g. http://192.168.1.50:7878)
+  externalUrl String?  // External/Public Link (e.g. https://requests.mydomain.com) <--- ADD THIS
+  apiKey      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+model IgnoredUser {
+  id        String   @id @default(cuid())
+  plexId    String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+}
+
+model Payment {
+  id           String      @id @default(cuid())
+  externalId   String?     @unique
+  provider     String
+  payerName    String
+  payerEmail   String?
+  amount       Float
+  date         DateTime
+  status       String      @default("Unlinked")
+  subscriberId String?
+  createdAt    DateTime    @default(now())
+  subscriber   Subscriber? @relation(fields: [subscriberId], references: [id])
+}
+
+model EmailAccount {
+  id        String    @id @default(cuid())
+  name      String
+  host      String
+  port      Int       @default(993)
+  user      String
+  pass      String
+  lastSync  DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String   @unique // <--- ADD THIS
+  password  String   // Hashed
+  role      String   @default("USER") // "ADMIN" or "USER"
+  createdAt DateTime @default(now())
+}
+
+model SupportTicket {
+  id        String   @id @default(cuid())
+  name      String   // User's name
+  email     String   // User's email (required for replies)
+  issue     String   // Description
+  status    String   @default("Pending") // Pending, Acknowledged, Completed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
