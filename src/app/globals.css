@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #06080D;
+  --color-sidebar: #0B0F19;
+}
+
+:root {
+  --background: #06080D;
+  --foreground: #ffffff;
+}
+
+body {
+  background-color: var(--color-background);
+  color: white;
+}
