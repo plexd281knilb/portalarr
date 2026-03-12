@@ -1,10 +1,10 @@
 services:
-  Portalarr
+  portalarr:
     container_name: Portalarr
     build: .
-    image: ghcr.io/plexd281knilb/Portalarr:latest
+    image: ghcr.io/plexd281knilb/portalarr:latest
     restart: unless-stopped
-    user: root  # <--- THIS IS REQUIRED TO FIX THE DB LOCK
+    user: root  # <--- Required to fix Unraid DB lock issues
     ports:
       - "3001:3000"
     dns:
@@ -14,6 +14,9 @@ services:
       - DATABASE_URL=file:/app/data/dev.db
       - NODE_ENV=production
     volumes:
-      - ./data:/app/data
-      - /mnt/user:/mnt/user
-      - /mnt/remotes:/mnt/remotes
+      # Unraid Appdata Mapping
+      - /mnt/user/appdata/portalarr/data:/app/data
+      
+      # Read-only access to unraid shares for your glances/stats
+      - /mnt/user:/mnt/user:ro
+      - /mnt/remotes:/mnt/remotes:ro

@@ -1,6 +1,7 @@
 # 1. Install dependencies
 FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat openssl
+# ADDED: python3, make, and g++ are required to compile better-sqlite3 on Alpine
+RUN apk add --no-cache libc6-compat openssl python3 make g++
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
@@ -13,8 +14,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# FIX: Install Prisma globally to guarantee the binary exists and is the right version
-RUN npm install -g prisma@5.22.0
+# UPDATED: Install Prisma 6 globally to match our package.json update
+RUN npm install -g prisma@6
 RUN prisma generate
 
 # Build Next.js
@@ -30,8 +31,8 @@ RUN apk add --no-cache openssl
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# FIX: Install Prisma globally in the runner too, so we can run migrations
-RUN npm install -g prisma@5.22.0
+# UPDATED: Install Prisma 6 globally in the runner too
+RUN npm install -g prisma@6
 
 # Copy the standalone build artifacts
 COPY --from=builder /app/public ./public
@@ -39,12 +40,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
-USER nextjs
+USER root
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# FIX: Run prisma directly (since it is global now)
+# Run prisma migrations on startup, then boot the server
 CMD ["sh", "-c", "prisma migrate deploy && node server.js"]
