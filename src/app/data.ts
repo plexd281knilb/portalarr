@@ -23,10 +23,6 @@ export async function getGlancesInstances() {
   return await prisma.glancesInstance.findMany({ orderBy: { createdAt: "asc" } });
 }
 
-export async function getSubscribers() {
-  return await prisma.subscriber.findMany({ orderBy: { name: "asc" } });
-}
-
 export async function getServices() {
   return await prisma.service.findMany({ orderBy: { name: "asc" } });
 }
@@ -226,13 +222,10 @@ export async function fetchMediaAppsActivity() {
                  cache: "no-store" 
              });
              const json = await res.json();
-
-             // Removed old pendingCount fetch to calculate it manually below
              
              if (json.results) {
                  data.online = true;
 
-                 // Filter: Exclude Available (4) and Declined (3)
                  const activeRequests = json.results.filter((r: any) => r.status !== 4 && r.status !== 3);
 
                  data.requests = await Promise.all(activeRequests.map(async (r: any) => {
@@ -268,10 +261,7 @@ export async function fetchMediaAppsActivity() {
                      };
                  }));
                  
-                 // FIX: Manually calculate Pending (Status 1 only)
-                 // Processing (Status 5) is now considered Approved/Working
                  const actualPending = activeRequests.filter((r: any) => r.status === 1).length;
-                 
                  data.stats = { total: json.pageInfo?.results || 0, pending: actualPending };
              }
         }
@@ -315,7 +305,6 @@ export async function fetchMediaAppsActivity() {
 
              const allRequests = [...movies, ...tv];
              
-             // Base Filter for List
              const activeRequests = allRequests.filter((r: any) => {
                  if (r.denied) return false;
                  if (r.available) return false;
@@ -371,19 +360,12 @@ export async function fetchMediaAppsActivity() {
                 };
              });
              
-             // FIX: Count Pending correctly for Ombi Stats
-             // Exclude items that are "Processing" from the Pending count
              const actualPending = activeRequests.filter((r: any) => {
-                 if (r.approved) return false; // Already Approved
-                 
-                 // Check Children for Approval
+                 if (r.approved) return false;
                  if (r.childRequests && r.childRequests.some((c: any) => c.approved)) return false; 
-
-                 // Check Text Status for "Processing" or "Available"
                  const statusStr = r.requestStatus || r.status || "";
                  if (statusStr.includes("Processing") || statusStr.includes("Available")) return false;
-
-                 return true; // Actually Pending
+                 return true;
              }).length;
 
              data.stats = { 
@@ -403,231 +385,6 @@ export async function fetchMediaAppsActivity() {
 
   return results;
 }
-
-// --- DETAILED NODE STATS (FIXED FOR CONTAINERS) ---
-
-export async function fetchGlancesNodeDetails(id: string) {
-  const instance = await prisma.glancesInstance.findUnique({ where: { id } });
-  if (!instance) return null;
-
-  const baseUrl = instance.url.replace(/\/$/, "");
-  
-  const safeFetch = async (version: number, endpoint: string, signal: AbortSignal) => {
-      try {
-          const res = await fetch(`${baseUrl}/api/${version}/${endpoint}`, { cache: "no-store", signal });
-          if (!res.ok) return null;
-          return await res.json();
-      } catch (e) { return null; }
-  };
-
-  const toArray = (data: any) => Array.isArray(data) ? data : [];
-
-  const tryFetchAll = async (version: number) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      
-      try {
-          const quick = await safeFetch(version, "quicklook", controller.signal);
-          if (!quick) throw new Error("Offline");
-
-          const [cpu, mem, load, fs, sensors, smart, network, uptime, processList, containers, docker] = await Promise.all([
-              safeFetch(version, "cpu", controller.signal),
-              safeFetch(version, "mem", controller.signal),
-              safeFetch(version, "load", controller.signal),
-              safeFetch(version, "fs", controller.signal),
-              safeFetch(version, "sensors", controller.signal),
-              safeFetch(version, "smart", controller.signal),
-              safeFetch(version, "network", controller.signal),
-              safeFetch(version, "uptime", controller.signal),
-              safeFetch(version, "processlist", controller.signal),
-              safeFetch(version, "containers", controller.signal), 
-              safeFetch(version, "docker", controller.signal)      
-          ]);
-          
-          clearTimeout(timeoutId);
-
-          let dockerData = containers || docker || [];
-          if (!Array.isArray(dockerData) && typeof dockerData === 'object') {
-              dockerData = Object.values(dockerData); 
-          }
-
-          const processes = toArray(processList)
-            .sort((a: any, b: any) => (b.cpu_percent || 0) - (a.cpu_percent || 0))
-            .slice(0, 15);
-
-          return {
-              id: instance.id,
-              name: instance.name,
-              url: instance.url,
-              online: true,
-              version: version,
-              uptime: uptime || "Online",
-              cpu: cpu || quick.cpu,
-              mem: mem || quick.mem,
-              load: load,
-              fs: toArray(fs),
-              sensors: toArray(sensors),
-              smart: toArray(smart),
-              quick: quick,
-              network: toArray(network),
-              processes: processes,
-              docker: dockerData 
-          };
-      } catch (e) {
-          clearTimeout(timeoutId);
-          return null;
-      }
-  };
-
-  let data = await tryFetchAll(4);
-  if (!data) data = await tryFetchAll(3);
-  if (!data) data = await tryFetchAll(2);
-
-  if (!data) {
-      return { id: instance.id, name: instance.name, url: instance.url, online: false };
-  }
-
-  return data;
-}
-
-// --- SYNC LOGIC (VERBOSE DEBUGGING) ---
-
-export async function performSync() {
-  const logs: string[] = [];
-  console.log("[Sync] Starting Tautulli Sync Process...");
-  logs.push("Starting Sync Process...");
-
-  const instances = await prisma.tautulliInstance.findMany();
-  if (instances.length === 0) {
-      console.log("[Sync] Error: No Tautulli instances found.");
-      logs.push("Error: No Tautulli instances configured in Settings.");
-      return { success: false, logs };
-  }
-
-  const mergedUsers = new Map();
-  const ignoredUsers = await prisma.ignoredUser.findMany();
-  const ignoredIds = new Set(ignoredUsers.map(u => u.plexId));
-  console.log(`[Sync] Found ${ignoredIds.size} ignored users.`);
-  logs.push(`Found ${ignoredIds.size} ignored users.`);
-
-  let successfulFetches = 0;
-
-  const fetchInstanceData = async (instance: any) => {
-    try {
-        const baseUrl = instance.url.replace(/\/$/, "");
-        console.log(`[Sync] Connecting to ${instance.name} at ${baseUrl}...`);
-        logs.push(`Connecting to Tautulli: ${instance.name} (${baseUrl})...`);
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); 
-
-        const url = `${baseUrl}/api/v2?apikey=${instance.apiKey}&cmd=get_users_table&order_column=last_seen&order_dir=desc&length=1000`;
-        
-        const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-        clearTimeout(timeoutId); 
-        
-        if (res.status === 401) throw new Error("401 Unauthorized - Check API Key");
-        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-        
-        const data = await res.json();
-        const users = data?.response?.data?.data || [];
-        
-        console.log(`[Sync] Success: ${instance.name} returned ${users.length} users.`);
-        logs.push(`Success: Fetched ${users.length} users from ${instance.name}.`);
-        successfulFetches++;
-        return users;
-    } catch (err: any) { 
-        const msg = err.name === 'AbortError' ? 'Connection Timed Out' : err.message;
-        console.error(`[Sync] FAILED ${instance.name}: ${msg}`); // <--- PRINTS TO DOCKER LOGS
-        logs.push(`Failed to sync ${instance.name}: ${msg}`);
-        return []; 
-    }
-  };
-
-  const results = await Promise.all(instances.map(fetchInstanceData));
-
-  if (successfulFetches === 0) {
-      console.error("[Sync] CRITICAL: All Tautulli connections failed.");
-      logs.push("CRITICAL: All Tautulli connections failed. Aborting database update.");
-      return { success: false, logs };
-  }
-
-  results.flat().forEach((u: any) => {
-      const plexId = String(u.user_id);
-      if (ignoredIds.has(plexId)) return; 
-
-      const lastSeen = u.last_seen ? Number(u.last_seen) : 0;
-      let title = null;
-      if (u.last_played) title = u.last_played; 
-
-      if (!mergedUsers.has(plexId) || lastSeen > mergedUsers.get(plexId).lastSeen) {
-          mergedUsers.set(plexId, { 
-              plexId: plexId, 
-              name: u.friendly_name || u.username, 
-              email: u.email, 
-              avatarUrl: u.user_thumb, 
-              lastSeen: lastSeen,
-              title: title
-          });
-      }
-  });
-
-  console.log(`[Sync] Processing ${mergedUsers.size} unique users for DB update...`);
-  logs.push(`Processing ${mergedUsers.size} unique users...`);
-
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  const oneYearAgo = nowSeconds - (365 * 24 * 60 * 60);
-  let added = 0;
-  let updated = 0;
-
-  try {
-      for (const [plexId, userData] of mergedUsers) {
-          const lastWatchedDate = userData.lastSeen > 0 ? new Date(userData.lastSeen * 1000) : null;
-          
-          if (userData.lastSeen > oneYearAgo) {
-              const existing = await prisma.subscriber.findUnique({ where: { plexId } });
-              if (existing) { 
-                  await prisma.subscriber.update({ 
-                      where: { id: existing.id }, 
-                      data: { 
-                          avatarUrl: userData.avatarUrl, 
-                          lastWatched: lastWatchedDate,
-                          lastWatchedTitle: userData.title
-                      } 
-                  }); 
-                  updated++;
-              } else { 
-                  console.log(`[Sync] Creating new user: ${userData.name}`);
-                  await prisma.subscriber.create({ 
-                      data: { 
-                          plexId: plexId, 
-                          name: userData.name, 
-                          email: userData.email, 
-                          avatarUrl: userData.avatarUrl, 
-                          lastWatched: lastWatchedDate, 
-                          lastWatchedTitle: userData.title,
-                          status: "Active", 
-                          isManual: false,
-                          nextPaymentDate: new Date(new Date().setDate(new Date().getDate() + 30)) 
-                      } 
-                  }); 
-                  added++;
-              }
-          }
-      }
-  } catch (e: any) {
-      console.error(`[Sync] CRITICAL DB ERROR: ${e.message}`); // <--- PRINTS TO DOCKER LOGS
-      console.error(e); 
-      logs.push(`CRITICAL DB ERROR: ${e.message}`);
-      return { success: false, logs };
-  }
-
-  console.log(`[Sync] Complete. Added: ${added}, Updated: ${updated}`);
-  logs.push(`Sync Complete: ${added} added, ${updated} updated.`);
-  return { success: true, logs };
-}
-
-// --- HELPER FOR SERVICE HEALTH ---
 
 export async function fetchServiceHealth() {
   const services = await prisma.service.findMany({ orderBy: { name: "asc" } });
