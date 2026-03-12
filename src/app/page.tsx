@@ -5,13 +5,20 @@ import ActiveDownloads from "@/components/active-downloads";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ExternalLink, Server, LogIn, Settings } from "lucide-react"; // Added Settings icon
-import { cookies } from "next/headers"; // Added cookies
+import { ExternalLink, Server, LogIn, Settings } from "lucide-react"; 
+import { cookies } from "next/headers"; 
 
 export const dynamic = "force-dynamic";
 
+// --- NEW: URL Formatter ---
+// Automatically adds https:// if the admin forgot to include it in settings
+function makeAbsoluteUrl(url: string | null | undefined) {
+    if (!url) return "#";
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    return `https://${url}`;
+}
+
 export default async function UserLandingPage() {
-  // Check if user has an active session
   const cookieStore = await cookies();
   const isLoggedIn = !!cookieStore.get("session")?.value;
 
@@ -35,14 +42,12 @@ export default async function UserLandingPage() {
             <span>Home Page</span>
           </div>
           
-          {/* SMART BUTTON: Changes based on login status */}
           <Link href={isLoggedIn ? "/settings" : "/login"}>
             <Button variant="ghost" size="sm" className="gap-2">
                 {isLoggedIn ? <Settings className="h-4 w-4" /> : <LogIn className="h-4 w-4" />} 
                 {isLoggedIn ? "Admin Settings" : "Admin Login"}
             </Button>
           </Link>
-
         </div>
       </header>
 
@@ -72,19 +77,24 @@ export default async function UserLandingPage() {
                             No request apps configured.
                         </div>
                     ) : (
-                        requestApps.map(app => (
-                            <Link 
-                                key={app.id} 
-                                href={app.externalUrl || "#"} 
-                                target={app.externalUrl ? "_blank" : "_self"} 
-                                className={`w-full ${!app.externalUrl && "opacity-50 cursor-not-allowed"}`}
-                            >
-                                <Button size="lg" disabled={!app.externalUrl} className="w-full text-lg h-16 shadow-md hover:shadow-lg transition-all">
-                                    {app.name} 
-                                    {app.externalUrl ? <ExternalLink className="ml-2 h-5 w-5" /> : <span className="ml-2 text-xs">(Not Configured)</span>}
-                                </Button>
-                            </Link>
-                        ))
+                        requestApps.map(app => {
+                            // Apply the URL formatter here
+                            const safeUrl = makeAbsoluteUrl(app.externalUrl);
+                            
+                            return (
+                                <Link 
+                                    key={app.id} 
+                                    href={safeUrl} 
+                                    target={app.externalUrl ? "_blank" : "_self"} 
+                                    className={`w-full ${!app.externalUrl && "opacity-50 cursor-not-allowed"}`}
+                                >
+                                    <Button size="lg" disabled={!app.externalUrl} className="w-full text-lg h-16 shadow-md hover:shadow-lg transition-all">
+                                        {app.name} 
+                                        {app.externalUrl ? <ExternalLink className="ml-2 h-5 w-5" /> : <span className="ml-2 text-xs">(Not Configured)</span>}
+                                    </Button>
+                                </Link>
+                            );
+                        })
                     )}
                     <div className="text-xs text-center text-muted-foreground mt-4">
                         Links open in a new tab.
