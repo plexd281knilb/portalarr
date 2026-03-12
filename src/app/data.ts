@@ -1,11 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 
-// Singleton pattern for Prisma
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-
-// --- DATA FETCHERS (For Page Load) ---
 
 export async function getSettings() {
   let settings = await prisma.settings.findUnique({ where: { id: "global" } });
@@ -31,15 +28,12 @@ export async function getMediaApps() {
     return await prisma.mediaApp.findMany({ orderBy: { type: "asc" } });
 }
 
-// --- LIVE DASHBOARD LOGIC (Auto-Detect v4/v3/v2) ---
-
 export async function fetchDashboardData() {
   const [tautulliInstances, glancesInstances] = await Promise.all([
     prisma.tautulliInstance.findMany(),
     prisma.glancesInstance.findMany()
   ]);
 
-  // 1. FETCH PLEX (Tautulli)
   const fetchTautulli = async (instance: any) => {
     try {
       const baseUrl = instance.url.replace(/\/$/, "");
@@ -62,11 +56,10 @@ export async function fetchDashboardData() {
           sessions: data.response.data.sessions || [],
         };
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) { }
     return { type: "plex", name: instance.name, online: false };
   };
 
-  // 2. FETCH HARDWARE (Glances)
   const fetchGlances = async (instance: any) => {
     const baseUrl = instance.url.replace(/\/$/, "");
 
@@ -110,7 +103,6 @@ export async function fetchDashboardData() {
 
         const { quick, fs, network } = data;
 
-        // --- NETWORK: FILTER DUPLICATES ---
         let totalRx = 0;
         let totalTx = 0;
         if (Array.isArray(network)) {
@@ -130,7 +122,6 @@ export async function fetchDashboardData() {
             });
         }
 
-        // --- DISK: SMART SELECTOR ---
         const disks = Array.isArray(fs) ? fs : [];
         const cleanDisks = disks.filter(d => 
             !d.mnt_point.startsWith("/boot") && !d.mnt_point.startsWith("/efi") &&
@@ -169,8 +160,6 @@ export async function fetchDashboardData() {
 
   return results;
 }
-
-// --- MEDIA APP ACTIVITY FETCHERS ---
 
 export async function fetchMediaAppsActivity() {
   const apps = await prisma.mediaApp.findMany({ orderBy: { type: "asc" } });

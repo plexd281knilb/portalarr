@@ -1,30 +1,22 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { useTheme } from "next-themes"
 import { logout } from "@/app/auth-actions" 
 import { 
   LayoutDashboard, 
   Settings, 
   Menu,
   X,
-  Sun,
-  Moon,
   LogOut,
-  ExternalLink,
   LifeBuoy
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   const pathname = usePathname()
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => setMounted(true), [])
 
   return (
     <div className={cn("pb-12 h-screen border-r bg-sidebar text-sidebar-foreground border-sidebar-border flex flex-col justify-between", className)}>
@@ -59,26 +51,6 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
       </div>
 
       <div className="px-3 py-4 space-y-1">
-        <Link href="/" target="_blank">
-            <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-foreground">
-                <ExternalLink className="mr-2 h-4 w-4" /> View Public Site
-            </Button>
-        </Link>
-
-        {mounted && (
-            <Button 
-                variant="ghost" 
-                className="w-full justify-start"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-                {theme === "dark" ? (
-                    <><Sun className="mr-2 h-4 w-4" /> Light Mode</>
-                ) : (
-                    <><Moon className="mr-2 h-4 w-4" /> Dark Mode</>
-                )}
-            </Button>
-        )}
-
         <Button 
             variant="ghost" 
             className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
@@ -94,10 +66,6 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
 export function MobileSidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => setMounted(true), [])
 
   return (
     <>

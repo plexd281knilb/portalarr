@@ -1,7 +1,5 @@
 generator client {
   provider      = "prisma-client-js"
-  // "native" allows it to run on your Windows PC
-  // "linux-musl-openssl-3.0.x" allows it to run in the Docker container
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
@@ -50,8 +48,8 @@ model MediaApp {
   id          String   @id @default(cuid())
   type        String
   name        String
-  url         String   // Internal IP (e.g. http://192.168.1.50:7878)
-  externalUrl String?  // External/Public Link (e.g. https://requests.mydomain.com)
+  url         String   // Internal IP
+  externalUrl String?  // External/Public Link
   apiKey      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
@@ -60,7 +58,7 @@ model MediaApp {
 model User {
   id        String   @id @default(cuid())
   username  String   @unique
-  email     String   @unique
+  email     String   @unique 
   password  String   // Hashed
   role      String   @default("USER") // "ADMIN" or "USER"
   createdAt DateTime @default(now())
@@ -68,11 +66,11 @@ model User {
 
 model SupportTicket {
   id           String   @id @default(cuid())
-  name         String   // User's name
-  email        String   // User's email (required for replies)
-  issue        String   // Description
-  status       String   @default("Pending") // Pending, Acknowledged, Completed
-  adminComment String?  
+  name         String   
+  email        String   
+  issue        String   
+  status       String   @default("Pending") 
+  adminComment String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

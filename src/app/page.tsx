@@ -1,21 +1,24 @@
-import { getLandingStats, getMediaApps, getSupportTickets, getActiveDownloads } from "@/app/actions";
+import { getLandingStats, getPublicMediaApps, getActiveDownloads } from "@/app/actions";
 import LandingSupport from "@/components/landing-support";
 import SystemStatus from "@/components/system-status"; 
-import ActiveDownloads from "@/components/active-downloads"; // <--- Import New Component
+import ActiveDownloads from "@/components/active-downloads"; 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { ExternalLink, Server, LogIn } from "lucide-react";
+import { ExternalLink, Server, LogIn, Settings } from "lucide-react"; // Added Settings icon
+import { cookies } from "next/headers"; // Added cookies
 
 export const dynamic = "force-dynamic";
 
 export default async function UserLandingPage() {
-  const [stats, apps, tickets, downloads] = await Promise.all([
+  // Check if user has an active session
+  const cookieStore = await cookies();
+  const isLoggedIn = !!cookieStore.get("session")?.value;
+
+  const [stats, apps, downloads] = await Promise.all([
       getLandingStats(),
-      getMediaApps(),
-      getSupportTickets(),
-      getActiveDownloads() // <--- Fetch initial downloads
+      getPublicMediaApps(), 
+      getActiveDownloads() 
   ]);
 
   const requestApps = apps.filter(app => 
@@ -29,13 +32,17 @@ export default async function UserLandingPage() {
         <div className="flex h-16 items-center px-6 gap-4 max-w-7xl mx-auto w-full justify-between">
           <div className="font-bold text-xl flex items-center gap-2">
             <Server className="h-6 w-6 text-primary" />
-            <span>Adminarr Media</span>
+            <span>Home Page</span>
           </div>
-          <Link href="/login">
+          
+          {/* SMART BUTTON: Changes based on login status */}
+          <Link href={isLoggedIn ? "/settings" : "/login"}>
             <Button variant="ghost" size="sm" className="gap-2">
-                <LogIn className="h-4 w-4" /> Admin Login
+                {isLoggedIn ? <Settings className="h-4 w-4" /> : <LogIn className="h-4 w-4" />} 
+                {isLoggedIn ? "Admin Settings" : "Admin Login"}
             </Button>
           </Link>
+
         </div>
       </header>
 
@@ -48,7 +55,6 @@ export default async function UserLandingPage() {
             </p>
         </section>
 
-        {/* TOP ROW: 3 Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             
             <SystemStatus initialData={stats} />
@@ -67,9 +73,15 @@ export default async function UserLandingPage() {
                         </div>
                     ) : (
                         requestApps.map(app => (
-                            <Link key={app.id} href={app.externalUrl || app.url} target="_blank" className="w-full">
-                                <Button size="lg" className="w-full text-lg h-16 shadow-md hover:shadow-lg transition-all">
-                                    {app.name} <ExternalLink className="ml-2 h-5 w-5" />
+                            <Link 
+                                key={app.id} 
+                                href={app.externalUrl || "#"} 
+                                target={app.externalUrl ? "_blank" : "_self"} 
+                                className={`w-full ${!app.externalUrl && "opacity-50 cursor-not-allowed"}`}
+                            >
+                                <Button size="lg" disabled={!app.externalUrl} className="w-full text-lg h-16 shadow-md hover:shadow-lg transition-all">
+                                    {app.name} 
+                                    {app.externalUrl ? <ExternalLink className="ml-2 h-5 w-5" /> : <span className="ml-2 text-xs">(Not Configured)</span>}
                                 </Button>
                             </Link>
                         ))
@@ -80,11 +92,10 @@ export default async function UserLandingPage() {
                 </CardContent>
             </Card>
 
-            <LandingSupport initialTickets={tickets} />
+            <LandingSupport />
             
         </div>
 
-        {/* BOTTOM ROW: Wide Downloads Card */}
         <div className="w-full">
              <ActiveDownloads initialData={downloads} />
         </div>
