@@ -6,8 +6,6 @@ import {
     getAppUsers, createAppUser, deleteAppUser, 
     // General Settings
     getSettings, saveSettings, saveFeeSettings, saveJobSettings, 
-    // Email (Scanning)
-    getEmailAccounts, addEmailAccount, deleteEmailAccount, 
     // Apps & Monitoring
     getTautulliInstances, addTautulliInstance, removeTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance,
@@ -19,15 +17,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Trash2, UserPlus, Shield, User, Mail, Send, Pencil, X } from "lucide-react";
+import { Trash2, UserPlus, Shield, User, Send, Pencil, X } from "lucide-react";
 
 export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     
     // Data States
     const [users, setUsers] = useState<any[]>([]);
-    const [emailAccounts, setEmailAccounts] = useState<any[]>([]);
     const [systemSettings, setSystemSettings] = useState<any>({});
     
     // App States
@@ -40,16 +36,14 @@ export default function SettingsPage() {
 
     const loadAllData = async () => {
         setLoading(true);
-        const [u, e, s, t, g, m] = await Promise.all([
+        const [u, s, t, g, m] = await Promise.all([
             getAppUsers(),
-            getEmailAccounts(),
             getSettings(),
             getTautulliInstances(),
             getGlancesInstances(),
             getMediaApps()
         ]);
         setUsers(u);
-        setEmailAccounts(e);
         setSystemSettings(s || {});
         setTautulli(t);
         setGlances(g);
@@ -66,14 +60,6 @@ export default function SettingsPage() {
         await action(formData); 
         (e.target as HTMLFormElement).reset();
         setEditingApp(null); // Clear edit mode
-        loadAllData();
-    };
-
-    const handleObjectForm = async (e: React.FormEvent, action: Function) => {
-        e.preventDefault();
-        const formData = new FormData(e.target as HTMLFormElement);
-        await action(Object.fromEntries(formData)); 
-        (e.target as HTMLFormElement).reset();
         loadAllData();
     };
 
@@ -111,12 +97,11 @@ export default function SettingsPage() {
             </div>
 
             <Tabs defaultValue="general" className="space-y-4">
-                {/* UPDATED: grid-cols-2 on mobile, grid-cols-4 on desktop, h-auto to allow wrapping */}
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
+                {/* UPDATED: Changed from md:grid-cols-4 to md:grid-cols-3 to match the remaining tabs */}
+                <TabsList className="grid w-full grid-cols-1 md:grid-cols-3 h-auto">
                     <TabsTrigger value="general">General & SMTP</TabsTrigger>
                     <TabsTrigger value="access">Access Control</TabsTrigger>
                     <TabsTrigger value="monitoring">Monitoring & Apps</TabsTrigger>
-                    <TabsTrigger value="payments">Payment Scanning</TabsTrigger>
                 </TabsList>
 
                 {/* --- TAB 1: GENERAL & SMTP --- */}
@@ -145,20 +130,7 @@ export default function SettingsPage() {
 
                         {/* FEES & JOB INTERVAL */}
                         <div className="space-y-4">
-                            <Card>
-                                <CardHeader><CardTitle>Pricing</CardTitle></CardHeader>
-                                <CardContent>
-                                    <form onSubmit={handleSaveFees} className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2"><Label>Monthly ($)</Label><Input name="monthlyFee" type="number" step="0.01" defaultValue={systemSettings.monthlyFee}/></div>
-                                            <div className="space-y-2"><Label>Yearly ($)</Label><Input name="yearlyFee" type="number" step="0.01" defaultValue={systemSettings.yearlyFee}/></div>
-                                        </div>
-                                        <Button type="submit" variant="secondary" className="w-full">Update Fees</Button>
-                                    </form>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
+                                                        <Card>
                                 <CardHeader><CardTitle>Automation</CardTitle></CardHeader>
                                 <CardContent>
                                     <form onSubmit={(e) => handleForm(e, saveJobSettings)} className="flex gap-4 items-end">
@@ -357,45 +329,6 @@ export default function SettingsPage() {
                             </CardContent>
                         </Card>
                     </div>
-                </TabsContent>
-
-                {/* --- TAB 4: PAYMENT SCANNING (IMAP) --- */}
-                <TabsContent value="payments" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Payment Email Scanning (IMAP)</CardTitle>
-                            <CardDescription>Connect email accounts to scan for Venmo/PayPal receipts.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="space-y-2">
-                                {emailAccounts.length === 0 && <div className="text-sm italic text-muted-foreground">No accounts connected.</div>}
-                                {emailAccounts.map(acc => (
-                                    <div key={acc.id} className="flex justify-between items-center border p-3 rounded-md">
-                                        <div className="flex items-center gap-3">
-                                            <Mail className="h-5 w-5 text-blue-500"/>
-                                            <div>
-                                                <div className="font-medium">{acc.name}</div>
-                                                <div className="text-xs text-muted-foreground">{acc.host} ({acc.user})</div>
-                                            </div>
-                                        </div>
-                                        <Button size="sm" variant="destructive" onClick={() => handleDelete(acc.id, deleteEmailAccount)}>Disconnect</Button>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="border-t pt-4">
-                                <h4 className="text-sm font-medium mb-3">Connect New Account</h4>
-                                <form onSubmit={(e) => handleObjectForm(e, addEmailAccount)} className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2"><Label>Name</Label><Input name="name" placeholder="Payment Inbox" required /></div>
-                                    <div className="space-y-2"><Label>Host</Label><Input name="host" placeholder="imap.gmail.com" required /></div>
-                                    <div className="space-y-2"><Label>User</Label><Input name="user" placeholder="email@gmail.com" required /></div>
-                                    <div className="space-y-2"><Label>Password</Label><Input name="pass" type="password" required /></div>
-                                    <div className="space-y-2"><Label>Port</Label><Input name="port" defaultValue="993" required /></div>
-                                    <div className="flex items-end"><Button type="submit" className="w-full">Connect</Button></div>
-                                </form>
-                            </div>
-                        </CardContent>
-                    </Card>
                 </TabsContent>
             </Tabs>
         </div>

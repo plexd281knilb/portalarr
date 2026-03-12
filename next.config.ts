@@ -21,6 +21,8 @@ console.log("✅ Allowed Origins Auto-Detected:", allowedOrigins);
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // CRITICAL FIX: Stops Turbopack from breaking on Windows symlinks
+  serverExternalPackages: ["better-sqlite3", "@prisma/client"], 
   experimental: {
     // instrumentationHook: true,  <--- REMOVE OR COMMENT OUT THIS LINE
     serverActions: {

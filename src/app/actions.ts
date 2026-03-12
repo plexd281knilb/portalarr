@@ -2,7 +2,6 @@
 
 import { PrismaClient } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { scanEmailAccounts } from "@/lib/email-scanner"; 
 import { hash } from "bcryptjs"; 
 import nodemailer from "nodemailer"; 
 
