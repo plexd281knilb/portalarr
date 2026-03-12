@@ -10,8 +10,11 @@ import { jwtVerify } from "jose";
 const prisma = new PrismaClient();
 const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "default-secret-key-change-me");
 
-// --- SECURITY AUTH CHECK ---
-// Prevents public users from pinging Server Actions to extract API keys
+// ============================================================================
+// --- SECURITY LAYER ---
+// ============================================================================
+
+// Prevents public users from pinging Admin Server Actions to extract API keys
 async function verifyAdmin() {
     const cookieStore = await cookies();
     const session = cookieStore.get("session")?.value;
@@ -23,13 +26,15 @@ async function verifyAdmin() {
     }
 }
 
-// --- HELPER: Clean URL (Removes trailing slashes) ---
 function cleanUrl(url: string): string {
     if (!url) return "";
     return url.replace(/\/$/, ""); 
 }
 
-// --- DATA FETCHERS (SECURED) ---
+// ============================================================================
+// --- SECURE ADMIN ACTIONS (REQUIRES LOGIN) ---
+// ============================================================================
+
 export async function getSettings() {
     await verifyAdmin();
     return await prisma.settings.findFirst() || {};
@@ -71,7 +76,6 @@ export async function clearSmtpSettings() {
   revalidatePath("/settings");
 }
 
-// --- TAUTULLI ACTIONS (SECURED) ---
 export async function addTautulliInstance(formData: FormData) {
   await verifyAdmin();
   const name = formData.get("name") as string;
@@ -92,7 +96,6 @@ export async function getTautulliInstances() {
     return await prisma.tautulliInstance.findMany();
 }
 
-// --- GLANCES ACTIONS (SECURED) ---
 export async function addGlancesInstance(formData: FormData) {
   await verifyAdmin();
   const name = formData.get("name") as string;
@@ -112,7 +115,6 @@ export async function getGlancesInstances() {
     return await prisma.glancesInstance.findMany();
 }
 
-// --- SERVICE ACTIONS (SECURED) ---
 export async function addService(formData: FormData) {
   await verifyAdmin();
   const name = formData.get("name") as string;
@@ -145,7 +147,6 @@ export async function getServiceStatus() {
     return results;
 }
 
-// --- MEDIA APP ACTIONS (SECURED) ---
 export async function getMediaApps() {
     await verifyAdmin();
     return await prisma.mediaApp.findMany();
@@ -187,7 +188,6 @@ export async function removeMediaApp(id: string) {
   revalidatePath("/settings");
 }
 
-// --- USER AUTHENTICATION ACTIONS (SECURED) ---
 export async function getAppUsers() {
     await verifyAdmin();
     return await prisma.user.findMany({
@@ -227,7 +227,6 @@ export async function deleteAppUser(id: string) {
     }
 }
 
-// --- SUPPORT TICKETS (SECURED) ---
 export async function getSupportTickets() {
     await verifyAdmin();
     return await prisma.supportTicket.findMany({
@@ -366,25 +365,53 @@ export async function submitSupportTicket(formData: FormData) {
     }
 }
 
-export async function getDashboardActivity() {
-  const { fetchDashboardData } = await import("@/app/data");
-  return await fetchDashboardData();
-}
-
-export async function getMediaAppsActivity() {
-  const { fetchMediaAppsActivity } = await import("@/app/data");
-  return await fetchMediaAppsActivity();
-}
-
+// SECURED: Directly fetches from DB and explicitly filters response fields
 export async function getActiveDownloads() {
-    const { fetchMediaAppsActivity } = await import("@/app/data");
-    const allApps = await fetchMediaAppsActivity();
-    
-    return allApps.filter((app: any) => 
-        app.type === "sabnzbd" || 
-        app.type === "nzbget" ||
-        app.type === "qBittorrent" 
-    );
+    const apps = await prisma.mediaApp.findMany({
+        where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent"] } }
+    });
+
+    const results = await Promise.all(apps.map(async (app) => {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); 
+            const cleanUrl = app.url.replace(/\/$/, "");
+            
+            let data: any = { 
+                id: app.id, 
+                type: app.type, 
+                name: app.name, 
+                online: false,
+                queue: []
+            };
+
+            const res = await fetch(`${cleanUrl}/api?mode=queue&output=json&apikey=${app.apiKey}`, { 
+                signal: controller.signal, 
+                cache: "no-store" 
+            });
+            clearTimeout(timeoutId);
+            
+            const json = await res.json();
+            if (json.queue) {
+                data.online = true;
+                
+                // SANITIZATION: Explicitly map only the necessary fields. 
+                // We drop the raw JSON to prevent leaking internal disk paths or API info.
+                data.queue = (json.queue.slots || []).map((slot: any) => ({
+                    filename: slot.filename || "Unknown Download",
+                    percentage: slot.percentage || "0",
+                    timeleft: slot.timeleft || "0:00",
+                    mb: slot.mb || 0,
+                    mbleft: slot.mbleft || 0
+                }));
+            }
+            return data;
+        } catch (e) {
+            return { id: app.id, type: app.type, name: app.name, online: false, queue: [] };
+        }
+    }));
+
+    return results;
 }
 
 export async function getLandingStats() {
