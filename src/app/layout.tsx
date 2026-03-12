@@ -4,7 +4,6 @@ import "./globals.css";
 import { Sidebar, MobileSidebar } from "@/components/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 
-
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {

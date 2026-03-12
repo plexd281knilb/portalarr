@@ -9,6 +9,7 @@ import { useTheme } from "next-themes"
 import { logout } from "@/app/auth-actions" 
 import { 
   LayoutDashboard, 
+  Users, 
   Settings, 
   Activity, 
   Layers,
@@ -18,7 +19,9 @@ import {
   Moon,
   LogOut,
   ExternalLink,
-  LifeBuoy
+  Shield,
+  LifeBuoy,
+  Trash2 // <--- 1. Import Trash Icon
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -43,6 +46,13 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
+            <Link href="/admin">
+              <Button variant={pathname === "/admin" ? "secondary" : "ghost"} className="w-full justify-start">
+                <Shield className="mr-2 h-4 w-4" />
+                Admin Overview
+              </Button>
+            </Link>
+
             <Link href="/monitoring">
               <Button variant={pathname.startsWith("/monitoring") ? "secondary" : "ghost"} className="w-full justify-start">
                 <Activity className="mr-2 h-4 w-4" />
@@ -54,6 +64,22 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               <Button variant={pathname.startsWith("/apps") ? "secondary" : "ghost"} className="w-full justify-start">
                 <Layers className="mr-2 h-4 w-4" />
                 Apps
+              </Button>
+            </Link>
+
+            {/* --- 2. NEW CLEANUP LINK (Desktop) --- */}
+            <Link href="/cleanup">
+              <Button variant={pathname.startsWith("/cleanup") ? "secondary" : "ghost"} className="w-full justify-start">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Cleanup
+              </Button>
+            </Link>
+            {/* ------------------------------------ */}
+            
+            <Link href="/users">
+              <Button variant={pathname.startsWith("/users") ? "secondary" : "ghost"} className="w-full justify-start">
+                <Users className="mr-2 h-4 w-4" />
+                User List
               </Button>
             </Link>
 
@@ -140,6 +166,11 @@ export function MobileSidebar() {
                       <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
                     </Button>
                   </Link>
+                  <Link href="/admin" onClick={() => setIsOpen(false)}>
+                    <Button variant={pathname === "/admin" ? "secondary" : "ghost"} className="w-full justify-start">
+                      <Shield className="mr-2 h-4 w-4" /> Admin Overview
+                    </Button>
+                  </Link>
                   <Link href="/monitoring" onClick={() => setIsOpen(false)}>
                     <Button variant={pathname.startsWith("/monitoring") ? "secondary" : "ghost"} className="w-full justify-start">
                       <Activity className="mr-2 h-4 w-4" /> Live Monitoring
@@ -148,6 +179,20 @@ export function MobileSidebar() {
                   <Link href="/apps" onClick={() => setIsOpen(false)}>
                     <Button variant={pathname.startsWith("/apps") ? "secondary" : "ghost"} className="w-full justify-start">
                       <Layers className="mr-2 h-4 w-4" /> Apps
+                    </Button>
+                  </Link>
+
+                  {/* --- 3. NEW CLEANUP LINK (Mobile) --- */}
+                  <Link href="/cleanup" onClick={() => setIsOpen(false)}>
+                    <Button variant={pathname.startsWith("/cleanup") ? "secondary" : "ghost"} className="w-full justify-start">
+                      <Trash2 className="mr-2 h-4 w-4" /> Cleanup
+                    </Button>
+                  </Link>
+                  {/* ---------------------------------- */}
+
+                  <Link href="/users" onClick={() => setIsOpen(false)}>
+                    <Button variant={pathname.startsWith("/users") ? "secondary" : "ghost"} className="w-full justify-start">
+                      <Users className="mr-2 h-4 w-4" /> User List
                     </Button>
                   </Link>
                   <Link href="/admin/tickets" onClick={() => setIsOpen(false)}>

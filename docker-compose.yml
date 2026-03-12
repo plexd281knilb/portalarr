@@ -1,0 +1,19 @@
+services:
+  Portalarr
+    container_name: Portalarr
+    build: .
+    image: ghcr.io/plexd281knilb/Portalarr:latest
+    restart: unless-stopped
+    user: root  # <--- THIS IS REQUIRED TO FIX THE DB LOCK
+    ports:
+      - "3001:3000"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    environment:
+      - DATABASE_URL=file:/app/data/dev.db
+      - NODE_ENV=production
+    volumes:
+      - ./data:/app/data
+      - /mnt/user:/mnt/user
+      - /mnt/remotes:/mnt/remotes

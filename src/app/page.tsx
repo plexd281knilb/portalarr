@@ -1,4 +1,4 @@
-import { getLandingStats, getMediaApps, getSupportTickets } from "./actions";
+import { getLandingStats, getMediaApps, getSupportTickets } from "@/app/actions";
 import LandingSupport from "@/components/landing-support";
 import SystemStatus from "@/components/system-status"; // <--- Import New Component
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
