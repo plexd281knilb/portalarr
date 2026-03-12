@@ -10,8 +10,6 @@ import { logout } from "@/app/auth-actions"
 import { 
   LayoutDashboard, 
   Settings, 
-  Activity, 
-  Layers,
   Menu,
   X,
   Sun,
@@ -40,20 +38,6 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               <Button variant={pathname === "/" ? "secondary" : "ghost"} className="w-full justify-start">
                 <LayoutDashboard className="mr-2 h-4 w-4" />
                 Dashboard
-              </Button>
-            </Link>
-
-            <Link href="/monitoring">
-              <Button variant={pathname.startsWith("/monitoring") ? "secondary" : "ghost"} className="w-full justify-start">
-                <Activity className="mr-2 h-4 w-4" />
-                Live Monitoring
-              </Button>
-            </Link>
-
-            <Link href="/apps">
-              <Button variant={pathname.startsWith("/apps") ? "secondary" : "ghost"} className="w-full justify-start">
-                <Layers className="mr-2 h-4 w-4" />
-                Apps
               </Button>
             </Link>
 
@@ -140,16 +124,7 @@ export function MobileSidebar() {
                       <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
                     </Button>
                   </Link>
-                  <Link href="/monitoring" onClick={() => setIsOpen(false)}>
-                    <Button variant={pathname.startsWith("/monitoring") ? "secondary" : "ghost"} className="w-full justify-start">
-                      <Activity className="mr-2 h-4 w-4" /> Live Monitoring
-                    </Button>
-                  </Link>
-                  <Link href="/apps" onClick={() => setIsOpen(false)}>
-                    <Button variant={pathname.startsWith("/apps") ? "secondary" : "ghost"} className="w-full justify-start">
-                      <Layers className="mr-2 h-4 w-4" /> Apps
-                    </Button>
-                  </Link>
+                  
                   <Link href="/admin/tickets" onClick={() => setIsOpen(false)}>
                     <Button variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"} className="w-full justify-start">
                       <LifeBuoy className="mr-2 h-4 w-4" /> Support Tickets

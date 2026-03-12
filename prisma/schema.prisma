@@ -122,11 +122,12 @@ model User {
 }
 
 model SupportTicket {
-  id        String   @id @default(cuid())
-  name      String   // User's name
-  email     String   // User's email (required for replies)
-  issue     String   // Description
-  status    String   @default("Pending") // Pending, Acknowledged, Completed
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String   // User's name
+  email        String   // User's email (required for replies)
+  issue        String   // Description
+  status       String   @default("Pending") // Pending, Acknowledged, Completed
+  adminComment String?  // <--- ADD THIS FIELD
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

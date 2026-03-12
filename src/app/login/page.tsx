@@ -28,11 +28,11 @@ export default function LoginPage() {
 
     // Cast to 'any' to bypass the strict type check
     if ((res as any)?.error) {
-    setError((res as any).error);
+      setError((res as any).error);
     } else {
       // Browsers save passwords on navigation. 
-      // We wait a tick to ensure the form submission registers before redirecting.
-      router.push("/admin"); 
+      // Redirect to settings instead of the removed admin overview.
+      router.push("/settings"); 
     }
   }
 

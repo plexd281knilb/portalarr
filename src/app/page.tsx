@@ -1,6 +1,7 @@
-import { getLandingStats, getMediaApps, getSupportTickets } from "@/app/actions";
+import { getLandingStats, getMediaApps, getSupportTickets, getActiveDownloads } from "@/app/actions";
 import LandingSupport from "@/components/landing-support";
-import SystemStatus from "@/components/system-status"; // <--- Import New Component
+import SystemStatus from "@/components/system-status"; 
+import ActiveDownloads from "@/components/active-downloads"; // <--- Import New Component
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,10 +11,11 @@ import { ExternalLink, Server, LogIn } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function UserLandingPage() {
-  const [stats, apps, tickets] = await Promise.all([
+  const [stats, apps, tickets, downloads] = await Promise.all([
       getLandingStats(),
       getMediaApps(),
-      getSupportTickets()
+      getSupportTickets(),
+      getActiveDownloads() // <--- Fetch initial downloads
   ]);
 
   const requestApps = apps.filter(app => 
@@ -46,12 +48,11 @@ export default async function UserLandingPage() {
             </p>
         </section>
 
+        {/* TOP ROW: 3 Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             
-            {/* 1. SYSTEM STATUS CARD (Now Auto-Updating) */}
             <SystemStatus initialData={stats} />
 
-            {/* 2. REQUEST CONTENT CARD */}
             <Card className="h-full flex flex-col">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -79,10 +80,15 @@ export default async function UserLandingPage() {
                 </CardContent>
             </Card>
 
-            {/* 3. SUPPORT CARD */}
             <LandingSupport initialTickets={tickets} />
             
         </div>
+
+        {/* BOTTOM ROW: Wide Downloads Card */}
+        <div className="w-full">
+             <ActiveDownloads initialData={downloads} />
+        </div>
+
       </main>
     </div>
   );

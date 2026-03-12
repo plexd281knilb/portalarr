@@ -86,13 +86,14 @@ export async function saveJobSettings(formData: FormData) {
   revalidatePath("/settings");
 }
 
-export async function saveFeeSettings(monthly: number, yearly: number) {
-    await prisma.settings.upsert({
-        where: { id: "global" },
-        update: { monthlyFee: monthly, yearlyFee: yearly },
-        create: { id: "global", monthlyFee: monthly, yearlyFee: yearly }
-    });
-    revalidatePath("/payments");
+
+// --- NEW: CLEAR SMTP SETTINGS ---
+export async function clearSmtpSettings() {
+  await prisma.settings.update({
+    where: { id: "global" },
+    data: { smtpHost: "", smtpPort: 0, smtpUser: "", smtpPass: "" },
+  });
+  revalidatePath("/settings");
 }
 
 // --- TAUTULLI ACTIONS ---
@@ -518,8 +519,7 @@ export async function deleteAppUser(id: string) {
     }
 }
 
-// --- NEW: LANDING PAGE & SUPPORT ACTIONS ---
-
+// --- LANDING PAGE & SUPPORT ACTIONS ---
 export async function getLandingStats() {
     const [tautulli, glances, apps] = await Promise.all([
         prisma.tautulliInstance.findMany(),
@@ -527,7 +527,8 @@ export async function getLandingStats() {
         prisma.mediaApp.findMany()
     ]);
 
-    let totalStreams = 0;
+    // CHANGED: Instead of a single number, we store an array of objects
+    let streamStats: { name: string, count: number }[] = [];
     let serverStats: any[] = [];
     let downApps: string[] = [];
 
@@ -540,27 +541,31 @@ export async function getLandingStats() {
             const res = await fetch(fullUrl, { next: { revalidate: 10 } });
             
             if (!res.ok) {
-                console.error(`Failed Tautulli (${t.name}): ${res.status} ${res.statusText} | URL: ${fullUrl}`);
+                console.error(`Failed Tautulli (${t.name}): ${res.status} ${res.statusText}`);
+                streamStats.push({ name: t.name, count: 0 }); // Fallback
                 return;
             }
             
             const data = await res.json();
-            if (data.response?.data?.stream_count) {
-                totalStreams += Number(data.response.data.stream_count);
-            }
+            const count = data.response?.data?.stream_count ? Number(data.response.data.stream_count) : 0;
+            
+            // Push the individual server's stats into the array
+            streamStats.push({ name: t.name, count: count });
+
         } catch (e: any) { 
-            console.error(`Failed Tautulli (${t.name}): ${e.message} | URL: ${fullUrl}`); 
+            console.error(`Failed Tautulli (${t.name}): ${e.message}`); 
+            streamStats.push({ name: t.name, count: 0 }); // Fallback on error
         }
     }));
 
+    // ... (Glances Stats and App Status blocks remain exactly the same as before) ...
     // 2. Glances Stats (Auto-Fallback v4 -> v3 -> v2)
     await Promise.all(glances.map(async (g) => {
         const cleanGlances = cleanUrl(g.url);
         
-        // Helper to fetch v4, v3, or v2
         const fetchGlancesMetric = async (endpoint: string) => {
             let errorDetails = "";
-            const versions = [4, 3, 2]; // Order of priority
+            const versions = [4, 3, 2]; 
 
             for (const v of versions) {
                 try {
@@ -569,9 +574,8 @@ export async function getLandingStats() {
                     
                     if (res.ok) return await res.json();
                     
-                    // Keep track of errors for debugging if all fail
                     errorDetails += `[v${v}: ${res.status}] `;
-                } catch (e) { /* Check next version */ }
+                } catch (e) { }
             }
             throw new Error(`All versions failed. Tried: ${errorDetails}`);
         };
@@ -604,7 +608,8 @@ export async function getLandingStats() {
         }
     }));
 
-    return { totalStreams, serverStats, downApps };
+    // CHANGED: Return streamStats instead of totalStreams
+    return { streamStats, serverStats, downApps };
 }
 
 // ... (submitSupportTicket and other functions remain the same) ...
@@ -654,11 +659,45 @@ export async function getSupportTickets() {
     });
 }
 
-export async function updateTicketStatus(id: string, status: string) {
-    await prisma.supportTicket.update({
+export async function updateTicketStatus(id: string, status: string, adminComment?: string) {
+    // 1. Update the database with the new status and comment
+    const ticket = await prisma.supportTicket.update({
         where: { id },
-        data: { status }
+        data: { status, adminComment }
     });
+
+    // 2. If status is Acknowledged or Completed, send the email
+    if (status === "Acknowledged" || status === "Completed") {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        
+        if (settings?.smtpHost && settings?.smtpUser) {
+            const transporter = nodemailer.createTransport({
+                host: settings.smtpHost,
+                port: settings.smtpPort,
+                secure: settings.smtpPort === 465, 
+                auth: { user: settings.smtpUser, pass: settings.smtpPass },
+            } as any);
+
+            // Construct the email text
+            let emailText = `Hi ${ticket.name},\n\nYour support ticket status has been updated to: ${status}.\n\n`;
+            if (adminComment) {
+                emailText += `Admin Reply:\n${adminComment}\n\n`;
+            }
+            emailText += `--- Original Issue ---\n${ticket.issue}\n\nThanks,\nAdminarr Support`;
+
+            try {
+                await transporter.sendMail({
+                    from: `"Support" <${settings.smtpUser}>`,
+                    to: ticket.email,
+                    subject: `Support Ticket Update: ${status}`,
+                    text: emailText
+                });
+            } catch (e) {
+                console.error("Failed to send ticket update email:", e);
+            }
+        }
+    }
+
     revalidatePath("/");
     revalidatePath("/admin/tickets");
 }
@@ -721,4 +760,18 @@ export async function getServiceStatus() {
     }));
 
     return results;
+}
+
+// --- NEW: FETCH ACTIVE DOWNLOADS ---
+export async function getActiveDownloads() {
+    // Import the heavy fetcher from data.ts dynamically or directly
+    const { fetchMediaAppsActivity } = await import("@/app/data");
+    const allApps = await fetchMediaAppsActivity();
+    
+    // Filter down to only the download clients
+    return allApps.filter((app: any) => 
+        app.type === "sabnzbd" || 
+        app.type === "nzbget" ||
+        app.type === "qBittorrent" // Add others if you use them
+    );
 }

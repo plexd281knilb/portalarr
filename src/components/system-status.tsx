@@ -4,15 +4,13 @@ import { useState, useEffect } from "react";
 import { getLandingStats } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, WifiOff, Cpu, HardDrive, RefreshCw } from "lucide-react";
+import { Activity, WifiOff, Cpu, HardDrive, PlaySquare } from "lucide-react";
 
 export default function SystemStatus({ initialData }: { initialData: any }) {
     const [stats, setStats] = useState(initialData);
-    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         const interval = setInterval(async () => {
-            // Fetch fresh stats without setting global loading state (silent update)
             try {
                 const fresh = await getLandingStats();
                 if (fresh) setStats(fresh);
@@ -24,6 +22,9 @@ export default function SystemStatus({ initialData }: { initialData: any }) {
         return () => clearInterval(interval);
     }, []);
 
+    // Calculate total streams from the array we created in actions.ts
+    const totalStreams = stats.streamStats?.reduce((acc: number, server: any) => acc + server.count, 0) || 0;
+
     return (
         <Card className="h-full">
             <CardHeader>
@@ -34,7 +35,6 @@ export default function SystemStatus({ initialData }: { initialData: any }) {
                         </CardTitle>
                         <CardDescription>Live server performance.</CardDescription>
                     </div>
-                    {/* Tiny indicator to show it's live */}
                     <div className="flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
@@ -42,6 +42,7 @@ export default function SystemStatus({ initialData }: { initialData: any }) {
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
+                
                 {/* General Health */}
                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                     <span className="font-medium">Overall Health</span>
@@ -56,22 +57,40 @@ export default function SystemStatus({ initialData }: { initialData: any }) {
                     )}
                 </div>
                 
-                {/* Down Apps Warning */}
                 {stats.downApps.length > 0 && (
                     <div className="text-sm text-red-500 bg-red-50 p-3 rounded border border-red-100">
                         <strong>Down:</strong> {stats.downApps.join(", ")}
                     </div>
                 )}
 
-                {/* Stream Count */}
-                <div className="text-center py-2 border-y">
-                    <div className="text-3xl font-bold text-primary transition-all duration-500">
-                        {stats.totalStreams}
+                {/* Stream Count Section */}
+                <div className="py-2 border-y">
+                    <div className="text-center mb-3">
+                        <div className="text-3xl font-bold text-primary transition-all duration-500">
+                            {totalStreams}
+                        </div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Active Streams</div>
                     </div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Active Streams</div>
+                    
+                    {/* Individual Server Breakdown */}
+                    {stats.streamStats && stats.streamStats.length > 0 && (
+                        <div className="space-y-2 mt-4 pt-4 border-t border-dashed">
+                            {stats.streamStats.map((server: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between text-sm">
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                        <PlaySquare className="h-4 w-4" />
+                                        <span>{server.name}</span>
+                                    </div>
+                                    <Badge variant={server.count > 0 ? "default" : "secondary"}>
+                                        {server.count}
+                                    </Badge>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {/* Server Stats (CPU/RAM) */}
+                {/* Hardware Server Stats (CPU/RAM) */}
                 <div className="space-y-3">
                     {stats.serverStats.map((server: any) => (
                         <div key={server.name} className="space-y-1">

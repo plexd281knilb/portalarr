@@ -5,7 +5,7 @@ import {
     // Auth
     getAppUsers, createAppUser, deleteAppUser, 
     // General Settings
-    getSettings, saveSettings, saveFeeSettings, saveJobSettings, 
+    getSettings, saveSettings, saveJobSettings, clearSmtpSettings,
     // Apps & Monitoring
     getTautulliInstances, addTautulliInstance, removeTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance,
@@ -15,9 +15,10 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger, } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Trash2, UserPlus, Shield, User, Send, Pencil, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
@@ -70,16 +71,6 @@ export default function SettingsPage() {
         }
     };
 
-    const handleSaveFees = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const formData = new FormData(e.target as HTMLFormElement);
-        await saveFeeSettings(
-            parseFloat(formData.get("monthlyFee") as string),
-            parseFloat(formData.get("yearlyFee") as string)
-        );
-        alert("Fee settings saved.");
-    };
-
     // Populate form for editing
     const startEdit = (app: any) => {
         setEditingApp(app);
@@ -107,30 +98,59 @@ export default function SettingsPage() {
                 {/* --- TAB 1: GENERAL & SMTP --- */}
                 <TabsContent value="general" className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2">
-                        {/* SMTP SETTINGS */}
-                        <Card className="col-span-2 md:col-span-1">
-                            <CardHeader>
-                                <CardTitle>SMTP Settings (Sending)</CardTitle>
-                                <CardDescription>Used for sending welcome emails and notifications.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={(e) => handleForm(e, saveSettings)} className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2"><Label>SMTP Host</Label><Input name="smtpHost" defaultValue={systemSettings.smtpHost} placeholder="smtp.gmail.com"/></div>
-                                        <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort} placeholder="587"/></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2"><Label>User</Label><Input name="smtpUser" defaultValue={systemSettings.smtpUser} placeholder="user@gmail.com"/></div>
-                                        <div className="space-y-2"><Label>Password</Label><Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass}/></div>
-                                    </div>
-                                    <Button type="submit"><Send className="h-4 w-4 mr-2"/> Save SMTP</Button>
-                                </form>
-                            </CardContent>
-                        </Card>
+{/* SMTP SETTINGS */}
+<Card className="col-span-2 md:col-span-1">
+    <CardHeader>
+        <div className="flex justify-between items-start">
+            <div>
+                <CardTitle>SMTP Settings (Sending)</CardTitle>
+                <CardDescription>Used for sending welcome emails and notifications.</CardDescription>
+            </div>
+            {systemSettings?.smtpHost ? (
+                <Badge className="bg-green-500 hover:bg-green-600">Saved</Badge>
+            ) : (
+                <Badge variant="secondary">Not Configured</Badge>
+            )}
+        </div>
+    </CardHeader>
+    <CardContent>
+        <form onSubmit={(e) => handleForm(e, saveSettings)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>SMTP Host</Label><Input name="smtpHost" defaultValue={systemSettings.smtpHost || ""} placeholder="smtp.gmail.com"/></div>
+                <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort || ""} placeholder="587"/></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>User</Label><Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/></div>
+                <div className="space-y-2"><Label>Password</Label><Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass || ""}/></div>
+            </div>
+            <div className="flex gap-2">
+                <Button type="submit" className="flex-1">
+                    <Send className="h-4 w-4 mr-2"/> 
+                    {systemSettings?.smtpHost ? "Update SMTP" : "Save SMTP"}
+                </Button>
+                
+                {systemSettings?.smtpHost && (
+                    <Button 
+                        type="button" 
+                        variant="destructive" 
+                        onClick={async () => {
+                            if(confirm("Are you sure you want to clear the SMTP settings?")) {
+                                await clearSmtpSettings();
+                                loadAllData(); // Refresh the UI state
+                            }
+                        }}
+                    >
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                )}
+            </div>
+        </form>
+    </CardContent>
+</Card>
 
                         {/* FEES & JOB INTERVAL */}
                         <div className="space-y-4">
-                                                        <Card>
+                            <Card>
                                 <CardHeader><CardTitle>Automation</CardTitle></CardHeader>
                                 <CardContent>
                                     <form onSubmit={(e) => handleForm(e, saveJobSettings)} className="flex gap-4 items-end">

@@ -5,11 +5,12 @@ import { jwtVerify } from "jose";
 // FIX: This must match the fallback key in auth-actions.ts EXACTLY
 const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "default-secret-key-change-me");
 
-export async function middleware(req: NextRequest) {
+// CHANGED: The exported function must be named "proxy" in Next.js 16.1+
+export async function proxy(req: NextRequest) {
   const session = req.cookies.get("session")?.value;
   const { pathname } = req.nextUrl;
 
-  console.log(`[MIDDLEWARE] Checking path: ${pathname}`);
+  console.log(`[PROXY] Checking path: ${pathname}`);
 
   // 1. DEFINE PROTECTED ROUTES
   // These are the paths that REQUIRE a login
@@ -22,17 +23,17 @@ export async function middleware(req: NextRequest) {
   // 2. CHECK SESSION
   if (isProtectedRoute) {
     if (!session) {
-      console.log("[MIDDLEWARE] No session found. Redirecting to login.");
+      console.log("[PROXY] No session found. Redirecting to login.");
       return NextResponse.redirect(new URL("/login", req.url));
     }
 
     try {
       // Verify Token is valid
       await jwtVerify(session, SECRET_KEY);
-      console.log("[MIDDLEWARE] Token valid. Access granted.");
+      console.log("[PROXY] Token valid. Access granted.");
       return NextResponse.next();
     } catch (err) {
-      console.log("[MIDDLEWARE] Token invalid or signature mismatch. Redirecting.");
+      console.log("[PROXY] Token invalid or signature mismatch. Redirecting.");
       // Fake/Expired Token? Go to login
       return NextResponse.redirect(new URL("/login", req.url));
     }
