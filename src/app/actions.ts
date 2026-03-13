@@ -14,6 +14,7 @@ const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "default-s
 // --- SECURITY LAYER ---
 // ============================================================================
 
+// Prevents public users from pinging Admin Server Actions to extract API keys
 async function verifyAdmin() {
     const cookieStore = await cookies();
     const session = cookieStore.get("session")?.value;
@@ -312,11 +313,12 @@ export async function sendManualEmail(formData: FormData) {
 }
 
 // ============================================================================
-// --- PUBLIC DASHBOARD ACTIONS (SPEED OPTIMIZED) ---
+// --- PUBLIC DASHBOARD ACTIONS (DO NOT SECURE THESE - THEY FEED THE UI) ---
 // ============================================================================
 
 export async function getPublicMediaApps() {
     const apps = await prisma.mediaApp.findMany();
+    // STRIP SENSITIVE DATA: Only return the public URL, Name, and Type
     return apps.map(app => ({
         id: app.id,
         name: app.name,
@@ -363,30 +365,127 @@ export async function submitSupportTicket(formData: FormData) {
     }
 }
 
+// SECURED: Directly fetches from DB and explicitly filters response fields
 export async function getActiveDownloads() {
-    const { getCachedMediaAppsActivity } = await import("@/app/data");
-    const activity = await getCachedMediaAppsActivity();
-    
-    // Only return apps that have a queue (SABnzbd, NZBGet, etc.)
-    return activity.filter((app: any) => app.queue && app.queue.length > 0);
+    const apps = await prisma.mediaApp.findMany({
+        where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent"] } }
+    });
+
+    const results = await Promise.all(apps.map(async (app) => {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); 
+            const cleanUrl = app.url.replace(/\/$/, "");
+            
+            let data: any = { 
+                id: app.id, 
+                type: app.type, 
+                name: app.name, 
+                online: false,
+                queue: []
+            };
+
+            const res = await fetch(`${cleanUrl}/api?mode=queue&output=json&apikey=${app.apiKey}`, { 
+                signal: controller.signal, 
+                cache: "no-store" 
+            });
+            clearTimeout(timeoutId);
+            
+            const json = await res.json();
+            if (json.queue) {
+                data.online = true;
+                
+                // SANITIZATION: Explicitly map only the necessary fields. 
+                // We drop the raw JSON to prevent leaking internal disk paths or API info.
+                data.queue = (json.queue.slots || []).map((slot: any) => ({
+                    filename: slot.filename || "Unknown Download",
+                    percentage: slot.percentage || "0",
+                    timeleft: slot.timeleft || "0:00",
+                    mb: slot.mb || 0,
+                    mbleft: slot.mbleft || 0
+                }));
+            }
+            return data;
+        } catch (e) {
+            return { id: app.id, type: app.type, name: app.name, online: false, queue: [] };
+        }
+    }));
+
+    return results;
 }
 
 export async function getLandingStats() {
-    const { getCachedDashboardData, getCachedMediaAppsActivity, getSettings } = await import("@/app/data");
-    const [serverStats, appActivity, settings] = await Promise.all([
-        getCachedDashboardData(),
-        getCachedMediaAppsActivity(),
-        getSettings()
+    const [tautulli, glances, apps] = await Promise.all([
+        prisma.tautulliInstance.findMany(),
+        prisma.glancesInstance.findMany(),
+        prisma.mediaApp.findMany()
     ]);
-    return { serverStats, appActivity, settings };
-}
 
-export async function getDashboardActivity() {
-  const { getCachedDashboardData } = await import("@/app/data");
-  return await getCachedDashboardData();
-}
+    let streamStats: { name: string, count: number }[] = [];
+    let serverStats: any[] = [];
+    let downApps: string[] = [];
 
-export async function getMediaAppsActivity() {
-  const { getCachedMediaAppsActivity } = await import("@/app/data");
-  return await getCachedMediaAppsActivity();
+    await Promise.all(tautulli.map(async (t) => {
+        let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
+        const fullUrl = `${baseUrl}/api/v2?apikey=${t.apiKey}&cmd=get_activity`;
+
+        try {
+            const res = await fetch(fullUrl, { next: { revalidate: 10 } });
+            
+            if (!res.ok) {
+                streamStats.push({ name: t.name, count: 0 }); 
+                return;
+            }
+            
+            const data = await res.json();
+            const count = data.response?.data?.stream_count ? Number(data.response.data.stream_count) : 0;
+            streamStats.push({ name: t.name, count: count });
+
+        } catch (e: any) { 
+            streamStats.push({ name: t.name, count: 0 }); 
+        }
+    }));
+
+    await Promise.all(glances.map(async (g) => {
+        const cleanGlances = cleanUrl(g.url);
+        
+        const fetchGlancesMetric = async (endpoint: string) => {
+            const versions = [4, 3, 2]; 
+            for (const v of versions) {
+                try {
+                    const url = `${cleanGlances}/api/${v}/${endpoint}`;
+                    const res = await fetch(url, { next: { revalidate: 10 } });
+                    if (res.ok) return await res.json();
+                } catch (e) { }
+            }
+            throw new Error(`Failed`);
+        };
+
+        try {
+            const cpu = await fetchGlancesMetric("cpu");
+            const mem = await fetchGlancesMetric("mem");
+            
+            serverStats.push({ 
+                name: g.name, 
+                cpu: cpu.total, 
+                ram: mem.percent, 
+                online: true 
+            });
+        } catch (e: any) {
+            serverStats.push({ name: g.name, online: false });
+        }
+    }));
+
+    await Promise.all(apps.map(async (app) => {
+        try {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 2000); 
+            await fetch(app.url, { signal: controller.signal, mode: 'no-cors' });
+            clearTimeout(id);
+        } catch (e) {
+            downApps.push(app.name);
+        }
+    }));
+
+    return { streamStats, serverStats, downApps };
 }
