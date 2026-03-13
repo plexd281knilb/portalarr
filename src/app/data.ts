@@ -7,7 +7,6 @@ const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 // --- EXPORTED CACHED FUNCTIONS ---
-// Call these in your actions or pages for sub-200ms load times
 export const getCachedDashboardData = unstable_cache(
   async () => await fetchDashboardDataInternal(),
   ["portal-dashboard-stats"],
@@ -18,6 +17,12 @@ export const getCachedMediaAppsActivity = unstable_cache(
   async () => await fetchMediaAppsActivityInternal(),
   ["portal-media-activity"],
   { revalidate: 60, tags: ["media"] }
+);
+
+export const getCachedServiceHealth = unstable_cache(
+  async () => await fetchServiceHealthInternal(),
+  ["portal-service-health"],
+  { revalidate: 60, tags: ["services"] }
 );
 
 // --- HELPER GETTERS ---
@@ -31,7 +36,7 @@ export async function getGlancesInstances() { return await prisma.glancesInstanc
 export async function getServices() { return await prisma.service.findMany({ orderBy: { name: "asc" } }); }
 export async function getMediaApps() { return await prisma.mediaApp.findMany({ orderBy: { type: "asc" } }); }
 
-// --- INTERNAL LOGIC (PRESERVING 100% OF YOUR ORIGINAL CODE) ---
+// --- INTERNAL LOGIC ---
 async function fetchDashboardDataInternal() {
   const [tautulliInstances, glancesInstances] = await Promise.all([
     prisma.tautulliInstance.findMany(),
@@ -44,7 +49,9 @@ async function fetchDashboardDataInternal() {
       const url = `${baseUrl}/api/v2?apikey=${instance.apiKey}&cmd=get_activity`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch(url, { signal: controller.signal });
+      
+      // ADDED: cache: "no-store"
+      const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
       clearTimeout(timeoutId);
       const data = await res.json();
       if (data?.response?.data) {
@@ -65,10 +72,11 @@ async function fetchDashboardDataInternal() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000);
         try {
+            // ADDED: cache: "no-store"
             const [quickReq, fsReq, netReq] = await Promise.all([
-                fetch(`${baseUrl}/api/${version}/quicklook`, { signal: controller.signal }),
-                fetch(`${baseUrl}/api/${version}/fs`, { signal: controller.signal }),
-                fetch(`${baseUrl}/api/${version}/network`, { signal: controller.signal })
+                fetch(`${baseUrl}/api/${version}/quicklook`, { signal: controller.signal, cache: "no-store" }),
+                fetch(`${baseUrl}/api/${version}/fs`, { signal: controller.signal, cache: "no-store" }),
+                fetch(`${baseUrl}/api/${version}/network`, { signal: controller.signal, cache: "no-store" })
             ]);
             clearTimeout(timeoutId);
             if (!quickReq.ok || !fsReq.ok) return null;
@@ -120,10 +128,11 @@ async function fetchMediaAppsActivityInternal() {
 
         const fetchArrQueue = async () => {
              try {
-                const res = await fetch(`${cleanUrl}/api/v3/queue?apikey=${app.apiKey}&pageSize=20`, { signal: controller.signal });
+                // ADDED: cache: "no-store"
+                const res = await fetch(`${cleanUrl}/api/v3/queue?apikey=${app.apiKey}&pageSize=20`, { signal: controller.signal, cache: "no-store" });
                 if (res.ok) return await res.json();
              } catch(e) {}
-             const res = await fetch(`${cleanUrl}/api/v1/queue?apikey=${app.apiKey}&pageSize=20`, { signal: controller.signal });
+             const res = await fetch(`${cleanUrl}/api/v1/queue?apikey=${app.apiKey}&pageSize=20`, { signal: controller.signal, cache: "no-store" });
              if (res.ok) return await res.json();
              throw new Error("Failed");
         };
@@ -133,7 +142,8 @@ async function fetchMediaAppsActivityInternal() {
             if (json.records) { data.online = true; data.queue = json.records; }
         }
         else if (app.type === "sabnzbd" || app.type === "nzbget") {
-            const res = await fetch(`${cleanUrl}/api?mode=queue&output=json&apikey=${app.apiKey}`, { signal: controller.signal });
+            // ADDED: cache: "no-store"
+            const res = await fetch(`${cleanUrl}/api?mode=queue&output=json&apikey=${app.apiKey}`, { signal: controller.signal, cache: "no-store" });
             const json = await res.json();
             if (json.queue) {
                 data.online = true; data.queue = json.queue.slots || [];
@@ -141,7 +151,8 @@ async function fetchMediaAppsActivityInternal() {
             }
         }
         else if (["overseerr", "jellyseerr"].includes(app.type)) {
-             const res = await fetch(`${cleanUrl}/api/v1/request?take=1000&skip=0&sort=added`, { headers: { "X-Api-Key": app.apiKey || "" }, signal: controller.signal });
+             // ADDED: cache: "no-store"
+             const res = await fetch(`${cleanUrl}/api/v1/request?take=1000&skip=0&sort=added`, { headers: { "X-Api-Key": app.apiKey || "" }, signal: controller.signal, cache: "no-store" });
              const json = await res.json();
              if (json.results) {
                  data.online = true;
@@ -150,6 +161,7 @@ async function fetchMediaAppsActivityInternal() {
                      let title = "Unknown Title", poster = r.media?.posterPath || "";
                      try {
                          if (r.media?.tmdbId) {
+                            // KEEP: force-cache (Safe to cache TMDB forever to avoid rate limits)
                             const detailRes = await fetch(`${cleanUrl}/api/v1/${r.media.mediaType}/${r.media.tmdbId}`, { headers: { "X-Api-Key": app.apiKey || "" }, cache: "force-cache" });
                             if (detailRes.ok) {
                                 const detail = await detailRes.json();
@@ -165,9 +177,10 @@ async function fetchMediaAppsActivityInternal() {
              }
         }
         else if (app.type === "ombi") {
+             // ADDED: cache: "no-store"
              const [mR, tR] = await Promise.all([
-                 fetch(`${cleanUrl}/api/v1/Request/movie?apikey=${app.apiKey}`, { signal: controller.signal }),
-                 fetch(`${cleanUrl}/api/v1/Request/tv?apikey=${app.apiKey}`, { signal: controller.signal })
+                 fetch(`${cleanUrl}/api/v1/Request/movie?apikey=${app.apiKey}`, { signal: controller.signal, cache: "no-store" }),
+                 fetch(`${cleanUrl}/api/v1/Request/tv?apikey=${app.apiKey}`, { signal: controller.signal, cache: "no-store" })
              ]);
              if (mR.ok || tR.ok) data.online = true;
              const movies = (mR.ok ? await mR.json() : []).map((m:any) => ({...m, uniqueType: 'movie'}));
@@ -182,7 +195,8 @@ async function fetchMediaAppsActivityInternal() {
              data.stats = { total: movies.length + tv.length, pending: activeRequests.filter(r => !r.approved && !r.childRequests?.some((c:any)=>c.approved)).length };
         }
         else if (app.type === "prowlarr") {
-            const res = await fetch(`${cleanUrl}/api/v1/indexer?apikey=${app.apiKey}`, { signal: controller.signal });
+            // ADDED: cache: "no-store"
+            const res = await fetch(`${cleanUrl}/api/v1/indexer?apikey=${app.apiKey}`, { signal: controller.signal, cache: "no-store" });
             const json = await res.json();
             if (Array.isArray(json)) {
                 data.online = true;
@@ -204,7 +218,8 @@ export async function fetchServiceHealth() {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(s.url, { method: "HEAD", signal: controller.signal });
+      // ADDED: cache: "no-store"
+      const res = await fetch(s.url, { method: "HEAD", signal: controller.signal, cache: "no-store" });
       clearTimeout(timeoutId);
       return { id: s.id, name: s.name, online: res.ok || [401, 403].includes(res.status) };
     } catch (e) { return { id: s.id, name: s.name, online: false }; }
