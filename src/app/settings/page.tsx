@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { 
     // Auth
     getAppUsers, createAppUser, deleteAppUser, 
@@ -9,19 +9,25 @@ import {
     // Apps & Monitoring
     getTautulliInstances, addTautulliInstance, removeTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance,
-    getMediaApps, addMediaApp, updateMediaApp, removeMediaApp 
+    getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
+    // --- NEW BETA ACTIONS ---
+    getBetaDashboardText, updateBetaDashboardText,
+    getBetaCards, createBetaCard, deleteBetaCard
 } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger, } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Trash2, UserPlus, Shield, User, Send, Pencil, X } from "lucide-react";
+import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
+    const [isPending, startTransition] = useTransition();
+    const [activeTab, setActiveTab] = useState("general");
     
     // Data States
     const [users, setUsers] = useState<any[]>([]);
@@ -32,35 +38,62 @@ export default function SettingsPage() {
     const [glances, setGlances] = useState<any[]>([]);
     const [mediaApps, setMediaApps] = useState<any[]>([]);
 
+    // --- NEW BETA STATES ---
+    const [betaText, setBetaText] = useState<string>("");
+    const [betaCards, setBetaCards] = useState<any[]>([]);
+
     // Edit Mode State
     const [editingApp, setEditingApp] = useState<any>(null);
 
     const loadAllData = async () => {
         setLoading(true);
-        const [u, s, t, g, m] = await Promise.all([
-            getAppUsers(),
-            getSettings(),
-            getTautulliInstances(),
-            getGlancesInstances(),
-            getMediaApps()
-        ]);
-        setUsers(u);
-        setSystemSettings(s || {});
-        setTautulli(t);
-        setGlances(g);
-        setMediaApps(m);
-        setLoading(false);
+
+        // Fail-Safe: Force unlock after 2.5 seconds if the database hangs
+        const safetyUnlock = setTimeout(() => {
+            setLoading(false);
+        }, 2500);
+
+        try {
+            const [u, s, t, g, m, bt, bc] = await Promise.all([
+                getAppUsers(),
+                getSettings(),
+                getTautulliInstances(),
+                getGlancesInstances(),
+                getMediaApps(),
+                getBetaDashboardText(), 
+                getBetaCards()          
+            ]);
+            setUsers(u || []);
+            setSystemSettings(s || {});
+            setTautulli(t || []);
+            setGlances(g || []);
+            setMediaApps(m || []);
+            setBetaText(bt || "");
+            setBetaCards(bc || []);
+        } catch (error) {
+            console.error("Failed to load settings data:", error);
+        } finally {
+            clearTimeout(safetyUnlock);
+            setLoading(false);
+        }
     };
 
     useEffect(() => { loadAllData(); }, []);
 
-    // --- HANDLERS ---
+    // --- TAB HANDLER ---
+    const handleTabChange = (value: string) => {
+        startTransition(() => {
+            setActiveTab(value);
+        });
+    };
+
+    // --- FORM HANDLERS ---
     const handleForm = async (e: React.FormEvent, action: Function) => {
         e.preventDefault();
         const formData = new FormData(e.target as HTMLFormElement);
         await action(formData); 
         (e.target as HTMLFormElement).reset();
-        setEditingApp(null); // Clear edit mode
+        setEditingApp(null); 
         loadAllData();
     };
 
@@ -71,84 +104,92 @@ export default function SettingsPage() {
         }
     };
 
-    // Populate form for editing
-    const startEdit = (app: any) => {
-        setEditingApp(app);
-    };
+    const startEdit = (app: any) => setEditingApp(app);
+    const cancelEdit = () => setEditingApp(null);
 
-    const cancelEdit = () => {
-        setEditingApp(null);
-    };
+    // Initial Loading Screen
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p>Loading settings...</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="space-y-6 p-8 max-w-6xl mx-auto">
+        <div className={`space-y-6 p-8 max-w-6xl mx-auto transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
             <div>
                 <h2 className="text-3xl font-bold tracking-tight">System Settings</h2>
                 <p className="text-muted-foreground">Configure the platform, integrations, and access.</p>
             </div>
 
-            <Tabs defaultValue="general" className="space-y-4">
-                {/* UPDATED: Changed from md:grid-cols-4 to md:grid-cols-3 to match the remaining tabs */}
-                <TabsList className="grid w-full grid-cols-1 md:grid-cols-3 h-auto">
-                    <TabsTrigger value="general">General & SMTP</TabsTrigger>
-                    <TabsTrigger value="access">Access Control</TabsTrigger>
-                    <TabsTrigger value="monitoring">Monitoring & Apps</TabsTrigger>
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
+                <TabsList className="grid w-full grid-cols-1 md:grid-cols-4 h-auto">
+                    <TabsTrigger value="general" className="cursor-pointer">General & SMTP</TabsTrigger>
+                    <TabsTrigger value="access" className="cursor-pointer">Access Control</TabsTrigger>
+                    <TabsTrigger value="monitoring" className="cursor-pointer">Monitoring & Apps</TabsTrigger>
+                    <TabsTrigger value="beta" className="cursor-pointer">Beta Testing</TabsTrigger>
                 </TabsList>
+                
+                {isPending && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Switching tabs...
+                    </div>
+                )}
 
                 {/* --- TAB 1: GENERAL & SMTP --- */}
                 <TabsContent value="general" className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2">
-{/* SMTP SETTINGS */}
-<Card className="col-span-2 md:col-span-1">
-    <CardHeader>
-        <div className="flex justify-between items-start">
-            <div>
-                <CardTitle>SMTP Settings (Sending)</CardTitle>
-                <CardDescription>Used for sending welcome emails and notifications.</CardDescription>
-            </div>
-            {systemSettings?.smtpHost ? (
-                <Badge className="bg-green-500 hover:bg-green-600">Saved</Badge>
-            ) : (
-                <Badge variant="secondary">Not Configured</Badge>
-            )}
-        </div>
-    </CardHeader>
-    <CardContent>
-        <form onSubmit={(e) => handleForm(e, saveSettings)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>SMTP Host</Label><Input name="smtpHost" defaultValue={systemSettings.smtpHost || ""} placeholder="smtp.gmail.com"/></div>
-                <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort || ""} placeholder="587"/></div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>User</Label><Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/></div>
-                <div className="space-y-2"><Label>Password</Label><Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass || ""}/></div>
-            </div>
-            <div className="flex gap-2">
-                <Button type="submit" className="flex-1">
-                    <Send className="h-4 w-4 mr-2"/> 
-                    {systemSettings?.smtpHost ? "Update SMTP" : "Save SMTP"}
-                </Button>
-                
-                {systemSettings?.smtpHost && (
-                    <Button 
-                        type="button" 
-                        variant="destructive" 
-                        onClick={async () => {
-                            if(confirm("Are you sure you want to clear the SMTP settings?")) {
-                                await clearSmtpSettings();
-                                loadAllData(); // Refresh the UI state
-                            }
-                        }}
-                    >
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
-                )}
-            </div>
-        </form>
-    </CardContent>
-</Card>
+                        <Card className="col-span-2 md:col-span-1">
+                            <CardHeader>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle>SMTP Settings (Sending)</CardTitle>
+                                        <CardDescription>Used for sending welcome emails and notifications.</CardDescription>
+                                    </div>
+                                    {systemSettings?.smtpHost ? (
+                                        <Badge className="bg-green-500 hover:bg-green-600">Saved</Badge>
+                                    ) : (
+                                        <Badge variant="secondary">Not Configured</Badge>
+                                    )}
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={(e) => handleForm(e, saveSettings)} className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2"><Label>SMTP Host</Label><Input name="smtpHost" defaultValue={systemSettings.smtpHost || ""} placeholder="smtp.gmail.com"/></div>
+                                        <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort || ""} placeholder="587"/></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2"><Label>User</Label><Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/></div>
+                                        <div className="space-y-2"><Label>Password</Label><Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass || ""}/></div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button type="submit" className="flex-1">
+                                            <Send className="h-4 w-4 mr-2"/> 
+                                            {systemSettings?.smtpHost ? "Update SMTP" : "Save SMTP"}
+                                        </Button>
+                                        
+                                        {systemSettings?.smtpHost && (
+                                            <Button 
+                                                type="button" 
+                                                variant="destructive" 
+                                                onClick={async () => {
+                                                    if(confirm("Are you sure you want to clear the SMTP settings?")) {
+                                                        await clearSmtpSettings();
+                                                        loadAllData();
+                                                    }
+                                                }}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </form>
+                            </CardContent>
+                        </Card>
 
-                        {/* FEES & JOB INTERVAL */}
                         <div className="space-y-4">
                             <Card>
                                 <CardHeader><CardTitle>Automation</CardTitle></CardHeader>
@@ -212,7 +253,6 @@ export default function SettingsPage() {
                 {/* --- TAB 3: MONITORING & APPS --- */}
                 <TabsContent value="monitoring" className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-3">
-                        {/* TAUTULLI */}
                         <Card className="col-span-1">
                             <CardHeader><CardTitle>Tautulli</CardTitle><CardDescription>For syncing users.</CardDescription></CardHeader>
                             <CardContent className="space-y-4">
@@ -233,7 +273,6 @@ export default function SettingsPage() {
                             </CardContent>
                         </Card>
 
-                        {/* GLANCES */}
                         <Card className="col-span-1">
                             <CardHeader><CardTitle>Glances</CardTitle><CardDescription>Server stats.</CardDescription></CardHeader>
                             <CardContent className="space-y-4">
@@ -253,14 +292,12 @@ export default function SettingsPage() {
                             </CardContent>
                         </Card>
 
-                        {/* MEDIA APPS (EDITABLE) */}
                         <Card className="col-span-1">
                             <CardHeader>
                                 <CardTitle>{editingApp ? "Edit Application" : "Applications"}</CardTitle>
                                 <CardDescription>{editingApp ? `Editing: ${editingApp.name}` : "Services for the Apps page."}</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                {/* List of Apps */}
                                 {!editingApp && (
                                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
                                         {mediaApps.map(app => (
@@ -282,14 +319,8 @@ export default function SettingsPage() {
                                     </div>
                                 )}
 
-                                {/* Form (Add or Update) */}
-                                <form 
-                                    onSubmit={(e) => handleForm(e, editingApp ? updateMediaApp : addMediaApp)} 
-                                    className={`space-y-2 ${!editingApp && "border-t pt-2"}`}
-                                >
-                                    {/* Hidden ID for Update */}
+                                <form onSubmit={(e) => handleForm(e, editingApp ? updateMediaApp : addMediaApp)} className={`space-y-2 ${!editingApp && "border-t pt-2"}`}>
                                     {editingApp && <input type="hidden" name="id" value={editingApp.id} />}
-
                                     <Select name="type" required defaultValue={editingApp?.type}>
                                         <SelectTrigger className="h-8"><SelectValue placeholder="Select App Type" /></SelectTrigger>
                                         <SelectContent>
@@ -319,9 +350,7 @@ export default function SettingsPage() {
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>
-                                    
                                     <Input name="name" placeholder="App Name" required className="h-8 text-xs" defaultValue={editingApp?.name} />
-                                    
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
                                             <Label className="text-[10px] text-muted-foreground">Internal URL (API)</Label>
@@ -332,19 +361,82 @@ export default function SettingsPage() {
                                             <Input name="externalUrl" placeholder="https://requests.domain.com" className="h-8 text-xs" defaultValue={editingApp?.externalUrl} />
                                         </div>
                                     </div>
-
                                     <Input name="apiKey" placeholder="API Key" className="h-8 text-xs" defaultValue={editingApp?.apiKey} />
-                                    
                                     <div className="flex gap-2">
-                                        <Button type="submit" size="sm" className="w-full">
-                                            {editingApp ? "Update App" : "Add App"}
-                                        </Button>
+                                        <Button type="submit" size="sm" className="w-full">{editingApp ? "Update App" : "Add App"}</Button>
                                         {editingApp && (
                                             <Button type="button" size="sm" variant="outline" onClick={cancelEdit}>
                                                 <X className="h-4 w-4"/>
                                             </Button>
                                         )}
                                     </div>
+                                </form>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </TabsContent>
+
+                {/* --- TAB 4: NEW BETA TESTING TAB --- */}
+                <TabsContent value="beta" className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Dashboard Card Text</CardTitle>
+                                <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={(e) => handleForm(e, updateBetaDashboardText)} className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label>Markdown Text</Label>
+                                        <Textarea name="text" rows={6} defaultValue={betaText} required placeholder="### Interested in Beta Testing?..." />
+                                    </div>
+                                    <Button type="submit">Save Dashboard Text</Button>
+                                </form>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Beta Testing Cards</CardTitle>
+                                <CardDescription>Add the instruction cards that appear on the /beta page.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                                    {(!betaCards || betaCards.length === 0) ? (
+                                        <div className="text-sm text-muted-foreground italic">No beta cards created yet.</div>
+                                    ) : (
+                                        betaCards.map((card: any) => (
+                                            <div key={card.id} className="flex items-start justify-between border p-3 rounded-md">
+                                                <div className="space-y-1">
+                                                    <div className="font-semibold">{card.title}</div>
+                                                    <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
+                                                </div>
+                                                <Button variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
+                                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                                </Button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                                <form onSubmit={(e) => handleForm(e, createBetaCard)} className="space-y-4 border-t pt-4">
+                                    <div className="space-y-2">
+                                        <Label>Card Title</Label>
+                                        <Input name="title" placeholder="Ex: New Music App" required />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Content (Supports Markdown)</Label>
+                                        <Textarea name="content" placeholder="Instructions go here..." rows={4} required />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Button Text (Optional)</Label>
+                                            <Input name="buttonText" placeholder="Ex: Download Plexamp" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Button URL (Optional)</Label>
+                                            <Input name="buttonUrl" placeholder="https://..." />
+                                        </div>
+                                    </div>
+                                    <Button type="submit" className="w-full">Add Beta Card</Button>
                                 </form>
                             </CardContent>
                         </Card>

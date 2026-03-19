@@ -489,3 +489,49 @@ export async function getLandingStats() {
 
     return { streamStats, serverStats, downApps };
 }
+
+// ============================================================================
+// --- BETA TESTING ACTIONS ---
+// ============================================================================
+
+export async function getBetaDashboardText() {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    return settings?.betaDashboardText || "### Interested in Beta Testing?\nWe are rolling out new features. Click below to see what we are currently testing and how you can get access!";
+}
+
+export async function updateBetaDashboardText(formData: FormData) {
+    await verifyAdmin();
+    const text = formData.get("text") as string;
+    await prisma.settings.upsert({
+        where: { id: "global" },
+        update: { betaDashboardText: text },
+        create: { id: "global", betaDashboardText: text }
+    });
+    revalidatePath("/");
+    revalidatePath("/settings");
+}
+
+export async function getBetaCards() {
+    return await prisma.betaCard.findMany({ orderBy: { createdAt: 'desc' } });
+}
+
+export async function createBetaCard(formData: FormData) {
+    await verifyAdmin();
+    const title = formData.get("title") as string;
+    const content = formData.get("content") as string;
+    const buttonText = formData.get("buttonText") as string;
+    const buttonUrl = formData.get("buttonUrl") as string;
+    
+    await prisma.betaCard.create({ 
+        data: { title, content, buttonText, buttonUrl } 
+    });
+    revalidatePath("/beta");
+    revalidatePath("/settings");
+}
+
+export async function deleteBetaCard(id: string) {
+    await verifyAdmin();
+    await prisma.betaCard.delete({ where: { id } });
+    revalidatePath("/beta");
+    revalidatePath("/settings");
+}

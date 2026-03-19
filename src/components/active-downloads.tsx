@@ -1,27 +1,45 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getActiveDownloads } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Download, Loader2 } from "lucide-react";
 
-export default function ActiveDownloads({ initialData }: { initialData: any[] }) {
-    const [downloads, setDownloads] = useState<any[]>(initialData);
+export default function ActiveDownloads() {
+    const [downloads, setDownloads] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const interval = setInterval(async () => {
+        const fetchDownloads = async () => {
             try {
-                const fresh = await getActiveDownloads();
+                const res = await fetch("/api/downloads");
+                if (!res.ok) throw new Error("Failed to fetch");
+                const fresh = await res.json();
                 if (fresh) setDownloads(fresh);
             } catch (e) {
-                console.error("Failed to auto-refresh downloads", e);
+                console.error("Failed to fetch downloads", e);
+            } finally {
+                setLoading(false);
             }
-        }, 10000); // 10 Seconds
+        };
 
+        // Initial fetch
+        fetchDownloads();
+
+        // Auto-refresh every 10 seconds
+        const interval = setInterval(fetchDownloads, 5000);
         return () => clearInterval(interval);
     }, []);
+
+    if (loading) {
+        return (
+            <Card className="w-full flex items-center justify-center p-12 min-h-[150px]">
+                <Loader2 className="h-6 w-6 animate-spin text-primary mr-3" />
+                <span className="text-muted-foreground">Checking active downloads...</span>
+            </Card>
+        );
+    }
 
     // Flatten all queues from all download apps into a single array
     const allQueueItems = downloads.flatMap(app => app.queue || []);

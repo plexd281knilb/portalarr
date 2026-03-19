@@ -6,15 +6,14 @@ import { Sidebar, MobileSidebar } from "@/components/sidebar";
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   
-  // Opt out of the Admin Sidebar for the public dashboard and login screen
-  const isPublicRoute = pathname === "/" || pathname === "/login";
+  // Update this array to include "/beta"
+  const isPublicRoute = pathname === "/" || pathname === "/login" || pathname === "/beta";
 
   if (isPublicRoute) {
     return <div className="w-full min-h-[100dvh]">{children}</div>;
   }
 
   return (
-    // FIX: Changed from h-screen to h-[100dvh] for mobile browsers
     <div className="flex h-[100dvh] overflow-hidden bg-background text-foreground">
       
       {/* Desktop Sidebar */}

@@ -20,6 +20,7 @@ model Settings {
   theme            String    @default("dark")
   autoSyncInterval Int       @default(6)
   lastAutoSync     DateTime?
+  betaDashboardText String?
 }
 
 model TautulliInstance {
@@ -73,4 +74,15 @@ model SupportTicket {
   adminComment String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+// --- NEW MODEL ---
+model BetaCard {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   // Holds your Markdown text
+  buttonText  String?  
+  buttonUrl   String?  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

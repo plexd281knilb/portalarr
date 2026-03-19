@@ -1,28 +1,46 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getLandingStats } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, WifiOff, Cpu, HardDrive, PlaySquare } from "lucide-react";
+import { Activity, WifiOff, Cpu, HardDrive, PlaySquare, Loader2 } from "lucide-react";
 
-export default function SystemStatus({ initialData }: { initialData: any }) {
-    const [stats, setStats] = useState(initialData);
+export default function SystemStatus() {
+    const [stats, setStats] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const interval = setInterval(async () => {
+        const fetchStats = async () => {
             try {
-                const fresh = await getLandingStats();
+                const res = await fetch("/api/stats");
+                if (!res.ok) throw new Error("Failed to fetch");
+                const fresh = await res.json();
                 if (fresh) setStats(fresh);
             } catch (e) {
-                console.error("Failed to auto-refresh stats", e);
+                console.error("Failed to fetch stats", e);
+            } finally {
+                setLoading(false);
             }
-        }, 10000); // 10 Seconds
+        };
 
+        // Initial fetch
+        fetchStats();
+
+        // Auto-refresh every 10 seconds
+        const interval = setInterval(fetchStats, 5000);
         return () => clearInterval(interval);
     }, []);
 
-    // Calculate total streams from the array we created in actions.ts
+    if (loading || !stats) {
+        return (
+            <Card className="h-full flex flex-col items-center justify-center p-12 space-y-4 min-h-[300px]">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Checking systems...</p>
+            </Card>
+        );
+    }
+
+    // Calculate total streams from the array
     const totalStreams = stats.streamStats?.reduce((acc: number, server: any) => acc + server.count, 0) || 0;
 
     return (
@@ -46,7 +64,7 @@ export default function SystemStatus({ initialData }: { initialData: any }) {
                 {/* General Health */}
                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                     <span className="font-medium">Overall Health</span>
-                    {stats.downApps.length > 0 ? (
+                    {stats.downApps && stats.downApps.length > 0 ? (
                         <Badge variant="destructive" className="gap-1">
                             <WifiOff className="h-3 w-3"/> Issues Detected
                         </Badge>
@@ -57,7 +75,7 @@ export default function SystemStatus({ initialData }: { initialData: any }) {
                     )}
                 </div>
                 
-                {stats.downApps.length > 0 && (
+                {stats.downApps && stats.downApps.length > 0 && (
                     <div className="text-sm text-red-500 bg-red-50 p-3 rounded border border-red-100">
                         <strong>Down:</strong> {stats.downApps.join(", ")}
                     </div>
@@ -91,28 +109,30 @@ export default function SystemStatus({ initialData }: { initialData: any }) {
                 </div>
 
                 {/* Hardware Server Stats (CPU/RAM) */}
-                <div className="space-y-3">
-                    {stats.serverStats.map((server: any) => (
-                        <div key={server.name} className="space-y-1">
-                            <div className="flex justify-between text-xs font-semibold text-muted-foreground">
-                                <span>{server.name}</span>
-                                <span className={server.online ? "text-green-500" : "text-red-500"}>
-                                    {server.online ? "ONLINE" : "OFFLINE"}
-                                </span>
-                            </div>
-                            {server.online && (
-                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div className="flex items-center gap-1 bg-muted p-1.5 rounded">
-                                        <Cpu className="h-3 w-3"/> {server.cpu.toFixed(1)}% CPU
-                                    </div>
-                                    <div className="flex items-center gap-1 bg-muted p-1.5 rounded">
-                                        <HardDrive className="h-3 w-3"/> {server.ram.toFixed(1)}% RAM
-                                    </div>
+                {stats.serverStats && stats.serverStats.length > 0 && (
+                    <div className="space-y-3">
+                        {stats.serverStats.map((server: any) => (
+                            <div key={server.name} className="space-y-1">
+                                <div className="flex justify-between text-xs font-semibold text-muted-foreground">
+                                    <span>{server.name}</span>
+                                    <span className={server.online ? "text-green-500" : "text-red-500"}>
+                                        {server.online ? "ONLINE" : "OFFLINE"}
+                                    </span>
                                 </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
+                                {server.online && (
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div className="flex items-center gap-1 bg-muted p-1.5 rounded">
+                                            <Cpu className="h-3 w-3"/> {server.cpu?.toFixed(1) || 0}% CPU
+                                        </div>
+                                        <div className="flex items-center gap-1 bg-muted p-1.5 rounded">
+                                            <HardDrive className="h-3 w-3"/> {server.ram?.toFixed(1) || 0}% RAM
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

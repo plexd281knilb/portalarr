@@ -1,4 +1,5 @@
-import { getLandingStats, getPublicMediaApps, getActiveDownloads } from "@/app/actions";
+import { getPublicMediaApps, getBetaDashboardText } from "@/app/actions";
+import ReactMarkdown from "react-markdown";
 import LandingSupport from "@/components/landing-support";
 import SystemStatus from "@/components/system-status"; 
 import ActiveDownloads from "@/components/active-downloads"; 
@@ -10,8 +11,6 @@ import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-// --- NEW: URL Formatter ---
-// Automatically adds https:// if the admin forgot to include it in settings
 function makeAbsoluteUrl(url: string | null | undefined) {
     if (!url) return "#";
     if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -22,10 +21,10 @@ export default async function UserLandingPage() {
   const cookieStore = await cookies();
   const isLoggedIn = !!cookieStore.get("session")?.value;
 
-  const [stats, apps, downloads] = await Promise.all([
-      getLandingStats(),
-      getPublicMediaApps(), 
-      getActiveDownloads() 
+  // FAST FETCH: Only local database queries run on the server now
+  const [apps, betaText] = await Promise.all([
+      getPublicMediaApps(),
+      getBetaDashboardText()
   ]);
 
   const requestApps = apps.filter(app => 
@@ -62,7 +61,8 @@ export default async function UserLandingPage() {
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             
-            <SystemStatus initialData={stats} />
+            {/* System Status now fetches its own data instantly via the API */}
+            <SystemStatus />
 
             <Card className="h-full flex flex-col">
                 <CardHeader>
@@ -78,9 +78,7 @@ export default async function UserLandingPage() {
                         </div>
                     ) : (
                         requestApps.map(app => {
-                            // Apply the URL formatter here
                             const safeUrl = makeAbsoluteUrl(app.externalUrl);
-                            
                             return (
                                 <Link 
                                     key={app.id} 
@@ -107,7 +105,26 @@ export default async function UserLandingPage() {
         </div>
 
         <div className="w-full">
-             <ActiveDownloads initialData={downloads} />
+            {/* Active Downloads now fetches its own data instantly via the API */}
+             <ActiveDownloads />
+        </div>
+
+        <div className="w-full">
+            <Card className="bg-muted/30 border-primary/20">
+                <CardHeader>
+                    <CardTitle className="text-2xl flex items-center gap-2">
+                        🧪 Beta Testing & Additional Services
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown>{betaText}</ReactMarkdown>
+                </CardContent>
+                <CardContent>
+                    <Button asChild size="lg" className="mt-4">
+                        <Link href="/beta">View Beta Services</Link>
+                    </Button>
+                </CardContent>
+            </Card>
         </div>
 
       </main>
