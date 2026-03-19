@@ -30,11 +30,16 @@ const nextConfig: NextConfig = {
   // Tells Next.js to stop blocking your local network IP
   allowedDevOrigins: rawIps,
 
+  // ... top half of your config stays the same ...
+  
   experimental: {
     serverActions: {
       allowedOrigins: allowedOrigins,
     },
   },
+  
+  // ADD THIS CRITICAL LINE TO FIX THE DOCKER BUILD:
+  turbopack: {}, 
   
   webpack: (config, context) => {
     config.watchOptions = {
