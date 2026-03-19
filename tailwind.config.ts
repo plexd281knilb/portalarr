@@ -1,11 +1,11 @@
-// tailwind.config.ts (usually in the root folder)
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  // ... your other config ...
+  // ... your existing theme/content settings ...
   plugins: [
     require("tailwindcss-animate"),
-    require("@tailwindcss/typography"), // <--- THIS IS THE FIX
+    require("@tailwindcss/typography"),
   ],
 };
+
 export default config;

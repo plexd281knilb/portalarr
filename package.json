@@ -36,7 +36,8 @@
     "recharts": "^3.6.0",
     "remark-gfm": "^4.0.1",
     "simple-parser": "^0.0.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
