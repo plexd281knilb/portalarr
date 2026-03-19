@@ -18,7 +18,7 @@ COPY . .
 RUN npm install -g prisma@6
 # ... inside your Dockerfile
 RUN npx prisma generate
-RUN npx prisma migrate deploy  <-- ADD THIS LINE
+RUN npx prisma migrate deploy
 RUN npm run build
 
 # 3. Production image
