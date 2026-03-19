@@ -18,6 +18,10 @@ COPY . .
 RUN npm install -g prisma@6
 # ... inside your Dockerfile
 RUN npx prisma generate
+
+# Tell Docker exactly where the database is for the build process
+ENV DATABASE_URL="file:./dev.db"
+
 RUN npx prisma migrate deploy
 RUN npm run build
 
