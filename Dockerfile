@@ -16,9 +16,9 @@ COPY . .
 
 # UPDATED: Install Prisma 6 globally to match our package.json update
 RUN npm install -g prisma@6
-RUN prisma generate
-
-# Build Next.js
+# ... inside your Dockerfile
+RUN npx prisma generate
+RUN npx prisma migrate deploy  <-- ADD THIS LINE
 RUN npm run build
 
 # 3. Production image
