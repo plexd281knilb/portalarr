@@ -39,7 +39,7 @@ export default async function BetaPage() {
                         <CardHeader>
                         <CardTitle className="text-xl">{card.title}</CardTitle>
                         </CardHeader>
-                        <CardContent className="flex-grow prose prose-sm dark:prose-invert">
+                        <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden">
                             <ReactMarkdown>{card.content}</ReactMarkdown>
                         </CardContent>
                         {(card.buttonText && card.buttonUrl) && (

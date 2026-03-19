@@ -116,7 +116,7 @@ export default async function UserLandingPage() {
                         🧪 Beta Testing & Additional Services
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="prose prose-sm dark:prose-invert max-w-none">
+                <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden">
                     <ReactMarkdown>{betaText}</ReactMarkdown>
                 </CardContent>
                 <CardContent>
