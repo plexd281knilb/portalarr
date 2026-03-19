@@ -2,6 +2,7 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getBetaCards } from '@/app/actions';
@@ -71,7 +72,10 @@ export default function BetaPage() {
                                 </CardHeader>
                                 
                                 <CardContent className="flex-1 prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden pb-6">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    <ReactMarkdown 
+                                        remarkPlugins={[remarkGfm]} 
+                                        rehypePlugins={[rehypeRaw]}
+                                    >
                                         {card.content}
                                     </ReactMarkdown>
                                 </CardContent>

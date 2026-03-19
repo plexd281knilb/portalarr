@@ -1,5 +1,7 @@
 import { getPublicMediaApps, getBetaDashboardText } from "@/app/actions";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from 'remark-gfm'; // Critical for lists
+import rehypeRaw from 'rehype-raw'; // Critical for <br /> tags
 import LandingSupport from "@/components/landing-support";
 import SystemStatus from "@/components/system-status"; 
 import ActiveDownloads from "@/components/active-downloads"; 
@@ -61,7 +63,6 @@ export default async function UserLandingPage() {
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             
-            {/* System Status now fetches its own data instantly via the API */}
             <SystemStatus />
 
             <Card className="h-full flex flex-col">
@@ -105,7 +106,6 @@ export default async function UserLandingPage() {
         </div>
 
         <div className="w-full">
-            {/* Active Downloads now fetches its own data instantly via the API */}
              <ActiveDownloads />
         </div>
 
@@ -116,8 +116,11 @@ export default async function UserLandingPage() {
                         🧪 Beta Testing & Additional Services
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden">
-                    <ReactMarkdown>{betaText}</ReactMarkdown>
+                <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden pb-4">
+                    {/* Fixed with remarkGfm and rehypeRaw plugins */}
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                        {betaText}
+                    </ReactMarkdown>
                 </CardContent>
                 <CardContent>
                     <Button asChild size="lg" className="mt-4">
