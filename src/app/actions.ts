@@ -9,7 +9,7 @@ import { jwtVerify } from "jose";
 
 const prisma = new PrismaClient();
 // --- SECURITY FIX 1: Enforce JWT_SECRET ---
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production" && !process.env.NEXT_PHASE) {
     throw new Error("FATAL: JWT_SECRET environment variable is missing. The server cannot start securely.");
 }
 const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "dev-only-insecure-key-do-not-use-in-production");
