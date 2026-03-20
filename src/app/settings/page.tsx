@@ -14,7 +14,7 @@ import {
     getBetaDashboardText, updateBetaDashboardText,
     getBetaCards, createBetaCard, updateBetaCard, deleteBetaCard,
     getRoadmapText, updateRoadmapText,
-    // --- NEW ALERT ACTIONS ---
+    // --- ALERT ACTIONS ---
     getAlertBanner, updateAlertBanner
 } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -42,18 +42,18 @@ export default function SettingsPage() {
     const [glances, setGlances] = useState<any[]>([]);
     const [mediaApps, setMediaApps] = useState<any[]>([]);
 
-    // Beta & Roadmap States
+    // Content States
     const [betaText, setBetaText] = useState<string>("");
     const [betaCards, setBetaCards] = useState<any[]>([]);
     const [roadmapText, setRoadmapText] = useState<string>("");
 
-    // --- NEW ALERT STATES ---
+    // Alert States
     const [alertBanner, setAlertBanner] = useState<{enabled: boolean, text: string}>({enabled: false, text: ""});
     const [bannerEnabled, setBannerEnabled] = useState(false);
 
     // Edit Mode States
     const [editingApp, setEditingApp] = useState<any>(null);
-    const [editingBetaCard, setEditingBetaCard] = useState<any>(null); // <-- NEW STATE FOR BETA CARDS
+    const [editingBetaCard, setEditingBetaCard] = useState<any>(null);
 
     const loadAllData = async () => {
         setLoading(true);
@@ -112,15 +112,14 @@ export default function SettingsPage() {
         
         await action(formData); 
         
-        // Only reset the form if it's NOT a markdown/text editor form
-        // This keeps your new text visible while the background refresh happens
-        const isTextEditor = form.querySelector('textarea[name="text"]');
-        if (!isTextEditor) {
+        // Fix: Prevent reset for text editors to avoid "ghosting" the value back to empty
+        const isEditor = form.querySelector('textarea[name="text"]') || form.querySelector('input[name="text"]');
+        if (!isEditor) {
             form.reset();
         }
 
         setEditingApp(null); 
-        setEditingBetaCard(null); 
+        setEditingBetaCard(null);
         loadAllData();
     };
 
@@ -130,14 +129,6 @@ export default function SettingsPage() {
             loadAllData();
         }
     };
-
-    // App Edit Handlers
-    const startEdit = (app: any) => setEditingApp(app);
-    const cancelEdit = () => setEditingApp(null);
-
-    // Beta Card Edit Handlers
-    const startEditBetaCard = (card: any) => setEditingBetaCard(card);
-    const cancelEditBetaCard = () => setEditingBetaCard(null);
 
     // Initial Loading Screen
     if (loading) {
@@ -173,7 +164,7 @@ export default function SettingsPage() {
                 {/* --- TAB 1: GENERAL & SMTP --- */}
                 <TabsContent value="general" className="space-y-4">
                     
-                    {/* --- NEW ALERT BANNER CARD --- */}
+                    {/* SYSTEM ALERT BANNER */}
                     <Card className="col-span-2 border-orange-500/50 bg-orange-500/5 dark:bg-orange-500/10">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
@@ -373,7 +364,7 @@ export default function SettingsPage() {
                                                     <div className="text-[10px] text-muted-foreground uppercase">{app.type}</div>
                                                 </div>
                                                 <div className="flex gap-1">
-                                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-500" onClick={() => startEdit(app)}>
+                                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-500" onClick={() => setEditingApp(app)}>
                                                         <Pencil className="h-3 w-3"/>
                                                     </Button>
                                                     <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => handleDelete(app.id, removeMediaApp)}>
@@ -431,7 +422,7 @@ export default function SettingsPage() {
                                     <div className="flex gap-2">
                                         <Button type="submit" size="sm" className="w-full">{editingApp ? "Update App" : "Add App"}</Button>
                                         {editingApp && (
-                                            <Button type="button" size="sm" variant="outline" onClick={cancelEdit}>
+                                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingApp(null)}>
                                                 <X className="h-4 w-4"/>
                                             </Button>
                                         )}
@@ -442,78 +433,70 @@ export default function SettingsPage() {
                     </div>
                 </TabsContent>
 
-                {/* --- TAB 4: BETA TESTING & ROADMAP TAB --- */}
+                {/* --- TAB 4: BETA TESTING & ROADMAP --- */}
                 <TabsContent value="beta" className="space-y-6">
                     
+                    {/* ROADMAP CARD EDITOR */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">🗺️ Roadmap & New Features</CardTitle>
-                            <CardDescription>
-                                Update the text shown on the home page Roadmap card (Supports Markdown formatting).
-                            </CardDescription>
+                            <CardDescription>Update the text shown on the home page Roadmap card.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label>Roadmap Markdown</Label>
-                                    <Textarea 
-                                        name="text" 
-                                        defaultValue={roadmapText} 
-                                        rows={6} 
-                                        className="font-mono text-sm"
-                                        placeholder="### 🚀 Upcoming Features..."
-                                        required
-                                    />
-                                </div>
+                                <Textarea 
+                                    name="text" 
+                                    defaultValue={roadmapText} 
+                                    rows={8} 
+                                    className="font-mono text-sm"
+                                    placeholder="### 🚀 Upcoming Features..."
+                                    required
+                                />
                                 <Button type="submit">Save Roadmap Text</Button>
                             </form>
                         </CardContent>
                     </Card>
 
                     <div className="grid gap-4 md:grid-cols-2">
+                        {/* BETA DASHBOARD INTRO EDITOR */}
                         <Card>
                             <CardHeader>
-                                <CardTitle>Beta Dashboard Text</CardTitle>
+                                <CardTitle>Beta Dashboard Intro</CardTitle>
                                 <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <form onSubmit={(e) => handleForm(e, updateBetaDashboardText)} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label>Markdown Text</Label>
-                                        <Textarea name="text" rows={6} defaultValue={betaText} required placeholder="### Interested in Beta Testing?..." />
-                                    </div>
-                                    <Button type="submit">Save Beta Text</Button>
+                                    <Textarea name="text" rows={6} defaultValue={betaText} required placeholder="### Interested in Beta Testing?..." />
+                                    <Button type="submit">Save Intro Text</Button>
                                 </form>
                             </CardContent>
                         </Card>
+
+                        {/* BETA TESTING CARDS EDITOR */}
                         <Card>
                             <CardHeader>
                                 <CardTitle>{editingBetaCard ? "Edit Beta Card" : "Beta Testing Cards"}</CardTitle>
-                                <CardDescription>{editingBetaCard ? `Editing: ${editingBetaCard.title}` : "Add the instruction cards that appear on the /beta page."}</CardDescription>
+                                <CardDescription>Manage the instruction cards on the /beta page.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 {!editingBetaCard && (
                                     <div className="space-y-4 max-h-[300px] overflow-y-auto">
-                                        {(!betaCards || betaCards.length === 0) ? (
-                                            <div className="text-sm text-muted-foreground italic">No beta cards created yet.</div>
-                                        ) : (
-                                            betaCards.map((card: any) => (
-                                                <div key={card.id} className="flex items-start justify-between border p-3 rounded-md">
-                                                    <div className="space-y-1">
-                                                        <div className="font-semibold">{card.title}</div>
-                                                        <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
-                                                    </div>
-                                                    <div className="flex gap-1 shrink-0 ml-2">
-                                                        <Button type="button" variant="ghost" size="icon" onClick={() => startEditBetaCard(card)}>
-                                                            <Pencil className="h-4 w-4 text-blue-500" />
-                                                        </Button>
-                                                        <Button type="button" variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
-                                                            <Trash2 className="h-4 w-4 text-red-500" />
-                                                        </Button>
-                                                    </div>
+                                        {betaCards.map((card: any) => (
+                                            <div key={card.id} className="flex items-start justify-between border p-3 rounded-md">
+                                                <div className="space-y-1">
+                                                    <div className="font-semibold">{card.title}</div>
+                                                    <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
                                                 </div>
-                                            ))
-                                        )}
+                                                <div className="flex gap-1 shrink-0 ml-2">
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setEditingBetaCard(card)}>
+                                                        <Pencil className="h-4 w-4 text-blue-500" />
+                                                    </Button>
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
+                                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
                                 <form onSubmit={(e) => handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard)} className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}>
@@ -523,26 +506,16 @@ export default function SettingsPage() {
                                         <Input name="title" placeholder="Ex: New Music App" defaultValue={editingBetaCard?.title} required />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label>Content (Supports Markdown)</Label>
-                                        <Textarea name="content" placeholder="Instructions go here..." rows={4} defaultValue={editingBetaCard?.content} required />
+                                        <Label>Content (Markdown)</Label>
+                                        <Textarea name="content" placeholder="Instructions..." rows={4} defaultValue={editingBetaCard?.content} required />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label>Button Text (Optional)</Label>
-                                            <Input name="buttonText" placeholder="Ex: Download Plexamp" defaultValue={editingBetaCard?.buttonText} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Button URL (Optional)</Label>
-                                            <Input name="buttonUrl" placeholder="https://..." defaultValue={editingBetaCard?.buttonUrl} />
-                                        </div>
+                                        <div className="space-y-2"><Label>Button Text</Label><Input name="buttonText" defaultValue={editingBetaCard?.buttonText} /></div>
+                                        <div className="space-y-2"><Label>Button URL</Label><Input name="buttonUrl" defaultValue={editingBetaCard?.buttonUrl} /></div>
                                     </div>
                                     <div className="flex gap-2">
                                         <Button type="submit" className="w-full">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
-                                        {editingBetaCard && (
-                                            <Button type="button" variant="outline" onClick={cancelEditBetaCard}>
-                                                <X className="h-4 w-4"/>
-                                            </Button>
-                                        )}
+                                        {editingBetaCard && <Button type="button" variant="outline" onClick={() => setEditingBetaCard(null)}><X className="h-4 w-4"/></Button>}
                                     </div>
                                 </form>
                             </CardContent>

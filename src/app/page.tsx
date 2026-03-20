@@ -23,6 +23,7 @@ export default async function UserLandingPage() {
   const cookieStore = await cookies();
   const isLoggedIn = !!cookieStore.get("session")?.value;
 
+  // Fetch all dynamic content
   const [apps, betaText, roadmapText, alertBanner] = await Promise.all([
       getPublicMediaApps(),
       getBetaDashboardText(),
@@ -76,9 +77,7 @@ export default async function UserLandingPage() {
         </section>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            
             <SystemStatus />
-
             <Card className="h-full flex flex-col">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -109,14 +108,9 @@ export default async function UserLandingPage() {
                             );
                         })
                     )}
-                    <div className="text-xs text-center text-muted-foreground mt-4">
-                        Links open in a new tab.
-                    </div>
                 </CardContent>
             </Card>
-
             <LandingSupport />
-            
         </div>
 
         <div className="w-full">
@@ -159,7 +153,6 @@ export default async function UserLandingPage() {
                 </CardContent>
             </Card>
         </div>
-
       </main>
     </div>
   );

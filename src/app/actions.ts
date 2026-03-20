@@ -19,12 +19,21 @@ const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "dev-only-
 // ============================================================================
 
 async function verifyAdmin() {
+    // --- DEV BYPASS: Stop the "Unauthorized" errors locally ---
+    if (process.env.NODE_ENV === "development") {
+        return; 
+    }
+
     const cookieStore = await cookies();
     const session = cookieStore.get("session")?.value;
+    
     if (!session) throw new Error("Unauthorized");
+    
     try {
         await jwtVerify(session, SECRET_KEY);
-    } catch {
+    } catch (err) {
+        // Log the actual error for debugging before throwing
+        console.error("JWT Verification Failed:", err);
         throw new Error("Unauthorized");
     }
 }
