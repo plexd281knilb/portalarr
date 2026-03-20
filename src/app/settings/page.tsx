@@ -10,9 +10,12 @@ import {
     getTautulliInstances, addTautulliInstance, removeTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance,
     getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
-    // --- NEW BETA ACTIONS ---
+    // Beta & Roadmap Actions
     getBetaDashboardText, updateBetaDashboardText,
-    getBetaCards, createBetaCard, deleteBetaCard
+    getBetaCards, createBetaCard, deleteBetaCard,
+    getRoadmapText, updateRoadmapText,
+    // --- NEW ALERT ACTIONS ---
+    getAlertBanner, updateAlertBanner
 } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +24,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger, } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function SettingsPage() {
@@ -38,9 +42,14 @@ export default function SettingsPage() {
     const [glances, setGlances] = useState<any[]>([]);
     const [mediaApps, setMediaApps] = useState<any[]>([]);
 
-    // --- NEW BETA STATES ---
+    // Beta & Roadmap States
     const [betaText, setBetaText] = useState<string>("");
     const [betaCards, setBetaCards] = useState<any[]>([]);
+    const [roadmapText, setRoadmapText] = useState<string>("");
+
+    // --- NEW ALERT STATES ---
+    const [alertBanner, setAlertBanner] = useState<{enabled: boolean, text: string}>({enabled: false, text: ""});
+    const [bannerEnabled, setBannerEnabled] = useState(false);
 
     // Edit Mode State
     const [editingApp, setEditingApp] = useState<any>(null);
@@ -54,14 +63,16 @@ export default function SettingsPage() {
         }, 2500);
 
         try {
-            const [u, s, t, g, m, bt, bc] = await Promise.all([
+            const [u, s, t, g, m, bt, bc, rt, ab] = await Promise.all([
                 getAppUsers(),
                 getSettings(),
                 getTautulliInstances(),
                 getGlancesInstances(),
                 getMediaApps(),
                 getBetaDashboardText(), 
-                getBetaCards()          
+                getBetaCards(),
+                getRoadmapText(),
+                getAlertBanner()          
             ]);
             setUsers(u || []);
             setSystemSettings(s || {});
@@ -70,6 +81,11 @@ export default function SettingsPage() {
             setMediaApps(m || []);
             setBetaText(bt || "");
             setBetaCards(bc || []);
+            setRoadmapText(rt || "");
+            
+            // Set Banner State
+            setAlertBanner(ab || {enabled: false, text: ""});
+            setBannerEnabled(ab?.enabled || false);
         } catch (error) {
             console.error("Failed to load settings data:", error);
         } finally {
@@ -140,6 +156,40 @@ export default function SettingsPage() {
 
                 {/* --- TAB 1: GENERAL & SMTP --- */}
                 <TabsContent value="general" className="space-y-4">
+                    
+                    {/* --- NEW ALERT BANNER CARD --- */}
+                    <Card className="col-span-2 border-orange-500/50 bg-orange-500/5 dark:bg-orange-500/10">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                                <AlertTriangle className="h-5 w-5"/> System Alert Banner
+                            </CardTitle>
+                            <CardDescription>Display a warning or maintenance banner across the top of the home page.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={(e) => handleForm(e, updateAlertBanner)} className="space-y-4">
+                                <div className="flex items-center space-x-2">
+                                    <Switch 
+                                        id="banner-enabled" 
+                                        checked={bannerEnabled} 
+                                        onCheckedChange={setBannerEnabled} 
+                                    />
+                                    <Label htmlFor="banner-enabled" className="cursor-pointer">Enable Banner</Label>
+                                    <input type="hidden" name="enabled" value={bannerEnabled ? "on" : "off"} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Input 
+                                        name="text" 
+                                        defaultValue={alertBanner.text} 
+                                        placeholder="⚠️ **Maintenance:** Server will be down tonight at 2AM..." 
+                                    />
+                                </div>
+                                <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                                    Save Alert Banner
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+
                     <div className="grid gap-4 md:grid-cols-2">
                         <Card className="col-span-2 md:col-span-1">
                             <CardHeader>
@@ -376,12 +426,38 @@ export default function SettingsPage() {
                     </div>
                 </TabsContent>
 
-                {/* --- TAB 4: NEW BETA TESTING TAB --- */}
-                <TabsContent value="beta" className="space-y-4">
+                {/* --- TAB 4: BETA TESTING & ROADMAP TAB --- */}
+                <TabsContent value="beta" className="space-y-6">
+                    
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">🗺️ Roadmap & New Features</CardTitle>
+                            <CardDescription>
+                                Update the text shown on the home page Roadmap card (Supports Markdown formatting).
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Roadmap Markdown</Label>
+                                    <Textarea 
+                                        name="text" 
+                                        defaultValue={roadmapText} 
+                                        rows={6} 
+                                        className="font-mono text-sm"
+                                        placeholder="### 🚀 Upcoming Features..."
+                                        required
+                                    />
+                                </div>
+                                <Button type="submit">Save Roadmap Text</Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+
                     <div className="grid gap-4 md:grid-cols-2">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Dashboard Card Text</CardTitle>
+                                <CardTitle>Beta Dashboard Text</CardTitle>
                                 <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -390,7 +466,7 @@ export default function SettingsPage() {
                                         <Label>Markdown Text</Label>
                                         <Textarea name="text" rows={6} defaultValue={betaText} required placeholder="### Interested in Beta Testing?..." />
                                     </div>
-                                    <Button type="submit">Save Dashboard Text</Button>
+                                    <Button type="submit">Save Beta Text</Button>
                                 </form>
                             </CardContent>
                         </Card>
@@ -410,7 +486,7 @@ export default function SettingsPage() {
                                                     <div className="font-semibold">{card.title}</div>
                                                     <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
                                                 </div>
-                                                <Button variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
                                                     <Trash2 className="h-4 w-4 text-red-500" />
                                                 </Button>
                                             </div>

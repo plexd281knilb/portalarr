@@ -43,6 +43,30 @@ export default function SystemStatus() {
     // Calculate total streams from the array
     const totalStreams = stats.streamStats?.reduce((acc: number, server: any) => acc + server.count, 0) || 0;
 
+    // --- SORTING LOGIC ---
+    
+    // Order for the Streams section
+    const streamOrder = ["main", "kids", "backup"];
+    const sortStreams = (a: any, b: any) => {
+        const getIndex = (name: string) => {
+            const lowerName = name.toLowerCase();
+            const index = streamOrder.findIndex(keyword => lowerName.includes(keyword));
+            return index === -1 ? 999 : index; 
+        };
+        return getIndex(a.name) - getIndex(b.name);
+    };
+
+    // Order for the Hardware Stats section
+    const hardwareOrder = ["main", "backup"];
+    const sortHardware = (a: any, b: any) => {
+        const getIndex = (name: string) => {
+            const lowerName = name.toLowerCase();
+            const index = hardwareOrder.findIndex(keyword => lowerName.includes(keyword));
+            return index === -1 ? 999 : index; 
+        };
+        return getIndex(a.name) - getIndex(b.name);
+    };
+
     return (
         <Card className="h-full">
             <CardHeader>
@@ -93,7 +117,7 @@ export default function SystemStatus() {
                     {/* Individual Server Breakdown */}
                     {stats.streamStats && stats.streamStats.length > 0 && (
                         <div className="space-y-2 mt-4 pt-4 border-t border-dashed">
-                            {stats.streamStats.map((server: any, idx: number) => (
+                            {[...stats.streamStats].sort(sortStreams).map((server: any, idx: number) => (
                                 <div key={idx} className="flex items-center justify-between text-sm">
                                     <div className="flex items-center gap-2 text-muted-foreground">
                                         <PlaySquare className="h-4 w-4" />
@@ -111,7 +135,7 @@ export default function SystemStatus() {
                 {/* Hardware Server Stats (CPU/RAM) */}
                 {stats.serverStats && stats.serverStats.length > 0 && (
                     <div className="space-y-3">
-                        {stats.serverStats.map((server: any) => (
+                        {[...stats.serverStats].sort(sortHardware).map((server: any) => (
                             <div key={server.name} className="space-y-1">
                                 <div className="flex justify-between text-xs font-semibold text-muted-foreground">
                                     <span>{server.name}</span>

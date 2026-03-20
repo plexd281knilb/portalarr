@@ -14,7 +14,6 @@ const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "default-s
 // --- SECURITY LAYER ---
 // ============================================================================
 
-// Prevents public users from pinging Admin Server Actions to extract API keys
 async function verifyAdmin() {
     const cookieStore = await cookies();
     const session = cookieStore.get("session")?.value;
@@ -318,7 +317,6 @@ export async function sendManualEmail(formData: FormData) {
 
 export async function getPublicMediaApps() {
     const apps = await prisma.mediaApp.findMany();
-    // STRIP SENSITIVE DATA: Only return the public URL, Name, and Type
     return apps.map(app => ({
         id: app.id,
         name: app.name,
@@ -365,7 +363,6 @@ export async function submitSupportTicket(formData: FormData) {
     }
 }
 
-// SECURED: Directly fetches from DB and explicitly filters response fields
 export async function getActiveDownloads() {
     const apps = await prisma.mediaApp.findMany({
         where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent"] } }
@@ -394,9 +391,6 @@ export async function getActiveDownloads() {
             const json = await res.json();
             if (json.queue) {
                 data.online = true;
-                
-                // SANITIZATION: Explicitly map only the necessary fields. 
-                // We drop the raw JSON to prevent leaking internal disk paths or API info.
                 data.queue = (json.queue.slots || []).map((slot: any) => ({
                     filename: slot.filename || "Unknown Download",
                     percentage: slot.percentage || "0",
@@ -533,5 +527,51 @@ export async function deleteBetaCard(id: string) {
     await verifyAdmin();
     await prisma.betaCard.delete({ where: { id } });
     revalidatePath("/beta");
+    revalidatePath("/settings");
+}
+
+// ============================================================================
+// --- ROADMAP ACTIONS ---
+// ============================================================================
+
+export async function getRoadmapText() {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    return settings?.roadmapText || "### 🚀 Upcoming Releases & Roadmap\nNo new updates at this time. Check back later!";
+}
+
+export async function updateRoadmapText(formData: FormData) {
+    await verifyAdmin();
+    const text = formData.get("text") as string;
+    await prisma.settings.upsert({
+        where: { id: "global" },
+        update: { roadmapText: text },
+        create: { id: "global", roadmapText: text }
+    });
+    revalidatePath("/");
+    revalidatePath("/settings");
+}
+
+// ============================================================================
+// --- ALERT BANNER ACTIONS ---
+// ============================================================================
+
+export async function getAlertBanner() {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    return {
+        enabled: settings?.alertBannerEnabled || false,
+        text: settings?.alertBannerText || "⚠️ **System Maintenance:** Expected downtime this weekend."
+    };
+}
+
+export async function updateAlertBanner(formData: FormData) {
+    await verifyAdmin();
+    const enabled = formData.get("enabled") === "on";
+    const text = formData.get("text") as string;
+    await prisma.settings.upsert({
+        where: { id: "global" },
+        update: { alertBannerEnabled: enabled, alertBannerText: text },
+        create: { id: "global", alertBannerEnabled: enabled, alertBannerText: text }
+    });
+    revalidatePath("/");
     revalidatePath("/settings");
 }

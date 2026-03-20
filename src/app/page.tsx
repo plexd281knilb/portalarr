@@ -1,14 +1,14 @@
-import { getPublicMediaApps, getBetaDashboardText } from "@/app/actions";
+import { getPublicMediaApps, getBetaDashboardText, getRoadmapText, getAlertBanner } from "@/app/actions";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from 'remark-gfm'; // Critical for lists
-import rehypeRaw from 'rehype-raw'; // Critical for <br /> tags
+import remarkGfm from 'remark-gfm'; 
+import rehypeRaw from 'rehype-raw'; 
 import LandingSupport from "@/components/landing-support";
 import SystemStatus from "@/components/system-status"; 
 import ActiveDownloads from "@/components/active-downloads"; 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ExternalLink, Server, LogIn, Settings } from "lucide-react"; 
+import { ExternalLink, Server, LogIn, Settings, AlertTriangle } from "lucide-react"; 
 import { cookies } from "next/headers"; 
 
 export const dynamic = "force-dynamic";
@@ -23,10 +23,11 @@ export default async function UserLandingPage() {
   const cookieStore = await cookies();
   const isLoggedIn = !!cookieStore.get("session")?.value;
 
-  // FAST FETCH: Only local database queries run on the server now
-  const [apps, betaText] = await Promise.all([
+  const [apps, betaText, roadmapText, alertBanner] = await Promise.all([
       getPublicMediaApps(),
-      getBetaDashboardText()
+      getBetaDashboardText(),
+      getRoadmapText(),
+      getAlertBanner()
   ]);
 
   const requestApps = apps.filter(app => 
@@ -36,6 +37,19 @@ export default async function UserLandingPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      
+      {/* --- ALERT BANNER --- */}
+      {alertBanner.enabled && alertBanner.text && (
+          <div className="w-full bg-orange-500/20 border-b border-orange-500/50 text-orange-700 dark:text-orange-400 px-4 py-2.5 text-center text-sm font-medium flex items-center justify-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <div className="[&>p]:inline">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                      {alertBanner.text}
+                  </ReactMarkdown>
+              </div>
+          </div>
+      )}
+
       <header className="border-b bg-muted/20">
         <div className="flex h-16 items-center px-6 gap-4 max-w-7xl mx-auto w-full justify-between">
           <div className="font-bold text-xl flex items-center gap-2">
@@ -109,6 +123,23 @@ export default async function UserLandingPage() {
              <ActiveDownloads />
         </div>
 
+        {/* ROADMAP CARD */}
+        <div className="w-full">
+            <Card className="bg-muted/30 border-primary/20">
+                <CardHeader>
+                    <CardTitle className="text-2xl flex items-center gap-2">
+                        🗺️ Roadmap & New Features
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden pb-4">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                        {roadmapText}
+                    </ReactMarkdown>
+                </CardContent>
+            </Card>
+        </div>
+
+        {/* BETA TESTING CARD */}
         <div className="w-full">
             <Card className="bg-muted/30 border-primary/20">
                 <CardHeader>
@@ -117,7 +148,6 @@ export default async function UserLandingPage() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden pb-4">
-                    {/* Fixed with remarkGfm and rehypeRaw plugins */}
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                         {betaText}
                     </ReactMarkdown>

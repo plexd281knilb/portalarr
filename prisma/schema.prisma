@@ -21,6 +21,9 @@ model Settings {
   autoSyncInterval Int       @default(6)
   lastAutoSync     DateTime?
   betaDashboardText String?
+  roadmapText      String?
+  alertBannerEnabled Boolean   @default(false)
+  alertBannerText    String?
 }
 
 model TautulliInstance {
