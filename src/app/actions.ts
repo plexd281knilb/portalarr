@@ -8,7 +8,11 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 
 const prisma = new PrismaClient();
-const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "default-secret-key-change-me");
+// --- SECURITY FIX 1: Enforce JWT_SECRET ---
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
+    throw new Error("FATAL: JWT_SECRET environment variable is missing. The server cannot start securely.");
+}
+const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "dev-only-insecure-key-do-not-use-in-production");
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -287,7 +291,7 @@ export async function sendManualEmail(formData: FormData) {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
         if (!settings?.smtpHost || !settings?.smtpUser) {
-            return { error: "SMTP settings (Host & User) not configured in Settings." };
+            return { error: "SMTP settings not configured." };
         }
 
         const transporter = nodemailer.createTransport({
@@ -307,7 +311,8 @@ export async function sendManualEmail(formData: FormData) {
         return { success: true };
     } catch (e: any) {
         console.error("Email Failed:", e);
-        return { error: e.message || "Failed to send email." };
+        // --- SECURITY FIX 4: Sanitize Error Messages ---
+        return { error: "Failed to send email. Please check your SMTP settings in the General tab." };
     }
 }
 
@@ -333,6 +338,19 @@ export async function submitSupportTicket(formData: FormData) {
     if (!name || !email || !issue) return { error: "All fields required" };
 
     try {
+        // --- SECURITY FIX 2: Rate Limiting (1 per hour per email) ---
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const recentTicket = await prisma.supportTicket.findFirst({
+            where: {
+                email: email,
+                createdAt: { gte: oneHourAgo }
+            }
+        });
+
+        if (recentTicket) {
+            return { error: "You've already submitted a ticket recently. Please wait an hour before submitting another." };
+        }
+
         await prisma.supportTicket.create({
             data: { name, email, issue }
         });
@@ -359,7 +377,7 @@ export async function submitSupportTicket(formData: FormData) {
         return { success: true };
     } catch (e) {
         console.error("Support Ticket Error:", e);
-        return { error: "Failed to submit ticket." };
+        return { error: "An unexpected error occurred. Please try again later." };
     }
 }
 
@@ -517,6 +535,22 @@ export async function createBetaCard(formData: FormData) {
     const buttonUrl = formData.get("buttonUrl") as string;
     
     await prisma.betaCard.create({ 
+        data: { title, content, buttonText, buttonUrl } 
+    });
+    revalidatePath("/beta");
+    revalidatePath("/settings");
+}
+
+export async function updateBetaCard(formData: FormData) {
+    await verifyAdmin();
+    const id = formData.get("id") as string;
+    const title = formData.get("title") as string;
+    const content = formData.get("content") as string;
+    const buttonText = formData.get("buttonText") as string;
+    const buttonUrl = formData.get("buttonUrl") as string;
+    
+    await prisma.betaCard.update({ 
+        where: { id },
         data: { title, content, buttonText, buttonUrl } 
     });
     revalidatePath("/beta");

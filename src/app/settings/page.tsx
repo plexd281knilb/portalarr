@@ -12,7 +12,7 @@ import {
     getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
     // Beta & Roadmap Actions
     getBetaDashboardText, updateBetaDashboardText,
-    getBetaCards, createBetaCard, deleteBetaCard,
+    getBetaCards, createBetaCard, updateBetaCard, deleteBetaCard,
     getRoadmapText, updateRoadmapText,
     // --- NEW ALERT ACTIONS ---
     getAlertBanner, updateAlertBanner
@@ -51,8 +51,9 @@ export default function SettingsPage() {
     const [alertBanner, setAlertBanner] = useState<{enabled: boolean, text: string}>({enabled: false, text: ""});
     const [bannerEnabled, setBannerEnabled] = useState(false);
 
-    // Edit Mode State
+    // Edit Mode States
     const [editingApp, setEditingApp] = useState<any>(null);
+    const [editingBetaCard, setEditingBetaCard] = useState<any>(null); // <-- NEW STATE FOR BETA CARDS
 
     const loadAllData = async () => {
         setLoading(true);
@@ -110,6 +111,7 @@ export default function SettingsPage() {
         await action(formData); 
         (e.target as HTMLFormElement).reset();
         setEditingApp(null); 
+        setEditingBetaCard(null); // Reset beta card edit mode on save
         loadAllData();
     };
 
@@ -120,8 +122,13 @@ export default function SettingsPage() {
         }
     };
 
+    // App Edit Handlers
     const startEdit = (app: any) => setEditingApp(app);
     const cancelEdit = () => setEditingApp(null);
+
+    // Beta Card Edit Handlers
+    const startEditBetaCard = (card: any) => setEditingBetaCard(card);
+    const cancelEditBetaCard = () => setEditingBetaCard(null);
 
     // Initial Loading Screen
     if (loading) {
@@ -472,47 +479,62 @@ export default function SettingsPage() {
                         </Card>
                         <Card>
                             <CardHeader>
-                                <CardTitle>Beta Testing Cards</CardTitle>
-                                <CardDescription>Add the instruction cards that appear on the /beta page.</CardDescription>
+                                <CardTitle>{editingBetaCard ? "Edit Beta Card" : "Beta Testing Cards"}</CardTitle>
+                                <CardDescription>{editingBetaCard ? `Editing: ${editingBetaCard.title}` : "Add the instruction cards that appear on the /beta page."}</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
-                                <div className="space-y-4 max-h-[300px] overflow-y-auto">
-                                    {(!betaCards || betaCards.length === 0) ? (
-                                        <div className="text-sm text-muted-foreground italic">No beta cards created yet.</div>
-                                    ) : (
-                                        betaCards.map((card: any) => (
-                                            <div key={card.id} className="flex items-start justify-between border p-3 rounded-md">
-                                                <div className="space-y-1">
-                                                    <div className="font-semibold">{card.title}</div>
-                                                    <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
+                                {!editingBetaCard && (
+                                    <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                                        {(!betaCards || betaCards.length === 0) ? (
+                                            <div className="text-sm text-muted-foreground italic">No beta cards created yet.</div>
+                                        ) : (
+                                            betaCards.map((card: any) => (
+                                                <div key={card.id} className="flex items-start justify-between border p-3 rounded-md">
+                                                    <div className="space-y-1">
+                                                        <div className="font-semibold">{card.title}</div>
+                                                        <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
+                                                    </div>
+                                                    <div className="flex gap-1 shrink-0 ml-2">
+                                                        <Button type="button" variant="ghost" size="icon" onClick={() => startEditBetaCard(card)}>
+                                                            <Pencil className="h-4 w-4 text-blue-500" />
+                                                        </Button>
+                                                        <Button type="button" variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
+                                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                                        </Button>
+                                                    </div>
                                                 </div>
-                                                <Button type="button" variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
-                                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                                </Button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                                <form onSubmit={(e) => handleForm(e, createBetaCard)} className="space-y-4 border-t pt-4">
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+                                <form onSubmit={(e) => handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard)} className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}>
+                                    {editingBetaCard && <input type="hidden" name="id" value={editingBetaCard.id} />}
                                     <div className="space-y-2">
                                         <Label>Card Title</Label>
-                                        <Input name="title" placeholder="Ex: New Music App" required />
+                                        <Input name="title" placeholder="Ex: New Music App" defaultValue={editingBetaCard?.title} required />
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Content (Supports Markdown)</Label>
-                                        <Textarea name="content" placeholder="Instructions go here..." rows={4} required />
+                                        <Textarea name="content" placeholder="Instructions go here..." rows={4} defaultValue={editingBetaCard?.content} required />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label>Button Text (Optional)</Label>
-                                            <Input name="buttonText" placeholder="Ex: Download Plexamp" />
+                                            <Input name="buttonText" placeholder="Ex: Download Plexamp" defaultValue={editingBetaCard?.buttonText} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Button URL (Optional)</Label>
-                                            <Input name="buttonUrl" placeholder="https://..." />
+                                            <Input name="buttonUrl" placeholder="https://..." defaultValue={editingBetaCard?.buttonUrl} />
                                         </div>
                                     </div>
-                                    <Button type="submit" className="w-full">Add Beta Card</Button>
+                                    <div className="flex gap-2">
+                                        <Button type="submit" className="w-full">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
+                                        {editingBetaCard && (
+                                            <Button type="button" variant="outline" onClick={cancelEditBetaCard}>
+                                                <X className="h-4 w-4"/>
+                                            </Button>
+                                        )}
+                                    </div>
                                 </form>
                             </CardContent>
                         </Card>
