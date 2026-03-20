@@ -107,11 +107,20 @@ export default function SettingsPage() {
     // --- FORM HANDLERS ---
     const handleForm = async (e: React.FormEvent, action: Function) => {
         e.preventDefault();
-        const formData = new FormData(e.target as HTMLFormElement);
+        const form = e.target as HTMLFormElement;
+        const formData = new FormData(form);
+        
         await action(formData); 
-        (e.target as HTMLFormElement).reset();
+        
+        // Only reset the form if it's NOT a markdown/text editor form
+        // This keeps your new text visible while the background refresh happens
+        const isTextEditor = form.querySelector('textarea[name="text"]');
+        if (!isTextEditor) {
+            form.reset();
+        }
+
         setEditingApp(null); 
-        setEditingBetaCard(null); // Reset beta card edit mode on save
+        setEditingBetaCard(null); 
         loadAllData();
     };
 

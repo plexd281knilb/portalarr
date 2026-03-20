@@ -1,7 +1,7 @@
 import { getPublicMediaApps, getBetaDashboardText, getRoadmapText, getAlertBanner } from "@/app/actions";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm'; 
-// --- SECURITY FIX 3: Removed rehypeRaw to prevent HTML injection --- 
+import rehypeRaw from 'rehype-raw'; 
 import LandingSupport from "@/components/landing-support";
 import SystemStatus from "@/components/system-status"; 
 import ActiveDownloads from "@/components/active-downloads"; 
@@ -43,8 +43,7 @@ export default async function UserLandingPage() {
           <div className="w-full bg-orange-500/20 border-b border-orange-500/50 text-orange-700 dark:text-orange-400 px-4 py-2.5 text-center text-sm font-medium flex items-center justify-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <div className="[&>p]:inline">
-                  {/* Fixed: Removed rehypeRaw for security */}
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                       {alertBanner.text}
                   </ReactMarkdown>
               </div>
@@ -133,8 +132,7 @@ export default async function UserLandingPage() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden pb-4">
-                    {/* Fixed: Removed rehypeRaw for security */}
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                         {roadmapText}
                     </ReactMarkdown>
                 </CardContent>
@@ -150,8 +148,7 @@ export default async function UserLandingPage() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden pb-4">
-                    {/* Fixed: Removed rehypeRaw for security */}
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                         {betaText}
                     </ReactMarkdown>
                 </CardContent>
