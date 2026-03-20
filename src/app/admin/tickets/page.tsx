@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSupportTickets, updateTicketStatus } from "@/app/actions";
+// 1. Add deleteSupportTicket to your imports
+import { getSupportTickets, updateTicketStatus, deleteSupportTicket } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Mail, LifeBuoy, Send } from "lucide-react";
+// 2. Add Trash2 to your icon imports
+import { Mail, LifeBuoy, Send, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export default function AdminTicketsPage() {
@@ -30,10 +32,22 @@ export default function AdminTicketsPage() {
         const newStatus = formData.get("status") as string;
         const comment = formData.get("adminComment") as string;
 
-        // Optimistically update the UI
         setTickets(prev => prev.map(t => t.id === id ? { ...t, status: newStatus, adminComment: comment } : t));
-        
         await updateTicketStatus(id, newStatus, comment);
+    };
+
+    // 3. Add the delete handler
+    const handleDelete = async (id: string) => {
+        if (!confirm("Are you sure you want to permanently delete this ticket?")) return;
+        
+        // Optimistic UI update
+        setTickets(prev => prev.filter(t => t.id !== id));
+        const result = await deleteSupportTicket(id);
+        
+        if (result.error) {
+            alert(result.error);
+            loadTickets(); // Refresh if delete fails
+        }
     };
 
     const getStatusColor = (status: string) => {
@@ -63,16 +77,27 @@ export default function AdminTicketsPage() {
                 {tickets.map((ticket) => (
                     <Card key={ticket.id}>
                         <CardHeader className="pb-2">
-                            <div className="space-y-1">
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    {ticket.name}
-                                    <Badge variant="outline" className="font-normal text-xs">
-                                        <Mail className="h-3 w-3 mr-1"/> {ticket.email}
-                                    </Badge>
-                                </CardTitle>
-                                <CardDescription>
-                                    Submitted {formatDistanceToNow(new Date(ticket.createdAt))} ago
-                                </CardDescription>
+                            <div className="flex justify-between items-start w-full">
+                                <div className="space-y-1">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        {ticket.name}
+                                        <Badge variant="outline" className="font-normal text-xs">
+                                            <Mail className="h-3 w-3 mr-1"/> {ticket.email}
+                                        </Badge>
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Submitted {formatDistanceToNow(new Date(ticket.createdAt))} ago
+                                    </CardDescription>
+                                </div>
+                                {/* 4. The New Delete Button */}
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="text-muted-foreground hover:text-destructive"
+                                    onClick={() => handleDelete(ticket.id)}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
                             </div>
                         </CardHeader>
                         <CardContent>

@@ -288,6 +288,21 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
     revalidatePath("/admin/tickets");
 }
 
+export async function deleteSupportTicket(id: string) {
+    await verifyAdmin();
+    try {
+        await prisma.supportTicket.delete({
+            where: { id }
+        });
+        revalidatePath("/admin/tickets");
+        revalidatePath("/settings");
+        return { success: true };
+    } catch (e) {
+        console.error("Failed to delete ticket:", e);
+        return { error: "Failed to delete ticket." };
+    }
+}
+
 export async function sendManualEmail(formData: FormData) {
     await verifyAdmin();
     const to = formData.get("to") as string;
