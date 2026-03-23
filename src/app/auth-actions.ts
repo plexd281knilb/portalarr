@@ -5,9 +5,16 @@ import { compare, hash } from "bcryptjs";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
+import { decryptData } from "@/lib/encryption";
+
+// ... (leave the rest of the file exactly as is!)
 
 const prisma = new PrismaClient();
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "default-secret-key-change-me");
+
+if (!process.env.JWT_SECRET) {
+  throw new Error("FATAL: JWT_SECRET environment variable is missing.");
+}
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 // --- 1. SETUP CHECK ---
 export async function checkSystemInitialized() {
@@ -50,8 +57,6 @@ export async function login(formData: FormData) {
   const username = formData.get("username") as string;
   const password = formData.get("password") as string;
 
-  console.log(`[AUTH] Attempting login for: ${username}`);
-
   if (!username || !password) {
     return { error: "Username and password required" };
   }
@@ -61,25 +66,21 @@ export async function login(formData: FormData) {
   });
 
   if (!user) {
-    console.log(`[AUTH] User not found: ${username}`);
     return { error: "Invalid credentials" };
   }
 
   const isValid = await compare(password, user.password);
 
   if (!isValid) {
-    console.log(`[AUTH] Invalid password for: ${username}`);
     return { error: "Invalid credentials" };
   }
 
-  console.log(`[AUTH] Login success for: ${username} (${user.role})`);
   await createSession(user.id, user.username, user.role);
   return { success: true };
 }
 
 // --- 4. LOGOUT ---
 export async function logout() {
-  // FIX: await cookies() before calling delete
   (await cookies()).delete("session");
   redirect("/login");
 }
@@ -92,21 +93,19 @@ async function createSession(userId: string, username: string, role: string) {
     .setExpirationTime("24h")
     .sign(JWT_SECRET);
 
-  console.log("[AUTH] Setting session cookie...");
+  const isProd = process.env.NODE_ENV === "production";
 
-  // FIX: await cookies() is required in Next.js 16
   (await cookies()).set("session", token, {
     httpOnly: true,
-    secure: false,  // <--- THIS IS THE KEY. It allows login over HTTP (IP or Localhost).
+    secure: isProd,
     maxAge: 60 * 60 * 24, 
     path: "/",
     sameSite: "lax",
   });
 }
 
-// --- HELPER: GET SESSION (For Middleware/Server Components) ---
+// --- HELPER: GET SESSION ---
 export async function getSession() {
-  // FIX: await cookies() before calling get
   const token = (await cookies()).get("session")?.value;
   if (!token) return null;
 
@@ -118,8 +117,7 @@ export async function getSession() {
   }
 }
 
-// Add this to the bottom of src/app/auth-actions.ts
-
+// --- 5. PLEX CALLBACK (OPTION 2: AUTO-SYNC) ---
 export async function handlePlexCallback(plexProfile: { email: string; username: string }) {
   console.log(`[AUTH] Processing Plex login for: ${plexProfile.username}`);
 
@@ -127,23 +125,44 @@ export async function handlePlexCallback(plexProfile: { email: string; username:
     return { error: "Plex account is missing an email or username." };
   }
 
-  // 1. Check if the user already exists in your database
   let user = await prisma.user.findUnique({
     where: { email: plexProfile.email }
   });
 
-  // 2. If they don't exist, create a new local user for them
   if (!user) {
-    console.log(`[AUTH] Creating new local user for Plex account: ${plexProfile.email}`);
+    console.log(`[AUTH] Checking Plex Friends List for: ${plexProfile.username}`);
     
-    // Prevent database crashes if their Plex username matches your Admin username
-    let safeUsername = plexProfile.username;
-    const existingUsername = await prisma.user.findUnique({ where: { username: safeUsername } });
-    if (existingUsername) {
-      safeUsername = `${safeUsername}_plex`;
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.mainPlexToken) {
+        return { error: "The Server Admin must configure their Plex Token in Settings before users can join." };
     }
 
-    // Generate a secure, random password (they will never need to type this)
+    const adminToken = decryptData(settings.mainPlexToken);
+    const response = await fetch("https://plex.tv/api/v2/friends", {
+        headers: {
+            "Accept": "application/json",
+            "X-Plex-Token": adminToken,
+            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+        }
+    });
+
+    let isFriend = false;
+    if (response.ok) {
+        const friendsList = await response.json();
+        isFriend = friendsList.some((friend: any) => 
+            friend.email === plexProfile.email || friend.username === plexProfile.username
+        );
+    }
+
+    if (!isFriend) {
+        console.warn(`[AUTH] BLOCKED: ${plexProfile.username} is not on the shared friends list.`);
+        return { error: "Access Denied. You do not have access to this Plex Server." };
+    }
+
+    let safeUsername = plexProfile.username;
+    const existingUsername = await prisma.user.findUnique({ where: { username: safeUsername } });
+    if (existingUsername) safeUsername = `${safeUsername}_plex`;
+
     const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
     const hashedPassword = await hash(randomPassword, 10);
 
@@ -152,17 +171,16 @@ export async function handlePlexCallback(plexProfile: { email: string; username:
         username: safeUsername,
         email: plexProfile.email,
         password: hashedPassword,
-        role: "USER", // STRICTLY enforced standard user role
+        role: "USER", 
       }
     });
   }
 
-  // 3. Generate the JWT and set the browser cookie
   await createSession(user.id, user.username, user.role);
   return { success: true };
 }
 
-// --- HELPER: GET CURRENT FULL USER (For Auto-Filling Forms) ---
+// --- HELPER: GET CURRENT FULL USER ---
 export async function getCurrentUser() {
   const payload = await getSession();
   if (!payload || !payload.userId) return null;

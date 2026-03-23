@@ -6,24 +6,20 @@ import { hash } from "bcryptjs";
 import nodemailer from "nodemailer"; 
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
+import { encryptData, decryptData } from "@/lib/encryption";
 
 const prisma = new PrismaClient();
-// --- SECURITY FIX 1: Enforce JWT_SECRET ---
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production" && !process.env.NEXT_PHASE) {
-    throw new Error("FATAL: JWT_SECRET environment variable is missing. The server cannot start securely.");
+
+if (!process.env.JWT_SECRET) {
+    throw new Error("FATAL: JWT_SECRET environment variable is missing.");
 }
-const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "dev-only-insecure-key-do-not-use-in-production");
+const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET);
 
 // ============================================================================
 // --- SECURITY LAYER ---
 // ============================================================================
 
 async function verifyAdmin() {
-    // --- DEV BYPASS: Stop the "Unauthorized" errors locally ---
-    if (process.env.NODE_ENV === "development") {
-        return; 
-    }
-
     const cookieStore = await cookies();
     const session = cookieStore.get("session")?.value;
     
@@ -32,7 +28,6 @@ async function verifyAdmin() {
     try {
         await jwtVerify(session, SECRET_KEY);
     } catch (err) {
-        // Log the actual error for debugging before throwing
         console.error("JWT Verification Failed:", err);
         throw new Error("Unauthorized");
     }
@@ -49,7 +44,12 @@ function cleanUrl(url: string): string {
 
 export async function getSettings() {
     await verifyAdmin();
-    return await prisma.settings.findFirst() || {};
+    const settings = await prisma.settings.findFirst() || {} as any;
+    
+    if (settings.smtpPass) settings.smtpPass = decryptData(settings.smtpPass);
+    if (settings.mainPlexToken) settings.mainPlexToken = decryptData(settings.mainPlexToken);
+    
+    return settings;
 }
 
 export async function saveSettings(formData: FormData) {
@@ -57,12 +57,22 @@ export async function saveSettings(formData: FormData) {
   const smtpHost = formData.get("smtpHost") as string;
   const smtpPort = formData.get("smtpPort") as string;
   const smtpUser = formData.get("smtpUser") as string;
-  const smtpPass = formData.get("smtpPass") as string;
+  const rawSmtpPass = formData.get("smtpPass") as string;
+  const rawPlexToken = formData.get("mainPlexToken") as string;
+
+  const encryptedSmtpPass = encryptData(rawSmtpPass);
+  const encryptedPlexToken = encryptData(rawPlexToken);
 
   await prisma.settings.upsert({
     where: { id: "global" },
-    update: { smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass },
-    create: { id: "global", smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass },
+    update: { 
+        smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass: encryptedSmtpPass, 
+        mainPlexToken: encryptedPlexToken 
+    },
+    create: { 
+        id: "global", smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass: encryptedSmtpPass, 
+        mainPlexToken: encryptedPlexToken 
+    },
   });
   revalidatePath("/settings");
 }
@@ -262,7 +272,7 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
                 host: settings.smtpHost,
                 port: settings.smtpPort,
                 secure: settings.smtpPort === 465, 
-                auth: { user: settings.smtpUser, pass: settings.smtpPass },
+                auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
             } as any);
 
             let emailText = `Hi ${ticket.name},\n\nYour support ticket status has been updated to: ${status}.\n\n`;
@@ -322,7 +332,7 @@ export async function sendManualEmail(formData: FormData) {
             host: settings.smtpHost,
             port: settings.smtpPort,
             secure: settings.smtpPort === 465, 
-            auth: { user: settings.smtpUser, pass: settings.smtpPass },
+            auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
         } as any);
 
         await transporter.sendMail({
@@ -335,7 +345,6 @@ export async function sendManualEmail(formData: FormData) {
         return { success: true };
     } catch (e: any) {
         console.error("Email Failed:", e);
-        // --- SECURITY FIX 4: Sanitize Error Messages ---
         return { error: "Failed to send email. Please check your SMTP settings in the General tab." };
     }
 }
@@ -362,7 +371,6 @@ export async function submitSupportTicket(formData: FormData) {
     if (!name || !email || !issue) return { error: "All fields required" };
 
     try {
-        // --- SECURITY FIX 2: Rate Limiting (1 per hour per email) ---
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
         const recentTicket = await prisma.supportTicket.findFirst({
             where: {
@@ -386,7 +394,7 @@ export async function submitSupportTicket(formData: FormData) {
                 host: settings.smtpHost,
                 port: settings.smtpPort,
                 secure: settings.smtpPort === 465, 
-                auth: { user: settings.smtpUser, pass: settings.smtpPass },
+                auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
             } as any);
 
             await transporter.sendMail({

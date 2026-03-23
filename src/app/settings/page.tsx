@@ -2,19 +2,14 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { 
-    // Auth
     getAppUsers, createAppUser, deleteAppUser, 
-    // General Settings
     getSettings, saveSettings, saveJobSettings, clearSmtpSettings,
-    // Apps & Monitoring
     getTautulliInstances, addTautulliInstance, removeTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance,
     getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
-    // Beta & Roadmap Actions
     getBetaDashboardText, updateBetaDashboardText,
     getBetaCards, createBetaCard, updateBetaCard, deleteBetaCard,
     getRoadmapText, updateRoadmapText,
-    // --- ALERT ACTIONS ---
     getAlertBanner, updateAlertBanner
 } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -58,7 +53,6 @@ export default function SettingsPage() {
     const loadAllData = async () => {
         setLoading(true);
 
-        // Fail-Safe: Force unlock after 2.5 seconds if the database hangs
         const safetyUnlock = setTimeout(() => {
             setLoading(false);
         }, 2500);
@@ -84,7 +78,6 @@ export default function SettingsPage() {
             setBetaCards(bc || []);
             setRoadmapText(rt || "");
             
-            // Set Banner State
             setAlertBanner(ab || {enabled: false, text: ""});
             setBannerEnabled(ab?.enabled || false);
         } catch (error) {
@@ -97,14 +90,12 @@ export default function SettingsPage() {
 
     useEffect(() => { loadAllData(); }, []);
 
-    // --- TAB HANDLER ---
     const handleTabChange = (value: string) => {
         startTransition(() => {
             setActiveTab(value);
         });
     };
 
-    // --- FORM HANDLERS ---
     const handleForm = async (e: React.FormEvent, action: Function) => {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
@@ -112,7 +103,6 @@ export default function SettingsPage() {
         
         await action(formData); 
         
-        // Fix: Prevent reset for text editors to avoid "ghosting" the value back to empty
         const isEditor = form.querySelector('textarea[name="text"]') || form.querySelector('input[name="text"]');
         if (!isEditor) {
             form.reset();
@@ -130,7 +120,6 @@ export default function SettingsPage() {
         }
     };
 
-    // Initial Loading Screen
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 text-muted-foreground">
@@ -149,7 +138,7 @@ export default function SettingsPage() {
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
                 <TabsList className="grid w-full grid-cols-1 md:grid-cols-4 h-auto">
-                    <TabsTrigger value="general" className="cursor-pointer">General & SMTP</TabsTrigger>
+                    <TabsTrigger value="general" className="cursor-pointer">General Setup</TabsTrigger>
                     <TabsTrigger value="access" className="cursor-pointer">Access Control</TabsTrigger>
                     <TabsTrigger value="monitoring" className="cursor-pointer">Monitoring & Apps</TabsTrigger>
                     <TabsTrigger value="beta" className="cursor-pointer">Beta Testing</TabsTrigger>
@@ -161,10 +150,9 @@ export default function SettingsPage() {
                     </div>
                 )}
 
-                {/* --- TAB 1: GENERAL & SMTP --- */}
+                {/* --- TAB 1: GENERAL SETUP --- */}
                 <TabsContent value="general" className="space-y-4">
                     
-                    {/* SYSTEM ALERT BANNER */}
                     <Card className="col-span-2 border-orange-500/50 bg-orange-500/5 dark:bg-orange-500/10">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
@@ -202,10 +190,10 @@ export default function SettingsPage() {
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <CardTitle>SMTP Settings (Sending)</CardTitle>
-                                        <CardDescription>Used for sending welcome emails and notifications.</CardDescription>
+                                        <CardTitle>Global Integrations</CardTitle>
+                                        <CardDescription>Configure SMTP emails and Plex Auto-Sync tokens.</CardDescription>
                                     </div>
-                                    {systemSettings?.smtpHost ? (
+                                    {systemSettings?.smtpHost || systemSettings?.mainPlexToken ? (
                                         <Badge className="bg-green-500 hover:bg-green-600">Saved</Badge>
                                     ) : (
                                         <Badge variant="secondary">Not Configured</Badge>
@@ -222,18 +210,34 @@ export default function SettingsPage() {
                                         <div className="space-y-2"><Label>User</Label><Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/></div>
                                         <div className="space-y-2"><Label>Password</Label><Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass || ""}/></div>
                                     </div>
-                                    <div className="flex gap-2">
+                                    
+                                    {/* NEW PLEX TOKEN SECTION */}
+                                    <div className="space-y-2 border-t pt-4 mt-4">
+                                        <Label htmlFor="mainPlexToken">Admin Plex Token (For Auto-Syncing Users)</Label>
+                                        <Input 
+                                            id="mainPlexToken" 
+                                            name="mainPlexToken" 
+                                            type="password" 
+                                            defaultValue={systemSettings.mainPlexToken || ""} 
+                                            placeholder="xxxxxxxxxxxxxxxxxxxx" 
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            This token securely checks your friends list to automatically approve users.
+                                        </p>
+                                    </div>
+
+                                    <div className="flex gap-2 pt-2">
                                         <Button type="submit" className="flex-1">
                                             <Send className="h-4 w-4 mr-2"/> 
-                                            {systemSettings?.smtpHost ? "Update SMTP" : "Save SMTP"}
+                                            Update Settings
                                         </Button>
                                         
-                                        {systemSettings?.smtpHost && (
+                                        {(systemSettings?.smtpHost || systemSettings?.mainPlexToken) && (
                                             <Button 
                                                 type="button" 
                                                 variant="destructive" 
                                                 onClick={async () => {
-                                                    if(confirm("Are you sure you want to clear the SMTP settings?")) {
+                                                    if(confirm("Are you sure you want to wipe these settings?")) {
                                                         await clearSmtpSettings();
                                                         loadAllData();
                                                     }
