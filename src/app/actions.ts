@@ -102,8 +102,12 @@ export async function addTautulliInstance(formData: FormData) {
   await verifyAdmin();
   const name = formData.get("name") as string;
   const url = formData.get("url") as string;
-  const apiKey = formData.get("apiKey") as string;
-  await prisma.tautulliInstance.create({ data: { name, url, apiKey } });
+  const rawApiKey = formData.get("apiKey") as string;
+  
+  // Encrypt before saving
+  await prisma.tautulliInstance.create({ 
+      data: { name, url, apiKey: encryptData(rawApiKey) } 
+  });
   revalidatePath("/settings");
 }
 
@@ -115,7 +119,9 @@ export async function removeTautulliInstance(id: string) {
 
 export async function getTautulliInstances() {
     await verifyAdmin();
-    return await prisma.tautulliInstance.findMany();
+    const instances = await prisma.tautulliInstance.findMany();
+    // Decrypt before sending to the UI
+    return instances.map(i => ({ ...i, apiKey: decryptData(i.apiKey) }));
 }
 
 export async function addGlancesInstance(formData: FormData) {
@@ -171,7 +177,9 @@ export async function getServiceStatus() {
 
 export async function getMediaApps() {
     await verifyAdmin();
-    return await prisma.mediaApp.findMany();
+    const apps = await prisma.mediaApp.findMany();
+    // Decrypt before sending to the UI
+    return apps.map(app => ({ ...app, apiKey: decryptData(app.apiKey as string) }));
 }
 
 export async function addMediaApp(formData: FormData) {
@@ -180,10 +188,11 @@ export async function addMediaApp(formData: FormData) {
   const name = formData.get("name") as string;
   const url = formData.get("url") as string;
   const externalUrl = formData.get("externalUrl") as string; 
-  const apiKey = formData.get("apiKey") as string;
+  const rawApiKey = formData.get("apiKey") as string;
   
+  // Encrypt before saving
   await prisma.mediaApp.create({ 
-      data: { type, name, url, externalUrl: externalUrl || null, apiKey } 
+      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey) } 
   });
   revalidatePath("/settings");
 }
@@ -195,11 +204,12 @@ export async function updateMediaApp(formData: FormData) {
     const name = formData.get("name") as string;
     const url = formData.get("url") as string;
     const externalUrl = formData.get("externalUrl") as string;
-    const apiKey = formData.get("apiKey") as string;
+    const rawApiKey = formData.get("apiKey") as string;
 
+    // Encrypt before saving
     await prisma.mediaApp.update({
         where: { id },
-        data: { type, name, url, externalUrl: externalUrl || null, apiKey }
+        data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey) }
     });
     revalidatePath("/settings");
 }
@@ -419,26 +429,32 @@ export async function getActiveDownloads() {
     });
 
     const results = await Promise.all(apps.map(async (app) => {
+        // 1. Initialize the data object for THIS specific app iteration
+        let data: any = { 
+            id: app.id, 
+            type: app.type, 
+            name: app.name, 
+            online: false,
+            queue: []
+        };
+
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000); 
             const cleanUrl = app.url.replace(/\/$/, "");
             
-            let data: any = { 
-                id: app.id, 
-                type: app.type, 
-                name: app.name, 
-                online: false,
-                queue: []
-            };
+            // Decrypt the API key from your secure storage
+            const decryptedKey = decryptData(app.apiKey as string);
 
-            const res = await fetch(`${cleanUrl}/api?mode=queue&output=json&apikey=${app.apiKey}`, { 
+            const res = await fetch(`${cleanUrl}/api?mode=queue&output=json&apikey=${decryptedKey}`, { 
                 signal: controller.signal, 
                 cache: "no-store" 
             });
             clearTimeout(timeoutId);
             
             const json = await res.json();
+
+            // 2. Now 'data' is defined and can be updated
             if (json.queue) {
                 data.online = true;
                 data.queue = (json.queue.slots || []).map((slot: any) => ({
@@ -451,7 +467,8 @@ export async function getActiveDownloads() {
             }
             return data;
         } catch (e) {
-            return { id: app.id, type: app.type, name: app.name, online: false, queue: [] };
+            // Return the initialized 'data' object (which has online: false) if the fetch fails
+            return data;
         }
     }));
 
