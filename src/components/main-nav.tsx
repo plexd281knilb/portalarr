@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { logout } from "@/app/auth-actions"; // <-- 1. Import the logout function
 import { 
     LayoutDashboard, 
     Users, 
     Settings, 
     Activity, 
     Layers,
-    Trash2 // <--- 1. Import the Trash Icon
+    Trash2,
+    LogOut // <-- 2. Import the LogOut icon
 } from "lucide-react";
 
 export function MainNav({
@@ -20,7 +22,7 @@ export function MainNav({
 
   return (
     <nav
-      className={cn("flex items-center space-x-4 lg:space-x-6", className)}
+      className={cn("flex items-center space-x-4 lg:space-x-6 w-full", className)}
       {...props}
     >
       <Link
@@ -56,7 +58,6 @@ export function MainNav({
         Apps
       </Link>
 
-      {/* --- 2. NEW CLEANUP LINK --- */}
       <Link
         href="/cleanup"
         className={cn(
@@ -67,7 +68,6 @@ export function MainNav({
         <Trash2 className="h-4 w-4" />
         Cleanup
       </Link>
-      {/* --------------------------- */}
 
       <Link
         href="/users"
@@ -90,6 +90,16 @@ export function MainNav({
         <Settings className="h-4 w-4" />
         Settings
       </Link>
+
+      {/* --- 3. THE SIGN OUT BUTTON --- */}
+      {/* Adding ml-auto pushes it to the far right side of the navigation bar */}
+      <button
+        onClick={() => logout()}
+        className="ml-auto text-sm font-medium transition-colors text-red-500 hover:text-red-600 flex items-center gap-2 cursor-pointer"
+      >
+        <LogOut className="h-4 w-4" />
+        Sign Out
+      </button>
     </nav>
   );
 }

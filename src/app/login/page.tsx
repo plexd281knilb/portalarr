@@ -3,16 +3,19 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { login, setupFirstAdmin, checkSystemInitialized } from "@/app/auth-actions"; 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { getPlexPin, checkPlexPin, getPlexUser } from "@/app/plex-auth";
+import { handlePlexCallback } from "@/app/auth-actions"; // Ensure this is imported!
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, ArrowLeft, ShieldCheck, Loader2 } from "lucide-react";
-import Link from "next/link";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertCircle, ShieldCheck, Loader2, Play } from "lucide-react";
 
 export default function LoginPage() {
   const [isSetupMode, setIsSetupMode] = useState<boolean | null>(null);
   const [error, setError] = useState("");
+  const [isPlexLoading, setIsPlexLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -21,18 +24,54 @@ export default function LoginPage() {
     });
   }, []);
 
-  async function handleSubmit(formData: FormData) {
+  async function handleAdminSubmit(formData: FormData) {
     setError("");
     const action = isSetupMode ? setupFirstAdmin : login;
     const res = await action(formData);
 
-    // Cast to 'any' to bypass the strict type check
     if ((res as any)?.error) {
       setError((res as any).error);
     } else {
-      // Browsers save passwords on navigation. 
-      // Redirect to settings instead of the removed admin overview.
       router.push("/settings"); 
+    }
+  }
+
+  async function handlePlexLogin() {
+    setIsPlexLoading(true);
+    setError("");
+
+    try {
+      const pin = await getPlexPin();
+      const authUrl = `https://app.plex.tv/auth/#!?clientID=portalarr-custom-dashboard-app&code=${pin.code}&context[device][product]=Portalarr`;
+      const popup = window.open(authUrl, "PlexLogin", "width=600,height=700");
+
+      const pollInterval = setInterval(async () => {
+        const token = await checkPlexPin(pin.id);
+        
+        if (token) {
+          clearInterval(pollInterval);
+          popup?.close();
+          const plexUser = await getPlexUser(token);
+          
+          const res = await handlePlexCallback(plexUser);
+          
+          if (res.error) {
+            setError(res.error);
+            setIsPlexLoading(false);
+          } else {
+            router.push("/");
+          }
+        }
+
+        if (popup?.closed) {
+          clearInterval(pollInterval);
+          setIsPlexLoading(false);
+        }
+      }, 2000);
+
+    } catch (err) {
+      setError("Failed to connect to Plex.");
+      setIsPlexLoading(false);
     }
   }
 
@@ -50,45 +89,76 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle className="text-2xl flex items-center gap-2">
              {isSetupMode ? <ShieldCheck className="h-6 w-6 text-primary" /> : null}
-             {isSetupMode ? "Setup Owner Account" : "Admin Login"}
+             {isSetupMode ? "Setup Owner Account" : "Welcome to Portalarr"}
           </CardTitle>
           <CardDescription>
             {isSetupMode 
-                ? "Welcome! Create the first administrator account to get started." 
-                : "Enter your credentials to access the dashboard."}
+                ? "Create the first administrator account to get started." 
+                : "Sign in to access your media requests."}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={handleSubmit} className="grid gap-4">
+          
+          {isSetupMode ? (
+             <AdminForm handleSubmit={handleAdminSubmit} isSetupMode={true} error={error} />
+          ) : (
+            <Tabs defaultValue="user" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="user">User</TabsTrigger>
+                <TabsTrigger value="admin">Admin</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="user" className="space-y-4">
+                <div className="flex flex-col items-center justify-center py-4 space-y-4">
+                    <div className="bg-[#e5a00d]/10 p-4 rounded-full">
+                        <Play className="h-8 w-8 text-[#e5a00d] ml-1" />
+                    </div>
+                    <p className="text-sm text-center text-muted-foreground pb-2">
+                        Sign in with your Plex account to request movies and TV shows.
+                    </p>
+                    <Button 
+                        type="button" 
+                        className="w-full bg-[#e5a00d] text-black hover:bg-[#c98c0b]"
+                        onClick={handlePlexLogin}
+                        disabled={isPlexLoading}
+                    >
+                        {isPlexLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Sign in with Plex
+                    </Button>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="admin">
+                <AdminForm handleSubmit={handleAdminSubmit} isSetupMode={false} error={error} />
+              </TabsContent>
+            </Tabs>
+          )}
+
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AdminForm({ handleSubmit, isSetupMode, error }: { handleSubmit: any, isSetupMode: boolean, error: string }) {
+    return (
+        <form action={handleSubmit} className="grid gap-4 animate-in fade-in">
             <div className="grid gap-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">Admin Username</Label>
               <Input 
-                  // Adding a key forces React to re-render this input when mode changes
                   key={isSetupMode ? "setup-user" : "login-user"}
-                  id="username" 
-                  name="username" 
-                  type="text" 
-                  required 
+                  id="username" name="username" type="text" required 
                   placeholder={isSetupMode ? "e.g. admin" : ""}
-                  autoComplete="username"
-                  // These attributes tell the browser "This is raw text, not a sentence/email"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck="false"
+                  autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck="false"
               />
             </div>
             
             {isSetupMode && (
-                <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
-                    <Label htmlFor="email">Email</Label>
+                <div className="grid gap-2">
+                    <Label htmlFor="email">Admin Email</Label>
                     <Input 
-                        key="setup-email"
-                        id="email" 
-                        name="email" 
-                        type="email" 
-                        required 
-                        placeholder="admin@example.com" 
-                        autoComplete="email"
+                        key="setup-email" id="email" name="email" type="email" required 
+                        placeholder="admin@example.com" autoComplete="email"
                     />
                 </div>
             )}
@@ -97,10 +167,7 @@ export default function LoginPage() {
               <Label htmlFor="password">Password</Label>
               <Input 
                   key={isSetupMode ? "setup-pass" : "login-pass"}
-                  id="password" 
-                  name="password" 
-                  type="password" 
-                  required 
+                  id="password" name="password" type="password" required 
                   autoComplete={isSetupMode ? "new-password" : "current-password"}
               />
             </div>
@@ -112,16 +179,8 @@ export default function LoginPage() {
             )}
             
             <Button type="submit" className="w-full">
-                {isSetupMode ? "Create & Login" : "Sign in now"}
+                {isSetupMode ? "Create & Login" : "Sign in to Dashboard"}
             </Button>
-          </form>
-        </CardContent>
-        <CardFooter className="justify-center border-t p-4">
-            <Link href="/" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1">
-                <ArrowLeft className="h-3 w-3" /> Back to Home
-            </Link>
-        </CardFooter>
-      </Card>
-    </div>
-  );
+        </form>
+    )
 }

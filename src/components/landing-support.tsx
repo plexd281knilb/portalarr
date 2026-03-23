@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { submitSupportTicket } from "@/app/actions";
+import { getCurrentUser } from "@/app/auth-actions"; // <-- Import the new helper
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +13,18 @@ import { Send, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 export default function LandingSupport() {
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
+    
+    // State to hold the user data
+    const [defaultUser, setDefaultUser] = useState({ name: "", email: "" });
+
+    // When the component loads, fetch the user's data
+    useEffect(() => {
+        getCurrentUser().then(user => {
+            if (user) {
+                setDefaultUser({ name: user.username, email: user.email });
+            }
+        });
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -38,11 +51,26 @@ export default function LandingSupport() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                         <Label>Name</Label>
-                        <Input name="name" required placeholder="Your Name" />
+                        <Input 
+                            name="name" 
+                            required 
+                            placeholder="Your Name" 
+                            defaultValue={defaultUser.name}
+                            // The key forces React to update the input once the fetch finishes
+                            key={`name-${defaultUser.name}`} 
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label>Email</Label>
-                        <Input name="email" type="email" required placeholder="For replies..." />
+                        <Input 
+                            name="email" 
+                            type="email" 
+                            required 
+                            placeholder="For replies..." 
+                            defaultValue={defaultUser.email}
+                            // The key forces React to update the input once the fetch finishes
+                            key={`email-${defaultUser.email}`} 
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label>Issue</Label>

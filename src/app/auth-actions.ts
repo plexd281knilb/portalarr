@@ -117,3 +117,60 @@ export async function getSession() {
     return null;
   }
 }
+
+// Add this to the bottom of src/app/auth-actions.ts
+
+export async function handlePlexCallback(plexProfile: { email: string; username: string }) {
+  console.log(`[AUTH] Processing Plex login for: ${plexProfile.username}`);
+
+  if (!plexProfile.email || !plexProfile.username) {
+    return { error: "Plex account is missing an email or username." };
+  }
+
+  // 1. Check if the user already exists in your database
+  let user = await prisma.user.findUnique({
+    where: { email: plexProfile.email }
+  });
+
+  // 2. If they don't exist, create a new local user for them
+  if (!user) {
+    console.log(`[AUTH] Creating new local user for Plex account: ${plexProfile.email}`);
+    
+    // Prevent database crashes if their Plex username matches your Admin username
+    let safeUsername = plexProfile.username;
+    const existingUsername = await prisma.user.findUnique({ where: { username: safeUsername } });
+    if (existingUsername) {
+      safeUsername = `${safeUsername}_plex`;
+    }
+
+    // Generate a secure, random password (they will never need to type this)
+    const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
+    const hashedPassword = await hash(randomPassword, 10);
+
+    user = await prisma.user.create({
+      data: {
+        username: safeUsername,
+        email: plexProfile.email,
+        password: hashedPassword,
+        role: "USER", // STRICTLY enforced standard user role
+      }
+    });
+  }
+
+  // 3. Generate the JWT and set the browser cookie
+  await createSession(user.id, user.username, user.role);
+  return { success: true };
+}
+
+// --- HELPER: GET CURRENT FULL USER (For Auto-Filling Forms) ---
+export async function getCurrentUser() {
+  const payload = await getSession();
+  if (!payload || !payload.userId) return null;
+  
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId as string },
+    select: { username: true, email: true }
+  });
+  
+  return user;
+}
