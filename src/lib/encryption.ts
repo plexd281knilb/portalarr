@@ -22,12 +22,16 @@ export function decryptData(text: string) {
     try {
         const parts = text.split(':');
         if (parts.length !== 3) return text; 
+        
         const iv = Buffer.from(parts[0], 'hex');
         const authTag = Buffer.from(parts[1], 'hex');
         const encryptedText = Buffer.from(parts[2], 'hex');
+        
         const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
         decipher.setAuthTag(authTag);
-        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+        
+        // FIX: Remove 'hex' because encryptedText is already a Buffer
+        let decrypted = decipher.update(encryptedText, undefined, 'utf8');
         decrypted += decipher.final('utf8');
         return decrypted;
     } catch (e) {
