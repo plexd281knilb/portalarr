@@ -18,18 +18,16 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 # Portalarr 🌐
 
-Portalarr is a modern, unified self-hosted dashboard designed specifically for media server administrators and their users. It aggregates real-time performance tracking, active download monitoring, content requests, support ticketing, and custom system announcements into a single, elegant web interface.
+Portalarr is a modern, unified self-hosted dashboard designed specifically for media server administrators and their users. It aggregates real-time performance tracking, support ticketing, and custom system announcements into a single, elegant web interface.
 
-Built as a highly reactive, force-dynamic Next.js application, Portalarr interfaces securely with popular self-hosted applications and infrastructure metrics providers (such as Tautulli, Glances, SABnzbd, NZBGet, and qBittorrent) while providing robust administrative controls.
+Built as a highly reactive, force-dynamic Next.js application, Portalarr interfaces securely with popular self-hosted applications and infrastructure metrics providers while providing robust administrative controls.
 
 ---
 
 ## ✨ Features
 
 ### 👤 User-Facing Dashboard
-* **Real-Time System Status:** At-a-glance health monitoring across media systems, explicitly displaying active stream breakdowns across servers (e.g., Main, Kids, Backup) and flagging offline or down services.
-* **Unified Request Content:** Seamless, dynamic routing to your configured content discovery or request platforms (Overseerr, Ombi, or Jellyseerr).
-* **Active Downloads Monitor:** Aggregated download status bar pooling active queues across NZB downloaders (SABnzbd, NZBGet) and torrent clients (qBittorrent) with individual percentage calculations, remaining file sizes, and time-left estimates.
+* **Real-Time System Status:** At-a-glance health monitoring across media systems, explicitly displaying active stream breakdowns across servers and flagging offline or down services.
 * **Integrated Support Desk:** A native user ticketing submission form allowing users to report streaming or server issues directly to the administrator. Pre-authenticates and auto-fills fields for logged-in users.
 * **Announcements & Feature Discovery:** * **Alert Banner:** A global emergency markdown header for broadcast maintenance notices or downtime warnings.
   * **Interactive Roadmap:** Dedicated markdown space detailing upcoming server features, expansions, or content changes.
@@ -39,7 +37,7 @@ Built as a highly reactive, force-dynamic Next.js application, Portalarr interfa
 * **JWT-Secured Admin Panel:** Complete server configuration suite gated behind rigorous JSON Web Token verification middleware (`verifyAdmin`).
 * **Hardware Telemetry Integration:** Syncs multi-version Glances API endpoints to safely capture server CPU utilization and RAM metrics over non-cors contexts.
 * **Dynamic Media App Settings:** Securely configure external URLs, internal addresses, and credentials for background API workers.
-* **At-Rest Field Encryption:** Industry-standard local symmetric payload cryptographic encryption routines securing highly sensitive fields (Plex Auth Tokens, Usenet/Torrent API Keys, SMTP passwords) directly in the local SQLite instance.
+* **At-Rest Field Encryption:** Industry-standard local symmetric payload cryptographic encryption routines securing highly sensitive fields directly in the local SQLite instance.
 * **Automated SMTP Mailer Pipelines:** Automatically signals user notifications upon support ticket updates ("Acknowledged" or "Completed"), sends manual administrative emails, and routes structural admin alerts when new support desk tickets land.
 * **Granular User Administration:** Comprehensive user registration database management supporting full bcrypt password-hashing cycles and explicit Admin/User RBAC definitions.
 
@@ -63,3 +61,23 @@ Built as a highly reactive, force-dynamic Next.js application, Portalarr interfa
   ```env
   DATABASE_URL="file:./prisma/dev.db"
   JWT_SECRET="your-super-secure-long-jwt-secret-string"
+
+  ├── .github/workflows/      # Automated Github Actions for container building/publishing
+├── prisma/
+│   ├── schema.prisma       # Prisma DB definition (Settings, Tautulli, Services, MediaApps, Tickets, Beta)
+│   └── migrations/         # Schema structural transition history files
+├── src/
+│   ├── app/
+│   │   ├── actions.ts      # Primary server-side logic (Secure Admin Panel & Public Feeds)
+│   │   ├── auth-actions.ts # User account tracking and authentication checks
+│   │   ├── page.tsx        # Dynamic system homepage routing layout
+│   │   ├── beta/page.tsx   # React client-state tracking for the interactive Beta cards
+│   │   └── admin/          # Gated administrative dashboard views
+│   ├── components/
+│   │   ├── system-status.tsx    # Live hardware & streaming metrics renderer
+│   │   └── landing-support.tsx  # Interactive user support ticket submission layout
+│   └── lib/
+│       ├── encryption.ts   # Hardware-level string cryptography tooling
+│       └── utils.ts        # UI design styling combinations
+├── Dockerfile              # Deployment packaging container configurations
+└── package.json            # Framework specifications, script macros, and dependency trees
