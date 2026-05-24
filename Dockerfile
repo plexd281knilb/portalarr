@@ -1,5 +1,6 @@
 # 1. Install dependencies
 FROM node:20-alpine AS deps
+# Install dependencies required for Prisma engines
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
@@ -14,7 +15,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma Client using the local pinned binary
+# Generate Prisma Client using the local binary
 RUN ./node_modules/.bin/prisma generate
 
 # Build environment variables
@@ -31,21 +32,23 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN apk add --no-cache openssl
+# CRITICAL: Install libraries required for Prisma engines to run on Alpine
+RUN apk add --no-cache openssl libc6-compat
+
+# CRITICAL: Install Prisma CLI globally. 
+# This is the most reliable way to ensure the 'prisma' command is in the PATH
+# and that all of its own dependencies are correctly satisfied for migrations.
+RUN npm install -g prisma@6.2.1
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy standalone build artifacts
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-
-# CRITICAL: We need the prisma CLI in the final image for migrations.
-# Next.js standalone doesn't include devDependencies like the prisma CLI.
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 USER nextjs
 
@@ -54,6 +57,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Run migrations using the pinned prisma version. 
-# Using npx with an explicit version ensures we use 6.2.1 even if the local path is tricky.
-CMD ["sh", "-c", "npx prisma@6.2.1 migrate deploy && node server.js"]
+# Run migrations using the globally installed prisma CLI
+CMD ["sh", "-c", "prisma migrate deploy && node server.js"]
