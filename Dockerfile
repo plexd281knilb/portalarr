@@ -38,6 +38,7 @@ RUN adduser --system --uid 1001 nextjs
 # Copy prisma binaries/client from builder
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Copy standalone build artifacts
 COPY --from=builder /app/public ./public
@@ -53,5 +54,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Run migrations using the local prisma CLI
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Run migrations using the local pinned prisma binary to prevent npx version mismatch
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node server.js"]
