@@ -7,11 +7,20 @@ function getLocalIps() {
   const results: string[] = ["localhost:3000", "127.0.0.1:3000"]; 
   const rawIps: string[] = ["localhost", "127.0.0.1"];
 
+  // Add custom origins from environment if provided
+  if (process.env.ALLOWED_ORIGINS) {
+    process.env.ALLOWED_ORIGINS.split(",").forEach(origin => {
+        results.push(origin.trim());
+    });
+  }
+
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]!) {
       if (net.family === 'IPv4' && !net.internal) {
         results.push(`${net.address}:3000`);
-        rawIps.push(net.address); // Capture just the IP for dev origins
+        results.push(`${net.address}:3001`); // Common Unraid default
+        results.push(`${net.address}`);      // Standard port 80
+        rawIps.push(net.address); 
       }
     }
   }

@@ -26,6 +26,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
    ```env
    DATABASE_URL="file:./prisma/dev.db"
    JWT_SECRET="your-super-secret-key"
+   ALLOWED_ORIGINS="your-domain.com,192.168.1.50:8080" # Optional: For Server Actions
    ```
 3. **Database Setup:**
    ```bash
