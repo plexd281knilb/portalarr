@@ -55,13 +55,13 @@ export default async function UserLandingPage() {
         <div className="flex h-16 items-center px-6 gap-4 max-w-7xl mx-auto w-full justify-between">
           <div className="font-bold text-xl flex items-center gap-2">
             <Server className="h-6 w-6 text-primary" />
-            <span>Home Page</span>
+            <span>Portalarr Home</span>
           </div>
           
-          <Link href={isLoggedIn ? "/settings" : "/login"}>
+          <Link href="/settings">
             <Button variant="ghost" size="sm" className="gap-2">
-                {isLoggedIn ? <Settings className="h-4 w-4" /> : <LogIn className="h-4 w-4" />} 
-                {isLoggedIn ? "Admin Settings" : "Admin Login"}
+                <Settings className="h-4 w-4" />
+                Settings
             </Button>
           </Link>
         </div>
