@@ -45,9 +45,15 @@ Portalarr is optimized for Docker deployment, particularly on Unraid.
    ```bash
    docker-compose up --build
    ```
-3. **Database Migrations:** The Docker container is configured to run `prisma migrate deploy` automatically on startup.
+3. **Database Migrations:** The Docker container is configured to run `prisma migrate deploy` automatically on startup. This safely updates the schema without affecting your data.
 4. **Volumes:**
    Data is persisted in `/app/data` (mapped to `/mnt/user/appdata/portalarr/data` in the default `docker-compose.yml`).
+
+### Updating Portalarr
+To update to the latest version while preserving your settings and database:
+1. **Pull the latest image:** `docker-compose pull`
+2. **Restart the container:** `docker-compose up -d`
+The persistent volume ensures your `dev.db` file is maintained across updates, and automatic migrations will apply any new schema changes.
 
 ## Development Conventions
 

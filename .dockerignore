@@ -4,3 +4,6 @@ node_modules
 .env
 npm-debug.log
 README.md
+*.db
+*.db-journal
+*.db-wal
