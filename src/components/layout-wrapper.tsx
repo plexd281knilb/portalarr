@@ -2,8 +2,10 @@
 
 import { usePathname } from "next/navigation";
 import { Sidebar, MobileSidebar } from "@/components/sidebar";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings, LayoutDashboard, Server } from "lucide-react";
 import { logout } from "@/app/auth-actions";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -12,25 +14,45 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
   if (isPublicRoute) {
     return (
-      <div className="w-full min-h-[100dvh] flex flex-col">
-        {/* --- NEW USER HEADER --- */}
-        {/* Only show this header if they are NOT on the login screen */}
+      <div className="w-full min-h-[100dvh] flex flex-col bg-background">
+        {/* --- GLOBAL USER HEADER --- */}
         {pathname !== "/login" && (
-          <header className="flex items-center justify-between p-4 border-b bg-background shrink-0">
-            <span className="font-bold text-lg text-primary">Portalarr</span>
+          <header className="flex items-center justify-between px-6 h-16 border-b bg-muted/20 shrink-0">
+            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                <Server className="h-6 w-6 text-primary" />
+                <span className="font-bold text-xl tracking-tight">Portalarr</span>
+            </Link>
             
-            <button 
-              onClick={() => logout()} 
-              className="flex items-center gap-2 text-sm font-medium text-red-500 hover:text-red-600 transition-colors"
-            >
-              <LogOut className="w-4 h-4" /> 
-              Sign Out
-            </button>
+            <div className="flex items-center gap-4">
+                {pathname === "/beta" ? (
+                    <Button asChild variant="ghost" size="sm" className="hidden sm:flex gap-2">
+                        <Link href="/">
+                            <LayoutDashboard className="h-4 w-4" /> 
+                            Dashboard
+                        </Link>
+                    </Button>
+                ) : (
+                    <Button asChild variant="ghost" size="sm" className="hidden sm:flex gap-2">
+                        <Link href="/settings">
+                            <Settings className="h-4 w-4" /> 
+                            Settings
+                        </Link>
+                    </Button>
+                )}
+
+                <button 
+                onClick={() => logout()} 
+                className="flex items-center gap-2 text-sm font-medium text-red-500 hover:text-red-600 transition-colors ml-2"
+                >
+                <LogOut className="w-4 h-4" /> 
+                <span className="hidden xs:inline">Sign Out</span>
+                </button>
+            </div>
           </header>
         )}
         {/* ----------------------- */}
 
-        <main className="flex-1">
+        <main className="flex-1 overflow-y-auto">
           {children}
         </main>
       </div>

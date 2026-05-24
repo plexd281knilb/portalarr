@@ -51,23 +51,7 @@ export default async function UserLandingPage() {
           </div>
       )}
 
-      <header className="border-b bg-muted/20">
-        <div className="flex h-16 items-center px-6 gap-4 max-w-7xl mx-auto w-full justify-between">
-          <div className="font-bold text-xl flex items-center gap-2">
-            <Server className="h-6 w-6 text-primary" />
-            <span>Portalarr Home</span>
-          </div>
-          
-          <Link href="/settings">
-            <Button variant="ghost" size="sm" className="gap-2">
-                <Settings className="h-4 w-4" />
-                Settings
-            </Button>
-          </Link>
-        </div>
-      </header>
-
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-8">
+      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
         
         <section className="text-center space-y-4 py-8">
             <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl">System Dashboard</h1>
@@ -78,7 +62,7 @@ export default async function UserLandingPage() {
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <SystemStatus />
-            <Card className="h-full flex flex-col">
+            <Card className="h-full flex flex-col animate-in fade-in duration-700">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <ExternalLink className="h-5 w-5 text-primary"/> Request Content
@@ -119,7 +103,7 @@ export default async function UserLandingPage() {
 
         {/* ROADMAP CARD */}
         <div className="w-full">
-            <Card className="bg-muted/30 border-primary/20">
+            <Card className="bg-muted/30 border-primary/20 animate-in fade-in duration-1000">
                 <CardHeader>
                     <CardTitle className="text-2xl flex items-center gap-2">
                         🗺️ Roadmap & New Features

@@ -40,7 +40,7 @@ export default function LandingSupport() {
     };
 
     return (
-        <Card className="h-full flex flex-col">
+        <Card className="h-full flex flex-col animate-in fade-in duration-700">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <AlertCircle className="h-5 w-5 text-primary"/> Support

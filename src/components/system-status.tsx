@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, WifiOff, Cpu, HardDrive, PlaySquare, Loader2 } from "lucide-react";
+import { Activity, WifiOff, Cpu, HardDrive, PlaySquare } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SystemStatus() {
     const [stats, setStats] = useState<any>(null);
@@ -26,16 +27,26 @@ export default function SystemStatus() {
         // Initial fetch
         fetchStats();
 
-        // Auto-refresh every 10 seconds
+        // Auto-refresh every 5 seconds
         const interval = setInterval(fetchStats, 5000);
         return () => clearInterval(interval);
     }, []);
 
     if (loading || !stats) {
         return (
-            <Card className="h-full flex flex-col items-center justify-center p-12 space-y-4 min-h-[300px]">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Checking systems...</p>
+            <Card className="h-full flex flex-col">
+                <CardHeader>
+                    <Skeleton className="h-6 w-1/3 mb-2" />
+                    <Skeleton className="h-4 w-1/2" />
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <Skeleton className="h-12 w-full" />
+                    <div className="space-y-2">
+                        <Skeleton className="h-16 w-full" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-full" />
+                    </div>
+                </CardContent>
             </Card>
         );
     }
@@ -68,7 +79,7 @@ export default function SystemStatus() {
     };
 
     return (
-        <Card className="h-full">
+        <Card className="h-full animate-in fade-in duration-700">
             <CardHeader>
                 <div className="flex justify-between items-start">
                     <div>

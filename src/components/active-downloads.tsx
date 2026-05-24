@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Download, Loader2 } from "lucide-react";
+import { Download } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ActiveDownloads() {
     const [downloads, setDownloads] = useState<any[]>([]);
@@ -27,16 +28,22 @@ export default function ActiveDownloads() {
         // Initial fetch
         fetchDownloads();
 
-        // Auto-refresh every 10 seconds
+        // Auto-refresh every 5 seconds
         const interval = setInterval(fetchDownloads, 5000);
         return () => clearInterval(interval);
     }, []);
 
     if (loading) {
         return (
-            <Card className="w-full flex items-center justify-center p-12 min-h-[150px]">
-                <Loader2 className="h-6 w-6 animate-spin text-primary mr-3" />
-                <span className="text-muted-foreground">Checking active downloads...</span>
+            <Card className="w-full flex flex-col">
+                <CardHeader>
+                    <Skeleton className="h-6 w-1/4 mb-2" />
+                    <Skeleton className="h-4 w-1/3" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                </CardContent>
             </Card>
         );
     }
@@ -45,7 +52,7 @@ export default function ActiveDownloads() {
     const allQueueItems = downloads.flatMap(app => app.queue || []);
 
     return (
-        <Card className="w-full">
+        <Card className="w-full animate-in fade-in duration-700">
             <CardHeader>
                 <div className="flex justify-between items-center">
                     <div>

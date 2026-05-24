@@ -7,8 +7,9 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { getBetaCards } from '@/app/actions';
 import Link from 'next/link';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Server } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function BetaPage() {
     const [betaCards, setBetaCards] = useState<any[]>([]);
@@ -30,25 +31,23 @@ export default function BetaPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-background flex flex-col items-center justify-center space-y-4">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Loading beta services...</p>
+            <div className="min-h-screen bg-background flex flex-col animate-in fade-in duration-500">
+                <main className="flex-1 p-6 max-w-5xl mx-auto w-full space-y-8 mt-8">
+                    <div className="space-y-4">
+                        <Skeleton className="h-12 w-2/3" />
+                        <Skeleton className="h-6 w-1/2" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card className="flex flex-col p-6 space-y-4"><Skeleton className="h-6 w-1/3"/><Skeleton className="h-24 w-full"/><Skeleton className="h-10 w-full"/></Card>
+                        <Card className="flex flex-col p-6 space-y-4"><Skeleton className="h-6 w-1/3"/><Skeleton className="h-24 w-full"/><Skeleton className="h-10 w-full"/></Card>
+                    </div>
+                </main>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-background flex flex-col">
-            <header className="border-b bg-muted/20">
-                <div className="flex h-16 items-center px-6 gap-4 max-w-7xl mx-auto w-full">
-                    <Button asChild variant="ghost" size="sm">
-                        <Link href="/">
-                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
-                        </Link>
-                    </Button>
-                </div>
-            </header>
-
+        <div className="min-h-screen bg-background flex flex-col animate-in fade-in duration-500">
             <main className="flex-1 p-6 max-w-5xl mx-auto w-full space-y-8 pb-12 mt-8">
                 <div className="mb-8">
                     <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl mb-4 text-primary">

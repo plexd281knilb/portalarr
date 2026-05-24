@@ -122,9 +122,23 @@ export default function SettingsPage() {
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p>Loading settings...</p>
+            <div className="flex-1 space-y-6 p-8 max-w-6xl mx-auto animate-in fade-in duration-500">
+                <div className="space-y-2">
+                    <Skeleton className="h-10 w-1/4" />
+                    <Skeleton className="h-4 w-1/3" />
+                </div>
+                <div className="space-y-4">
+                    <div className="flex gap-2 border-b pb-2">
+                        <Skeleton className="h-8 w-24" />
+                        <Skeleton className="h-8 w-24" />
+                        <Skeleton className="h-8 w-24" />
+                        <Skeleton className="h-8 w-24" />
+                    </div>
+                    <div className="grid gap-6 md:grid-cols-2">
+                        <Card className="p-6 space-y-4"><Skeleton className="h-6 w-1/3"/><Skeleton className="h-32 w-full"/></Card>
+                        <Card className="p-6 space-y-4"><Skeleton className="h-6 w-1/3"/><Skeleton className="h-32 w-full"/></Card>
+                    </div>
+                </div>
             </div>
         );
     }
