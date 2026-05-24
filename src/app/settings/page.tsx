@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { Switch } from "@/components/ui/switch";
 import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, AlertTriangle, PlaySquare, Activity } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
