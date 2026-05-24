@@ -63,13 +63,13 @@ Portalarr is optimized for Docker deployment, particularly on Unraid.
 - **Sensitive Fields:** Fields like `mainPlexToken`, `smtpPass`, and service `apiKey`s must be encrypted before saving to the database using `encryptData` and decrypted before use with `decryptData` (from `src/lib/encryption.ts`).
 
 ### 4. Global Route Protection
-- **Middleware:** All routes are protected by `src/middleware.ts`.
+- **Proxy Configuration:** All routes are protected by `src/proxy.ts` (Next.js 16 convention).
 - **Enforcement:** Users are redirected to `/login` if no valid session exists.
 - **Role-Based Access:** Admin routes (`/settings`, `/admin/*`) are restricted to users with the `ADMIN` role. Standard users are redirected back to the home page if they attempt to access these routes.
 
 ## Key Files
 - `prisma/schema.prisma`: The source of truth for the database schema.
-- `src/middleware.ts`: Global authentication and role-based access control.
+- `src/proxy.ts`: Global authentication and role-based access control.
 - `src/app/actions.ts`: Main repository for system logic and database mutations.
 - `src/app/auth-actions.ts`: Logic for login, session creation, and Plex authentication.
 - `src/components/sidebar.tsx`: Main navigation component.
