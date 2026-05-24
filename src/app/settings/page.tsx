@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger, } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, AlertTriangle } from "lucide-react";
+import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, AlertTriangle, PlaySquare, Activity } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function SettingsPage() {

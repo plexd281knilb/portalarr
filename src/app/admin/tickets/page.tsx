@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 // 2. Add Trash2 to your icon imports
-import { Mail, LifeBuoy, Send, Trash2 } from "lucide-react";
+import { Mail, LifeBuoy, Send, Trash2, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export default function AdminTicketsPage() {
