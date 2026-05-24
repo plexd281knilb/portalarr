@@ -12,20 +12,14 @@ WORKDIR /app
 
 # Copy node_modules from deps
 COPY --from=deps /app/node_modules ./node_modules
-
-# Copy ONLY prisma schema first to cache the generate step
-COPY prisma ./prisma/
-RUN npx prisma generate
-
-# Now copy the rest of the source code
 COPY . .
 
-# Build environment variables (using modern key=value format)
-ENV DATABASE_URL="file:./dev.db"
-ENV NEXT_TELEMETRY_DISABLED=1
+# Generate Prisma Client (uses default node_modules location)
+RUN npx prisma generate
 
-# Note: JWT_SECRET is NOT needed at build time for this app.
-# It will be provided as a runtime environment variable.
+# Build environment variables
+ENV DATABASE_URL="file:./prisma/dev.db"
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build the application
 RUN npm run build

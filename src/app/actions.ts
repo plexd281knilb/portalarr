@@ -1,14 +1,12 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { hash } from "bcryptjs"; 
 import nodemailer from "nodemailer"; 
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { encryptData, decryptData } from "@/lib/encryption";
-
-const prisma = new PrismaClient();
+import prisma from "@/lib/prisma";
 
 const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
 if (!JWT_SECRET_RAW && process.env.NODE_ENV === "production") {

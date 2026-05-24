@@ -1,15 +1,13 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
 import { compare, hash } from "bcryptjs";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
 import { decryptData } from "@/lib/encryption";
+import prisma from "@/lib/prisma";
 
 // ... (leave the rest of the file exactly as is!)
-
-const prisma = new PrismaClient();
 
 const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
 if (!JWT_SECRET_RAW && process.env.NODE_ENV === "production") {

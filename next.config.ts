@@ -33,7 +33,7 @@ console.log("✅ Allowed Origins Auto-Detected:", allowedOrigins);
 const nextConfig: NextConfig = {
   output: "standalone",
   // CRITICAL FIX: Stops Turbopack from breaking on Windows symlinks
-  serverExternalPackages: ["better-sqlite3", "@prisma/client"], 
+  serverExternalPackages: ["better-sqlite3"], 
   
   // --- THE FIX FROM YOUR CONSOLE LOGS ---
   // Tells Next.js to stop blocking your local network IP

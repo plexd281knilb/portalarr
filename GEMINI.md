@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 - **Architecture:** Next.js 16 (App Router) with React 19. It uses Server Actions for backend logic and Prisma with SQLite for data persistence.
 - **Tech Stack:**
   - **Framework:** Next.js 16
-  - **Database:** SQLite (Prisma ORM)
+  - **Database:** SQLite (Prisma 6 ORM)
   - **Styling:** Tailwind CSS, Radix UI (Shadcn UI style)
   - **Icons:** Lucide React
   - **Auth:** Custom JWT-based session management using `jose` and `bcryptjs`.
