@@ -45,7 +45,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                 className="flex items-center gap-2 text-sm font-medium text-red-500 hover:text-red-600 transition-colors ml-2"
                 >
                 <LogOut className="w-4 h-4" /> 
-                <span className="hidden xs:inline">Sign Out</span>
+                <span className="hidden sm:inline">Sign Out</span>
                 </button>
             </div>
           </header>

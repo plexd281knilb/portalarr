@@ -8,7 +8,7 @@ import ActiveDownloads from "@/components/active-downloads";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ExternalLink, Server, LogIn, Settings, AlertTriangle } from "lucide-react"; 
+import { ExternalLink, AlertTriangle } from "lucide-react"; 
 import { cookies } from "next/headers"; 
 
 export const dynamic = "force-dynamic";
