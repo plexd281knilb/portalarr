@@ -14,8 +14,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma Client (uses default node_modules location)
-RUN npx prisma generate
+# Generate Prisma Client using the local pinned binary
+RUN ./node_modules/.bin/prisma generate
 
 # Build environment variables
 ENV DATABASE_URL="file:./prisma/dev.db"

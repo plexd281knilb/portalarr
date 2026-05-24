@@ -31,7 +31,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
    ```
 3. **Database Setup:**
    ```bash
-   npx prisma migrate dev
+   npx prisma@6.2.1 migrate dev
    ```
 4. **Run Dev Server:**
    ```bash
