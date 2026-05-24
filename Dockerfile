@@ -12,16 +12,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN npm install -g prisma@6
 RUN npx prisma generate
 
 # Tell Docker exactly where the database is for the build process
 ENV DATABASE_URL="file:./dev.db"
-
-# --- FIX: Provide a placeholder for the build phase ---
 ENV JWT_SECRET="placeholder-for-build-purposes-only"
 
-RUN npx prisma migrate deploy
 RUN npm run build
 
 # 3. Production image
@@ -34,12 +30,15 @@ RUN apk add --no-cache openssl
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+# Install prisma globally for migrations
 RUN npm install -g prisma@6
 
 # Copy the standalone build artifacts
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy prisma folder for migrations
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 USER nextjs
 
@@ -48,4 +47,5 @@ EXPOSE 3000
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["node", "server.js"]
+# Run migrations on startup before starting the server
+CMD ["sh", "-c", "prisma migrate deploy && node server.js"]

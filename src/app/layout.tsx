@@ -7,7 +7,7 @@ import LayoutWrapper from "@/components/layout-wrapper";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Adminarr",
+  title: "Portalarr",
   description: "Mission Control for Home Lab",
 };
 

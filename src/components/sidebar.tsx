@@ -23,7 +23,7 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
       <div className="space-y-4 py-4">
         <div className="px-3 py-2">
           <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
-            Adminarr
+            Portalarr
           </h2>
           <div className="space-y-1">
             <Link href="/">
@@ -85,7 +85,7 @@ export function MobileSidebar() {
 
             <div className="flex-1 px-2 pb-4 flex flex-col justify-between">
               <div className="px-3 py-2">
-                <h2 className="mb-6 px-4 text-lg font-semibold tracking-tight">Adminarr</h2>
+                <h2 className="mb-6 px-4 text-lg font-semibold tracking-tight">Portalarr</h2>
                 <div className="space-y-1">
                   <Link href="/" onClick={() => setIsOpen(false)}>
                     <Button variant={pathname === "/" ? "secondary" : "ghost"} className="w-full justify-start">

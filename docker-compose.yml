@@ -13,8 +13,9 @@ services:
     environment:
       - DATABASE_URL=file:/app/data/dev.db
       - NODE_ENV=production
+      - JWT_SECRET=change-me-to-something-random # CRITICAL: Change this!
     volumes:
-      # Unraid Appdata Mapping
+      # Persistent Database Store
       - /mnt/user/appdata/portalarr/data:/app/data
       
       # Read-only access to unraid shares for your glances/stats

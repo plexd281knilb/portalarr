@@ -313,66 +313,85 @@ export default function SettingsPage() {
 
                 {/* --- TAB 3: MONITORING & APPS --- */}
                 <TabsContent value="monitoring" className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <Card className="col-span-1">
-                            <CardHeader><CardTitle>Tautulli</CardTitle><CardDescription>For syncing users.</CardDescription></CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-2">
-                                    {tautulli.map(t => (
-                                        <div key={t.id} className="flex justify-between items-center border p-2 rounded text-sm">
-                                            <span className="truncate">{t.name}</span>
-                                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => handleDelete(t.id, removeTautulliInstance)}><Trash2 className="h-3 w-3"/></Button>
-                                        </div>
-                                    ))}
-                                </div>
-                                <form onSubmit={(e) => handleForm(e, addTautulliInstance)} className="space-y-2 border-t pt-2">
-                                    <Input name="name" placeholder="Name" size={1} required className="h-8 text-xs"/>
-                                    <Input name="url" placeholder="URL (http://...)" required className="h-8 text-xs"/>
-                                    <Input name="apiKey" placeholder="API Key" required className="h-8 text-xs"/>
-                                    <Button type="submit" size="sm" className="w-full">Add Tautulli</Button>
-                                </form>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="col-span-1">
-                            <CardHeader><CardTitle>Glances</CardTitle><CardDescription>Server stats.</CardDescription></CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-2">
-                                    {glances.map(g => (
-                                        <div key={g.id} className="flex justify-between items-center border p-2 rounded text-sm">
-                                            <span className="truncate">{g.name}</span>
-                                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => handleDelete(g.id, removeGlancesInstance)}><Trash2 className="h-3 w-3"/></Button>
-                                        </div>
-                                    ))}
-                                </div>
-                                <form onSubmit={(e) => handleForm(e, addGlancesInstance)} className="space-y-2 border-t pt-2">
-                                    <Input name="name" placeholder="Name" required className="h-8 text-xs"/>
-                                    <Input name="url" placeholder="URL" required className="h-8 text-xs"/>
-                                    <Button type="submit" size="sm" className="w-full">Add Glances</Button>
-                                </form>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="col-span-1">
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        <Card className="flex flex-col">
                             <CardHeader>
-                                <CardTitle>{editingApp ? "Edit Application" : "Applications"}</CardTitle>
-                                <CardDescription>{editingApp ? `Editing: ${editingApp.name}` : "Services for the Apps page."}</CardDescription>
+                                <CardTitle className="flex items-center gap-2">
+                                    <PlaySquare className="h-5 w-5 text-primary"/> Tautulli
+                                </CardTitle>
+                                <CardDescription>Plex monitoring instances.</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-4">
+                            <CardContent className="space-y-4 flex-1">
+                                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                                    {tautulli.length === 0 && <p className="text-xs text-muted-foreground italic">No instances added.</p>}
+                                    {tautulli.map(t => (
+                                        <div key={t.id} className="flex justify-between items-center border p-2 rounded-md bg-muted/20 text-sm">
+                                            <span className="truncate font-medium">{t.name}</span>
+                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(t.id, removeTautulliInstance)}><Trash2 className="h-4 w-4"/></Button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <form onSubmit={(e) => handleForm(e, addTautulliInstance)} className="space-y-2 border-t pt-4 mt-auto">
+                                    <div className="grid gap-2">
+                                        <Input name="name" placeholder="Friendly Name (e.g. Main Plex)" required className="h-9 text-sm"/>
+                                        <Input name="url" placeholder="URL (http://192.168.1.50:8181)" required className="h-9 text-sm"/>
+                                        <Input name="apiKey" placeholder="Tautulli API Key" required className="h-9 text-sm"/>
+                                    </div>
+                                    <Button type="submit" size="sm" className="w-full mt-2">Add Instance</Button>
+                                </form>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="flex flex-col">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Activity className="h-5 w-5 text-primary"/> Glances
+                                </CardTitle>
+                                <CardDescription>Hardware monitoring instances.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4 flex-1">
+                                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                                    {glances.length === 0 && <p className="text-xs text-muted-foreground italic">No instances added.</p>}
+                                    {glances.map(g => (
+                                        <div key={g.id} className="flex justify-between items-center border p-2 rounded-md bg-muted/20 text-sm">
+                                            <span className="truncate font-medium">{g.name}</span>
+                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(g.id, removeGlancesInstance)}><Trash2 className="h-4 w-4"/></Button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <form onSubmit={(e) => handleForm(e, addGlancesInstance)} className="space-y-2 border-t pt-4 mt-auto">
+                                    <div className="grid gap-2">
+                                        <Input name="name" placeholder="Server Name (e.g. Unraid)" required className="h-9 text-sm"/>
+                                        <Input name="url" placeholder="URL (http://192.168.1.50:61208)" required className="h-9 text-sm"/>
+                                    </div>
+                                    <Button type="submit" size="sm" className="w-full mt-2">Add Instance</Button>
+                                </form>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="flex flex-col">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Shield className="h-5 w-5 text-primary"/> {editingApp ? "Edit Application" : "Applications"}
+                                </CardTitle>
+                                <CardDescription>{editingApp ? `Modifying ${editingApp.name}` : "Connect your Arr apps and requests."}</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4 flex-1">
                                 {!editingApp && (
-                                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                                        {mediaApps.length === 0 && <p className="text-xs text-muted-foreground italic">No apps added.</p>}
                                         {mediaApps.map(app => (
-                                            <div key={app.id} className="flex justify-between items-center border p-2 rounded text-sm">
+                                            <div key={app.id} className="flex justify-between items-center border p-2 rounded-md bg-muted/20 text-sm">
                                                 <div className="truncate">
-                                                    <div className="font-medium">{app.name}</div>
-                                                    <div className="text-[10px] text-muted-foreground uppercase">{app.type}</div>
+                                                    <div className="font-semibold">{app.name}</div>
+                                                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{app.type}</div>
                                                 </div>
-                                                <div className="flex gap-1">
-                                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-500" onClick={() => setEditingApp(app)}>
-                                                        <Pencil className="h-3 w-3"/>
+                                                <div className="flex gap-1 shrink-0">
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500 hover:bg-blue-50" onClick={() => setEditingApp(app)}>
+                                                        <Pencil className="h-4 w-4"/>
                                                     </Button>
-                                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => handleDelete(app.id, removeMediaApp)}>
-                                                        <Trash2 className="h-3 w-3"/>
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => handleDelete(app.id, removeMediaApp)}>
+                                                        <Trash2 className="h-4 w-4"/>
                                                     </Button>
                                                 </div>
                                             </div>
@@ -380,15 +399,16 @@ export default function SettingsPage() {
                                     </div>
                                 )}
 
-                                <form onSubmit={(e) => handleForm(e, editingApp ? updateMediaApp : addMediaApp)} className={`space-y-2 ${!editingApp && "border-t pt-2"}`}>
+                                <form onSubmit={(e) => handleForm(e, editingApp ? updateMediaApp : addMediaApp)} className={`space-y-3 ${!editingApp && "border-t pt-4 mt-auto"}`}>
                                     {editingApp && <input type="hidden" name="id" value={editingApp.id} />}
                                     <Select name="type" required defaultValue={editingApp?.type}>
-                                        <SelectTrigger className="h-8"><SelectValue placeholder="Select App Type" /></SelectTrigger>
+                                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="App Type" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectGroup>
                                                 <SelectLabel>Downloads</SelectLabel>
                                                 <SelectItem value="sabnzbd">SABnzbd</SelectItem>
                                                 <SelectItem value="nzbget">NZBGet</SelectItem>
+                                                <SelectItem value="qBittorrent">qBittorrent</SelectItem>
                                             </SelectGroup>
                                             <SelectGroup>
                                                 <SelectLabel>Movies & TV</SelectLabel>
@@ -411,22 +431,22 @@ export default function SettingsPage() {
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>
-                                    <Input name="name" placeholder="App Name" required className="h-8 text-xs" defaultValue={editingApp?.name} />
+                                    <Input name="name" placeholder="Display Name" required className="h-9 text-sm" defaultValue={editingApp?.name} />
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
-                                            <Label className="text-[10px] text-muted-foreground">Internal URL (API)</Label>
-                                            <Input name="url" placeholder="http://192.168.1.X:PORT" required className="h-8 text-xs" defaultValue={editingApp?.url} />
+                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Internal URL</Label>
+                                            <Input name="url" placeholder="IP:PORT" required className="h-9 text-sm font-mono" defaultValue={editingApp?.url} />
                                         </div>
                                         <div className="space-y-1">
-                                            <Label className="text-[10px] text-muted-foreground">External URL (User)</Label>
-                                            <Input name="externalUrl" placeholder="https://requests.domain.com" className="h-8 text-xs" defaultValue={editingApp?.externalUrl} />
+                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">External URL</Label>
+                                            <Input name="externalUrl" placeholder="requests.com" className="h-9 text-sm font-mono" defaultValue={editingApp?.externalUrl} />
                                         </div>
                                     </div>
-                                    <Input name="apiKey" placeholder="API Key" className="h-8 text-xs" defaultValue={editingApp?.apiKey} />
+                                    <Input name="apiKey" placeholder="API Key" className="h-9 text-sm font-mono" defaultValue={editingApp?.apiKey} />
                                     <div className="flex gap-2">
-                                        <Button type="submit" size="sm" className="w-full">{editingApp ? "Update App" : "Add App"}</Button>
+                                        <Button type="submit" size="sm" className="w-full h-9">{editingApp ? "Update App" : "Add App"}</Button>
                                         {editingApp && (
-                                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingApp(null)}>
+                                            <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setEditingApp(null)}>
                                                 <X className="h-4 w-4"/>
                                             </Button>
                                         )}

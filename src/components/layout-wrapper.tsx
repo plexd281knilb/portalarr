@@ -51,7 +51,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         {/* Mobile Header (Admins Only) */}
         <div className="md:hidden border-b bg-background p-4 flex items-center gap-3 shrink-0">
            <MobileSidebar /> 
-           <span className="font-bold text-lg">Adminarr Settings</span>
+           <span className="font-bold text-lg">Portalarr Settings</span>
         </div>
 
         {/* Scrollable Page Content */}

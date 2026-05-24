@@ -143,38 +143,6 @@ export async function getGlancesInstances() {
     return await prisma.glancesInstance.findMany();
 }
 
-export async function addService(formData: FormData) {
-  await verifyAdmin();
-  const name = formData.get("name") as string;
-  const url = formData.get("url") as string;
-  await prisma.service.create({ data: { name, url } });
-  revalidatePath("/settings");
-}
-
-export async function removeService(id: string) {
-  await verifyAdmin();
-  await prisma.service.delete({ where: { id } });
-  revalidatePath("/settings");
-}
-
-export async function getServiceStatus() {
-    await verifyAdmin();
-    const services = await prisma.service.findMany();
-    
-    const results = await Promise.all(services.map(async (service) => {
-        try {
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 2000);
-            await fetch(service.url, { signal: controller.signal, mode: 'no-cors' });
-            clearTimeout(id);
-            return { ...service, online: true };
-        } catch (e) {
-            return { ...service, online: false };
-        }
-    }));
-    return results;
-}
-
 export async function getMediaApps() {
     await verifyAdmin();
     const apps = await prisma.mediaApp.findMany();
@@ -289,18 +257,14 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
             if (adminComment) {
                 emailText += `Admin Reply:\n${adminComment}\n\n`;
             }
-            emailText += `--- Original Issue ---\n${ticket.issue}\n\nThanks,\nAdminarr Support`;
+            emailText += `--- Original Issue ---\n${ticket.issue}\n\nThanks,\nPortalarr Support`;
 
-            try {
-                await transporter.sendMail({
-                    from: `"Support" <${settings.smtpUser}>`,
-                    to: ticket.email,
-                    subject: `Support Ticket Update: ${status}`,
-                    text: emailText
-                });
-            } catch (e) {
-                console.error("Failed to send ticket update email:", e);
-            }
+            await transporter.sendMail({
+                from: `"Portalarr" <${settings.smtpUser}>`,
+                to: ticket.email,
+                subject: `Support Ticket Update: ${status}`,
+                text: emailText
+            });
         }
     }
 
@@ -346,7 +310,7 @@ export async function sendManualEmail(formData: FormData) {
         } as any);
 
         await transporter.sendMail({
-            from: `"Adminarr" <${settings.smtpUser}>`,
+            from: `"Portalarr" <${settings.smtpUser}>`,
             to: to,
             subject: subject,
             html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${message}</div>` 

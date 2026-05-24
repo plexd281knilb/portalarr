@@ -59,75 +59,97 @@ export default function AdminTicketsPage() {
     };
 
     return (
-        <div className="flex-1 space-y-4 p-8 pt-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                    <LifeBuoy className="h-8 w-8 text-primary"/> Support Tickets
-                </h2>
-                <Button onClick={loadTickets} variant="outline" size="sm">Refresh</Button>
+        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-5xl mx-auto">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+                        <LifeBuoy className="h-8 w-8 text-primary"/> Support Tickets
+                    </h2>
+                    <p className="text-muted-foreground">Manage and respond to user-submitted issues.</p>
+                </div>
+                <Button onClick={loadTickets} variant="outline" size="sm" className="w-fit">
+                    <Loader2 className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                    Refresh
+                </Button>
             </div>
 
-            <div className="grid gap-4">
+            <div className="grid gap-6">
                 {tickets.length === 0 && !loading && (
-                    <div className="p-12 text-center border border-dashed rounded-lg text-muted-foreground">
-                        No support tickets found. Good job!
-                    </div>
+                    <Card className="border-dashed bg-muted/20">
+                        <CardContent className="p-12 text-center text-muted-foreground italic">
+                            No support tickets found. All systems go!
+                        </CardContent>
+                    </Card>
                 )}
                 
                 {tickets.map((ticket) => (
-                    <Card key={ticket.id}>
-                        <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start w-full">
-                                <div className="space-y-1">
-                                    <CardTitle className="text-base flex items-center gap-2">
-                                        {ticket.name}
-                                        <Badge variant="outline" className="font-normal text-xs">
+                    <Card key={ticket.id} className="overflow-hidden border-primary/5 shadow-sm hover:shadow-md transition-shadow">
+                        <CardHeader className="bg-muted/30 pb-4">
+                            <div className="flex justify-between items-start w-full gap-4">
+                                <div className="space-y-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <CardTitle className="text-lg font-bold truncate">
+                                            {ticket.name}
+                                        </CardTitle>
+                                        <Badge variant="secondary" className="font-mono text-[10px] px-1.5 py-0 h-5">
                                             <Mail className="h-3 w-3 mr-1"/> {ticket.email}
                                         </Badge>
-                                    </CardTitle>
-                                    <CardDescription>
+                                    </div>
+                                    <CardDescription className="text-xs">
                                         Submitted {formatDistanceToNow(new Date(ticket.createdAt))} ago
                                     </CardDescription>
                                 </div>
-                                {/* 4. The New Delete Button */}
-                                <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="text-muted-foreground hover:text-destructive"
-                                    onClick={() => handleDelete(ticket.id)}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                    <Badge className={`${getStatusColor(ticket.status)} text-white border-0 shadow-sm px-3`}>
+                                        {ticket.status}
+                                    </Badge>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                        onClick={() => handleDelete(ticket.id)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
                         </CardHeader>
-                        <CardContent>
-                            <div className="bg-muted/50 p-3 rounded-md text-sm whitespace-pre-wrap mb-4 border">
+                        <CardContent className="pt-6 space-y-6">
+                            <div className="bg-background border rounded-lg p-4 text-sm leading-relaxed whitespace-pre-wrap shadow-inner">
                                 {ticket.issue}
                             </div>
                             
-                            <form onSubmit={(e) => handleUpdate(e, ticket.id)} className="space-y-4 border-t pt-4">
+                            <form onSubmit={(e) => handleUpdate(e, ticket.id)} className="space-y-4 pt-4 border-t border-dashed">
                                 <div className="space-y-2">
-                                    <Label>Admin Reply (Included in email notification)</Label>
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        <Send className="h-3 w-3" /> Admin Response
+                                    </Label>
                                     <Textarea 
                                         name="adminComment" 
                                         defaultValue={ticket.adminComment || ""} 
-                                        placeholder="Type your reply or internal notes here..." 
-                                        className="min-h-[80px]"
+                                        placeholder="Type your message to the user..." 
+                                        className="min-h-[100px] bg-muted/10 focus-visible:ring-primary/30"
                                     />
+                                    <p className="text-[10px] text-muted-foreground italic">
+                                        This message will be included in the email notification sent to the user.
+                                    </p>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <Select name="status" defaultValue={ticket.status}>
-                                        <SelectTrigger className={`w-[150px] text-white ${getStatusColor(ticket.status)}`}>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Pending">Pending</SelectItem>
-                                            <SelectItem value="Acknowledged">Acknowledged</SelectItem>
-                                            <SelectItem value="Completed">Completed</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <Button type="submit" className="gap-2">
-                                        <Send className="h-4 w-4" /> Save & Notify
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-2">
+                                    <div className="flex items-center gap-2">
+                                        <Label className="text-xs font-medium whitespace-nowrap">Set Status:</Label>
+                                        <Select name="status" defaultValue={ticket.status}>
+                                            <SelectTrigger className="w-[160px] h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Pending">Pending</SelectItem>
+                                                <SelectItem value="Acknowledged">Acknowledged</SelectItem>
+                                                <SelectItem value="Completed">Completed</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <Button type="submit" className="gap-2 h-9 shadow-sm" size="sm">
+                                        <Send className="h-4 w-4" /> Save & Notify User
                                     </Button>
                                 </div>
                             </form>
