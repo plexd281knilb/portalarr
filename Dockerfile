@@ -20,10 +20,12 @@ RUN npx prisma generate
 # Now copy the rest of the source code
 COPY . .
 
-# Build environment variables
+# Build environment variables (using modern key=value format)
 ENV DATABASE_URL="file:./dev.db"
-ENV JWT_SECRET="placeholder-for-build-purposes-only"
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Note: JWT_SECRET is NOT needed at build time for this app.
+# It will be provided as a runtime environment variable.
 
 # Build the application
 RUN npm run build
@@ -33,7 +35,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN apk add --no-cache openssl
 RUN addgroup --system --gid 1001 nodejs
@@ -54,8 +56,8 @@ USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 # Run migrations using the local prisma CLI
 CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
