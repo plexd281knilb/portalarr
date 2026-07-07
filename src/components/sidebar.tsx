@@ -12,7 +12,8 @@ import {
   Menu,
   X,
   LogOut,
-  LifeBuoy
+  LifeBuoy,
+  BookOpen
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -30,6 +31,13 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               <Button variant={pathname === "/" ? "secondary" : "ghost"} className="w-full justify-start">
                 <LayoutDashboard className="mr-2 h-4 w-4" />
                 Dashboard
+              </Button>
+            </Link>
+
+            <Link href="/library">
+              <Button variant={pathname.startsWith("/library") ? "secondary" : "ghost"} className="w-full justify-start">
+                <BookOpen className="mr-2 h-4 w-4" />
+                Book Library
               </Button>
             </Link>
 
@@ -90,6 +98,12 @@ export function MobileSidebar() {
                   <Link href="/" onClick={() => setIsOpen(false)}>
                     <Button variant={pathname === "/" ? "secondary" : "ghost"} className="w-full justify-start">
                       <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
+                    </Button>
+                  </Link>
+
+                  <Link href="/library" onClick={() => setIsOpen(false)}>
+                    <Button variant={pathname.startsWith("/library") ? "secondary" : "ghost"} className="w-full justify-start">
+                      <BookOpen className="mr-2 h-4 w-4" /> Book Library
                     </Button>
                   </Link>
                   

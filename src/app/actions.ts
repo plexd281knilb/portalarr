@@ -621,3 +621,171 @@ export async function updateAlertBanner(formData: FormData) {
     revalidatePath("/");
     revalidatePath("/settings");
 }
+
+// ============================================================================
+// --- BOOK LIBRARY & REQUEST ACTIONS (SHELFMARK + GRIMMORY) ---
+// ============================================================================
+
+import fs from "fs";
+import path from "path";
+
+async function verifyUser() {
+    const cookieStore = await cookies();
+    const session = cookieStore.get("session")?.value;
+    if (!session) throw new Error("Unauthorized");
+    try {
+        const { payload } = await jwtVerify(session, SECRET_KEY);
+        return payload; // { userId, username, role }
+    } catch (err) {
+        throw new Error("Unauthorized");
+    }
+}
+
+async function checkLibraryAccess(allowedUsersStr: string, username: string, role: string) {
+    if (role === "ADMIN") return true;
+    if (!allowedUsersStr) return false;
+    const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
+    if (allowed.includes("*") || allowed.includes(username.toLowerCase())) {
+        return true;
+    }
+    return false;
+}
+
+export async function getLibraries() {
+    const session = await verifyUser();
+    const libraries = await prisma.library.findMany({
+        orderBy: { name: "asc" }
+    });
+    
+    const accessible = [];
+    for (const lib of libraries) {
+        if (await checkLibraryAccess(lib.allowedUsers, session.username as string, session.role as string)) {
+            accessible.push(lib);
+        }
+    }
+    return accessible;
+}
+
+export async function createLibrary(formData: FormData) {
+    await verifyAdmin();
+    const name = formData.get("name") as string;
+    const description = formData.get("description") as string;
+    const allowedUsers = formData.get("allowedUsers") as string || "*";
+    
+    await prisma.library.create({
+        data: { name, description, allowedUsers }
+    });
+    revalidatePath("/library");
+}
+
+export async function updateLibrary(formData: FormData) {
+    await verifyAdmin();
+    const id = formData.get("id") as string;
+    const name = formData.get("name") as string;
+    const description = formData.get("description") as string;
+    const allowedUsers = formData.get("allowedUsers") as string || "*";
+    
+    await prisma.library.update({
+        where: { id },
+        data: { name, description, allowedUsers }
+    });
+    revalidatePath("/library");
+}
+
+export async function deleteLibrary(id: string) {
+    await verifyAdmin();
+    
+    const books = await prisma.book.findMany({ where: { libraryId: id } });
+    for (const book of books) {
+        try {
+            if (fs.existsSync(book.filePath)) {
+                fs.unlinkSync(book.filePath);
+            }
+        } catch (e) {
+            console.error(`Failed to delete book file: ${book.filePath}`, e);
+        }
+    }
+    
+    await prisma.library.delete({ where: { id } });
+    revalidatePath("/library");
+}
+
+export async function getLibraryBooks(libraryId: string) {
+    const session = await verifyUser();
+    const library = await prisma.library.findUnique({
+        where: { id: libraryId }
+    });
+    
+    if (!library) throw new Error("Library not found");
+    
+    const hasAccess = await checkLibraryAccess(
+        library.allowedUsers, 
+        session.username as string, 
+        session.role as string
+    );
+    if (!hasAccess) throw new Error("Unauthorized access to this library");
+    
+    return await prisma.book.findMany({
+        where: { libraryId },
+        orderBy: { title: "asc" }
+    });
+}
+
+export async function deleteBook(id: string) {
+    await verifyAdmin();
+    const book = await prisma.book.findUnique({ where: { id } });
+    if (!book) throw new Error("Book not found");
+    
+    try {
+        if (fs.existsSync(book.filePath)) {
+            fs.unlinkSync(book.filePath);
+        }
+    } catch (e) {
+        console.error(`Failed to delete book file: ${book.filePath}`, e);
+    }
+    
+    await prisma.book.delete({ where: { id } });
+    revalidatePath("/library");
+}
+
+export async function getBookRequests() {
+    const session = await verifyUser();
+    
+    if (session.role === "ADMIN") {
+        return await prisma.bookRequest.findMany({
+            orderBy: { createdAt: "desc" }
+        });
+    } else {
+        return await prisma.bookRequest.findMany({
+            where: { requestedBy: session.username as string },
+            orderBy: { createdAt: "desc" }
+        });
+    }
+}
+
+export async function createBookRequest(formData: FormData) {
+    const session = await verifyUser();
+    const title = formData.get("title") as string;
+    const author = formData.get("author") as string || "";
+    
+    if (!title) throw new Error("Title is required");
+    
+    await prisma.bookRequest.create({
+        data: {
+            title,
+            author,
+            requestedBy: session.username as string,
+            status: "Pending"
+        }
+    });
+    revalidatePath("/library");
+}
+
+export async function updateBookRequestStatus(id: string, status: string) {
+    await verifyAdmin();
+    await prisma.bookRequest.update({
+        where: { id },
+        data: { status }
+    });
+    revalidatePath("/library");
+}

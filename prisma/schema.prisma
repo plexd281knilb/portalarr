@@ -89,3 +89,37 @@ model BetaCard {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+model Library {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  allowedUsers String   @default("") // Comma-separated list of usernames, or "*" for everyone
+  books        Book[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Book {
+  id          String   @id @default(cuid())
+  title       String
+  author      String?
+  coverUrl    String?  // Optional cover image
+  filePath    String   // Local path on disk to the PDF/EPUB/etc.
+  fileSize    Int?     // Size in bytes
+  fileType    String   // "epub", "pdf", "cbz", etc.
+  libraryId   String
+  library     Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model BookRequest {
+  id          String   @id @default(cuid())
+  title       String
+  author      String?
+  requestedBy String   // Username
+  status      String   @default("Pending") // "Pending", "Approved", "Downloaded", "Rejected"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
