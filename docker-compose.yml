@@ -21,3 +21,7 @@ services:
       # Read-only access to unraid shares for your glances/stats
       - /mnt/user:/mnt/user:ro
       - /mnt/remotes:/mnt/remotes:ro
+
+      # Book Library Share (Read/Write mount for book upload & processing)
+      # Map this to your Unraid book share (e.g. /mnt/user/books:/books)
+      # - /mnt/user/books:/books
