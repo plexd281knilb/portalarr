@@ -1644,3 +1644,33 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
         throw new Error(`Failed to send request: ${e.message || "Unknown mail error"}`);
     }
 }
+
+export async function searchOpenLibrary(query: string) {
+    if (!query || query.trim().length < 2) return [];
+    try {
+        const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
+            headers: { "Accept": "application/json" },
+            next: { revalidate: 3600 }
+        });
+        if (!response.ok) throw new Error("Open Library search failed");
+        
+        const data = await response.json();
+        const docs = data.docs || [];
+        
+        return docs.map((doc: any) => {
+            const author = doc.author_name && doc.author_name.length > 0 ? doc.author_name[0] : "Unknown Author";
+            const coverUrl = doc.cover_i 
+                ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
+                : "";
+            return {
+                title: doc.title,
+                author,
+                coverUrl,
+                year: doc.first_publish_year || "Unknown Year"
+            };
+        });
+    } catch (e) {
+        console.error("Open Library API Error:", e);
+        return [];
+    }
+}

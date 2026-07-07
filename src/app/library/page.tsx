@@ -17,7 +17,8 @@ import {
   saveUserKindleSettings,
   sendBookToKindle,
   getPublicSmtpFromEmail,
-  getAppUsers
+  getAppUsers,
+  searchOpenLibrary
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -65,6 +66,11 @@ export default function BookLibraryPage() {
     const [serverSmtpFrom, setServerSmtpFrom] = useState("");
     const [sendingToKindleId, setSendingToKindleId] = useState<string | null>(null);
     const [allUsers, setAllUsers] = useState<any[]>([]);
+
+    // Open Library Autocomplete states
+    const [openLibrarySuggestions, setOpenLibrarySuggestions] = useState<any[]>([]);
+    const [searchingRegistry, setSearchingRegistry] = useState(false);
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -118,6 +124,27 @@ export default function BookLibraryPage() {
         }
         loadInitData();
     }, []);
+
+    useEffect(() => {
+        if (!reqTitle || reqTitle.trim().length < 2) {
+            setOpenLibrarySuggestions([]);
+            return;
+        }
+
+        const delayDebounceFn = setTimeout(async () => {
+            setSearchingRegistry(true);
+            try {
+                const results = await searchOpenLibrary(reqTitle);
+                setOpenLibrarySuggestions(results || []);
+            } catch (e) {
+                console.error("Autocomplete search error:", e);
+            } finally {
+                setSearchingRegistry(false);
+            }
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [reqTitle]);
 
     useEffect(() => {
         if (selectedLibrary) {
@@ -657,16 +684,75 @@ export default function BookLibraryPage() {
                                 </CardHeader>
                                 <CardContent>
                                     <form onSubmit={handleCreateRequest} className="space-y-4">
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-1.5 relative">
                                             <Label htmlFor="reqTitle" className="text-xs font-medium">Book Title</Label>
                                             <Input
                                                 id="reqTitle"
                                                 type="text"
                                                 placeholder="e.g. Project Hail Mary"
                                                 value={reqTitle}
-                                                onChange={(e) => setReqTitle(e.target.value)}
+                                                onChange={(e) => {
+                                                    setReqTitle(e.target.value);
+                                                    setShowSuggestions(true);
+                                                }}
+                                                onFocus={() => setShowSuggestions(true)}
                                                 required
+                                                autoComplete="off"
                                             />
+
+                                            {showSuggestions && (
+                                                <div 
+                                                    className="fixed inset-0 z-40 bg-transparent" 
+                                                    onClick={() => setShowSuggestions(false)} 
+                                                />
+                                            )}
+
+                                            {showSuggestions && (reqTitle.trim().length >= 2) && (
+                                                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[#1e1e24] text-foreground border border-muted/80 rounded-md shadow-xl max-h-60 overflow-y-auto divide-y divide-muted/50">
+                                                    {searchingRegistry ? (
+                                                        <div className="p-3 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                                                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                            Searching book registry...
+                                                        </div>
+                                                    ) : openLibrarySuggestions.length === 0 ? (
+                                                        <div className="p-3 text-center text-xs text-muted-foreground italic">
+                                                            No matches found in registry.
+                                                        </div>
+                                                    ) : (
+                                                        openLibrarySuggestions.map((book, idx) => (
+                                                            <div 
+                                                                key={idx}
+                                                                className="p-2 flex gap-3 hover:bg-muted/40 cursor-pointer items-start transition-colors z-50 relative"
+                                                                onMouseDown={() => {
+                                                                    setReqTitle(book.title);
+                                                                    setReqAuthor(book.author);
+                                                                    setShowSuggestions(false);
+                                                                }}
+                                                            >
+                                                                {book.coverUrl ? (
+                                                                    <img 
+                                                                        src={book.coverUrl} 
+                                                                        alt={book.title} 
+                                                                        className="w-8 h-10 object-cover rounded bg-muted/20 shrink-0 border border-muted"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="w-8 h-10 rounded bg-muted flex items-center justify-center text-[8px] text-muted-foreground shrink-0 border border-muted">
+                                                                        NO COVER
+                                                                    </div>
+                                                                )}
+                                                                <div className="min-w-0 flex-1">
+                                                                    <h5 className="text-xs font-semibold text-foreground leading-snug truncate" title={book.title}>
+                                                                        {book.title}
+                                                                    </h5>
+                                                                    <p className="text-[10px] text-muted-foreground truncate">
+                                                                        {book.author} • {book.year}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="reqAuthor" className="text-xs font-medium">Author (Optional)</Label>
