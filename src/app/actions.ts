@@ -25,7 +25,10 @@ async function verifyAdmin() {
     if (!session) throw new Error("Unauthorized");
     
     try {
-        await jwtVerify(session, SECRET_KEY);
+        const { payload } = await jwtVerify(session, SECRET_KEY);
+        if (payload.role !== "ADMIN") {
+            throw new Error("Unauthorized");
+        }
     } catch (err) {
         console.error("JWT Verification Failed:", err);
         throw new Error("Unauthorized");
