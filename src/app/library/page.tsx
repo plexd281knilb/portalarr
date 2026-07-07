@@ -19,7 +19,10 @@ import {
   getPublicSmtpFromEmail,
   getAppUsers,
   searchOpenLibrary,
-  deleteBookRequest
+  deleteBookRequest,
+  getSeriesBooksList,
+  createMultipleBookRequests,
+  deleteMultipleBookRequests
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -75,6 +78,8 @@ export default function BookLibraryPage() {
     const [reqType, setReqType] = useState("book"); // "book" or "series"
     const [reqCoverUrl, setReqCoverUrl] = useState("");
     const [reqPublishYear, setReqPublishYear] = useState("");
+    const [seriesBooksChecklist, setSeriesBooksChecklist] = useState<any[]>([]);
+    const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
 
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -361,24 +366,83 @@ export default function BookLibraryPage() {
     async function handleCreateRequest(e: React.FormEvent) {
         e.preventDefault();
         if (!reqTitle) return;
-        const formData = new FormData();
-        formData.append("title", reqTitle);
-        formData.append("author", reqAuthor);
-        formData.append("type", reqType);
-        formData.append("coverUrl", reqCoverUrl);
-        formData.append("publishYear", reqPublishYear);
 
         try {
-            await createBookRequest(formData);
+            if (reqType === "series" && seriesBooksChecklist.length > 0) {
+                const checkedBooks = seriesBooksChecklist.filter(b => b.checked);
+                if (checkedBooks.length === 0) {
+                    alert("Please select at least one book in the series to request.");
+                    return;
+                }
+                await createMultipleBookRequests(checkedBooks);
+            } else {
+                const formData = new FormData();
+                formData.append("title", reqTitle);
+                formData.append("author", reqAuthor);
+                formData.append("type", reqType);
+                formData.append("coverUrl", reqCoverUrl);
+                formData.append("publishYear", reqPublishYear);
+                await createBookRequest(formData);
+            }
+
             setReqTitle("");
             setReqAuthor("");
             setReqCoverUrl("");
             setReqPublishYear("");
             setReqType("book");
+            setSeriesBooksChecklist([]);
             const reqs = await getBookRequests();
             setRequests(reqs || []);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to submit request:", e);
+            alert(e.message || "Failed to submit request.");
+        }
+    }
+
+    function toggleChecklistItem(index: number) {
+        setSeriesBooksChecklist(prev => prev.map((item, idx) => 
+            idx === index ? { ...item, checked: !item.checked } : item
+        ));
+    }
+
+    function selectAllChecklist(checked: boolean) {
+        setSeriesBooksChecklist(prev => prev.map(item => ({ ...item, checked })));
+    }
+
+    async function handleBulkDeleteRequests() {
+        if (selectedRequestIds.length === 0) return;
+        if (!confirm(`Are you sure you want to delete ${selectedRequestIds.length} selected requests?`)) return;
+        try {
+            await deleteMultipleBookRequests(selectedRequestIds);
+            setSelectedRequestIds([]);
+            const reqs = await getBookRequests();
+            setRequests(reqs || []);
+        } catch (e: any) {
+            alert(e.message || "Failed to delete selected requests.");
+        }
+    }
+
+    function toggleSelectRequest(id: string) {
+        setSelectedRequestIds(prev => 
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    }
+
+    function toggleSelectAllRequests() {
+        const deletableRequests = requests.filter(req => isAdmin || req.requestedBy === user?.username);
+        const deletableIds = deletableRequests.map(r => r.id);
+        
+        const allAlreadySelected = deletableIds.every(id => selectedRequestIds.includes(id));
+        if (allAlreadySelected) {
+            setSelectedRequestIds(prev => prev.filter(id => !deletableIds.includes(id)));
+        } else {
+            setSelectedRequestIds(prev => {
+                const newIds = [...prev];
+                deletableIds.forEach(id => {
+                    if (!newIds.includes(id)) newIds.push(id);
+                });
+                return newIds;
+            });
         }
     }
 
@@ -713,7 +777,10 @@ export default function BookLibraryPage() {
                                                         ? "bg-primary text-black shadow-sm" 
                                                         : "text-muted-foreground hover:text-foreground"
                                                 }`}
-                                                onClick={() => setReqType("book")}
+                                                onClick={() => {
+                                                    setReqType("book");
+                                                    setSeriesBooksChecklist([]);
+                                                }}
                                             >
                                                 Single Book
                                             </button>
@@ -724,7 +791,10 @@ export default function BookLibraryPage() {
                                                         ? "bg-purple-600 text-white shadow-sm" 
                                                         : "text-muted-foreground hover:text-foreground"
                                                 }`}
-                                                onClick={() => setReqType("series")}
+                                                onClick={() => {
+                                                    setReqType("series");
+                                                    setSeriesBooksChecklist([]);
+                                                }}
                                             >
                                                 Book Series
                                             </button>
@@ -771,12 +841,24 @@ export default function BookLibraryPage() {
                                                             <div 
                                                                 key={idx}
                                                                 className="p-2 flex gap-3 hover:bg-muted/40 cursor-pointer items-start transition-colors z-50 relative"
-                                                                onMouseDown={() => {
+                                                                onMouseDown={async () => {
                                                                     setReqTitle(book.title);
                                                                     setReqAuthor(book.author);
                                                                     setReqCoverUrl(book.coverUrl || "");
                                                                     setReqPublishYear(book.year ? String(book.year) : "");
                                                                     setShowSuggestions(false);
+
+                                                                    if (reqType === "series") {
+                                                                        setSearchingRegistry(true);
+                                                                        try {
+                                                                            const list = await getSeriesBooksList(book.title, book.author);
+                                                                            setSeriesBooksChecklist(list.map(b => ({ ...b, checked: true })));
+                                                                        } catch (err) {
+                                                                            console.error("Failed to load series books list:", err);
+                                                                        } finally {
+                                                                            setSearchingRegistry(false);
+                                                                        }
+                                                                    }
                                                                 }}
                                                             >
                                                                 {book.coverUrl ? (
@@ -814,6 +896,71 @@ export default function BookLibraryPage() {
                                                 onChange={(e) => setReqAuthor(e.target.value)}
                                             />
                                         </div>
+
+                                        {reqType === "series" && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                className="w-full text-xs border-primary/20 text-primary hover:bg-primary/10 font-semibold h-9"
+                                                disabled={searchingRegistry || !reqTitle}
+                                                onClick={async () => {
+                                                    setSearchingRegistry(true);
+                                                    try {
+                                                        const list = await getSeriesBooksList(reqTitle, reqAuthor);
+                                                        if (list.length === 0) {
+                                                            alert("No books found matching this series title and author in the registry.");
+                                                        }
+                                                        setSeriesBooksChecklist(list.map(b => ({ ...b, checked: true })));
+                                                    } catch (err) {
+                                                        console.error(err);
+                                                        alert("Failed to lookup series books.");
+                                                    } finally {
+                                                        setSearchingRegistry(false);
+                                                    }
+                                                }}
+                                            >
+                                                {searchingRegistry ? (
+                                                    <>
+                                                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                                        Searching Book Registry...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Search className="h-3.5 w-3.5 mr-1.5" />
+                                                        Lookup Series Books List
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
+
+                                        {reqType === "series" && seriesBooksChecklist.length > 0 && (
+                                            <div className="space-y-2 border border-muted/80 rounded p-2 bg-[#1e1e24]/40 max-h-52 overflow-y-auto">
+                                                <div className="flex justify-between items-center text-[10px] font-bold text-muted-foreground mb-1 pb-1 border-b border-muted/30">
+                                                    <span>Select Books ({seriesBooksChecklist.filter(b => b.checked).length} selected)</span>
+                                                    <div className="flex gap-2">
+                                                        <button type="button" className="text-primary hover:underline text-[9px]" onClick={() => selectAllChecklist(true)}>All</button>
+                                                        <button type="button" className="text-primary hover:underline text-[9px]" onClick={() => selectAllChecklist(false)}>None</button>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {seriesBooksChecklist.map((book, idx) => (
+                                                        <label key={idx} className="flex gap-2 items-start text-[11px] cursor-pointer hover:bg-muted/20 p-1 rounded transition-colors">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={book.checked}
+                                                                onChange={() => toggleChecklistItem(idx)}
+                                                                className="mt-0.5 h-3.5 w-3.5 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0"
+                                                            />
+                                                            <div className="min-w-0 flex-1">
+                                                                <span className="font-semibold text-foreground block truncate" title={book.title}>{book.title}</span>
+                                                                <span className="text-[9px] text-muted-foreground block truncate">{book.author} {book.publishYear ? `(${book.publishYear})` : ""}</span>
+                                                            </div>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <Button type="submit" className="w-full font-semibold text-black">
                                             Submit Request
                                         </Button>
@@ -824,10 +971,32 @@ export default function BookLibraryPage() {
 
                         <div className="lg:col-span-2">
                             <Card className="border-muted/60">
-                                <CardHeader className="py-4 border-b border-muted/50">
+                                <CardHeader className="py-3.5 border-b border-muted/50 flex flex-row justify-between items-center flex-wrap gap-2">
                                     <CardTitle className="text-base font-bold flex items-center gap-2">
                                         <LifeBuoy className="h-4.5 w-4.5 text-primary" /> Active Requests Log
                                     </CardTitle>
+                                    {requests.length > 0 && (
+                                        <div className="flex items-center gap-2">
+                                            {selectedRequestIds.length > 0 && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="destructive"
+                                                    className="h-8 text-xs font-semibold px-3"
+                                                    onClick={handleBulkDeleteRequests}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete Selected ({selectedRequestIds.length})
+                                                </Button>
+                                            )}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-3"
+                                                onClick={toggleSelectAllRequests}
+                                            >
+                                                Select All / None
+                                            </Button>
+                                        </div>
+                                    )}
                                 </CardHeader>
                                 <CardContent className="p-0">
                                     {requests.length === 0 ? (
@@ -836,10 +1005,20 @@ export default function BookLibraryPage() {
                                         </div>
                                     ) : (
                                         <div className="divide-y divide-muted/50">
-                                            {requests.map(req => (
-                                                <div key={req.id} className="p-4 flex items-center justify-between flex-wrap gap-3">
-                                                    <div className="flex gap-3 items-start min-w-0 flex-1">
-                                                        {req.coverUrl ? (
+                                            {requests.map(req => {
+                                                const canDelete = isAdmin || req.requestedBy === user?.username;
+                                                return (
+                                                    <div key={req.id} className="p-4 flex items-center justify-between flex-wrap gap-3">
+                                                        <div className="flex gap-3 items-start min-w-0 flex-1">
+                                                            {canDelete && (
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedRequestIds.includes(req.id)}
+                                                                    onChange={() => toggleSelectRequest(req.id)}
+                                                                    className="mt-1 h-4 w-4 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 shrink-0 cursor-pointer"
+                                                                />
+                                                            )}
+                                                            {req.coverUrl ? (
                                                             <img 
                                                                 src={req.coverUrl} 
                                                                 alt={req.title} 
@@ -941,7 +1120,7 @@ export default function BookLibraryPage() {
                                                         )}
                                                     </div>
                                                 </div>
-                                            ))}
+                                            )})}
                                         </div>
                                     )}
                                 </CardContent>

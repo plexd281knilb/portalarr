@@ -1783,3 +1783,112 @@ export async function searchOpenLibrary(query: string) {
         return [];
     }
 }
+
+export async function getSeriesBooksList(seriesTitle: string, author: string = "") {
+    try {
+        const query = author ? `${seriesTitle} ${author}` : seriesTitle;
+        const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
+            headers: { "Accept": "application/json" },
+            next: { revalidate: 3600 }
+        });
+        if (!response.ok) throw new Error("Series query failed");
+        
+        const data = await response.json();
+        const docs = data.docs || [];
+        
+        const uniqueBooks: any[] = [];
+        const seenTitles = new Set<string>();
+        
+        for (const doc of docs) {
+            const normalizedTitle = doc.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const titleLower = doc.title.toLowerCase();
+            const isCompilation = titleLower.includes("box set") || 
+                                  titleLower.includes("boxed set") || 
+                                  titleLower.includes("collection") || 
+                                  titleLower.includes("series 1-") || 
+                                  titleLower.includes("pack") || 
+                                  titleLower.includes("omnibus") || 
+                                  titleLower.includes("bundle") ||
+                                  titleLower.includes("boxedset");
+                                  
+            if (isCompilation) continue;
+            
+            if (author && doc.author_name) {
+                const authorLower = author.toLowerCase();
+                const matchesAuthor = doc.author_name.some((name: string) => 
+                    name.toLowerCase().includes(authorLower)
+                );
+                if (!matchesAuthor) continue;
+            }
+            
+            if (!seenTitles.has(normalizedTitle)) {
+                seenTitles.add(normalizedTitle);
+                
+                const authorName = doc.author_name && doc.author_name.length > 0 
+                    ? doc.author_name[0] 
+                    : author || "Unknown Author";
+                    
+                const coverUrl = doc.cover_i 
+                    ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
+                    : "";
+                    
+                uniqueBooks.push({
+                    title: doc.title,
+                    author: authorName,
+                    coverUrl,
+                    publishYear: doc.first_publish_year ? String(doc.first_publish_year) : ""
+                });
+            }
+        }
+        
+        return uniqueBooks;
+    } catch (e) {
+        console.error("Failed to fetch series books list:", e);
+        return [];
+    }
+}
+
+export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[]) {
+    const session = await verifyUser();
+    if (!booksList || booksList.length === 0) return;
+    
+    for (const book of booksList) {
+        const request = await prisma.bookRequest.create({
+            data: {
+                title: book.title,
+                author: book.author,
+                coverUrl: book.coverUrl,
+                publishYear: book.publishYear,
+                requestedBy: session.username as string,
+                type: "book",
+                status: "Pending"
+            }
+        });
+        
+        autoDownloadBookRequest(request.id, book.title, book.author).catch(err => {
+            console.error(`[AUTO-DOWNLOAD] Failed for series book "${book.title}":`, err);
+        });
+    }
+    
+    revalidatePath("/library");
+}
+
+export async function deleteMultipleBookRequests(ids: string[]) {
+    const session = await verifyUser();
+    if (!ids || ids.length === 0) return;
+    
+    if (session.role === "ADMIN") {
+        await prisma.bookRequest.deleteMany({
+            where: { id: { in: ids } }
+        });
+    } else {
+        await prisma.bookRequest.deleteMany({
+            where: {
+                id: { in: ids },
+                requestedBy: session.username as string
+            }
+        });
+    }
+    
+    revalidatePath("/library");
+}
