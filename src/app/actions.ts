@@ -786,6 +786,7 @@ export async function createBookRequest(formData: FormData) {
     const session = await verifyUser();
     const title = formData.get("title") as string;
     const author = formData.get("author") as string || "";
+    const type = formData.get("type") as string || "book"; // "book" or "series"
     
     if (!title) throw new Error("Title is required");
     
@@ -794,13 +795,16 @@ export async function createBookRequest(formData: FormData) {
             title,
             author,
             requestedBy: session.username as string,
+            type,
             status: "Pending"
         }
     });
     
-    autoDownloadBookRequest(request.id, title, author).catch(err => {
-        console.error(`[AUTO-DOWNLOAD] Background process failed:`, err);
-    });
+    if (type === "book") {
+        autoDownloadBookRequest(request.id, title, author).catch(err => {
+            console.error(`[AUTO-DOWNLOAD] Background process failed:`, err);
+        });
+    }
 
     revalidatePath("/library");
 }

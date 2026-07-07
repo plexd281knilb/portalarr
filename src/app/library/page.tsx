@@ -72,6 +72,7 @@ export default function BookLibraryPage() {
     const [openLibrarySuggestions, setOpenLibrarySuggestions] = useState<any[]>([]);
     const [searchingRegistry, setSearchingRegistry] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [reqType, setReqType] = useState("book"); // "book" or "series"
 
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -361,11 +362,13 @@ export default function BookLibraryPage() {
         const formData = new FormData();
         formData.append("title", reqTitle);
         formData.append("author", reqAuthor);
+        formData.append("type", reqType);
 
         try {
             await createBookRequest(formData);
             setReqTitle("");
             setReqAuthor("");
+            setReqType("book");
             const reqs = await getBookRequests();
             setRequests(reqs || []);
         } catch (e) {
@@ -696,8 +699,35 @@ export default function BookLibraryPage() {
                                 </CardHeader>
                                 <CardContent>
                                     <form onSubmit={handleCreateRequest} className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-2 bg-muted/20 p-1 rounded-md border border-muted/50">
+                                            <button
+                                                type="button"
+                                                className={`py-1.5 text-xs font-semibold rounded transition-all ${
+                                                    reqType === "book" 
+                                                        ? "bg-primary text-black shadow-sm" 
+                                                        : "text-muted-foreground hover:text-foreground"
+                                                }`}
+                                                onClick={() => setReqType("book")}
+                                            >
+                                                Single Book
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`py-1.5 text-xs font-semibold rounded transition-all ${
+                                                    reqType === "series" 
+                                                        ? "bg-purple-600 text-white shadow-sm" 
+                                                        : "text-muted-foreground hover:text-foreground"
+                                                }`}
+                                                onClick={() => setReqType("series")}
+                                            >
+                                                Book Series
+                                            </button>
+                                        </div>
+
                                         <div className="space-y-1.5 relative">
-                                            <Label htmlFor="reqTitle" className="text-xs font-medium">Book Title</Label>
+                                            <Label htmlFor="reqTitle" className="text-xs font-medium">
+                                                {reqType === "series" ? "Series Title" : "Book Title"}
+                                            </Label>
                                             <Input
                                                 id="reqTitle"
                                                 type="text"
@@ -801,7 +831,18 @@ export default function BookLibraryPage() {
                                             {requests.map(req => (
                                                 <div key={req.id} className="p-4 flex items-center justify-between flex-wrap gap-3">
                                                     <div className="space-y-1">
-                                                        <h4 className="font-semibold text-sm">{req.title}</h4>
+                                                         <div className="flex items-center gap-2 flex-wrap">
+                                                             <h4 className="font-semibold text-sm">{req.title}</h4>
+                                                             {req.type === "series" ? (
+                                                                 <Badge variant="outline" className="text-[10px] py-0 px-1 border-purple-500/30 text-purple-400 bg-purple-500/5 font-semibold">
+                                                                     SERIES
+                                                                 </Badge>
+                                                             ) : (
+                                                                 <Badge variant="outline" className="text-[10px] py-0 px-1 border-blue-500/30 text-blue-400 bg-blue-500/5 font-semibold">
+                                                                     BOOK
+                                                                 </Badge>
+                                                             )}
+                                                         </div>
                                                         <p className="text-xs text-muted-foreground">
                                                             {req.author ? `by ${req.author}` : "Unknown Author"} • Requested by <span className="font-medium text-foreground">{req.requestedBy}</span>
                                                         </p>

@@ -122,6 +122,7 @@ model BookRequest {
   title       String
   author      String?
   requestedBy String   // Username
+  type        String   @default("book") // "book" or "series"
   status      String   @default("Pending") // "Pending", "Approved", "Downloaded", "Rejected"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
