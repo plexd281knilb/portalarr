@@ -5,6 +5,7 @@ import rehypeRaw from 'rehype-raw';
 import LandingSupport from "@/components/landing-support";
 import SystemStatus from "@/components/system-status"; 
 import ActiveDownloads from "@/components/active-downloads"; 
+import RequestLibraryAccess from "@/components/request-library-access";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -70,6 +71,11 @@ export default async function UserLandingPage() {
                     <CardDescription>Looking for something specific? Request it here.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col justify-center space-y-4">
+                    {isLoggedIn && (
+                        <div className="border-b border-muted/50 pb-4">
+                            <RequestLibraryAccess />
+                        </div>
+                    )}
                     {requestApps.length === 0 ? (
                         <div className="text-center text-muted-foreground italic p-4">
                             No request apps configured.

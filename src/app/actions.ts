@@ -1530,3 +1530,86 @@ export async function getPublicSmtpFromEmail() {
     if (!settings) return "";
     return settings.smtpFrom || settings.smtpUser || "";
 }
+
+export async function submitLibraryAccessRequest(email: string, kindleEmail: string) {
+    const session = await verifyUser();
+    
+    const user = await prisma.user.update({
+        where: { username: session.username as string },
+        data: {
+            email: email || undefined,
+            kindleEmail: kindleEmail || ""
+        }
+    });
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
+    if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+        throw new Error("SMTP is not configured on the server. Please contact your administrator.");
+    }
+
+    const admins = await prisma.user.findMany({
+        where: { role: "ADMIN" }
+    });
+
+    const adminEmails = admins
+        .map(admin => admin.email)
+        .filter(email => !!email);
+
+    const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
+    const senderEmail = settings.smtpFrom || settings.smtpUser;
+
+    const transporter = nodemailer.createTransport({
+        host: settings.smtpHost,
+        port: settings.smtpPort || 587,
+        secure: settings.smtpPort === 465,
+        auth: {
+            user: settings.smtpUser,
+            pass: decryptData(settings.smtpPass)
+        }
+    });
+
+    const mailOptions = {
+        from: senderEmail,
+        to: recipientEmails.join(", "),
+        subject: `🚨 Library Access Request from ${user.username}`,
+        html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <h2 style="color: #0f172a; margin-top: 0;">Library Access Request</h2>
+                <p>The user <strong>${user.username}</strong> has requested access to the Book Library.</p>
+                
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                
+                <h3 style="color: #0f172a; margin-bottom: 8px;">User Details:</h3>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <tr>
+                        <td style="padding: 6px 0; font-weight: bold; width: 150px;">Username:</td>
+                        <td style="padding: 6px 0;">${user.username}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 0; font-weight: bold;">Personal Email:</td>
+                        <td style="padding: 6px 0;"><code>${user.email || "Not Provided"}</code></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 0; font-weight: bold;">Send-to-Kindle:</td>
+                        <td style="padding: 6px 0;"><code>${user.kindleEmail || "Not Provided"}</code></td>
+                    </tr>
+                </table>
+
+                <h3 style="color: #0f172a; margin-bottom: 8px;">How to Approve:</h3>
+                <p style="line-height: 1.6;">
+                    To grant access to this user, log into Portalarr and open the Book Library Manage tab. 
+                    Edit the library you want them to access (e.g. <em>Wife's Bookshelf</em> or <em>Kids' Bookshelf</em>), 
+                    and add their username <strong><code>${user.username}</code></strong> to the <strong>Allowed Users</strong> list.
+                </p>
+            </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to email admin about access request:", e);
+        throw new Error(`Failed to send request: ${e.message || "Unknown mail error"}`);
+    }
+}
