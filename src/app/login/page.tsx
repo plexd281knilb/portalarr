@@ -32,7 +32,7 @@ export default function LoginPage() {
     if ((res as any)?.error) {
       setError((res as any).error);
     } else {
-      router.push("/settings"); 
+      window.location.href = "/settings"; 
     }
   }
 
@@ -62,7 +62,7 @@ export default function LoginPage() {
             setError(res.error);
             setIsPlexLoading(false);
           } else {
-            router.push("/");
+            window.location.href = "/";
           }
         }
 

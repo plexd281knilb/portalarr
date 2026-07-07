@@ -92,11 +92,9 @@ async function createSession(userId: string, username: string, role: string) {
     .setExpirationTime("24h")
     .sign(JWT_SECRET);
 
-  const isProd = process.env.NODE_ENV === "production";
-
   (await cookies()).set("session", token, {
     httpOnly: true,
-    secure: isProd,
+    secure: false,
     maxAge: 60 * 60 * 24, 
     path: "/",
     sameSite: "lax",
