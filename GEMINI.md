@@ -80,6 +80,12 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Enforcement:** Users are redirected to `/login` if no valid session exists.
 - **Role-Based Access:** Admin routes (`/settings`, `/admin/*`) are restricted to users with the `ADMIN` role. Standard users are redirected back to the home page if they attempt to access these routes.
 
+### 5. Gotchas & Best Practices
+- **Windows File Locks:** SQLite database and Prisma engine files lock during `npm run dev`. Stop the dev server before running `npx prisma migrate dev`.
+- **Registry Autocomplete:** Use `onMouseDown` instead of `onClick` for dropdown suggestion list items to prevent input `onBlur` from unmounting items prematurely.
+- **Open Library Queries:** Combine series queries with the author name (e.g. `Series Author`) and filter out compilations (box sets, bundles, omnibus) to avoid duplicate or unrelated bulk results.
+- **Library Access Defaults:** New libraries must default to restricted access (`allowedUsers = ""`) so that the admin must explicitly authorize users rather than defaulting to public (`*`).
+
 ## Key Files
 - `prisma/schema.prisma`: The source of truth for the database schema.
 - `src/proxy.ts`: Global authentication and role-based access control.
