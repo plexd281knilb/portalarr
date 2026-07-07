@@ -16,7 +16,8 @@ import {
   sendReleaseToDownloadClient,
   saveUserKindleSettings,
   sendBookToKindle,
-  getPublicSmtpFromEmail
+  getPublicSmtpFromEmail,
+  getAppUsers
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -63,6 +64,7 @@ export default function BookLibraryPage() {
     const [userKindleEmail, setUserKindleEmail] = useState("");
     const [serverSmtpFrom, setServerSmtpFrom] = useState("");
     const [sendingToKindleId, setSendingToKindleId] = useState<string | null>(null);
+    const [allUsers, setAllUsers] = useState<any[]>([]);
 
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -103,6 +105,11 @@ export default function BookLibraryPage() {
 
                 const reqs = await getBookRequests();
                 setRequests(reqs || []);
+
+                if (session && session.role === "ADMIN") {
+                    const ulist = await getAppUsers();
+                    setAllUsers(ulist || []);
+                }
             } catch (e) {
                 console.error("Failed to load initial library data:", e);
             } finally {
@@ -834,6 +841,73 @@ export default function BookLibraryPage() {
                                                     onChange={(e) => setLibAllowedUsers(e.target.value)}
                                                     required
                                                 />
+                                            </div>
+
+                                            <div className="space-y-2 border border-muted/80 p-3 rounded-md bg-muted/20">
+                                                <Label className="text-xs font-semibold block border-b border-muted pb-1 mb-1 text-primary">
+                                                    Allowed Users Quick Toggle List
+                                                </Label>
+                                                {libAllowedUsers === "*" ? (
+                                                    <div className="text-[10px] text-muted-foreground flex justify-between items-center">
+                                                        <span>Everyone has access (<code>*</code>)</span>
+                                                        <Button 
+                                                            type="button" 
+                                                            variant="outline" 
+                                                            className="h-5 text-[9px] px-2 py-0 border-primary/20 text-primary hover:bg-primary/10"
+                                                            onClick={() => setLibAllowedUsers("")}
+                                                        >
+                                                            Restrict Access
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-0.5">
+                                                            {allUsers.length === 0 ? (
+                                                                <span className="text-[10px] text-muted-foreground italic">No users found.</span>
+                                                            ) : (
+                                                                allUsers.map(u => {
+                                                                    const allowedList = libAllowedUsers.split(",")
+                                                                        .map(item => item.trim())
+                                                                        .filter(Boolean);
+                                                                    const isAllowed = allowedList.includes(u.username);
+                                                                    return (
+                                                                        <Badge
+                                                                            key={u.id}
+                                                                            variant={isAllowed ? "default" : "outline"}
+                                                                            className={`cursor-pointer transition-colors text-[9px] px-2 py-0.5 ${
+                                                                                isAllowed 
+                                                                                    ? "bg-primary text-black hover:bg-primary/80 font-bold border-primary" 
+                                                                                    : "hover:bg-muted/30 border-muted-foreground/30 text-muted-foreground"
+                                                                            }`}
+                                                                            onClick={() => {
+                                                                                let newList;
+                                                                                if (isAllowed) {
+                                                                                    newList = allowedList.filter(item => item !== u.username);
+                                                                                } else {
+                                                                                    newList = [...allowedList, u.username];
+                                                                                }
+                                                                                setLibAllowedUsers(newList.join(", "));
+                                                                            }}
+                                                                        >
+                                                                            {u.username}
+                                                                        </Badge>
+                                                                    );
+                                                                })
+                                                            )}
+                                                        </div>
+                                                        <div className="flex justify-between items-center text-[9px]">
+                                                            <span className="text-muted-foreground">Click badges to grant or revoke library access.</span>
+                                                            <Button 
+                                                                type="button" 
+                                                                variant="ghost" 
+                                                                className="h-4 text-[9px] p-0 text-primary hover:underline hover:bg-transparent font-semibold"
+                                                                onClick={() => setLibAllowedUsers("*")}
+                                                            >
+                                                                Grant to Everyone (*)
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="flex gap-2">
                                                 <Button type="submit" className="flex-1 font-semibold text-black">
