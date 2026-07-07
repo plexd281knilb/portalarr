@@ -94,6 +94,7 @@ model Library {
   id           String   @id @default(cuid())
   name         String   @unique
   description  String?
+  path         String   @default("") // Path to the folder share inside the container
   allowedUsers String   @default("") // Comma-separated list of usernames, or "*" for everyone
   books        Book[]
   createdAt    DateTime @default(now())

@@ -10,7 +10,8 @@ import {
   deleteLibrary,
   getBookRequests,
   createBookRequest,
-  updateBookRequestStatus
+  updateBookRequestStatus,
+  scanLibrary
 } from "@/app/actions";
 import { getSession } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -39,8 +40,10 @@ export default function BookLibraryPage() {
     // Form states
     const [libName, setLibName] = useState("");
     const [libDesc, setLibDesc] = useState("");
+    const [libPath, setLibPath] = useState("");
     const [libAllowedUsers, setLibAllowedUsers] = useState("*");
     const [editingLibId, setEditingLibId] = useState<string | null>(null);
+    const [scanning, setScanning] = useState(false);
 
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -105,6 +108,7 @@ export default function BookLibraryPage() {
         const formData = new FormData();
         formData.append("name", libName);
         formData.append("description", libDesc);
+        formData.append("path", libPath);
         formData.append("allowedUsers", libAllowedUsers);
 
         try {
@@ -116,6 +120,7 @@ export default function BookLibraryPage() {
             }
             setLibName("");
             setLibDesc("");
+            setLibPath("");
             setLibAllowedUsers("*");
             setEditingLibId(null);
             
@@ -144,6 +149,7 @@ export default function BookLibraryPage() {
         setEditingLibId(lib.id);
         setLibName(lib.name);
         setLibDesc(lib.description || "");
+        setLibPath(lib.path || "");
         setLibAllowedUsers(lib.allowedUsers || "*");
     }
 
@@ -205,6 +211,18 @@ export default function BookLibraryPage() {
             }
         } catch (e) {
             console.error("Failed to delete book:", e);
+        }
+    }
+
+    async function handleScanLibrary(libId: string) {
+        setScanning(true);
+        try {
+            await scanLibrary(libId);
+            await loadBooks(libId);
+        } catch (e: any) {
+            alert(e.message || "Failed to scan library folder");
+        } finally {
+            setScanning(false);
         }
     }
 
@@ -336,6 +354,24 @@ export default function BookLibraryPage() {
                                                 onChange={(e) => setSearchQuery(e.target.value)}
                                             />
                                         </div>
+                                        {isAdmin && selectedLibrary.path && (
+                                            <Button 
+                                                variant="outline" 
+                                                onClick={() => handleScanLibrary(selectedLibrary.id)}
+                                                disabled={scanning}
+                                                className="w-full sm:w-auto font-semibold border-primary/20 text-primary hover:bg-primary/5"
+                                            >
+                                                {scanning ? (
+                                                    <>
+                                                        <Loader2 className="mr-2 h-4.5 w-4.5 animate-spin" /> Scanning...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <UploadCloud className="mr-2 h-4.5 w-4.5" /> Scan Share Folder
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
                                     </div>
 
                                     {isAdmin && (
@@ -645,6 +681,19 @@ export default function BookLibraryPage() {
                                                 />
                                             </div>
                                             <div className="space-y-1.5">
+                                                <Label htmlFor="libPath" className="text-xs">Folder Path (Unraid Share)</Label>
+                                                <Input
+                                                    id="libPath"
+                                                    type="text"
+                                                    placeholder="e.g. /books/wife"
+                                                    value={libPath}
+                                                    onChange={(e) => setLibPath(e.target.value)}
+                                                />
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Folder directory inside Portalarr Docker mapped to your Unraid share.
+                                                </p>
+                                            </div>
+                                            <div className="space-y-1.5">
                                                 <Label htmlFor="libAllowedUsers" className="text-xs">
                                                     Allowed Users (Comma separated)
                                                 </Label>
@@ -700,10 +749,15 @@ export default function BookLibraryPage() {
                                                         <div className="space-y-1">
                                                             <h4 className="font-semibold text-sm">{lib.name}</h4>
                                                             <p className="text-xs text-muted-foreground">{lib.description || "No description."}</p>
-                                                            <div className="flex items-center gap-2 pt-1">
+                                                            <div className="flex items-center gap-2 pt-1 flex-wrap">
                                                                 <Badge className="bg-muted text-[10px]">
                                                                     Access: {lib.allowedUsers}
                                                                 </Badge>
+                                                                {lib.path && (
+                                                                    <Badge variant="outline" className="text-[10px] border-primary/20 text-primary">
+                                                                        Path: {lib.path}
+                                                                    </Badge>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         <div className="flex gap-2">

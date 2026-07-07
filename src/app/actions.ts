@@ -670,10 +670,11 @@ export async function createLibrary(formData: FormData) {
     await verifyAdmin();
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
+    const path = formData.get("path") as string || "";
     const allowedUsers = formData.get("allowedUsers") as string || "*";
     
     await prisma.library.create({
-        data: { name, description, allowedUsers }
+        data: { name, description, path, allowedUsers }
     });
     revalidatePath("/library");
 }
@@ -683,11 +684,12 @@ export async function updateLibrary(formData: FormData) {
     const id = formData.get("id") as string;
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
+    const path = formData.get("path") as string || "";
     const allowedUsers = formData.get("allowedUsers") as string || "*";
     
     await prisma.library.update({
         where: { id },
-        data: { name, description, allowedUsers }
+        data: { name, description, path, allowedUsers }
     });
     revalidatePath("/library");
 }
@@ -788,4 +790,67 @@ export async function updateBookRequestStatus(id: string, status: string) {
         data: { status }
     });
     revalidatePath("/library");
+}
+
+export async function scanLibrary(libraryId: string) {
+    await verifyAdmin();
+    const library = await prisma.library.findUnique({
+        where: { id: libraryId }
+    });
+    if (!library) throw new Error("Library not found");
+    if (!library.path) throw new Error("No folder path configured for this library");
+    if (!fs.existsSync(library.path)) {
+        throw new Error(`Directory does not exist: ${library.path}`);
+    }
+
+    try {
+        const files = fs.readdirSync(library.path);
+        const validExtensions = [".pdf", ".epub", ".mobi", ".cbz"];
+        const diskFilePaths = new Set<string>();
+
+        for (const file of files) {
+            const ext = path.extname(file).toLowerCase();
+            if (validExtensions.includes(ext)) {
+                const fullPath = path.join(library.path, file);
+                diskFilePaths.add(fullPath);
+
+                const existing = await prisma.book.findFirst({
+                    where: { filePath: fullPath }
+                });
+
+                if (!existing) {
+                    const stats = fs.statSync(fullPath);
+                    const titleWithoutExt = path.basename(file, ext).replace(/[_-]/g, ' ');
+                    await prisma.book.create({
+                        data: {
+                            title: titleWithoutExt,
+                            author: "Unknown Author",
+                            filePath: fullPath,
+                            fileSize: stats.size,
+                            fileType: ext.replace(".", ""),
+                            libraryId: libraryId
+                        }
+                    });
+                }
+            }
+        }
+
+        const dbBooks = await prisma.book.findMany({
+            where: { libraryId: libraryId }
+        });
+
+        for (const dbBook of dbBooks) {
+            if (!diskFilePaths.has(dbBook.filePath)) {
+                await prisma.book.delete({
+                    where: { id: dbBook.id }
+                });
+            }
+        }
+
+        revalidatePath("/library");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to scan library:", e);
+        throw new Error(e.message || "Failed to scan library folder");
+    }
 }

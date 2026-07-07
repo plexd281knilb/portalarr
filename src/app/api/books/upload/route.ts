@@ -41,9 +41,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Library not found" }, { status: 404 });
         }
 
-        const dirPath = path.join(process.cwd(), "data", "books");
-        if (!fs.existsSync(dirPath)) {
-            fs.mkdirSync(dirPath, { recursive: true });
+              let dirPath = library.path;
+        if (!dirPath || !fs.existsSync(dirPath)) {
+            dirPath = path.join(process.cwd(), "data", "books");
+            if (!fs.existsSync(dirPath)) {
+                fs.mkdirSync(dirPath, { recursive: true });
+            }
         }
 
         const fileExtension = path.extname(file.name) || ".pdf";
