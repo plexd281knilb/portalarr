@@ -11,7 +11,9 @@ import {
   getBookRequests,
   createBookRequest,
   updateBookRequestStatus,
-  scanLibrary
+  scanLibrary,
+  searchProwlarrIndexers,
+  sendReleaseToDownloadClient
 } from "@/app/actions";
 import { getSession } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -44,6 +46,13 @@ export default function BookLibraryPage() {
     const [libAllowedUsers, setLibAllowedUsers] = useState("*");
     const [editingLibId, setEditingLibId] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
+
+    // Prowlarr Search states
+    const [prowlarrResults, setProwlarrResults] = useState<any[]>([]);
+    const [searchingProwlarr, setSearchingProwlarr] = useState(false);
+    const [activeRequestForSearch, setActiveRequestForSearch] = useState<any>(null);
+    const [searchProwlarrError, setSearchProwlarrError] = useState("");
+    const [pushingReleaseId, setPushingReleaseId] = useState<string | null>(null);
 
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -223,6 +232,43 @@ export default function BookLibraryPage() {
             alert(e.message || "Failed to scan library folder");
         } finally {
             setScanning(false);
+        }
+    }
+
+    async function triggerProwlarrSearch(req: any) {
+        setActiveRequestForSearch(req);
+        setSearchingProwlarr(true);
+        setProwlarrResults([]);
+        setSearchProwlarrError("");
+        try {
+            const queryText = req.author ? `${req.title} ${req.author}` : req.title;
+            const res = await searchProwlarrIndexers(queryText);
+            setProwlarrResults(res || []);
+        } catch (e: any) {
+            setSearchProwlarrError(e.message || "Failed to search indexers.");
+        } finally {
+            setSearchingProwlarr(false);
+        }
+    }
+
+    async function handleSendRelease(release: any) {
+        if (!activeRequestForSearch) return;
+        setPushingReleaseId(release.downloadUrl);
+        try {
+            await sendReleaseToDownloadClient(
+                activeRequestForSearch.id, 
+                release.downloadUrl, 
+                release.title, 
+                release.protocol
+            );
+            const reqs = await getBookRequests();
+            setRequests(reqs || []);
+            setActiveRequestForSearch(null);
+            alert("Release successfully pushed to download client!");
+        } catch (e: any) {
+            alert(e.message || "Failed to send release to client.");
+        } finally {
+            setPushingReleaseId(null);
         }
     }
 
@@ -603,7 +649,15 @@ export default function BookLibraryPage() {
                                                             {req.status}
                                                         </Badge>
                                                         {isAdmin && req.status === "Pending" && (
-                                                            <div className="flex gap-1.5">
+                                                            <div className="flex gap-1.5 items-center">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold"
+                                                                    onClick={() => triggerProwlarrSearch(req)}
+                                                                >
+                                                                    <Search className="h-3 w-3 mr-1" /> Search Release
+                                                                </Button>
                                                                 <Button 
                                                                     size="sm" 
                                                                     variant="outline" 
@@ -621,6 +675,16 @@ export default function BookLibraryPage() {
                                                                     <X className="h-4 w-4" />
                                                                 </Button>
                                                             </div>
+                                                        )}
+                                                        {isAdmin && req.status === "Approved" && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold mr-2"
+                                                                onClick={() => triggerProwlarrSearch(req)}
+                                                            >
+                                                                <Search className="h-3 w-3 mr-1" /> Re-Search
+                                                            </Button>
                                                         )}
                                                         {isAdmin && req.status === "Approved" && (
                                                             <Button 
@@ -839,6 +903,82 @@ export default function BookLibraryPage() {
                             </div>
                         )}
                     </div>
+                </div>
+            )}
+
+            {/* --- PROWLARR SEARCH RESULTS MODAL --- */}
+            {activeRequestForSearch && (
+                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-3xl max-h-[85vh] flex flex-col border-muted shadow-2xl">
+                        <CardHeader className="border-b border-muted/50 pb-4">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                    <Sparkles className="h-5 w-5 text-primary" /> Search Releases for "{activeRequestForSearch.title}"
+                                </CardTitle>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setActiveRequestForSearch(null)}>
+                                    <X className="h-5 w-5" />
+                                </Button>
+                            </div>
+                            <CardDescription>
+                                Prowlarr Indexers query status: {searchingProwlarr ? "Searching indexers..." : `${prowlarrResults.length} releases found.`}
+                            </CardDescription>
+                        </CardHeader>
+                        
+                        <CardContent className="flex-1 overflow-y-auto p-0 min-h-[250px] max-h-[50vh]">
+                            {searchingProwlarr ? (
+                                <div className="flex flex-col items-center justify-center p-12 space-y-4">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                    <p className="text-sm text-muted-foreground">Searching Usenet and Torrent indexers via Prowlarr...</p>
+                                </div>
+                            ) : searchProwlarrError ? (
+                                <div className="p-8 text-center text-sm text-red-500 font-medium">
+                                    {searchProwlarrError}
+                                </div>
+                            ) : prowlarrResults.length === 0 ? (
+                                <div className="p-12 text-center text-sm text-muted-foreground italic">
+                                    No matching releases found on your indexers.
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-muted/50">
+                                    {prowlarrResults.map((release, i) => (
+                                        <div key={i} className="p-4 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors">
+                                            <div className="space-y-1 flex-1 min-w-0">
+                                                <h4 className="font-semibold text-xs leading-snug text-foreground break-words truncate" title={release.title}>
+                                                    {release.title}
+                                                </h4>
+                                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+                                                    <Badge variant="outline" className="text-[9px] py-0 border-muted uppercase">
+                                                        {release.protocol}
+                                                    </Badge>
+                                                    <span className="font-medium text-foreground">{(release.size / (1024 * 1024)).toFixed(1)} MB</span>
+                                                    <span>Indexer: {release.indexer}</span>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                disabled={pushingReleaseId === release.downloadUrl}
+                                                onClick={() => handleSendRelease(release)}
+                                                className="text-xs font-bold text-black shrink-0"
+                                            >
+                                                {pushingReleaseId === release.downloadUrl ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                    <>
+                                                        <Download className="h-3 w-3 mr-1" /> Grab
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                        <CardFooter className="border-t border-muted/50 pt-4 bg-muted/10 flex justify-end">
+                            <Button variant="outline" onClick={() => setActiveRequestForSearch(null)}>
+                                Close
+                            </Button>
+                        </CardFooter>
+                    </Card>
                 </div>
             )}
         </div>

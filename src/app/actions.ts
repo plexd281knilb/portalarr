@@ -854,3 +854,125 @@ export async function scanLibrary(libraryId: string) {
         throw new Error(e.message || "Failed to scan library folder");
     }
 }
+
+export async function searchProwlarrIndexers(query: string) {
+    await verifyAdmin();
+    
+    const prowlarrApp = await prisma.mediaApp.findFirst({
+        where: { type: "prowlarr" }
+    });
+    
+    if (!prowlarrApp) {
+        throw new Error("Prowlarr is not configured in Portalarr Settings. Please add it first under Settings.");
+    }
+    
+    const prowlarrUrl = cleanUrl(prowlarrApp.url);
+    const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
+    
+    try {
+        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(query)}&categories=7000&categories=7010&categories=7020&apikey=${prowlarrKey}`;
+        const res = await fetch(searchUrl, { cache: "no-store" });
+        if (!res.ok) {
+            throw new Error(`Prowlarr returned status ${res.status}`);
+        }
+        
+        const results = await res.json();
+        
+        return (results || []).map((r: any) => ({
+            title: r.title,
+            size: r.size,
+            downloadUrl: r.downloadUrl,
+            indexer: r.indexer,
+            protocol: r.protocol,
+            infoUrl: r.infoUrl
+        }));
+    } catch (e: any) {
+        console.error("Prowlarr search failed:", e);
+        throw new Error(e.message || "Failed to query Prowlarr API");
+    }
+}
+
+export async function sendReleaseToDownloadClient(requestId: string, downloadUrl: string, title: string, protocol: string) {
+    await verifyAdmin();
+    
+    if (protocol === "usenet") {
+        const sabApp = await prisma.mediaApp.findFirst({
+            where: { type: "sabnzbd" }
+        });
+        
+        if (!sabApp) {
+            throw new Error("No SABnzbd download client configured in Portalarr Settings.");
+        }
+        
+        const sabUrl = cleanUrl(sabApp.url);
+        const sabKey = decryptData(sabApp.apiKey as string);
+        
+        const pushUrl = `${sabUrl}/api?mode=addurl&name=${encodeURIComponent(downloadUrl)}&nzbname=${encodeURIComponent(title)}&cat=books&output=json&apikey=${sabKey}`;
+        const res = await fetch(pushUrl, { cache: "no-store" });
+        
+        if (!res.ok) {
+            throw new Error(`SABnzbd returned status ${res.status}`);
+        }
+        const json = await res.json();
+        if (json.status === false) {
+            throw new Error(json.error || "SABnzbd failed to accept the NZB file");
+        }
+    } else {
+        const qbitApp = await prisma.mediaApp.findFirst({
+            where: { type: "qbittorrent" }
+        }) || await prisma.mediaApp.findFirst({
+            where: { type: { contains: "qbit" } }
+        });
+        
+        if (!qbitApp) {
+            throw new Error("No qBittorrent client configured in Portalarr Settings.");
+        }
+        
+        const qbitUrl = cleanUrl(qbitApp.url);
+        const qbitKey = decryptData(qbitApp.apiKey as string);
+        
+        try {
+            const body = new URLSearchParams();
+            body.append("urls", downloadUrl);
+            body.append("category", "books");
+            
+            const qbitRes = await fetch(`${qbitUrl}/api/v2/torrents/add`, {
+                method: "POST",
+                body,
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
+            });
+            if (!qbitRes.ok) {
+                throw new Error(`qBittorrent returned status ${qbitRes.status}`);
+            }
+        } catch (err: any) {
+            console.warn("qBit direct upload failed. Attempting login first.", err);
+            const loginRes = await fetch(`${qbitUrl}/api/v2/auth/login`, {
+                method: "POST",
+                body: new URLSearchParams({ username: "admin", password: qbitKey }),
+                headers: { "Content-Type": "application/x-www-form-urlencoded" }
+            });
+            const cookie = loginRes.headers.get("set-cookie");
+            if (!cookie) throw new Error("Failed to authenticate with qBittorrent");
+            
+            const addRes = await fetch(`${qbitUrl}/api/v2/torrents/add`, {
+                method: "POST",
+                body: new URLSearchParams({ urls: downloadUrl, category: "books" }),
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Cookie": cookie
+                }
+            });
+            if (!addRes.ok) throw new Error(`qBittorrent add failed with ${addRes.status}`);
+        }
+    }
+    
+    await prisma.bookRequest.update({
+        where: { id: requestId },
+        data: { status: "Approved" }
+    });
+    
+    revalidatePath("/library");
+    return { success: true };
+}
