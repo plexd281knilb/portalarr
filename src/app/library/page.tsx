@@ -22,7 +22,8 @@ import {
   deleteBookRequest,
   getSeriesBooksList,
   createMultipleBookRequests,
-  deleteMultipleBookRequests
+  deleteMultipleBookRequests,
+  submitSupportTicket
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -35,7 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, 
   UploadCloud, Check, X, FileText, Download, 
-  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send 
+  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle
 } from "lucide-react";
 
 export default function BookLibraryPage() {
@@ -80,6 +81,13 @@ export default function BookLibraryPage() {
     const [reqPublishYear, setReqPublishYear] = useState("");
     const [seriesBooksChecklist, setSeriesBooksChecklist] = useState<any[]>([]);
     const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
+
+    // Report Issue states
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportName, setReportName] = useState("");
+    const [reportEmail, setReportEmail] = useState("");
+    const [reportDescription, setReportDescription] = useState("");
+    const [submittingReport, setSubmittingReport] = useState(false);
 
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -446,6 +454,47 @@ export default function BookLibraryPage() {
         }
     }
 
+    function handleOpenReportIssueModal(item: { type: "book" | "request", title: string, id: string, status?: string }) {
+        setReportName(user?.username || "");
+        setReportEmail(user?.email || "");
+        
+        let prefilledIssue = "";
+        if (item.type === "book") {
+            prefilledIssue = `Issue with library book: "${item.title}" (ID: ${item.id})\n\nDescribe the issue: `;
+        } else {
+            prefilledIssue = `Issue with book request: "${item.title}" (ID: ${item.id}, Status: ${item.status || "Pending"})\n\nDescribe the issue: `;
+        }
+        
+        setReportDescription(prefilledIssue);
+        setIsReportModalOpen(true);
+    }
+
+    async function handleSendReport() {
+        if (!reportName || !reportEmail || !reportDescription) {
+            alert("All fields are required.");
+            return;
+        }
+        setSubmittingReport(true);
+        try {
+            const formData = new FormData();
+            formData.append("name", reportName);
+            formData.append("email", reportEmail);
+            formData.append("issue", reportDescription);
+            const res = await submitSupportTicket(formData);
+            if (res && res.error) {
+                alert(res.error);
+            } else {
+                alert("Support ticket submitted successfully! The administrator has been notified.");
+                setIsReportModalOpen(false);
+                setReportDescription("");
+            }
+        } catch (e: any) {
+            alert("Failed to submit support ticket.");
+        } finally {
+            setSubmittingReport(false);
+        }
+    }
+
     async function handleUpdateRequestStatus(id: string, status: string) {
         try {
             await updateBookRequestStatus(id, status);
@@ -731,6 +780,15 @@ export default function BookLibraryPage() {
                                                             <a href={`/api/books/${book.id}`} download>
                                                                 <Download className="h-3 w-3" />
                                                             </a>
+                                                        </Button>
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            className="text-xs border-amber-500/20 text-amber-500 hover:bg-amber-500/10 p-2"
+                                                            title="Report an Issue"
+                                                            onClick={() => handleOpenReportIssueModal({ type: 'book', title: book.title, id: book.id })}
+                                                        >
+                                                            <AlertTriangle className="h-3 w-3" />
                                                         </Button>
                                                         {isAdmin && (
                                                             <Button 
@@ -1060,15 +1118,26 @@ export default function BookLibraryPage() {
                                                             {req.status}
                                                         </Badge>
                                                         {(isAdmin || req.requestedBy === user?.username) && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 shrink-0"
-                                                                title="Delete Request"
-                                                                onClick={() => handleDeleteRequest(req.id)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
+                                                            <div className="flex gap-1 items-center">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="p-1 h-7 w-7 text-amber-500 hover:text-amber-600 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 shrink-0"
+                                                                    title="Report Request Issue"
+                                                                    onClick={() => handleOpenReportIssueModal({ type: 'request', title: req.title, id: req.id, status: req.status })}
+                                                                >
+                                                                    <AlertTriangle className="h-4 w-4" />
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 shrink-0"
+                                                                    title="Delete Request"
+                                                                    onClick={() => handleDeleteRequest(req.id)}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
                                                         )}
                                                         {isAdmin && req.status === "Pending" && (
                                                             <div className="flex gap-1.5 items-center">
@@ -1556,6 +1625,89 @@ export default function BookLibraryPage() {
                         <CardFooter className="border-t border-muted/50 pt-4 bg-muted/10 flex justify-end">
                             <Button variant="outline" onClick={() => setActiveRequestForSearch(null)}>
                                 Close
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
+            )}
+
+            {isReportModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md border-muted/85 bg-[#141419]/90 shadow-2xl relative animate-in zoom-in-95 duration-200">
+                        <CardHeader className="pb-3 border-b border-muted/30">
+                            <div className="flex justify-between items-center">
+                                <CardTitle className="text-base font-bold flex items-center gap-2 text-amber-500">
+                                    <AlertTriangle className="h-5 w-5" /> Report an Issue
+                                </CardTitle>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-7 w-7 p-0 border-muted hover:bg-muted/20"
+                                    onClick={() => setIsReportModalOpen(false)}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <CardDescription>
+                                This will submit a support ticket to the server administrator.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="reportName" className="text-xs font-semibold text-foreground">Your Name</Label>
+                                <Input
+                                    id="reportName"
+                                    value={reportName}
+                                    onChange={(e) => setReportName(e.target.value)}
+                                    placeholder="Your username"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="reportEmail" className="text-xs font-semibold text-foreground">Your Email Address</Label>
+                                <Input
+                                    id="reportEmail"
+                                    type="email"
+                                    value={reportEmail}
+                                    onChange={(e) => setReportEmail(e.target.value)}
+                                    placeholder="For administrator replies..."
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="reportDesc" className="text-xs font-semibold text-foreground">Describe the Problem</Label>
+                                <textarea
+                                    id="reportDesc"
+                                    rows={6}
+                                    className="flex w-full rounded-md border border-muted/80 bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={reportDescription}
+                                    onChange={(e) => setReportDescription(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </CardContent>
+                        <CardFooter className="pt-2 border-t border-muted/30 flex justify-end gap-2">
+                            <Button 
+                                variant="outline" 
+                                className="h-9 font-semibold text-xs border-muted/80 text-muted-foreground hover:text-foreground"
+                                onClick={() => setIsReportModalOpen(false)}
+                                disabled={submittingReport}
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                className="h-9 font-semibold text-xs text-black"
+                                onClick={handleSendReport}
+                                disabled={submittingReport}
+                            >
+                                {submittingReport ? (
+                                    <>
+                                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                                        Submitting...
+                                    </>
+                                ) : (
+                                    "Submit Report"
+                                )}
                             </Button>
                         </CardFooter>
                     </Card>

@@ -945,6 +945,10 @@ export async function processEpubForKindle(filePath: string): Promise<string> {
 
 export async function scanLibrary(libraryId: string) {
     await verifyAdmin();
+    return await scanLibraryInternal(libraryId);
+}
+
+export async function scanLibraryInternal(libraryId: string) {
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
     });
@@ -1430,11 +1434,37 @@ export async function monitorAndRetryDownload(
         console.log(`[AUTO-DOWNLOAD-MONITOR] Attempt ${attemptIndex + 1} Poll ${poll + 1}/${maxPolls} status: ${downloadStatus}`);
 
         if (downloadStatus === "completed") {
-            console.log(`[AUTO-DOWNLOAD-MONITOR] Download completed successfully!`);
-            await prisma.bookRequest.update({
+            console.log(`[AUTO-DOWNLOAD-MONITOR] Download completed successfully for: ${release.title}`);
+            const req = await prisma.bookRequest.update({
                 where: { id: requestId },
                 data: { status: "Downloaded" }
             });
+            
+            await delay(5000);
+            
+            const libraries = await prisma.library.findMany();
+            for (const lib of libraries) {
+                try {
+                    await scanLibraryInternal(lib.id);
+                } catch (err) {
+                    console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${lib.name}":`, err);
+                }
+            }
+            
+            const allBooks = await prisma.book.findMany();
+            const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const matchedBook = allBooks.find(b => {
+                const bTitleClean = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                return bTitleClean.includes(reqTitleClean) || reqTitleClean.includes(bTitleClean);
+            });
+            
+            if (matchedBook) {
+                console.log(`[AUTO-DOWNLOAD-MONITOR] Found matching book "${matchedBook.title}". Automatically mailing to ${req.requestedBy}...`);
+                await sendBookToUserKindleInternal(matchedBook.id, req.requestedBy);
+            } else {
+                console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching: "${req.title}"`);
+            }
+            
             return;
         }
 
@@ -1636,6 +1666,110 @@ export async function sendBookToKindle(bookId: string) {
         throw new Error(`Kindle delivery failed: ${e.message || "Unknown SMTP error"}`);
     }
 }
+
+export async function sendBookToUserKindleInternal(bookId: string, username: string) {
+    const user = await prisma.user.findFirst({
+        where: { username }
+    });
+    
+    if (!user) {
+        console.error(`[AUTO-KINDLE] User not found: ${username}`);
+        return;
+    }
+    if (!user.kindleEmail) {
+        console.warn(`[AUTO-KINDLE] User ${username} has no Kindle email configured.`);
+        return;
+    }
+
+    const book = await prisma.book.findUnique({
+        where: { id: bookId }
+    });
+    if (!book) {
+        console.error(`[AUTO-KINDLE] Book not found: ${bookId}`);
+        return;
+    }
+    if (!fs.existsSync(book.filePath)) {
+        console.error(`[AUTO-KINDLE] Book file not found on disk: ${book.filePath}`);
+        return;
+    }
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
+    if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+        console.error("[AUTO-KINDLE] SMTP is not configured on this server.");
+        return;
+    }
+
+    const senderEmail = settings.smtpFrom || settings.smtpUser;
+    
+    const transporter = nodemailer.createTransport({
+        host: settings.smtpHost,
+        port: settings.smtpPort || 587,
+        secure: settings.smtpPort === 465,
+        auth: {
+            user: settings.smtpUser,
+            pass: decryptData(settings.smtpPass)
+        }
+    });
+
+    const mailOptions = {
+        from: senderEmail,
+        to: user.kindleEmail,
+        subject: `Deliver Book: ${book.title}`,
+        text: `Delivering your ebook "${book.title}" to your Kindle device.`,
+        attachments: [
+            {
+                filename: path.basename(book.filePath),
+                path: book.filePath
+            }
+        ]
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`[AUTO-KINDLE] Ebook "${book.title}" successfully emailed to ${user.kindleEmail} for ${username}`);
+        return { success: true };
+    } catch (e: any) {
+        console.error("[AUTO-KINDLE] Kindle SMTP send failed:", e);
+        
+        if (user.email) {
+            try {
+                const failMailOptions = {
+                    from: senderEmail,
+                    to: user.email,
+                    subject: `❌ Failed to Deliver Ebook to Kindle: ${book.title}`,
+                    html: `
+                        <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
+                            <p>We attempted to automatically deliver your requested book <strong>"${book.title}"</strong> to your Kindle, but the email transmission failed.</p>
+                            
+                            <div style="background-color: #f8fafc; border-left: 4px solid #ef4444; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px;">
+                                <strong>Error Details:</strong><br/>
+                                ${e.message || "Unknown SMTP Error"}
+                            </div>
+                            
+                            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                            
+                            <h3 style="margin-bottom: 8px;">Troubleshooting Checklist:</h3>
+                            <ol style="padding-left: 20px; line-height: 1.6;">
+                                <li>
+                                    <strong>Add Approved Sender:</strong> Ensure the portal's public sender address <strong><code>${senderEmail}</code></strong> is added to your approved list in your Amazon account:
+                                    <br/>
+                                    <span style="color: #64748b; font-size: 12px;">Amazon.com &rarr; Preferences &rarr; Personal Document Settings &rarr; Approved Personal Document E-mail List</span>
+                                </li>
+                                <li><strong>Check File Size:</strong> Kindle has a 50MB email file size limit. Your book size is <code>${(fs.statSync(book.filePath).size / (1024 * 1024)).toFixed(1)} MB</code>.</li>
+                                <li><strong>Verify Kindle Email:</strong> Double-check that your Kindle address (currently configured as <code>${user.kindleEmail}</code>) is exactly correct in your library settings.</li>
+                            </ol>
+                        </div>
+                    `
+                };
+                await transporter.sendMail(failMailOptions);
+            } catch (err) {
+                console.error("[AUTO-KINDLE] Failed to send troubleshooting email:", err);
+            }
+        }
+    }
+}
+
 
 export async function getPublicSmtpFromEmail() {
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
