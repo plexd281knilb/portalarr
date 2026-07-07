@@ -675,7 +675,7 @@ export async function createLibrary(formData: FormData) {
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
     const path = formData.get("path") as string || "";
-    const allowedUsers = formData.get("allowedUsers") as string || "*";
+    const allowedUsers = formData.get("allowedUsers") as string || "";
     
     await prisma.library.create({
         data: { name, description, path, allowedUsers }
@@ -689,7 +689,7 @@ export async function updateLibrary(formData: FormData) {
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
     const path = formData.get("path") as string || "";
-    const allowedUsers = formData.get("allowedUsers") as string || "*";
+    const allowedUsers = formData.get("allowedUsers") as string || "";
     
     await prisma.library.update({
         where: { id },

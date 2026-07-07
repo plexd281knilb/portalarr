@@ -53,7 +53,7 @@ export default function BookLibraryPage() {
     const [libName, setLibName] = useState("");
     const [libDesc, setLibDesc] = useState("");
     const [libPath, setLibPath] = useState("");
-    const [libAllowedUsers, setLibAllowedUsers] = useState("*");
+    const [libAllowedUsers, setLibAllowedUsers] = useState("");
     const [editingLibId, setEditingLibId] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
 
@@ -201,7 +201,7 @@ export default function BookLibraryPage() {
             setLibName("");
             setLibDesc("");
             setLibPath("");
-            setLibAllowedUsers("*");
+            setLibAllowedUsers("");
             setEditingLibId(null);
             
             const libs = await getLibraries();
@@ -1340,7 +1340,7 @@ export default function BookLibraryPage() {
                                                             setEditingLibId(null);
                                                             setLibName("");
                                                             setLibDesc("");
-                                                            setLibAllowedUsers("*");
+                                                            setLibAllowedUsers("");
                                                         }}
                                                     >
                                                         Cancel
