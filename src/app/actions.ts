@@ -772,7 +772,7 @@ export async function createBookRequest(formData: FormData) {
     
     if (!title) throw new Error("Title is required");
     
-    await prisma.bookRequest.create({
+    const request = await prisma.bookRequest.create({
         data: {
             title,
             author,
@@ -780,6 +780,11 @@ export async function createBookRequest(formData: FormData) {
             status: "Pending"
         }
     });
+    
+    autoDownloadBookRequest(request.id, title, author).catch(err => {
+        console.error(`[AUTO-DOWNLOAD] Background process failed:`, err);
+    });
+
     revalidatePath("/library");
 }
 
@@ -790,6 +795,39 @@ export async function updateBookRequestStatus(id: string, status: string) {
         data: { status }
     });
     revalidatePath("/library");
+}
+
+export async function processEpubForKindle(filePath: string): Promise<string> {
+    if (!fs.existsSync(filePath)) {
+        throw new Error("File does not exist.");
+    }
+
+    const stats = fs.statSync(filePath);
+    if (stats.size > 50 * 1024 * 1024) {
+        throw new Error("File size exceeds 50MB Kindle limit.");
+    }
+
+    const fd = fs.openSync(filePath, 'r');
+    const buffer = Buffer.alloc(4);
+    fs.readSync(fd, buffer, 0, 4, 0);
+    fs.closeSync(fd);
+
+    if (buffer.toString('hex') !== '504b0304') {
+        throw new Error("Invalid file format. File is not a valid ZIP/EPUB archive.");
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const dirname = path.dirname(filePath);
+    const basename = path.basename(filePath, ext);
+    const cleanName = basename.replace(/[^a-zA-Z0-9]/g, "_").replace(/__+/g, "_").toLowerCase() + ext;
+    const newPath = path.join(dirname, cleanName);
+
+    if (filePath !== newPath) {
+        fs.renameSync(filePath, newPath);
+        return newPath;
+    }
+
+    return filePath;
 }
 
 export async function scanLibrary(libraryId: string) {
@@ -811,7 +849,16 @@ export async function scanLibrary(libraryId: string) {
         for (const file of files) {
             const ext = path.extname(file).toLowerCase();
             if (validExtensions.includes(ext)) {
-                const fullPath = path.join(library.path, file);
+                let fullPath = path.join(library.path, file);
+
+                if (ext === ".epub") {
+                    try {
+                        fullPath = await processEpubForKindle(fullPath);
+                    } catch (err: any) {
+                        console.warn(`[KINDLE-PROCESS] EPUB check failed for ${file}: ${err.message}`);
+                    }
+                }
+
                 diskFilePaths.add(fullPath);
 
                 const existing = await prisma.book.findFirst({
@@ -820,7 +867,8 @@ export async function scanLibrary(libraryId: string) {
 
                 if (!existing) {
                     const stats = fs.statSync(fullPath);
-                    const titleWithoutExt = path.basename(file, ext).replace(/[_-]/g, ' ');
+                    const cleanBase = path.basename(fullPath, ext);
+                    const titleWithoutExt = cleanBase.replace(/[_-]/g, ' ');
                     await prisma.book.create({
                         data: {
                             title: titleWithoutExt,
@@ -852,6 +900,122 @@ export async function scanLibrary(libraryId: string) {
     } catch (e: any) {
         console.error("Failed to scan library:", e);
         throw new Error(e.message || "Failed to scan library folder");
+    }
+}
+
+export async function autoDownloadBookRequest(requestId: string, title: string, author: string) {
+    console.log(`[AUTO-DOWNLOAD] Starting auto-download check for: ${title} by ${author}`);
+    
+    try {
+        const prowlarrApp = await prisma.mediaApp.findFirst({
+            where: { type: "prowlarr" }
+        });
+        if (!prowlarrApp) {
+            await prisma.bookRequest.update({
+                where: { id: requestId },
+                data: { status: "Failed - Prowlarr is not configured under settings" }
+            });
+            return;
+        }
+
+        const prowlarrUrl = cleanUrl(prowlarrApp.url);
+        const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
+        const queryText = author ? `${title} ${author}` : title;
+
+        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(queryText)}&categories=7000&categories=7010&categories=7020&apikey=${prowlarrKey}`;
+        const res = await fetch(searchUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Prowlarr error: status ${res.status}`);
+        
+        const results = await res.json();
+        if (!results || results.length === 0) {
+            await prisma.bookRequest.update({
+                where: { id: requestId },
+                data: { status: "Failed - No results found on indexers" }
+            });
+            return;
+        }
+
+        const epubReleases = results.filter((r: any) => {
+            const hasEpubInTitle = r.title.toLowerCase().includes("epub") || 
+                                   (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
+            const isValidSize = r.size > 100 * 1024 && r.size < 50 * 1024 * 1024;
+            return hasEpubInTitle && isValidSize;
+        });
+
+        if (epubReleases.length === 0) {
+            await prisma.bookRequest.update({
+                where: { id: requestId },
+                data: { status: "Failed - No EPUB releases found under 50MB" }
+            });
+            return;
+        }
+
+        epubReleases.sort((a: any, b: any) => {
+            if (a.protocol === "usenet" && b.protocol !== "usenet") return -1;
+            if (a.protocol !== "usenet" && b.protocol === "usenet") return 1;
+            if (a.protocol === "torrent" && b.protocol === "torrent") {
+                return (b.seeders || 0) - (a.seeders || 0);
+            }
+            return b.size - a.size;
+        });
+
+        const selectedRelease = epubReleases[0];
+        console.log(`[AUTO-DOWNLOAD] Selected release for grab: ${selectedRelease.title}`);
+
+        if (selectedRelease.protocol === "usenet") {
+            const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
+            if (!sabApp) throw new Error("SABnzbd downloader is not configured");
+            const sabUrl = cleanUrl(sabApp.url);
+            const sabKey = decryptData(sabApp.apiKey as string);
+            
+            const pushUrl = `${sabUrl}/api?mode=addurl&name=${encodeURIComponent(selectedRelease.downloadUrl)}&nzbname=${encodeURIComponent(selectedRelease.title)}&cat=books&output=json&apikey=${sabKey}`;
+            const clientRes = await fetch(pushUrl, { cache: "no-store" });
+            if (!clientRes.ok) throw new Error(`SABnzbd request failed: ${clientRes.status}`);
+            const json = await clientRes.json();
+            if (json.status === false) throw new Error(json.error || "SABnzbd refused to queue download");
+        } else {
+            const qbitApp = await prisma.mediaApp.findFirst({
+                where: { type: "qbittorrent" }
+            }) || await prisma.mediaApp.findFirst({
+                where: { type: { contains: "qbit" } }
+            });
+            if (!qbitApp) throw new Error("qBittorrent downloader is not configured");
+            const qbitUrl = cleanUrl(qbitApp.url);
+            const qbitKey = decryptData(qbitApp.apiKey as string);
+            
+            try {
+                await fetch(`${qbitUrl}/api/v2/torrents/add`, {
+                    method: "POST",
+                    body: new URLSearchParams({ urls: selectedRelease.downloadUrl, category: "books" }),
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" }
+                });
+            } catch (err) {
+                const loginRes = await fetch(`${qbitUrl}/api/v2/auth/login`, {
+                    method: "POST",
+                    body: new URLSearchParams({ username: "admin", password: qbitKey }),
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" }
+                });
+                const cookie = loginRes.headers.get("set-cookie");
+                if (!cookie) throw new Error("qBittorrent authentication failed");
+                await fetch(`${qbitUrl}/api/v2/torrents/add`, {
+                    method: "POST",
+                    body: new URLSearchParams({ urls: selectedRelease.downloadUrl, category: "books" }),
+                    headers: { "Content-Type": "application/x-www-form-urlencoded", "Cookie": cookie }
+                });
+            }
+        }
+
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { status: "Downloading" }
+        });
+        
+    } catch (e: any) {
+        console.error(`[AUTO-DOWNLOAD] Error:`, e);
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { status: `Failed - ${e.message || "Unknown error during download client push"}` }
+        });
     }
 }
 

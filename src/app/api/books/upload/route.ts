@@ -58,12 +58,26 @@ export async function POST(req: NextRequest) {
         const buffer = Buffer.from(bytes);
         fs.writeFileSync(filePath, buffer);
 
+        let finalPath = filePath;
+        let finalSize = file.size;
+        if (fileExtension.toLowerCase() === ".epub") {
+            try {
+                const { processEpubForKindle } = require("@/app/actions");
+                finalPath = await processEpubForKindle(filePath);
+                const stats = fs.statSync(finalPath);
+                finalSize = stats.size;
+            } catch (err: any) {
+                console.error("Kindle epub processing failed:", err);
+                return NextResponse.json({ error: `Epub validation failed: ${err.message}` }, { status: 400 });
+            }
+        }
+
         const book = await prisma.book.create({
             data: {
                 title,
                 author: author || "Unknown Author",
-                filePath,
-                fileSize: file.size,
+                filePath: finalPath,
+                fileSize: finalSize,
                 fileType: fileExtension.replace(".", "").toLowerCase(),
                 libraryId
             }
