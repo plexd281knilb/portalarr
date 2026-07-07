@@ -1531,6 +1531,34 @@ export async function getPublicSmtpFromEmail() {
     return settings.smtpFrom || settings.smtpUser || "";
 }
 
+export async function checkUserLibraryAccess(): Promise<boolean> {
+    try {
+        const session = await verifyUser();
+        if (session.role === "ADMIN") return true;
+
+        const username = session.username as string;
+        
+        const libs = await prisma.library.findMany({
+            where: {
+                OR: [
+                    { allowedUsers: "*" },
+                    { allowedUsers: { contains: username } }
+                ]
+            }
+        });
+
+        const filtered = libs.filter(lib => {
+            if (lib.allowedUsers === "*") return true;
+            const users = lib.allowedUsers.split(",").map(u => u.trim());
+            return users.includes(username);
+        });
+
+        return filtered.length > 0;
+    } catch (e) {
+        return false;
+    }
+}
+
 export async function submitLibraryAccessRequest(email: string, kindleEmail: string) {
     const session = await verifyUser();
     

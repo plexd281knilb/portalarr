@@ -2,13 +2,37 @@
 
 import { usePathname } from "next/navigation";
 import { Sidebar, MobileSidebar } from "@/components/sidebar";
-import { LogOut, Settings, LayoutDashboard, Server } from "lucide-react";
-import { logout } from "@/app/auth-actions";
+import { LogOut, Settings, LayoutDashboard, Server, BookOpen } from "lucide-react";
+import { logout, getSession } from "@/app/auth-actions";
+import { checkUserLibraryAccess } from "@/app/actions";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [hasLibraryAccess, setHasLibraryAccess] = useState(false);
+
+  useEffect(() => {
+    async function checkAccess() {
+      try {
+        const session = await getSession();
+        if (session) {
+          if (session.role === "ADMIN") {
+            setHasLibraryAccess(true);
+          } else {
+            const hasAcc = await checkUserLibraryAccess();
+            setHasLibraryAccess(hasAcc);
+          }
+        } else {
+          setHasLibraryAccess(false);
+        }
+      } catch (e) {
+        console.error("Failed to check layout library access:", e);
+      }
+    }
+    checkAccess();
+  }, [pathname]);
   
   const isPublicRoute = pathname === "/" || pathname === "/login" || pathname === "/beta";
 
@@ -24,6 +48,15 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
             </Link>
             
             <div className="flex items-center gap-4">
+                {hasLibraryAccess && (
+                    <Button asChild variant="ghost" size="sm" className="hidden sm:flex gap-2 text-primary hover:text-primary hover:bg-primary/10">
+                        <Link href="/library">
+                            <BookOpen className="h-4 w-4" /> 
+                            Book Library
+                        </Link>
+                    </Button>
+                )}
+
                 {pathname === "/beta" ? (
                     <Button asChild variant="ghost" size="sm" className="hidden sm:flex gap-2">
                         <Link href="/">

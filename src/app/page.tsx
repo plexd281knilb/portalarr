@@ -1,4 +1,4 @@
-import { getPublicMediaApps, getBetaDashboardText, getRoadmapText, getAlertBanner } from "@/app/actions";
+import { getPublicMediaApps, getBetaDashboardText, getRoadmapText, getAlertBanner, checkUserLibraryAccess } from "@/app/actions";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm'; 
 import rehypeRaw from 'rehype-raw'; 
@@ -9,7 +9,7 @@ import RequestLibraryAccess from "@/components/request-library-access";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ExternalLink, AlertTriangle } from "lucide-react"; 
+import { ExternalLink, AlertTriangle, BookOpen } from "lucide-react"; 
 import { cookies } from "next/headers"; 
 
 export const dynamic = "force-dynamic";
@@ -25,11 +25,12 @@ export default async function UserLandingPage() {
   const isLoggedIn = !!cookieStore.get("session")?.value;
 
   // Fetch all dynamic content
-  const [apps, betaText, roadmapText, alertBanner] = await Promise.all([
+  const [apps, betaText, roadmapText, alertBanner, hasAccess] = await Promise.all([
       getPublicMediaApps(),
       getBetaDashboardText(),
       getRoadmapText(),
-      getAlertBanner()
+      getAlertBanner(),
+      isLoggedIn ? checkUserLibraryAccess() : Promise.resolve(false)
   ]);
 
   const requestApps = apps.filter(app => 
@@ -73,7 +74,16 @@ export default async function UserLandingPage() {
                 <CardContent className="flex-1 flex flex-col justify-center space-y-4">
                     {isLoggedIn && (
                         <div className="border-b border-muted/50 pb-4">
-                            <RequestLibraryAccess />
+                            {hasAccess ? (
+                                <Link href="/library" className="w-full block">
+                                    <Button size="lg" className="w-full text-base font-semibold h-12 shadow-sm hover:shadow transition-all bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-2">
+                                        <BookOpen className="h-4 w-4 text-white" />
+                                        Access Book Library
+                                    </Button>
+                                </Link>
+                            ) : (
+                                <RequestLibraryAccess />
+                            )}
                         </div>
                     )}
                     {requestApps.length === 0 ? (
