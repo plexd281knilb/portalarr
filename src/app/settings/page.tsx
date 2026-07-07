@@ -225,6 +225,13 @@ export default function SettingsPage() {
                                         <div className="space-y-2"><Label>User</Label><Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/></div>
                                         <div className="space-y-2"><Label>Password</Label><Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass || ""}/></div>
                                     </div>
+                                    <div className="space-y-2">
+                                        <Label>Sender Email Address</Label>
+                                        <Input name="smtpFrom" defaultValue={systemSettings.smtpFrom || ""} placeholder="portalarr@gmail.com"/>
+                                        <p className="text-[10px] text-muted-foreground">
+                                            The email address from which ebooks will be delivered (must be added to your users' Amazon Approved Senders list).
+                                        </p>
+                                    </div>
                                     
                                     {/* NEW PLEX TOKEN SECTION */}
                                     <div className="space-y-2 border-t pt-4 mt-4">

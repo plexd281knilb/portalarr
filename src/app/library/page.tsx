@@ -13,9 +13,12 @@ import {
   updateBookRequestStatus,
   scanLibrary,
   searchProwlarrIndexers,
-  sendReleaseToDownloadClient
+  sendReleaseToDownloadClient,
+  saveUserKindleSettings,
+  sendBookToKindle,
+  getPublicSmtpFromEmail
 } from "@/app/actions";
-import { getSession } from "@/app/auth-actions";
+import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, 
   UploadCloud, Check, X, FileText, Download, 
-  LifeBuoy, Shield, Loader2, Sparkles 
+  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send 
 } from "lucide-react";
 
 export default function BookLibraryPage() {
@@ -54,6 +57,13 @@ export default function BookLibraryPage() {
     const [searchProwlarrError, setSearchProwlarrError] = useState("");
     const [pushingReleaseId, setPushingReleaseId] = useState<string | null>(null);
 
+    // Kindle states
+    const [fullUser, setFullUser] = useState<any>(null);
+    const [userEmail, setUserEmail] = useState("");
+    const [userKindleEmail, setUserKindleEmail] = useState("");
+    const [serverSmtpFrom, setServerSmtpFrom] = useState("");
+    const [sendingToKindleId, setSendingToKindleId] = useState<string | null>(null);
+
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
     const [uploadTitle, setUploadTitle] = useState("");
@@ -75,6 +85,16 @@ export default function BookLibraryPage() {
                 const session = await getSession();
                 setUser(session);
                 
+                const profile = await getCurrentUser();
+                setFullUser(profile);
+                if (profile) {
+                    setUserEmail(profile.email || "");
+                    setUserKindleEmail(profile.kindleEmail || "");
+                }
+
+                const smtpFromEmail = await getPublicSmtpFromEmail();
+                setServerSmtpFrom(smtpFromEmail || "");
+
                 const libs = await getLibraries();
                 setLibraries(libs || []);
                 if (libs && libs.length > 0) {
@@ -235,6 +255,34 @@ export default function BookLibraryPage() {
         }
     }
 
+    async function handleSaveKindleConfig(e: React.FormEvent) {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append("email", userEmail);
+        formData.append("kindleEmail", userKindleEmail);
+        
+        try {
+            await saveUserKindleSettings(formData);
+            const profile = await getCurrentUser();
+            setFullUser(profile);
+            alert("Settings updated successfully!");
+        } catch (e: any) {
+            alert(e.message || "Failed to update profile settings.");
+        }
+    }
+
+    async function handleSendToKindle(bookId: string) {
+        setSendingToKindleId(bookId);
+        try {
+            await sendBookToKindle(bookId);
+            alert("Ebook successfully queued and delivered to your Kindle device!");
+        } catch (e: any) {
+            alert(e.message || "Delivery failed. Check your personal email inbox for instructions.");
+        } finally {
+            setSendingToKindleId(null);
+        }
+    }
+
     async function triggerProwlarrSearch(req: any) {
         setActiveRequestForSearch(req);
         setSearchingProwlarr(true);
@@ -334,11 +382,14 @@ export default function BookLibraryPage() {
             </header>
 
             <Tabs defaultValue="libs" className="w-full">
-                <TabsList className="grid w-full max-w-md grid-cols-3 mb-6">
+                <TabsList className="grid w-full max-w-xl grid-cols-4 mb-6">
                     <TabsTrigger value="libs">Libraries</TabsTrigger>
                     <TabsTrigger value="requests">Requests</TabsTrigger>
                     <TabsTrigger value="manage" disabled={!isAdmin}>
                         Manage
+                    </TabsTrigger>
+                    <TabsTrigger value="kindle">
+                        Kindle Settings
                     </TabsTrigger>
                 </TabsList>
 
@@ -537,6 +588,20 @@ export default function BookLibraryPage() {
                                                             onClick={() => setActiveBook(book)}
                                                         >
                                                             <BookOpen className="h-3 w-3 mr-1" /> Read
+                                                        </Button>
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            className="text-xs border-primary/20 text-primary hover:bg-primary/10"
+                                                            title="Send to Kindle"
+                                                            disabled={sendingToKindleId !== null}
+                                                            onClick={() => handleSendToKindle(book.id)}
+                                                        >
+                                                            {sendingToKindleId === book.id ? (
+                                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                            ) : (
+                                                                <Send className="h-3 w-3" />
+                                                            )}
                                                         </Button>
                                                         <Button 
                                                             variant="outline" 
@@ -852,6 +917,97 @@ export default function BookLibraryPage() {
                         </div>
                     </TabsContent>
                 )}
+
+                <TabsContent value="kindle" className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-1">
+                            <Card className="border-muted/60 bg-muted/10">
+                                <CardHeader>
+                                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                        <Mail className="h-5 w-5 text-primary" /> Delivery Configuration
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Configure your Kindle recipient address and personal alert details.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <form onSubmit={handleSaveKindleConfig} className="space-y-4">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="userEmail" className="text-xs">Your Personal E-mail</Label>
+                                            <Input
+                                                id="userEmail"
+                                                type="email"
+                                                placeholder="e.g. you@domain.com"
+                                                value={userEmail}
+                                                onChange={(e) => setUserEmail(e.target.value)}
+                                                required
+                                            />
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Used to send you delivery logs or instructions in case of Kindle rejection errors.
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="userKindleEmail" className="text-xs">Send-to-Kindle E-mail</Label>
+                                            <Input
+                                                id="userKindleEmail"
+                                                type="email"
+                                                placeholder="e.g. name@kindle.com"
+                                                value={userKindleEmail}
+                                                onChange={(e) => setUserKindleEmail(e.target.value)}
+                                                required
+                                            />
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Your dedicated Kindle email address found in your Amazon devices list.
+                                            </p>
+                                        </div>
+                                        <Button type="submit" className="w-full font-bold text-black">
+                                            Save Settings
+                                        </Button>
+                                    </form>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <div className="lg:col-span-2">
+                            <Card className="border-muted/60">
+                                <CardHeader className="py-4 border-b border-muted/50">
+                                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                                        📖 Amazon Approved Senders Guide
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-6 space-y-4 text-sm leading-relaxed">
+                                    <p>
+                                        Amazon requires all Send-to-Kindle documents to originate from an **Approved E-mail address**. 
+                                        If our server's address is not authorized on your Amazon account, Amazon will silently discard your books.
+                                    </p>
+                                    
+                                    <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg space-y-2">
+                                        <span className="font-semibold text-primary block text-xs uppercase tracking-wider">Your Server's Sending Address:</span>
+                                        {serverSmtpFrom ? (
+                                            <code className="text-sm font-mono font-bold bg-muted/60 px-2 py-1 rounded select-all text-foreground border border-muted">
+                                                {serverSmtpFrom}
+                                            </code>
+                                        ) : (
+                                            <span className="text-xs text-yellow-500 font-medium">
+                                                ⚠️ Server SMTP is not configured yet. Ask the administrator to add SMTP settings.
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <h4 className="font-bold text-foreground">How to Authorize this Address:</h4>
+                                    <ol className="list-decimal list-inside space-y-2 pl-2">
+                                        <li>Log into your Amazon Account on a web browser.</li>
+                                        <li>Navigate to Amazon's **[Manage Your Content and Devices](https://www.amazon.com/hz/mycd/myx#/home/settings/payment)** page.</li>
+                                        <li>Go to the **Preferences** tab at the top.</li>
+                                        <li>Scroll down and expand the **Personal Document Settings** accordion.</li>
+                                        <li>Scroll down to the **Approved Personal Document E-mail List** section.</li>
+                                        <li>Click **Add a new approved e-mail address**, paste the server address shown above, and click **Add Address**.</li>
+                                    </ol>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                </TabsContent>
             </Tabs>
 
             {activeBook && (

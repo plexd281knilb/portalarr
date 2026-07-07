@@ -16,6 +16,7 @@ model Settings {
   smtpPort         Int?
   smtpUser         String?
   smtpPass         String?
+  smtpFrom         String    @default("") // Email address the system sends books from
   refreshInterval  Int       @default(10)
   theme            String    @default("dark")
   autoSyncInterval Int       @default(6)
@@ -60,12 +61,13 @@ model MediaApp {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  email     String   @unique 
-  password  String   // Hashed
-  role      String   @default("USER") // "ADMIN" or "USER"
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  username    String   @unique
+  email       String   @unique 
+  password    String   // Hashed
+  kindleEmail String   @default("") // Send-to-Kindle email address
+  role        String   @default("USER") // "ADMIN" or "USER"
+  createdAt   DateTime @default(now())
 }
 
 model SupportTicket {
