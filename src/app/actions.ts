@@ -787,6 +787,8 @@ export async function createBookRequest(formData: FormData) {
     const title = formData.get("title") as string;
     const author = formData.get("author") as string || "";
     const type = formData.get("type") as string || "book"; // "book" or "series"
+    const coverUrl = formData.get("coverUrl") as string || "";
+    const publishYear = formData.get("publishYear") as string || "";
     
     if (!title) throw new Error("Title is required");
     
@@ -794,6 +796,8 @@ export async function createBookRequest(formData: FormData) {
         data: {
             title,
             author,
+            coverUrl,
+            publishYear,
             requestedBy: session.username as string,
             type,
             status: "Pending"

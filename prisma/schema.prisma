@@ -121,6 +121,8 @@ model BookRequest {
   id          String   @id @default(cuid())
   title       String
   author      String?
+  coverUrl    String?
+  publishYear String?
   requestedBy String   // Username
   type        String   @default("book") // "book" or "series"
   status      String   @default("Pending") // "Pending", "Approved", "Downloaded", "Rejected"

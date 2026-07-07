@@ -73,6 +73,8 @@ export default function BookLibraryPage() {
     const [searchingRegistry, setSearchingRegistry] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [reqType, setReqType] = useState("book"); // "book" or "series"
+    const [reqCoverUrl, setReqCoverUrl] = useState("");
+    const [reqPublishYear, setReqPublishYear] = useState("");
 
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -363,11 +365,15 @@ export default function BookLibraryPage() {
         formData.append("title", reqTitle);
         formData.append("author", reqAuthor);
         formData.append("type", reqType);
+        formData.append("coverUrl", reqCoverUrl);
+        formData.append("publishYear", reqPublishYear);
 
         try {
             await createBookRequest(formData);
             setReqTitle("");
             setReqAuthor("");
+            setReqCoverUrl("");
+            setReqPublishYear("");
             setReqType("book");
             const reqs = await getBookRequests();
             setRequests(reqs || []);
@@ -768,6 +774,8 @@ export default function BookLibraryPage() {
                                                                 onMouseDown={() => {
                                                                     setReqTitle(book.title);
                                                                     setReqAuthor(book.author);
+                                                                    setReqCoverUrl(book.coverUrl || "");
+                                                                    setReqPublishYear(book.year ? String(book.year) : "");
                                                                     setShowSuggestions(false);
                                                                 }}
                                                             >
@@ -830,25 +838,38 @@ export default function BookLibraryPage() {
                                         <div className="divide-y divide-muted/50">
                                             {requests.map(req => (
                                                 <div key={req.id} className="p-4 flex items-center justify-between flex-wrap gap-3">
-                                                    <div className="space-y-1">
-                                                         <div className="flex items-center gap-2 flex-wrap">
-                                                             <h4 className="font-semibold text-sm">{req.title}</h4>
-                                                             {req.type === "series" ? (
-                                                                 <Badge variant="outline" className="text-[10px] py-0 px-1 border-purple-500/30 text-purple-400 bg-purple-500/5 font-semibold">
-                                                                     SERIES
-                                                                 </Badge>
-                                                             ) : (
-                                                                 <Badge variant="outline" className="text-[10px] py-0 px-1 border-blue-500/30 text-blue-400 bg-blue-500/5 font-semibold">
-                                                                     BOOK
-                                                                 </Badge>
-                                                             )}
-                                                         </div>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {req.author ? `by ${req.author}` : "Unknown Author"} • Requested by <span className="font-medium text-foreground">{req.requestedBy}</span>
-                                                        </p>
-                                                        <p className="text-[10px] text-muted-foreground">
-                                                            Requested: {new Date(req.createdAt).toLocaleDateString()}
-                                                        </p>
+                                                    <div className="flex gap-3 items-start min-w-0 flex-1">
+                                                        {req.coverUrl ? (
+                                                            <img 
+                                                                src={req.coverUrl} 
+                                                                alt={req.title} 
+                                                                className="w-10 h-14 object-cover rounded bg-muted/20 border border-muted/50 shrink-0"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-10 h-14 rounded bg-muted/30 border border-muted/50 flex items-center justify-center text-[7px] text-muted-foreground shrink-0 font-bold uppercase text-center p-0.5">
+                                                                No Cover
+                                                            </div>
+                                                        )}
+                                                        <div className="space-y-1 min-w-0 flex-1">
+                                                             <div className="flex items-center gap-2 flex-wrap">
+                                                                 <h4 className="font-semibold text-sm truncate" title={req.title}>{req.title}</h4>
+                                                                 {req.type === "series" ? (
+                                                                     <Badge variant="outline" className="text-[10px] py-0 px-1 border-purple-500/30 text-purple-400 bg-purple-500/5 font-semibold">
+                                                                         SERIES
+                                                                     </Badge>
+                                                                 ) : (
+                                                                     <Badge variant="outline" className="text-[10px] py-0 px-1 border-blue-500/30 text-blue-400 bg-blue-500/5 font-semibold">
+                                                                         BOOK
+                                                                     </Badge>
+                                                                 )}
+                                                             </div>
+                                                            <p className="text-xs text-muted-foreground truncate font-medium">
+                                                                {req.author ? `by ${req.author}` : "Unknown Author"} {req.publishYear ? `(${req.publishYear})` : ""}
+                                                            </p>
+                                                            <p className="text-[10px] text-muted-foreground">
+                                                                Requested by <span className="font-semibold text-foreground">{req.requestedBy}</span> • {new Date(req.createdAt).toLocaleDateString()}
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                     <div className="flex items-center gap-3">
                                                         <Badge className={`text-xs ${
