@@ -962,6 +962,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const selectedRelease = epubReleases[0];
         console.log(`[AUTO-DOWNLOAD] Selected release for grab: ${selectedRelease.title}`);
 
+        let downloadId = "";
         if (selectedRelease.protocol === "usenet") {
             const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
             if (!sabApp) throw new Error("SABnzbd downloader is not configured");
@@ -973,6 +974,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             if (!clientRes.ok) throw new Error(`SABnzbd request failed: ${clientRes.status}`);
             const json = await clientRes.json();
             if (json.status === false) throw new Error(json.error || "SABnzbd refused to queue download");
+            downloadId = json.nzo_ids?.[0] || "";
         } else {
             const qbitApp = await prisma.mediaApp.findFirst({
                 where: { type: "qbittorrent" }
@@ -1008,6 +1010,11 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         await prisma.bookRequest.update({
             where: { id: requestId },
             data: { status: "Downloading" }
+        });
+
+        // Launch background downloader polling and failover task
+        monitorAndRetryDownload(requestId, epubReleases, 0, downloadId).catch(err => {
+            console.error(`[AUTO-DOWNLOAD-MONITOR] Background thread crashed:`, err);
         });
         
     } catch (e: any) {
@@ -1139,4 +1146,263 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     
     revalidatePath("/library");
     return { success: true };
+}
+
+// ============================================================================
+// --- DOWNLOAD MONITORING & AUTO RETRY AUTOMATION HANDLERS ---
+// ============================================================================
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: string): Promise<"downloading" | "completed" | "failed" | "unknown"> {
+    try {
+        const qRes = await fetch(`${sabUrl}/api?mode=queue&output=json&apikey=${sabKey}`);
+        if (qRes.ok) {
+            const qData = await qRes.json();
+            const slots = qData.queue?.slots || [];
+            const slot = slots.find((s: any) => s.nzo_id === downloadId);
+            if (slot) {
+                if (slot.status?.toLowerCase() === "failed") return "failed";
+                return "downloading";
+            }
+        }
+
+        const hRes = await fetch(`${sabUrl}/api?mode=history&output=json&apikey=${sabKey}`);
+        if (hRes.ok) {
+            const hData = await hRes.json();
+            const slots = hData.history?.slots || [];
+            const slot = slots.find((s: any) => s.nzo_id === downloadId);
+            if (slot) {
+                if (slot.status?.toLowerCase() === "failed") return "failed";
+                if (slot.status?.toLowerCase() === "completed") return "completed";
+            }
+        }
+        return "unknown";
+    } catch (e) {
+        console.error("Error checking SABnzbd status:", e);
+        return "unknown";
+    }
+}
+
+async function checkQbitStatus(qbitUrl: string, releaseTitle: string): Promise<{ status: "downloading" | "completed" | "failed" | "unknown", hash?: string }> {
+    try {
+        const res = await fetch(`${qbitUrl}/api/v2/torrents/info?category=books`);
+        if (!res.ok) return { status: "unknown" };
+        const torrents = await res.json();
+        
+        const torrent = torrents.find((t: any) => 
+            t.name.toLowerCase().includes(releaseTitle.toLowerCase()) ||
+            releaseTitle.toLowerCase().includes(t.name.toLowerCase())
+        );
+
+        if (torrent) {
+            const hash = torrent.hash;
+            const state = torrent.state?.toLowerCase();
+            
+            if (state === "error" || state === "missingfiles") {
+                return { status: "failed", hash };
+            }
+            if (state === "pausedup" || state === "seeding" || state.includes("complete") || torrent.progress === 1) {
+                return { status: "completed", hash };
+            }
+            if (state === "stalleddl" && torrent.num_seeds === 0) {
+                const ageInSeconds = Math.floor(Date.now() / 1000) - torrent.added_on;
+                if (ageInSeconds > 300 && torrent.progress === 0) {
+                    return { status: "failed", hash };
+                }
+            }
+            return { status: "downloading", hash };
+        }
+        return { status: "unknown" };
+    } catch (e) {
+        console.error("Error checking qBit status:", e);
+        return { status: "unknown" };
+    }
+}
+
+async function deleteDownload(protocol: string, downloadId: string, title: string) {
+    try {
+        if (protocol === "usenet") {
+            const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
+            if (sabApp) {
+                const sabUrl = cleanUrl(sabApp.url);
+                const sabKey = decryptData(sabApp.apiKey as string);
+                await fetch(`${sabUrl}/api?mode=queue&name=delete&value=${downloadId}&apikey=${sabKey}`);
+                await fetch(`${sabUrl}/api?mode=history&name=delete&value=${downloadId}&apikey=${sabKey}`);
+            }
+        } else {
+            const qbitApp = await prisma.mediaApp.findFirst({
+                where: { type: "qbittorrent" }
+            }) || await prisma.mediaApp.findFirst({
+                where: { type: { contains: "qbit" } }
+            });
+            if (qbitApp) {
+                const qbitUrl = cleanUrl(qbitApp.url);
+                const qbitKey = decryptData(qbitApp.apiKey as string);
+                
+                const { hash } = await checkQbitStatus(qbitUrl, title);
+                if (hash) {
+                    let cookieHeader = "";
+                    try {
+                        const loginRes = await fetch(`${qbitUrl}/api/v2/auth/login`, {
+                            method: "POST",
+                            body: new URLSearchParams({ username: "admin", password: qbitKey }),
+                            headers: { "Content-Type": "application/x-www-form-urlencoded" }
+                        });
+                        const cookie = loginRes.headers.get("set-cookie");
+                        if (cookie) cookieHeader = cookie;
+                    } catch (e) {}
+
+                    await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
+                        method: "POST",
+                        body: new URLSearchParams({ hashes: hash, deleteFiles: "true" }),
+                        headers: {
+                            "Content-Type": "application/x-www-form-urlencoded",
+                            ...(cookieHeader ? { "Cookie": cookieHeader } : {})
+                        }
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Failed to delete failed download:", e);
+    }
+}
+
+export async function monitorAndRetryDownload(
+    requestId: string,
+    releases: any[],
+    attemptIndex: number,
+    downloadId: string
+) {
+    const maxPolls = 20; 
+    const pollInterval = 30000; 
+    const release = releases[attemptIndex];
+    
+    console.log(`[AUTO-DOWNLOAD-MONITOR] Monitoring release attempt ${attemptIndex + 1}/${releases.length}: ${release.title}`);
+    
+    for (let poll = 0; poll < maxPolls; poll++) {
+        await delay(pollInterval);
+        
+        const currentReq = await prisma.bookRequest.findUnique({
+            where: { id: requestId }
+        });
+        if (!currentReq || currentReq.status === "Downloaded" || currentReq.status === "Rejected") {
+            console.log(`[AUTO-DOWNLOAD-MONITOR] Request ${requestId} was completed or cancelled. Stopping monitor.`);
+            return;
+        }
+
+        let downloadStatus: "downloading" | "completed" | "failed" | "unknown" = "unknown";
+        
+        if (release.protocol === "usenet") {
+            const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
+            if (sabApp) {
+                const sabUrl = cleanUrl(sabApp.url);
+                const sabKey = decryptData(sabApp.apiKey as string);
+                downloadStatus = await checkSabnzbdStatus(sabUrl, sabKey, downloadId);
+            }
+        } else {
+            const qbitApp = await prisma.mediaApp.findFirst({
+                where: { type: "qbittorrent" }
+            }) || await prisma.mediaApp.findFirst({
+                where: { type: { contains: "qbit" } }
+            });
+            if (qbitApp) {
+                const qbitUrl = cleanUrl(qbitApp.url);
+                const statusInfo = await checkQbitStatus(qbitUrl, release.title);
+                downloadStatus = statusInfo.status;
+            }
+        }
+
+        console.log(`[AUTO-DOWNLOAD-MONITOR] Attempt ${attemptIndex + 1} Poll ${poll + 1}/${maxPolls} status: ${downloadStatus}`);
+
+        if (downloadStatus === "completed") {
+            console.log(`[AUTO-DOWNLOAD-MONITOR] Download completed successfully!`);
+            await prisma.bookRequest.update({
+                where: { id: requestId },
+                data: { status: "Downloaded" }
+            });
+            return;
+        }
+
+        if (downloadStatus === "failed") {
+            console.log(`[AUTO-DOWNLOAD-MONITOR] Download failed for release: ${release.title}`);
+            break; 
+        }
+    }
+
+    await deleteDownload(release.protocol, downloadId, release.title);
+
+    if (attemptIndex + 1 < releases.length) {
+        const nextIndex = attemptIndex + 1;
+        const nextRelease = releases[nextIndex];
+        console.log(`[AUTO-DOWNLOAD-MONITOR] Attempting backup release ${nextIndex + 1}/${releases.length}: ${nextRelease.title}`);
+        
+        try {
+            let nextDownloadId = "";
+            if (nextRelease.protocol === "usenet") {
+                const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
+                if (!sabApp) throw new Error("SABnzbd not configured");
+                const sabUrl = cleanUrl(sabApp.url);
+                const sabKey = decryptData(sabApp.apiKey as string);
+                
+                const pushUrl = `${sabUrl}/api?mode=addurl&name=${encodeURIComponent(nextRelease.downloadUrl)}&nzbname=${encodeURIComponent(nextRelease.title)}&cat=books&output=json&apikey=${sabKey}`;
+                const res = await fetch(pushUrl, { cache: "no-store" });
+                if (!res.ok) throw new Error(`SABnzbd returned status ${res.status}`);
+                const json = await res.json();
+                if (json.status === false) throw new Error(json.error || "SABnzbd queue failure");
+                nextDownloadId = json.nzo_ids?.[0] || "";
+            } else {
+                const qbitApp = await prisma.mediaApp.findFirst({
+                    where: { type: "qbittorrent" }
+                }) || await prisma.mediaApp.findFirst({
+                    where: { type: { contains: "qbit" } }
+                });
+                if (!qbitApp) throw new Error("qBittorrent not configured");
+                const qbitUrl = cleanUrl(qbitApp.url);
+                const qbitKey = decryptData(qbitApp.apiKey as string);
+                
+                try {
+                    await fetch(`${qbitUrl}/api/v2/torrents/add`, {
+                        method: "POST",
+                        body: new URLSearchParams({ urls: nextRelease.downloadUrl, category: "books" }),
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+                    });
+                } catch (err) {
+                    const loginRes = await fetch(`${qbitUrl}/api/v2/auth/login`, {
+                        method: "POST",
+                        body: new URLSearchParams({ username: "admin", password: qbitKey }),
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+                    });
+                    const cookie = loginRes.headers.get("set-cookie");
+                    if (!cookie) throw new Error("qBit login failure");
+                    await fetch(`${qbitUrl}/api/v2/torrents/add`, {
+                        method: "POST",
+                        body: new URLSearchParams({ urls: nextRelease.downloadUrl, category: "books" }),
+                        headers: { "Content-Type": "application/x-www-form-urlencoded", "Cookie": cookie }
+                    });
+                }
+            }
+
+            await prisma.bookRequest.update({
+                where: { id: requestId },
+                data: { status: `Downloading (Backup attempt ${nextIndex + 1})` }
+            });
+            
+            monitorAndRetryDownload(requestId, releases, nextIndex, nextDownloadId).catch(err => {
+                console.error(`[AUTO-DOWNLOAD-MONITOR] Recursive monitor failed:`, err);
+            });
+        } catch (err: any) {
+            console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to launch backup release:`, err);
+            monitorAndRetryDownload(requestId, releases, nextIndex, "").catch(err => {
+                console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to proceed:`, err);
+            });
+        }
+    } else {
+        console.log(`[AUTO-DOWNLOAD-MONITOR] All releases failed.`);
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { status: "Failed - All release attempts failed" }
+        });
+    }
 }
