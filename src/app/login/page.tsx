@@ -45,10 +45,13 @@ export default function LoginPage() {
       const authUrl = `https://app.plex.tv/auth/#!?clientID=portalarr-custom-dashboard-app&code=${pin.code}&context[device][product]=Portalarr`;
       const popup = window.open(authUrl, "PlexLogin", "width=600,height=700");
 
+      let isProcessing = false;
       const pollInterval = setInterval(async () => {
+        if (isProcessing) return;
         const token = await checkPlexPin(pin.id);
         
-        if (token) {
+        if (token && !isProcessing) {
+          isProcessing = true;
           clearInterval(pollInterval);
           popup?.close();
           const plexUser = await getPlexUser(token);
