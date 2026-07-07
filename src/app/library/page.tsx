@@ -18,7 +18,8 @@ import {
   sendBookToKindle,
   getPublicSmtpFromEmail,
   getAppUsers,
-  searchOpenLibrary
+  searchOpenLibrary,
+  deleteBookRequest
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -379,6 +380,17 @@ export default function BookLibraryPage() {
             setRequests(reqs || []);
         } catch (e) {
             console.error("Failed to update request:", e);
+        }
+    }
+
+    async function handleDeleteRequest(id: string) {
+        if (!confirm("Are you sure you want to delete this request?")) return;
+        try {
+            await deleteBookRequest(id);
+            const reqs = await getBookRequests();
+            setRequests(reqs || []);
+        } catch (e: any) {
+            alert(e.message || "Failed to delete request.");
         }
     }
 
@@ -806,6 +818,17 @@ export default function BookLibraryPage() {
                                                         }`}>
                                                             {req.status}
                                                         </Badge>
+                                                        {(isAdmin || req.requestedBy === user?.username) && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 shrink-0"
+                                                                title="Delete Request"
+                                                                onClick={() => handleDeleteRequest(req.id)}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
                                                         {isAdmin && req.status === "Pending" && (
                                                             <div className="flex gap-1.5 items-center">
                                                                 <Button

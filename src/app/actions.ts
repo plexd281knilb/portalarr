@@ -754,6 +754,19 @@ export async function deleteBook(id: string) {
     revalidatePath("/library");
 }
 
+export async function deleteBookRequest(id: string) {
+    const session = await verifyUser();
+    const request = await prisma.bookRequest.findUnique({ where: { id } });
+    if (!request) throw new Error("Request not found");
+
+    if (session.role !== "ADMIN" && request.requestedBy !== session.username) {
+        throw new Error("You are not authorized to delete this request");
+    }
+
+    await prisma.bookRequest.delete({ where: { id } });
+    revalidatePath("/library");
+}
+
 export async function getBookRequests() {
     const session = await verifyUser();
     
