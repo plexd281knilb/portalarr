@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
   getLibraries, 
@@ -140,6 +140,18 @@ function extractSeriesInfo(title: string, knownSeries: string[] = []): { seriesN
 }
 
 export default function BookLibraryPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex min-h-screen items-center justify-center bg-background">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        }>
+            <BookLibraryPageContent />
+        </Suspense>
+    );
+}
+
+function BookLibraryPageContent() {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
