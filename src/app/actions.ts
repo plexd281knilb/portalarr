@@ -1182,10 +1182,48 @@ export async function scanLibraryInternal(libraryId: string) {
     }
 }
 
+async function getTargetLibraryForUser(username: string) {
+    try {
+        const libraries = await prisma.library.findMany();
+        if (libraries.length === 0) return null;
+        
+        // 1. Find library where this specific user is allowed
+        const userLib = libraries.find(lib => {
+            if (!lib.allowedUsers || lib.allowedUsers === "*") return false;
+            const allowed = lib.allowedUsers.split(",").map(u => u.trim());
+            return allowed.includes(username);
+        });
+        if (userLib) return userLib;
+        
+        // 2. Fallback: Find a library that allows everyone ("*")
+        const publicLib = libraries.find(lib => lib.allowedUsers === "*");
+        if (publicLib) return publicLib;
+        
+        // 3. Fallback: return the first library
+        return libraries[0];
+    } catch (e) {
+        return null;
+    }
+}
+
+function getDownloadCategoryForLibrary(libraryName: string): string {
+    const nameLower = libraryName.toLowerCase();
+    if (nameLower.includes("kids")) return "kids-books";
+    if (nameLower.includes("wife")) return "wife-books";
+    return "books";
+}
+
 export async function autoDownloadBookRequest(requestId: string, title: string, author: string) {
     console.log(`[AUTO-DOWNLOAD] Starting auto-download check for: ${title} by ${author}`);
     
     try {
+        const req = await prisma.bookRequest.findUnique({
+            where: { id: requestId }
+        });
+        const requester = req?.requestedBy || "";
+        const targetLib = await getTargetLibraryForUser(requester);
+        const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name) : "books";
+
         const prowlarrApp = await prisma.mediaApp.findFirst({
             where: { type: "prowlarr" }
         });
@@ -1248,7 +1286,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             const sabUrl = cleanUrl(sabApp.url);
             const sabKey = decryptData(sabApp.apiKey as string);
             
-            const pushUrl = `${sabUrl}/api?mode=addurl&name=${encodeURIComponent(selectedRelease.downloadUrl)}&nzbname=${encodeURIComponent(selectedRelease.title)}&cat=books&output=json&apikey=${sabKey}`;
+            const pushUrl = `${sabUrl}/api?mode=addurl&name=${encodeURIComponent(selectedRelease.downloadUrl)}&nzbname=${encodeURIComponent(selectedRelease.title)}&cat=${category}&output=json&apikey=${sabKey}`;
             const clientRes = await fetch(pushUrl, { cache: "no-store" });
             if (!clientRes.ok) throw new Error(`SABnzbd request failed: ${clientRes.status}`);
             const json = await clientRes.json();
@@ -1267,7 +1305,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             try {
                 await fetch(`${qbitUrl}/api/v2/torrents/add`, {
                     method: "POST",
-                    body: new URLSearchParams({ urls: selectedRelease.downloadUrl, category: "books" }),
+                    body: new URLSearchParams({ urls: selectedRelease.downloadUrl, category: category }),
                     headers: { "Content-Type": "application/x-www-form-urlencoded" }
                 });
             } catch (err) {
@@ -1280,7 +1318,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                 if (!cookie) throw new Error("qBittorrent authentication failed");
                 await fetch(`${qbitUrl}/api/v2/torrents/add`, {
                     method: "POST",
-                    body: new URLSearchParams({ urls: selectedRelease.downloadUrl, category: "books" }),
+                    body: new URLSearchParams({ urls: selectedRelease.downloadUrl, category: category }),
                     headers: { "Content-Type": "application/x-www-form-urlencoded", "Cookie": cookie }
                 });
             }
@@ -1345,6 +1383,13 @@ export async function searchProwlarrIndexers(query: string) {
 export async function sendReleaseToDownloadClient(requestId: string, downloadUrl: string, title: string, protocol: string) {
     await verifyAdmin();
     
+    const req = await prisma.bookRequest.findUnique({
+        where: { id: requestId }
+    });
+    const requester = req?.requestedBy || "";
+    const targetLib = await getTargetLibraryForUser(requester);
+    const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name) : "books";
+    
     if (protocol === "usenet") {
         const sabApp = await prisma.mediaApp.findFirst({
             where: { type: "sabnzbd" }
@@ -1357,7 +1402,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
         const sabUrl = cleanUrl(sabApp.url);
         const sabKey = decryptData(sabApp.apiKey as string);
         
-        const pushUrl = `${sabUrl}/api?mode=addurl&name=${encodeURIComponent(downloadUrl)}&nzbname=${encodeURIComponent(title)}&cat=books&output=json&apikey=${sabKey}`;
+        const pushUrl = `${sabUrl}/api?mode=addurl&name=${encodeURIComponent(downloadUrl)}&nzbname=${encodeURIComponent(title)}&cat=${category}&output=json&apikey=${sabKey}`;
         const res = await fetch(pushUrl, { cache: "no-store" });
         
         if (!res.ok) {
@@ -1384,7 +1429,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
         try {
             const body = new URLSearchParams();
             body.append("urls", downloadUrl);
-            body.append("category", "books");
+            body.append("category", category);
             
             const qbitRes = await fetch(`${qbitUrl}/api/v2/torrents/add`, {
                 method: "POST",
@@ -1408,7 +1453,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
             
             const addRes = await fetch(`${qbitUrl}/api/v2/torrents/add`, {
                 method: "POST",
-                body: new URLSearchParams({ urls: downloadUrl, category: "books" }),
+                body: new URLSearchParams({ urls: downloadUrl, category: category }),
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
                     "Cookie": cookie
@@ -1646,10 +1691,10 @@ export async function monitorAndRetryDownload(
             
             await delay(5000);
             
+            let targetLib: any = null;
             try {
-                const libraries = await prisma.library.findMany();
-                if (libraries.length > 0) {
-                    const targetLib = libraries[0];
+                targetLib = await getTargetLibraryForUser(req.requestedBy);
+                if (targetLib) {
                     const searchPaths = [
                         process.env.DOWNLOADS_DIR || "/downloads",
                         "/downloads",
@@ -1683,12 +1728,20 @@ export async function monitorAndRetryDownload(
                 console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to move downloaded file to library:`, moveErr);
             }
             
-            const libraries = await prisma.library.findMany();
-            for (const lib of libraries) {
+            if (targetLib) {
                 try {
-                    await scanLibraryInternal(lib.id);
+                    await scanLibraryInternal(targetLib.id);
                 } catch (err) {
-                    console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${lib.name}":`, err);
+                    console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${targetLib.name}":`, err);
+                }
+            } else {
+                const libraries = await prisma.library.findMany();
+                for (const lib of libraries) {
+                    try {
+                        await scanLibraryInternal(lib.id);
+                    } catch (err) {
+                        console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${lib.name}":`, err);
+                    }
                 }
             }
             
