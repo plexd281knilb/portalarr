@@ -970,6 +970,31 @@ function cleanSearchQuery(searchQuery: string): string {
         .trim();
 }
 
+async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortSignal): Promise<any> {
+    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1`;
+    const res = await fetch(url, { headers: { "Accept": "application/json" }, signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    
+    if (data && data.docs && data.docs.length > 0) {
+        return data;
+    }
+    
+    // Fallback: Check if prefix is 1-2 chars or standard tags like zlib/libgen/epub/pdf, and retry search without it
+    const prefixRegex = /^(?:[a-z]{1,2}|zlib|libgen|epub|pdf)\b\s*/i;
+    if (prefixRegex.test(cleanedQuery)) {
+        const fallbackQuery = cleanedQuery.replace(prefixRegex, "").trim();
+        console.log(`[OPEN-LIBRARY-FALLBACK] No matches for "${cleanedQuery}". Retrying with stripped prefix: "${fallbackQuery}"`);
+        const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fallbackQuery)}&limit=1`;
+        const fallbackRes = await fetch(fallbackUrl, { headers: { "Accept": "application/json" }, signal });
+        if (fallbackRes.ok) {
+            return await fallbackRes.json();
+        }
+    }
+    
+    return data;
+}
+
 export async function scanLibraryInternal(libraryId: string) {
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
@@ -1050,17 +1075,10 @@ export async function scanLibraryInternal(libraryId: string) {
                         const timeoutId = setTimeout(() => controller.abort(), 5000);
                         const searchQuery = author !== "Unknown Author" ? `${title} ${author}` : title;
                         const cleanedQuery = cleanSearchQuery(searchQuery);
-                        const olRes = await fetch(
-                            `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1`,
-                            {
-                                headers: { "Accept": "application/json" },
-                                signal: controller.signal
-                            }
-                        );
+                        const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
                         clearTimeout(timeoutId);
 
-                        if (olRes.ok) {
-                            const olData = await olRes.json();
+                        if (olData) {
                             const doc = olData?.docs?.[0];
                             if (doc) {
                                 title = doc.title || title;
@@ -1131,17 +1149,10 @@ export async function scanLibraryInternal(libraryId: string) {
                         const timeoutId = setTimeout(() => controller.abort(), 5000);
                         const searchQuery = tempAuthor !== "Unknown Author" ? `${tempTitle} ${tempAuthor}` : tempTitle;
                         const cleanedQuery = cleanSearchQuery(searchQuery);
-                        const olRes = await fetch(
-                            `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1`,
-                            {
-                                headers: { "Accept": "application/json" },
-                                signal: controller.signal
-                            }
-                        );
+                        const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
                         clearTimeout(timeoutId);
 
-                        if (olRes.ok) {
-                            const olData = await olRes.json();
+                        if (olData) {
                             const doc = olData?.docs?.[0];
                             if (doc) {
                                 title = doc.title || title;
