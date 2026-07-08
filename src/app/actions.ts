@@ -683,6 +683,11 @@ export async function createLibrary(formData: FormData) {
         data: { name, description, path, allowedUsers, downloadCategory }
     });
     revalidatePath("/library");
+
+    const usersList = allowedUsers.split(",").map(u => u.trim()).filter(Boolean);
+    if (usersList.length > 0) {
+        sendLibraryAccessEmail(name, description, usersList).catch(e => console.error(e));
+    }
 }
 
 export async function updateLibrary(formData: FormData) {
@@ -694,11 +699,114 @@ export async function updateLibrary(formData: FormData) {
     const allowedUsers = formData.get("allowedUsers") as string || "";
     const downloadCategory = formData.get("downloadCategory") as string || "books";
     
+    const existing = await prisma.library.findUnique({ where: { id } });
+
     await prisma.library.update({
         where: { id },
         data: { name, description, path, allowedUsers, downloadCategory }
     });
     revalidatePath("/library");
+
+    if (existing) {
+        const oldUsers = existing.allowedUsers.split(",").map(u => u.trim()).filter(Boolean);
+        const newUsers = allowedUsers.split(",").map(u => u.trim()).filter(Boolean);
+        const newlyAdded = newUsers.filter(u => !oldUsers.includes(u));
+        if (newlyAdded.length > 0) {
+            sendLibraryAccessEmail(name, description, newlyAdded).catch(e => console.error(e));
+        }
+    }
+}
+
+async function sendLibraryAccessEmail(libraryName: string, description: string, usernames: string[]) {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            console.log("[SMTP-LIBRARY-ACCESS] SMTP is not configured. Skipping access email.");
+            return;
+        }
+
+        let targetUsers: any[] = [];
+        if (usernames.includes("*")) {
+            targetUsers = await prisma.user.findMany({ where: { email: { not: "" } } });
+        } else {
+            targetUsers = await prisma.user.findMany({
+                where: {
+                    username: { in: usernames },
+                    email: { not: "" }
+                }
+            });
+        }
+
+        if (targetUsers.length === 0) {
+            console.log("[SMTP-LIBRARY-ACCESS] No users to notify.");
+            return;
+        }
+
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        for (const user of targetUsers) {
+            const subject = `📖 Access Granted: Portalarr "${libraryName}" Library Shelf`;
+            const text = `Hello ${user.username},
+
+You have been granted access to the "${libraryName}" library shelf on Portalarr!
+
+Library Description: ${description || "No description provided."}
+
+Instructions:
+1. Log in to Portalarr on your device.
+2. Navigate to the "Book Library" tab.
+3. Select "${libraryName}" from the list of shelves.
+4. You can now browse all available books, request new ones, download files directly, or send them to your configured Kindle email address in one click!
+
+Happy reading!
+- Portalarr Administration`;
+
+            const html = `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff; color: #334155;">
+                    <h2 style="color: #ea580c; margin-top: 0;">📖 Portalarr Library Access</h2>
+                    <p>Hello <strong>${user.username}</strong>,</p>
+                    <p>You have been granted access to the new library shelf: <strong>"${libraryName}"</strong> on Portalarr!</p>
+                    ${description ? `<p style="font-style: italic; color: #475569; padding: 8px 12px; background-color: #f8fafc; border-left: 4px solid #cbd5e1; margin: 15px 0;">${description}</p>` : ""}
+                    
+                    <h3 style="color: #0f172a; margin-top: 20px;">What you can do:</h3>
+                    <ul style="padding-left: 20px; color: #334155; line-height: 1.6;">
+                        <li><strong>Browse Ebooks:</strong> Open the <strong>Book Library</strong> tab and view this library shelf.</li>
+                        <li><strong>One-Click Kindle:</strong> Configure your Kindle settings and click "Send to Kindle" to instantly email books directly to your Kindle reader!</li>
+                        <li><strong>Request Books:</strong> If you don't see the book you want, request it in the "Requests" tab. The system will search, download, and copy it to this shelf automatically.</li>
+                        <li><strong>Direct Download:</strong> Download EPUB/PDF/CBZ files directly to your device.</li>
+                    </ul>
+                    
+                    <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px;">
+                        This email was sent automatically from your Portalarr server.
+                    </div>
+                </div>
+            `;
+
+            try {
+                await transporter.sendMail({
+                    from: `"Portalarr" <${senderEmail}>`,
+                    to: user.email,
+                    subject,
+                    text,
+                    html
+                });
+                console.log(`[SMTP-LIBRARY-ACCESS] Sent access notification email to ${user.username} (${user.email})`);
+            } catch (err: any) {
+                console.error(`[SMTP-LIBRARY-ACCESS] Failed to send email to ${user.username}:`, err.message);
+            }
+        }
+    } catch (e: any) {
+        console.error(`[SMTP-LIBRARY-ACCESS] SMTP notification error:`, e);
+    }
 }
 
 export async function deleteLibrary(id: string) {

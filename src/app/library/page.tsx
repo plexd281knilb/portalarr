@@ -1747,11 +1747,11 @@ function BookLibraryPageContent() {
                                                             <h4 className="font-semibold text-sm">{lib.name}</h4>
                                                             <p className="text-xs text-muted-foreground">{lib.description || "No description."}</p>
                                                             <div className="flex items-center gap-2 pt-1 flex-wrap">
-                                                                <Badge className="bg-muted text-[10px]">
-                                                                    Access: {lib.allowedUsers}
+                                                                <Badge className="bg-slate-900 border border-slate-800 text-slate-200 text-[10px]">
+                                                                    Access: {lib.allowedUsers || "Restricted (Admin Only)"}
                                                                 </Badge>
                                                                 {lib.path && (
-                                                                    <Badge variant="outline" className="text-[10px] border-primary/20 text-primary">
+                                                                    <Badge variant="outline" className="text-[10px] border-primary/20 text-primary bg-primary/5">
                                                                         Path: {lib.path}
                                                                     </Badge>
                                                                 )}
