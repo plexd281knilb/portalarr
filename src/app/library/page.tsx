@@ -41,7 +41,57 @@ import {
   LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle
 } from "lucide-react";
 
-function extractSeriesInfo(title: string): { seriesName: string | null, volume: string | null, bookTitle: string } {
+function extractSeriesInfo(title: string, knownSeries: string[] = []): { seriesName: string | null, volume: string | null, bookTitle: string } {
+    const titleLower = title.toLowerCase();
+
+    // First check if it matches any known series names from requests
+    for (const series of knownSeries) {
+        if (series && series.length > 3) {
+            const idx = titleLower.indexOf(series);
+            if (idx !== -1) {
+                // Try to find a volume number near it or anywhere in the title
+                const volRegex = /(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*(\d+)/i;
+                let volMatch = title.match(volRegex);
+                let volume: string | null = null;
+                if (volMatch) {
+                    volume = volMatch[1];
+                } else {
+                    // Try to find any standalone digit that isn't a 4-digit year > 1900
+                    const digitsMatch = title.match(/\b(\d+)\b/g);
+                    if (digitsMatch) {
+                        for (const digit of digitsMatch) {
+                            const val = parseInt(digit);
+                            if (val > 0 && val < 100 && digit !== "2015" && digit !== "2016" && digit !== "2018" && digit !== "2020" && digit !== "2021" && digit !== "2022" && digit !== "2023" && digit !== "2024" && digit !== "2025" && digit !== "2026") {
+                                volume = digit;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Clean the book title by removing the series name and any volume tag
+                let cleanBookTitle = title
+                    .replace(new RegExp(series, 'gi'), "")
+                    .replace(/(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*\d+/gi, "")
+                    .replace(/\(\s*\)/g, "")
+                    .replace(/\[\s*\]/g, "")
+                    .replace(/[:\-\s,#]+$/, "")
+                    .replace(/^[:\-\s,#]+/, "")
+                    .trim();
+
+                if (!cleanBookTitle) {
+                    cleanBookTitle = title;
+                }
+
+                return {
+                    seriesName: series,
+                    volume,
+                    bookTitle: cleanBookTitle
+                };
+            }
+        }
+    }
+
     // 1. Check parenthesis style: "Book Title (Series Name #1)" or "Book Title (Series Name, Vol. 1)"
     const parenRegex = /^(.*?)\s+\((.*?)\s*(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*(\d+)\)/i;
     let match = title.match(parenRegex);
@@ -798,9 +848,13 @@ export default function BookLibraryPage() {
     const seriesGroups: { [key: string]: typeof books } = {};
     const standaloneBooks: typeof books = [];
 
+    const knownSeries = requests
+        .filter(r => r.type === "series")
+        .map(r => r.title.toLowerCase().trim());
+
     if (groupBySeries) {
         for (const book of sortedBooks) {
-            const info = extractSeriesInfo(book.title);
+            const info = extractSeriesInfo(book.title, knownSeries);
             if (info.seriesName) {
                 const formattedSeriesName = info.seriesName
                     .split(" ")
@@ -928,20 +982,20 @@ export default function BookLibraryPage() {
                                                 <select
                                                     value={sortBy}
                                                     onChange={(e) => handleSortChange(e.target.value)}
-                                                    className="flex h-10 w-36 items-center justify-between rounded-md border border-input bg-muted/20 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-medium"
+                                                    className="flex h-10 w-36 items-center justify-between rounded-md border border-slate-800 bg-slate-900 text-slate-100 hover:bg-slate-800/80 px-3 py-2 text-sm focus:outline-none font-medium cursor-pointer transition-all"
                                                 >
-                                                    <option value="recent">Recently Added</option>
-                                                    <option value="title-asc">Title (A-Z)</option>
-                                                    <option value="title-desc">Title (Z-A)</option>
-                                                    <option value="author-asc">Author (A-Z)</option>
-                                                    <option value="author-desc">Author (Z-A)</option>
+                                                    <option value="recent" className="bg-slate-955 text-slate-100">Recently Added</option>
+                                                    <option value="title-asc" className="bg-slate-955 text-slate-100">Title (A-Z)</option>
+                                                    <option value="title-desc" className="bg-slate-955 text-slate-100">Title (Z-A)</option>
+                                                    <option value="author-asc" className="bg-slate-955 text-slate-100">Author (A-Z)</option>
+                                                    <option value="author-desc" className="bg-slate-955 text-slate-100">Author (Z-A)</option>
                                                 </select>
-                                                <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground cursor-pointer select-none bg-muted/10 border border-muted/50 px-3 h-10 rounded-md hover:bg-muted/20 transition-all shrink-0">
+                                                <label className="flex items-center gap-2 text-xs font-semibold text-slate-200 cursor-pointer select-none bg-slate-900 border border-slate-800 px-3 h-10 rounded-md hover:bg-slate-800/80 transition-all shrink-0">
                                                     <input
                                                         type="checkbox"
                                                         checked={groupBySeries}
                                                         onChange={(e) => handleGroupToggle(e.target.checked)}
-                                                        className="rounded border-muted bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer"
+                                                        className="rounded border-slate-700 bg-slate-955 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer accent-primary"
                                                     />
                                                     <span>Group Series</span>
                                                 </label>
@@ -1062,10 +1116,10 @@ export default function BookLibraryPage() {
                                     ) : groupBySeries ? (
                                         <div className="space-y-8">
                                             {Object.entries(seriesGroups).map(([seriesName, seriesBooks]) => (
-                                                <div key={seriesName} className="space-y-4 border border-muted/30 p-4 rounded-xl bg-muted/5 animate-in fade-in duration-300">
-                                                    <h3 className="text-sm font-extrabold text-primary flex items-center gap-2 border-b border-muted/30 pb-2">
+                                                <div key={seriesName} className="space-y-4 border border-slate-800/80 p-4 rounded-xl bg-slate-900/10 animate-in fade-in duration-300">
+                                                    <h3 className="text-sm font-extrabold text-primary flex items-center gap-2 border-b border-slate-800 pb-2">
                                                         📚 {seriesName} 
-                                                        <Badge variant="outline" className="text-[10px] py-0 border-primary/30 text-primary font-bold">
+                                                        <Badge variant="outline" className="text-[10px] py-0 border-primary/40 text-primary font-bold bg-primary/5">
                                                             {seriesBooks.length} {seriesBooks.length === 1 ? 'Book' : 'Books'}
                                                         </Badge>
                                                     </h3>
@@ -1075,10 +1129,10 @@ export default function BookLibraryPage() {
                                                 </div>
                                             ))}
                                             {standaloneBooks.length > 0 && (
-                                                <div className="space-y-4 pt-4 border-t border-muted/40">
-                                                    <h3 className="text-sm font-extrabold text-muted-foreground flex items-center gap-2 border-b border-muted/30 pb-2">
+                                                <div className="space-y-4 pt-4 border-t border-slate-800">
+                                                    <h3 className="text-sm font-extrabold text-slate-300 flex items-center gap-2 border-b border-slate-800 pb-2">
                                                         📖 Standalone & Uncategorized Books 
-                                                        <Badge variant="outline" className="text-[10px] py-0 border-muted/80 text-muted-foreground font-bold">
+                                                        <Badge variant="outline" className="text-[10px] py-0 border-slate-700 text-slate-300 font-bold bg-slate-900/45">
                                                             {standaloneBooks.length} {standaloneBooks.length === 1 ? 'Book' : 'Books'}
                                                         </Badge>
                                                     </h3>
