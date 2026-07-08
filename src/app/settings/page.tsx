@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
     getSettings, saveSettings, saveJobSettings, clearSmtpSettings,
@@ -25,9 +26,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SettingsPage() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const activeTab = searchParams.get("tab") || "general";
+
     const [loading, setLoading] = useState(true);
     const [isPending, startTransition] = useTransition();
-    const [activeTab, setActiveTab] = useState("general");
     
     // Data States
     const [users, setUsers] = useState<any[]>([]);
@@ -93,7 +98,9 @@ export default function SettingsPage() {
 
     const handleTabChange = (value: string) => {
         startTransition(() => {
-            setActiveTab(value);
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("tab", value);
+            router.push(`${pathname}?${params.toString()}`);
         });
     };
 

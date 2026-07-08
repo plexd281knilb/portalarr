@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
   getLibraries, 
   getLibraryBooks, 
@@ -41,6 +42,17 @@ import {
 } from "lucide-react";
 
 export default function BookLibraryPage() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const activeTab = searchParams.get("tab") || "libs";
+
+    const handleTabChange = (val: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("tab", val);
+        router.push(`${pathname}?${params.toString()}`);
+    };
+
     const [user, setUser] = useState<any>(null);
     const [libraries, setLibraries] = useState<any[]>([]);
     const [selectedLibrary, setSelectedLibrary] = useState<any>(null);
@@ -589,7 +601,7 @@ export default function BookLibraryPage() {
                 )}
             </header>
 
-            <Tabs defaultValue="libs" className="w-full">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                 <TabsList className="grid w-full max-w-xl grid-cols-2 sm:grid-cols-4 h-auto p-1 mb-6">
                     <TabsTrigger value="libs" className="py-2">Libraries</TabsTrigger>
                     <TabsTrigger value="requests" className="py-2">Requests</TabsTrigger>
