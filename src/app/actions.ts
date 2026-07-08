@@ -1270,6 +1270,16 @@ export async function scanLibraryInternal(libraryId: string) {
                                 if (doc.cover_i) {
                                     coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
                                 }
+                            } else {
+                                if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
+                                    author = tempAuthor;
+                                    title = tempTitle;
+                                }
+                            }
+                        } else {
+                            if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
+                                author = tempAuthor;
+                                title = tempTitle;
                             }
                         }
                     } catch (olErr) { }
