@@ -1597,13 +1597,18 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
 }
 
 function findDownloadedFile(dir: string, bookTitle: string): string | null {
-    if (!fs.existsSync(dir)) return null;
+    console.log(`[DOWNLOAD-FINDER] Scanning directory: ${dir} for book: "${bookTitle}"`);
+    if (!fs.existsSync(dir)) {
+        console.log(`[DOWNLOAD-FINDER] Directory does not exist: ${dir}`);
+        return null;
+    }
     
     const cleanBookTitle = bookTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
     const titleWords = bookTitle.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 2);
     
     try {
         const files = fs.readdirSync(dir);
+        console.log(`[DOWNLOAD-FINDER] Found ${files.length} items in ${dir}`);
         for (const file of files) {
             const fullPath = path.join(dir, file);
             const stat = fs.statSync(fullPath);
@@ -1615,8 +1620,10 @@ function findDownloadedFile(dir: string, bookTitle: string): string | null {
                 const ext = path.extname(file).toLowerCase();
                 if ([".epub", ".pdf", ".mobi", ".cbz"].includes(ext)) {
                     const cleanFileName = file.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    console.log(`[DOWNLOAD-FINDER] Inspecting file: ${file} (clean: ${cleanFileName})`);
                     
                     if (cleanFileName.includes(cleanBookTitle) || cleanBookTitle.includes(cleanFileName.replace(/(epub|pdf|mobi|cbz)$/, ""))) {
+                        console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (direct title match)`);
                         return fullPath;
                     }
                     
@@ -1626,14 +1633,16 @@ function findDownloadedFile(dir: string, bookTitle: string): string | null {
                             matchCount++;
                         }
                     }
+                    console.log(`[DOWNLOAD-FINDER] Word match count: ${matchCount}/${titleWords.length} (needed at least ${Math.min(2, titleWords.length)})`);
                     if (titleWords.length > 0 && matchCount >= Math.min(2, titleWords.length)) {
+                        console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (fuzzy word match)`);
                         return fullPath;
                     }
                 }
             }
         }
-    } catch (e) {
-        console.error(`[BACKGROUND-DOWNLOAD-FINDER] Error reading directory ${dir}:`, e);
+    } catch (e: any) {
+        console.error(`[BACKGROUND-DOWNLOAD-FINDER] Error reading directory ${dir}:`, e.message);
     }
     return null;
 }
@@ -1698,12 +1707,16 @@ export async function monitorAndRetryDownload(
             try {
                 targetLib = await getTargetLibraryForUser(req.requestedBy);
                 if (targetLib) {
+                    const settings = await prisma.settings.findFirst();
+                    const configuredPath = settings?.downloadsPath || "/downloads";
                     const searchPaths = [
+                        configuredPath,
                         process.env.DOWNLOADS_DIR || "/downloads",
                         "/downloads",
                         "/app/downloads",
                         "./downloads"
                     ];
+                    console.log(`[AUTO-DOWNLOAD-MONITOR] Searching for completed download in paths:`, searchPaths);
                     let foundFilePath: string | null = null;
                     for (const p of searchPaths) {
                         if (fs.existsSync(p)) {
