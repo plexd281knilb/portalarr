@@ -1004,6 +1004,19 @@ export async function createBookRequest(formData: FormData) {
     if (type === "series") {
         const expanded = await expandSeriesRequest(title, author, session.username as string);
         if (expanded) {
+            // Save the parent series request record itself in the DB
+            await prisma.bookRequest.create({
+                data: {
+                    title,
+                    author,
+                    coverUrl,
+                    publishYear,
+                    requestedBy: session.username as string,
+                    type: "series",
+                    status: "Approved"
+                }
+            });
+
             sendRequestNotificationToAdmins({
                 title: `${title} (Book Series)`,
                 author,
@@ -1262,28 +1275,40 @@ export async function scanLibraryInternal(libraryId: string) {
                         }
                     }
 
-                    // Dynamic Author Heuristic based on existing DB authors
+                    // Dynamic Author Heuristic based on existing DB authors & requested authors
                     try {
                         const dbAuthors = await prisma.book.findMany({
                             where: { author: { not: "Unknown Author" } },
                             select: { author: true },
                             distinct: ['author']
                         });
-                        const titleLower = title.toLowerCase();
+                        const reqAuthors = await prisma.bookRequest.findMany({
+                            where: { author: { not: "Unknown Author" } },
+                            select: { author: true },
+                            distinct: ['author']
+                        });
+
+                        const allAuthorsSet = new Set<string>();
                         for (const row of dbAuthors) {
-                            if (row.author) {
-                                const authLower = row.author.toLowerCase();
-                                if (titleLower.startsWith(authLower)) {
-                                    author = row.author;
-                                    title = title.substring(row.author.length).trim();
-                                    title = title.replace(/^[:\-\s]+/, "").trim();
-                                    break;
-                                } else if (titleLower.endsWith(authLower)) {
-                                    author = row.author;
-                                    title = title.substring(0, title.length - row.author.length).trim();
-                                    title = title.replace(/[:\-\s]+$/, "").trim();
-                                    break;
-                                }
+                            if (row.author) allAuthorsSet.add(row.author.trim());
+                        }
+                        for (const row of reqAuthors) {
+                            if (row.author) allAuthorsSet.add(row.author.trim());
+                        }
+
+                        const titleLower = title.toLowerCase();
+                        for (const auth of allAuthorsSet) {
+                            const authLower = auth.toLowerCase();
+                            if (titleLower.startsWith(authLower)) {
+                                author = auth;
+                                title = title.substring(auth.length).trim();
+                                title = title.replace(/^[:\-\s]+/, "").trim();
+                                break;
+                            } else if (titleLower.endsWith(authLower)) {
+                                author = auth;
+                                title = title.substring(0, title.length - auth.length).trim();
+                                title = title.replace(/[:\-\s]+$/, "").trim();
+                                break;
                             }
                         }
                     } catch (e) {}
@@ -1343,21 +1368,33 @@ export async function scanLibraryInternal(libraryId: string) {
                             select: { author: true },
                             distinct: ['author']
                         });
-                        const titleLower = tempTitle.toLowerCase();
+                        const reqAuthors = await prisma.bookRequest.findMany({
+                            where: { author: { not: "Unknown Author" } },
+                            select: { author: true },
+                            distinct: ['author']
+                        });
+
+                        const allAuthorsSet = new Set<string>();
                         for (const row of dbAuthors) {
-                            if (row.author) {
-                                const authLower = row.author.toLowerCase();
-                                if (titleLower.startsWith(authLower)) {
-                                    tempAuthor = row.author;
-                                    tempTitle = tempTitle.substring(row.author.length).trim();
-                                    tempTitle = tempTitle.replace(/^[:\-\s]+/, "").trim();
-                                    break;
-                                } else if (titleLower.endsWith(authLower)) {
-                                    tempAuthor = row.author;
-                                    tempTitle = tempTitle.substring(0, tempTitle.length - row.author.length).trim();
-                                    tempTitle = tempTitle.replace(/[:\-\s]+$/, "").trim();
-                                    break;
-                                }
+                            if (row.author) allAuthorsSet.add(row.author.trim());
+                        }
+                        for (const row of reqAuthors) {
+                            if (row.author) allAuthorsSet.add(row.author.trim());
+                        }
+
+                        const titleLower = tempTitle.toLowerCase();
+                        for (const auth of allAuthorsSet) {
+                            const authLower = auth.toLowerCase();
+                            if (titleLower.startsWith(authLower)) {
+                                tempAuthor = auth;
+                                tempTitle = tempTitle.substring(auth.length).trim();
+                                tempTitle = tempTitle.replace(/^[:\-\s]+/, "").trim();
+                                break;
+                            } else if (titleLower.endsWith(authLower)) {
+                                tempAuthor = auth;
+                                tempTitle = tempTitle.substring(0, tempTitle.length - auth.length).trim();
+                                tempTitle = tempTitle.replace(/[:\-\s]+$/, "").trim();
+                                break;
                             }
                         }
                     } catch (e) {}
