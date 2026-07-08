@@ -1858,9 +1858,27 @@ export async function monitorAndRetryDownload(
                         
                         fs.copyFileSync(foundFilePath, destPath);
                         try {
+                            try {
+                                fs.chmodSync(foundFilePath, 0o666);
+                            } catch (e) {}
+
                             fs.unlinkSync(foundFilePath);
+                            console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
+                            
+                            const parentDir = path.dirname(foundFilePath);
+                            if (parentDir !== configuredPath && parentDir !== "/downloads" && parentDir !== "./downloads" && parentDir !== "/app/downloads") {
+                                const remainingFiles = fs.readdirSync(parentDir);
+                                if (remainingFiles.length === 0) {
+                                    try {
+                                        fs.chmodSync(parentDir, 0o777);
+                                    } catch (e) {}
+                                    fs.rmdirSync(parentDir);
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Cleaned up empty parent directory: ${parentDir}`);
+                                }
+                            }
                         } catch (unlinkErr: any) {
-                            console.warn(`[AUTO-DOWNLOAD-MONITOR] Copied file successfully but failed to delete the source file from downloads directory (likely permission issue):`, unlinkErr.message);
+                            console.warn(`[AUTO-DOWNLOAD-MONITOR] Copied file successfully but failed to delete the source file/folder from downloads directory:`, unlinkErr.message);
+                            console.warn(`[AUTO-DOWNLOAD-MONITOR] TIP: Ensure your Docker volume mounts and PUID/PGID permissions allow the app to write/delete inside the downloads folder.`);
                         }
                         console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully moved file to library path.`);
                     } else {
