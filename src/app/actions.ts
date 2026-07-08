@@ -1548,6 +1548,48 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
     }
 }
 
+function findDownloadedFile(dir: string, bookTitle: string): string | null {
+    if (!fs.existsSync(dir)) return null;
+    
+    const cleanBookTitle = bookTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const titleWords = bookTitle.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 2);
+    
+    try {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+            const fullPath = path.join(dir, file);
+            const stat = fs.statSync(fullPath);
+            
+            if (stat.isDirectory()) {
+                const found = findDownloadedFile(fullPath, bookTitle);
+                if (found) return found;
+            } else {
+                const ext = path.extname(file).toLowerCase();
+                if ([".epub", ".pdf", ".mobi", ".cbz"].includes(ext)) {
+                    const cleanFileName = file.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    
+                    if (cleanFileName.includes(cleanBookTitle) || cleanBookTitle.includes(cleanFileName.replace(/(epub|pdf|mobi|cbz)$/, ""))) {
+                        return fullPath;
+                    }
+                    
+                    let matchCount = 0;
+                    for (const word of titleWords) {
+                        if (file.toLowerCase().includes(word)) {
+                            matchCount++;
+                        }
+                    }
+                    if (titleWords.length > 0 && matchCount >= Math.min(2, titleWords.length)) {
+                        return fullPath;
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error(`[BACKGROUND-DOWNLOAD-FINDER] Error reading directory ${dir}:`, e);
+    }
+    return null;
+}
+
 export async function monitorAndRetryDownload(
     requestId: string,
     releases: any[],
@@ -1603,6 +1645,43 @@ export async function monitorAndRetryDownload(
             });
             
             await delay(5000);
+            
+            try {
+                const libraries = await prisma.library.findMany();
+                if (libraries.length > 0) {
+                    const targetLib = libraries[0];
+                    const searchPaths = [
+                        process.env.DOWNLOADS_DIR || "/downloads",
+                        "/downloads",
+                        "/app/downloads",
+                        "./downloads"
+                    ];
+                    let foundFilePath: string | null = null;
+                    for (const p of searchPaths) {
+                        if (fs.existsSync(p)) {
+                            foundFilePath = findDownloadedFile(p, req.title);
+                            if (foundFilePath) break;
+                        }
+                    }
+
+                    if (foundFilePath) {
+                        const destPath = path.join(targetLib.path, path.basename(foundFilePath));
+                        console.log(`[AUTO-DOWNLOAD-MONITOR] Moving downloaded file from ${foundFilePath} to ${destPath}`);
+                        
+                        if (!fs.existsSync(targetLib.path)) {
+                            fs.mkdirSync(targetLib.path, { recursive: true });
+                        }
+                        
+                        fs.copyFileSync(foundFilePath, destPath);
+                        fs.unlinkSync(foundFilePath);
+                        console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully moved file to library path.`);
+                    } else {
+                        console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find completed download file for "${req.title}" in download directories.`);
+                    }
+                }
+            } catch (moveErr: any) {
+                console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to move downloaded file to library:`, moveErr);
+            }
             
             const libraries = await prisma.library.findMany();
             for (const lib of libraries) {
