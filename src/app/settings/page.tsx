@@ -279,8 +279,8 @@ export default function SettingsPage() {
                                 <CardContent>
                                     <form onSubmit={(e) => handleForm(e, saveJobSettings)} className="flex gap-4 items-end">
                                         <div className="space-y-2 flex-1">
-                                            <Label>Scan Interval (Hours)</Label>
-                                            <Input name="autoSyncInterval" type="number" defaultValue={systemSettings.autoSyncInterval || 24} />
+                                            <Label>Scan Interval (Minutes)</Label>
+                                            <Input name="autoSyncInterval" type="number" defaultValue={systemSettings.autoSyncInterval || 5} />
                                         </div>
                                         <Button type="submit" variant="secondary">Save</Button>
                                     </form>
