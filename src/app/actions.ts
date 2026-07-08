@@ -999,10 +999,11 @@ export async function scanLibraryInternal(libraryId: string) {
 
                     try {
                         const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 1500);
+                        const timeoutId = setTimeout(() => controller.abort(), 5000);
                         const searchQuery = author !== "Unknown Author" ? `${title} ${author}` : title;
+                        const cleanedQuery = searchQuery.replace(/\b\d{4}\b/g, "").replace(/[()\[\]]/g, "").replace(/\s+/g, " ").trim();
                         const olRes = await fetch(
-                            `https://openlibrary.org/search.json?q=${encodeURIComponent(searchQuery)}&limit=1`,
+                            `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1`,
                             {
                                 headers: { "Accept": "application/json" },
                                 signal: controller.signal
@@ -1053,10 +1054,11 @@ export async function scanLibraryInternal(libraryId: string) {
 
                     try {
                         const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 1500);
+                        const timeoutId = setTimeout(() => controller.abort(), 5000);
                         const searchQuery = tempAuthor !== "Unknown Author" ? `${tempTitle} ${tempAuthor}` : tempTitle;
+                        const cleanedQuery = searchQuery.replace(/\b\d{4}\b/g, "").replace(/[()\[\]]/g, "").replace(/\s+/g, " ").trim();
                         const olRes = await fetch(
-                            `https://openlibrary.org/search.json?q=${encodeURIComponent(searchQuery)}&limit=1`,
+                            `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1`,
                             {
                                 headers: { "Accept": "application/json" },
                                 signal: controller.signal

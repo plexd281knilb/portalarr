@@ -805,7 +805,7 @@ export default function BookLibraryPage() {
                                                                  Kindle
                                                              </Button>
                                                          </div>
-                                                         <div className="flex gap-2 justify-end w-full border-t border-muted/40 pt-2">
+                                                         <div className="flex gap-2 justify-center w-full border-t border-muted/40 pt-2">
                                                              <Button 
                                                                  variant="outline" 
                                                                  size="sm" 
