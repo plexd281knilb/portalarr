@@ -53,7 +53,7 @@ export default async function UserLandingPage() {
           </div>
       )}
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
+      <main className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500">
         
         <section className="text-center space-y-4 py-8">
             <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl">System Dashboard</h1>

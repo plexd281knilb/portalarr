@@ -145,18 +145,18 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className={`space-y-6 p-8 max-w-6xl mx-auto transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
+        <div className={`space-y-6 p-4 sm:p-8 max-w-6xl mx-auto transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
             <div>
                 <h2 className="text-3xl font-bold tracking-tight">System Settings</h2>
                 <p className="text-muted-foreground">Configure the platform, integrations, and access.</p>
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-                <TabsList className="grid w-full grid-cols-1 md:grid-cols-4 h-auto">
-                    <TabsTrigger value="general" className="cursor-pointer">General Setup</TabsTrigger>
-                    <TabsTrigger value="access" className="cursor-pointer">Access Control</TabsTrigger>
-                    <TabsTrigger value="monitoring" className="cursor-pointer">Monitoring & Apps</TabsTrigger>
-                    <TabsTrigger value="beta" className="cursor-pointer">Beta Testing</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto p-1">
+                    <TabsTrigger value="general" className="py-2 cursor-pointer">General Setup</TabsTrigger>
+                    <TabsTrigger value="access" className="py-2 cursor-pointer">Access Control</TabsTrigger>
+                    <TabsTrigger value="monitoring" className="py-2 cursor-pointer">Monitoring & Apps</TabsTrigger>
+                    <TabsTrigger value="beta" className="py-2 cursor-pointer">Beta Testing</TabsTrigger>
                 </TabsList>
                 
                 {isPending && (

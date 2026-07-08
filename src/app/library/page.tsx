@@ -572,7 +572,7 @@ export default function BookLibraryPage() {
     }
 
     return (
-        <div className="min-h-screen bg-background flex flex-col p-6 animate-in fade-in duration-500 max-w-7xl mx-auto w-full space-y-6">
+        <div className="min-h-screen bg-background flex flex-col p-4 sm:p-6 animate-in fade-in duration-500 max-w-7xl mx-auto w-full space-y-6">
             <header className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-muted/50 gap-4">
                 <div>
                     <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-2">
@@ -590,13 +590,13 @@ export default function BookLibraryPage() {
             </header>
 
             <Tabs defaultValue="libs" className="w-full">
-                <TabsList className="grid w-full max-w-xl grid-cols-4 mb-6">
-                    <TabsTrigger value="libs">Libraries</TabsTrigger>
-                    <TabsTrigger value="requests">Requests</TabsTrigger>
-                    <TabsTrigger value="manage" disabled={!isAdmin}>
+                <TabsList className="grid w-full max-w-xl grid-cols-2 sm:grid-cols-4 h-auto p-1 mb-6">
+                    <TabsTrigger value="libs" className="py-2">Libraries</TabsTrigger>
+                    <TabsTrigger value="requests" className="py-2">Requests</TabsTrigger>
+                    <TabsTrigger value="manage" className="py-2" disabled={!isAdmin}>
                         Manage
                     </TabsTrigger>
-                    <TabsTrigger value="kindle">
+                    <TabsTrigger value="kindle" className="py-2">
                         Kindle Settings
                     </TabsTrigger>
                 </TabsList>
@@ -845,7 +845,7 @@ export default function BookLibraryPage() {
                                                                  Kindle
                                                              </Button>
                                                          </div>
-                                                         <div className="flex gap-2 justify-center w-full border-t border-muted/40 pt-2">
+                                                         <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
                                                              <Button 
                                                                  variant="outline" 
                                                                  size="sm" 
@@ -1155,8 +1155,8 @@ export default function BookLibraryPage() {
                                             {requests.map(req => {
                                                 const canDelete = isAdmin || req.requestedBy === user?.username;
                                                 return (
-                                                    <div key={req.id} className="p-4 flex items-center justify-between flex-wrap gap-3">
-                                                        <div className="flex gap-3 items-start min-w-0 flex-1">
+                                                    <div key={req.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                        <div className="flex gap-3 items-start min-w-0 w-full sm:w-auto flex-1">
                                                             {canDelete && (
                                                                 <input
                                                                     type="checkbox"
@@ -1197,7 +1197,7 @@ export default function BookLibraryPage() {
                                                             </p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
+                                                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end border-t sm:border-t-0 pt-3 sm:pt-0 mt-1 sm:mt-0">
                                                         <Badge className={`text-xs ${
                                                             req.status === "Pending" ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30" :
                                                             req.status === "Approved" ? "bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30" :
