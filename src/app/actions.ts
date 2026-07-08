@@ -875,10 +875,11 @@ export async function updateBook(id: string, title: string, author: string, cove
     revalidatePath("/library");
 }
 
-async function renameBookFileOnDisk(bookId: string) {
+async function renameBookFileOnDisk(bookId: string): Promise<string> {
     try {
         const book = await prisma.book.findUnique({ where: { id: bookId } });
-        if (!book || !fs.existsSync(book.filePath)) return;
+        if (!book) return "";
+        if (!fs.existsSync(book.filePath)) return book.filePath;
 
         const ext = path.extname(book.filePath);
         const dir = path.dirname(book.filePath);
@@ -899,7 +900,7 @@ async function renameBookFileOnDisk(bookId: string) {
         }
 
         const newPath = path.join(dir, newFileName);
-        if (book.filePath === newPath) return;
+        if (book.filePath === newPath) return book.filePath;
 
         let finalPath = newPath;
         let counter = 1;
@@ -918,9 +919,13 @@ async function renameBookFileOnDisk(bookId: string) {
                 where: { id: bookId },
                 data: { filePath: finalPath }
             });
+            return finalPath;
         }
+        return book.filePath;
     } catch (err: any) {
         console.error(`[FILE-RENAME] Failed to rename file for book ${bookId}:`, err.message);
+        const book = await prisma.book.findUnique({ where: { id: bookId } });
+        return book ? book.filePath : "";
     }
 }
 
@@ -1315,8 +1320,6 @@ export async function scanLibraryInternal(libraryId: string) {
                     }
                 }
 
-                diskFilePaths.add(fullPath);
-
                 const existing = await prisma.book.findFirst({
                     where: { filePath: fullPath }
                 });
@@ -1405,77 +1408,86 @@ export async function scanLibraryInternal(libraryId: string) {
                             libraryId: libraryId
                         }
                     });
-                    await renameBookFileOnDisk(newBook.id);
-                } else if (existing.author === "Unknown Author" || !existing.coverUrl) {
-                    const cleanBase = path.basename(fullPath, ext);
-                    let title = existing.title;
-                    let author = existing.author;
-                    let coverUrl = existing.coverUrl || "";
+                    const finalPath = await renameBookFileOnDisk(newBook.id);
+                    diskFilePaths.add(finalPath);
+                } else {
+                    let finalPath = fullPath;
+                    if (existing.author === "Unknown Author" || !existing.coverUrl) {
+                        const cleanBase = path.basename(fullPath, ext);
+                        let title = existing.title;
+                        let author = existing.author;
+                        let coverUrl = existing.coverUrl || "";
 
-                    let tempTitle = cleanBase.replace(/[_-]/g, ' ').trim();
-                    let tempAuthor = "Unknown Author";
+                        let tempTitle = cleanBase.replace(/[_-]/g, ' ').trim();
+                        let tempAuthor = "Unknown Author";
 
-                    if (cleanBase.includes(" - ")) {
-                        const parts = cleanBase.split(" - ").map(p => p.trim());
-                        if (parts.length >= 2) {
-                            tempTitle = parts[0];
-                            tempAuthor = parts[1];
-                        }
-                    }
-
-                    // Dynamic Author Heuristic for backfilling
-                    try {
-                        const dbAuthors = await prisma.book.findMany({
-                            where: { author: { not: "Unknown Author" } },
-                            select: { author: true },
-                            distinct: ['author']
-                        });
-                        const reqAuthors = await prisma.bookRequest.findMany({
-                            where: { author: { not: "Unknown Author" } },
-                            select: { author: true },
-                            distinct: ['author']
-                        });
-
-                        const allAuthorsSet = new Set<string>();
-                        for (const row of dbAuthors) {
-                            if (row.author) allAuthorsSet.add(row.author.trim());
-                        }
-                        for (const row of reqAuthors) {
-                            if (row.author) allAuthorsSet.add(row.author.trim());
-                        }
-
-                        const titleLower = tempTitle.toLowerCase();
-                        for (const auth of allAuthorsSet) {
-                            const authLower = auth.toLowerCase();
-                            if (titleLower.startsWith(authLower)) {
-                                tempAuthor = auth;
-                                tempTitle = tempTitle.substring(auth.length).trim();
-                                tempTitle = tempTitle.replace(/^[:\-\s]+/, "").trim();
-                                break;
-                            } else if (titleLower.endsWith(authLower)) {
-                                tempAuthor = auth;
-                                tempTitle = tempTitle.substring(0, tempTitle.length - auth.length).trim();
-                                tempTitle = tempTitle.replace(/[:\-\s]+$/, "").trim();
-                                break;
+                        if (cleanBase.includes(" - ")) {
+                            const parts = cleanBase.split(" - ").map(p => p.trim());
+                            if (parts.length >= 2) {
+                                tempTitle = parts[0];
+                                tempAuthor = parts[1];
                             }
                         }
-                    } catch (e) {}
 
-                    try {
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 5000);
-                        const searchQuery = tempAuthor !== "Unknown Author" ? `${tempTitle} ${tempAuthor}` : tempTitle;
-                        const cleanedQuery = cleanSearchQuery(searchQuery);
-                        const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
-                        clearTimeout(timeoutId);
+                        // Dynamic Author Heuristic for backfilling
+                        try {
+                            const dbAuthors = await prisma.book.findMany({
+                                where: { author: { not: "Unknown Author" } },
+                                select: { author: true },
+                                distinct: ['author']
+                            });
+                            const reqAuthors = await prisma.bookRequest.findMany({
+                                where: { author: { not: "Unknown Author" } },
+                                select: { author: true },
+                                distinct: ['author']
+                            });
 
-                        if (olData) {
-                            const doc = olData?.docs?.[0];
-                            if (doc) {
-                                title = doc.title || title;
-                                author = doc.author_name?.[0] || author;
-                                if (doc.cover_i) {
-                                    coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+                            const allAuthorsSet = new Set<string>();
+                            for (const row of dbAuthors) {
+                                if (row.author) allAuthorsSet.add(row.author.trim());
+                            }
+                            for (const row of reqAuthors) {
+                                if (row.author) allAuthorsSet.add(row.author.trim());
+                            }
+
+                            const titleLower = tempTitle.toLowerCase();
+                            for (const auth of allAuthorsSet) {
+                                const authLower = auth.toLowerCase();
+                                if (titleLower.startsWith(authLower)) {
+                                    tempAuthor = auth;
+                                    tempTitle = tempTitle.substring(auth.length).trim();
+                                    tempTitle = tempTitle.replace(/^[:\-\s]+/, "").trim();
+                                    break;
+                                } else if (titleLower.endsWith(authLower)) {
+                                    tempAuthor = auth;
+                                    tempTitle = tempTitle.substring(0, tempTitle.length - auth.length).trim();
+                                    tempTitle = tempTitle.replace(/[:\-\s]+$/, "").trim();
+                                    break;
+                                }
+                            }
+                        } catch (e) {}
+
+                        try {
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 5000);
+                            const searchQuery = tempAuthor !== "Unknown Author" ? `${tempTitle} ${tempAuthor}` : tempTitle;
+                            const cleanedQuery = cleanSearchQuery(searchQuery);
+                            const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
+                            clearTimeout(timeoutId);
+
+                            if (olData) {
+                                const doc = olData?.docs?.[0];
+                                if (doc) {
+                                    title = doc.title || title;
+                                    author = doc.author_name?.[0] || author;
+                                    if (doc.cover_i) {
+                                        coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+                                    }
+                                } else {
+                                    if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
+                                        author = tempAuthor;
+                                        title = tempTitle;
+                                    }
                                 }
                             } else {
                                 if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
@@ -1483,23 +1495,21 @@ export async function scanLibraryInternal(libraryId: string) {
                                     title = tempTitle;
                                 }
                             }
-                        } else {
-                            if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
-                                author = tempAuthor;
-                                title = tempTitle;
-                            }
-                        }
-                    } catch (olErr) { }
+                        } catch (olErr) { }
 
-                    const updatedBook = await prisma.book.update({
-                        where: { id: existing.id },
-                        data: {
-                            title,
-                            author: existing.author === "Unknown Author" ? author : existing.author,
-                            coverUrl: existing.coverUrl ? existing.coverUrl : coverUrl
-                        }
-                    });
-                    await renameBookFileOnDisk(updatedBook.id);
+                        const updatedBook = await prisma.book.update({
+                            where: { id: existing.id },
+                            data: {
+                                title,
+                                author: existing.author === "Unknown Author" ? author : existing.author,
+                                coverUrl: existing.coverUrl ? existing.coverUrl : coverUrl
+                            }
+                        });
+                        finalPath = await renameBookFileOnDisk(updatedBook.id);
+                    } else {
+                        finalPath = await renameBookFileOnDisk(existing.id);
+                    }
+                    diskFilePaths.add(finalPath);
                 }
             }
         }
