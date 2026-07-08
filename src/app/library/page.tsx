@@ -1246,9 +1246,20 @@ function BookLibraryPageContent() {
                                                         ? "bg-purple-600 text-white shadow-sm" 
                                                         : "text-muted-foreground hover:text-foreground"
                                                 }`}
-                                                onClick={() => {
+                                                onClick={async () => {
                                                     setReqType("series");
                                                     setSeriesBooksChecklist([]);
+                                                    if (reqTitle) {
+                                                        setSearchingRegistry(true);
+                                                        try {
+                                                            const list = await getSeriesBooksList(reqTitle, reqAuthor);
+                                                            setSeriesBooksChecklist(list.map(b => ({ ...b, checked: true })));
+                                                        } catch (err) {
+                                                            console.error("Failed to load series books list:", err);
+                                                        } finally {
+                                                            setSearchingRegistry(false);
+                                                        }
+                                                    }
                                                 }}
                                             >
                                                 Book Series
