@@ -1070,6 +1070,8 @@ export async function scanLibrary(libraryId: string) {
 
 function cleanSearchQuery(searchQuery: string): string {
     return searchQuery
+        .replace(/'s\b/gi, "s") // Convert magician's -> magicians
+        .replace(/\b([a-zA-Z]+)\s+s\b/gi, "$1s") // Merge isolated s (magician s -> magicians)
         .replace(/\b\d{4}\b/g, "") // Strip 4-digit years
         .replace(/\b(?:0[1-9]|[1-9]\d|\d)\b/g, "") // Strip separate single/double digits (01, 1)
         .replace(/\b(?:v|vol|bk|book|part|no|#)\.?\s*\d+\b/gi, "") // Strip vol numbers
