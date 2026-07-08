@@ -1016,6 +1016,32 @@ export async function scanLibraryInternal(libraryId: string) {
                         }
                     }
 
+                    // Dynamic Author Heuristic based on existing DB authors
+                    try {
+                        const dbAuthors = await prisma.book.findMany({
+                            where: { author: { not: "Unknown Author" } },
+                            select: { author: true },
+                            distinct: ['author']
+                        });
+                        const titleLower = title.toLowerCase();
+                        for (const row of dbAuthors) {
+                            if (row.author) {
+                                const authLower = row.author.toLowerCase();
+                                if (titleLower.startsWith(authLower)) {
+                                    author = row.author;
+                                    title = title.substring(row.author.length).trim();
+                                    title = title.replace(/^[:\-\s]+/, "").trim();
+                                    break;
+                                } else if (titleLower.endsWith(authLower)) {
+                                    author = row.author;
+                                    title = title.substring(0, title.length - row.author.length).trim();
+                                    title = title.replace(/[:\-\s]+$/, "").trim();
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (e) {}
+
                     try {
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -1070,6 +1096,32 @@ export async function scanLibraryInternal(libraryId: string) {
                             tempAuthor = parts[1];
                         }
                     }
+
+                    // Dynamic Author Heuristic for backfilling
+                    try {
+                        const dbAuthors = await prisma.book.findMany({
+                            where: { author: { not: "Unknown Author" } },
+                            select: { author: true },
+                            distinct: ['author']
+                        });
+                        const titleLower = tempTitle.toLowerCase();
+                        for (const row of dbAuthors) {
+                            if (row.author) {
+                                const authLower = row.author.toLowerCase();
+                                if (titleLower.startsWith(authLower)) {
+                                    tempAuthor = row.author;
+                                    tempTitle = tempTitle.substring(row.author.length).trim();
+                                    tempTitle = tempTitle.replace(/^[:\-\s]+/, "").trim();
+                                    break;
+                                } else if (titleLower.endsWith(authLower)) {
+                                    tempAuthor = row.author;
+                                    tempTitle = tempTitle.substring(0, tempTitle.length - row.author.length).trim();
+                                    tempTitle = tempTitle.replace(/[:\-\s]+$/, "").trim();
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (e) {}
 
                     try {
                         const controller = new AbortController();
