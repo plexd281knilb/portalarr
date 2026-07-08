@@ -275,14 +275,27 @@ export default function SettingsPage() {
 
                         <div className="space-y-4">
                             <Card>
-                                <CardHeader><CardTitle>Automation</CardTitle></CardHeader>
+                                <CardHeader><CardTitle>Automation & Downloads</CardTitle></CardHeader>
                                 <CardContent>
-                                    <form onSubmit={(e) => handleForm(e, saveJobSettings)} className="flex gap-4 items-end">
-                                        <div className="space-y-2 flex-1">
-                                            <Label>Scan Interval (Minutes)</Label>
-                                            <Input name="autoSyncInterval" type="number" defaultValue={systemSettings.autoSyncInterval || 5} />
+                                    <form onSubmit={(e) => handleForm(e, saveJobSettings)} className="space-y-4">
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            <div className="space-y-2">
+                                                <Label>Scan Interval (Minutes)</Label>
+                                                <Input name="autoSyncInterval" type="number" defaultValue={systemSettings.autoSyncInterval || 5} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Completed Downloads Folder</Label>
+                                                <Input 
+                                                    name="downloadsPath" 
+                                                    type="text" 
+                                                    defaultValue={systemSettings.downloadsPath || "/downloads"} 
+                                                    placeholder="/downloads"
+                                                />
+                                            </div>
                                         </div>
-                                        <Button type="submit" variant="secondary">Save</Button>
+                                        <div className="flex justify-end">
+                                            <Button type="submit" variant="secondary">Save Automation Settings</Button>
+                                        </div>
                                     </form>
                                 </CardContent>
                             </Card>

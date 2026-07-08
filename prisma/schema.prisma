@@ -25,6 +25,7 @@ model Settings {
   roadmapText      String?
   alertBannerEnabled Boolean   @default(false)
   alertBannerText    String?
+  downloadsPath      String?   @default("/downloads")
 }
 
 model TautulliInstance {
@@ -96,9 +97,10 @@ model Library {
   id           String   @id @default(cuid())
   name         String   @unique
   description  String?
-  path         String   @default("") // Path to the folder share inside the container
-  allowedUsers String   @default("") // Comma-separated list of usernames, or "*" for everyone
-  books        Book[]
+  path             String   @default("") // Path to the folder share inside the container
+  allowedUsers     String   @default("") // Comma-separated list of usernames, or "*" for everyone
+  downloadCategory String   @default("books") // Downloader client category (e.g. books, kids-books)
+  books            Book[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

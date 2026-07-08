@@ -83,11 +83,12 @@ export async function saveSettings(formData: FormData) {
 export async function saveJobSettings(formData: FormData) {
   await verifyAdmin();
   const autoSyncInterval = Number(formData.get("autoSyncInterval"));
+  const downloadsPath = formData.get("downloadsPath") as string || "/downloads";
   
   await prisma.settings.upsert({
     where: { id: "global" },
-    update: { autoSyncInterval },
-    create: { id: "global", autoSyncInterval },
+    update: { autoSyncInterval, downloadsPath },
+    create: { id: "global", autoSyncInterval, downloadsPath },
   });
   revalidatePath("/settings");
 }
@@ -676,9 +677,10 @@ export async function createLibrary(formData: FormData) {
     const description = formData.get("description") as string;
     const path = formData.get("path") as string || "";
     const allowedUsers = formData.get("allowedUsers") as string || "";
+    const downloadCategory = formData.get("downloadCategory") as string || "books";
     
     await prisma.library.create({
-        data: { name, description, path, allowedUsers }
+        data: { name, description, path, allowedUsers, downloadCategory }
     });
     revalidatePath("/library");
 }
@@ -690,10 +692,11 @@ export async function updateLibrary(formData: FormData) {
     const description = formData.get("description") as string;
     const path = formData.get("path") as string || "";
     const allowedUsers = formData.get("allowedUsers") as string || "";
+    const downloadCategory = formData.get("downloadCategory") as string || "books";
     
     await prisma.library.update({
         where: { id },
-        data: { name, description, path, allowedUsers }
+        data: { name, description, path, allowedUsers, downloadCategory }
     });
     revalidatePath("/library");
 }

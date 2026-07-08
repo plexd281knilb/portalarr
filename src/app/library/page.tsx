@@ -55,6 +55,7 @@ export default function BookLibraryPage() {
     const [libDesc, setLibDesc] = useState("");
     const [libPath, setLibPath] = useState("");
     const [libAllowedUsers, setLibAllowedUsers] = useState("");
+    const [libDownloadCategory, setLibDownloadCategory] = useState("books");
     const [editingLibId, setEditingLibId] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
 
@@ -200,6 +201,7 @@ export default function BookLibraryPage() {
         formData.append("description", libDesc);
         formData.append("path", libPath);
         formData.append("allowedUsers", libAllowedUsers);
+        formData.append("downloadCategory", libDownloadCategory);
 
         try {
             if (editingLibId) {
@@ -212,6 +214,7 @@ export default function BookLibraryPage() {
             setLibDesc("");
             setLibPath("");
             setLibAllowedUsers("");
+            setLibDownloadCategory("books");
             setEditingLibId(null);
             
             const libs = await getLibraries();
@@ -241,6 +244,7 @@ export default function BookLibraryPage() {
         setLibDesc(lib.description || "");
         setLibPath(lib.path || "");
         setLibAllowedUsers(lib.allowedUsers || "*");
+        setLibDownloadCategory(lib.downloadCategory || "books");
     }
 
     async function handleUploadBook(e: React.FormEvent) {
@@ -1331,6 +1335,19 @@ export default function BookLibraryPage() {
                                                 />
                                                 <p className="text-[10px] text-muted-foreground">
                                                     Folder directory inside Portalarr Docker mapped to your Unraid share.
+                                                </p>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="libDownloadCategory" className="text-xs">Download Client Category (SABnzbd / Torrent)</Label>
+                                                <Input
+                                                    id="libDownloadCategory"
+                                                    type="text"
+                                                    placeholder="e.g. wife-books"
+                                                    value={libDownloadCategory}
+                                                    onChange={(e) => setLibDownloadCategory(e.target.value)}
+                                                />
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Custom SABnzbd NZB / Torrent category name to assign when grabbing requests.
                                                 </p>
                                             </div>
                                             <div className="space-y-1.5">
