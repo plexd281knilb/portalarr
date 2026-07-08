@@ -1188,7 +1188,9 @@ export async function scanLibraryInternal(libraryId: string) {
             }
         }
 
-        revalidatePath("/library");
+        try {
+            revalidatePath("/library");
+        } catch (e) {}
         return { success: true };
     } catch (e: any) {
         console.error("Failed to scan library:", e);
@@ -1745,7 +1747,11 @@ export async function monitorAndRetryDownload(
                         }
                         
                         fs.copyFileSync(foundFilePath, destPath);
-                        fs.unlinkSync(foundFilePath);
+                        try {
+                            fs.unlinkSync(foundFilePath);
+                        } catch (unlinkErr: any) {
+                            console.warn(`[AUTO-DOWNLOAD-MONITOR] Copied file successfully but failed to delete the source file from downloads directory (likely permission issue):`, unlinkErr.message);
+                        }
                         console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully moved file to library path.`);
                     } else {
                         console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find completed download file for "${req.title}" in download directories.`);
