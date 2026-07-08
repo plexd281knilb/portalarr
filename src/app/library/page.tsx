@@ -5,6 +5,7 @@ import {
   getLibraries, 
   getLibraryBooks, 
   deleteBook, 
+  updateBook,
   createLibrary, 
   updateLibrary, 
   deleteLibrary,
@@ -88,6 +89,15 @@ export default function BookLibraryPage() {
     const [reportEmail, setReportEmail] = useState("");
     const [reportDescription, setReportDescription] = useState("");
     const [submittingReport, setSubmittingReport] = useState(false);
+
+    // Edit Book states
+    const [isEditBookModalOpen, setIsEditBookModalOpen] = useState(false);
+    const [editBookId, setEditBookId] = useState("");
+    const [editBookTitle, setEditBookTitle] = useState("");
+    const [editBookAuthor, setEditBookAuthor] = useState("");
+    const [editBookCoverUrl, setEditBookCoverUrl] = useState("");
+    const [updatingBook, setUpdatingBook] = useState(false);
+    const [editBookError, setEditBookError] = useState("");
 
     // Book Upload states
     const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -495,6 +505,32 @@ export default function BookLibraryPage() {
         }
     }
 
+    const handleOpenEditBookModal = (book: any) => {
+        setEditBookId(book.id);
+        setEditBookTitle(book.title);
+        setEditBookAuthor(book.author || "");
+        setEditBookCoverUrl(book.coverUrl || "");
+        setEditBookError("");
+        setIsEditBookModalOpen(true);
+    };
+
+    const handleSaveBookEdit = async () => {
+        setUpdatingBook(true);
+        setEditBookError("");
+        try {
+            await updateBook(editBookId, editBookTitle, editBookAuthor, editBookCoverUrl);
+            setIsEditBookModalOpen(false);
+            if (selectedLibrary) {
+                const books = await getLibraryBooks(selectedLibrary.id);
+                setBooks(books);
+            }
+        } catch (err: any) {
+            setEditBookError(err.message || "Failed to update book.");
+        } finally {
+            setUpdatingBook(false);
+        }
+    };
+
     async function handleUpdateRequestStatus(id: string, status: string) {
         try {
             await updateBookRequestStatus(id, status);
@@ -826,6 +862,17 @@ export default function BookLibraryPage() {
                                                              >
                                                                  <AlertTriangle className="h-3.5 w-3.5" />
                                                              </Button>
+                                                             {isAdmin && (
+                                                                 <Button 
+                                                                     variant="outline" 
+                                                                     size="sm" 
+                                                                     className="text-xs h-7 px-2 border-blue-500/20 text-blue-500 hover:bg-blue-500/10"
+                                                                     title="Edit Book"
+                                                                     onClick={() => handleOpenEditBookModal(book)}
+                                                                 >
+                                                                     <Edit3 className="h-3.5 w-3.5" />
+                                                                 </Button>
+                                                             )}
                                                              {isAdmin && (
                                                                  <Button 
                                                                      variant="destructive" 
@@ -1745,6 +1792,92 @@ export default function BookLibraryPage() {
                                     </>
                                 ) : (
                                     "Submit Report"
+                                )}
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
+            )}
+
+            {isEditBookModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md border-muted/85 bg-[#141419]/90 shadow-2xl relative animate-in zoom-in-95 duration-200">
+                        <CardHeader className="pb-3 border-b border-muted/30">
+                            <div className="flex justify-between items-center">
+                                <CardTitle className="text-base font-bold flex items-center gap-2 text-primary">
+                                    <Edit3 className="h-5 w-5" /> Edit Book Details
+                                </CardTitle>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-7 w-7 p-0 border-muted hover:bg-muted/20"
+                                    onClick={() => setIsEditBookModalOpen(false)}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <CardDescription>
+                                Modify book details or correct the cover art link.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                            {editBookError && (
+                                <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded text-red-500 text-xs font-semibold">
+                                    {editBookError}
+                                </div>
+                            )}
+                            <div className="space-y-1.5">
+                                <Label htmlFor="editTitle" className="text-xs font-semibold text-foreground">Title</Label>
+                                <Input
+                                    id="editTitle"
+                                    value={editBookTitle}
+                                    onChange={(e) => setEditBookTitle(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="editAuthor" className="text-xs font-semibold text-foreground">Author</Label>
+                                <Input
+                                    id="editAuthor"
+                                    value={editBookAuthor}
+                                    onChange={(e) => setEditBookAuthor(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="editCoverUrl" className="text-xs font-semibold text-foreground">Cover Image URL</Label>
+                                <Input
+                                    id="editCoverUrl"
+                                    value={editBookCoverUrl}
+                                    onChange={(e) => setEditBookCoverUrl(e.target.value)}
+                                    placeholder="https://example.com/cover.jpg"
+                                />
+                                <p className="text-[10px] text-muted-foreground">
+                                    Provide a direct URL to an image or leave blank for a text cover placeholder.
+                                </p>
+                            </div>
+                        </CardContent>
+                        <CardFooter className="pt-2 border-t border-muted/30 flex justify-end gap-2">
+                            <Button 
+                                variant="outline" 
+                                className="h-9 font-semibold text-xs border-muted/80 text-muted-foreground hover:text-foreground"
+                                onClick={() => setIsEditBookModalOpen(false)}
+                                disabled={updatingBook}
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                className="h-9 font-semibold text-xs text-black"
+                                onClick={handleSaveBookEdit}
+                                disabled={updatingBook}
+                            >
+                                {updatingBook ? (
+                                    <>
+                                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    "Save Changes"
                                 )}
                             </Button>
                         </CardFooter>

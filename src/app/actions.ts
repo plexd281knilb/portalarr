@@ -754,6 +754,15 @@ export async function deleteBook(id: string) {
     revalidatePath("/library");
 }
 
+export async function updateBook(id: string, title: string, author: string, coverUrl: string) {
+    await verifyAdmin();
+    await prisma.book.update({
+        where: { id },
+        data: { title, author, coverUrl }
+    });
+    revalidatePath("/library");
+}
+
 export async function deleteBookRequest(id: string) {
     const session = await verifyUser();
     const request = await prisma.bookRequest.findUnique({ where: { id } });
@@ -948,6 +957,16 @@ export async function scanLibrary(libraryId: string) {
     return await scanLibraryInternal(libraryId);
 }
 
+function cleanSearchQuery(searchQuery: string): string {
+    return searchQuery
+        .replace(/\b\d{4}\b/g, "") // Strip 4-digit years
+        .replace(/\b(?:0[1-9]|[1-9]\d|\d)\b/g, "") // Strip separate single/double digits (01, 1)
+        .replace(/\b(?:v|vol|bk|book|part|no|#)\.?\s*\d+\b/gi, "") // Strip vol numbers
+        .replace(/[()\[\]]/g, "") // Strip brackets
+        .replace(/\s+/g, " ") // Clean spaces
+        .trim();
+}
+
 export async function scanLibraryInternal(libraryId: string) {
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
@@ -1001,7 +1020,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 5000);
                         const searchQuery = author !== "Unknown Author" ? `${title} ${author}` : title;
-                        const cleanedQuery = searchQuery.replace(/\b\d{4}\b/g, "").replace(/[()\[\]]/g, "").replace(/\s+/g, " ").trim();
+                        const cleanedQuery = cleanSearchQuery(searchQuery);
                         const olRes = await fetch(
                             `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1`,
                             {
@@ -1056,7 +1075,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 5000);
                         const searchQuery = tempAuthor !== "Unknown Author" ? `${tempTitle} ${tempAuthor}` : tempTitle;
-                        const cleanedQuery = searchQuery.replace(/\b\d{4}\b/g, "").replace(/[()\[\]]/g, "").replace(/\s+/g, " ").trim();
+                        const cleanedQuery = cleanSearchQuery(searchQuery);
                         const olRes = await fetch(
                             `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1`,
                             {
