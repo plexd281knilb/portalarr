@@ -1069,10 +1069,21 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
             headers: { "Accept": "application/json" },
             next: { revalidate: 3600 }
         });
-        if (!response.ok) throw new Error("Series query failed");
         
-        const data = await response.json();
-        const docs = data.docs || [];
+        const data = response.ok ? await response.json() : { docs: [] };
+        let docs = data.docs || [];
+        
+        if (docs.length === 0) {
+            console.log(`[SERIES-EXPANSION] No books found for series:"${seriesTitle}". Trying general keyword fallback...`);
+            const fallbackResponse = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(seriesTitle)}&fields=key,title,author_name,cover_i,first_publish_year`, {
+                headers: { "Accept": "application/json" },
+                next: { revalidate: 3600 }
+            });
+            if (fallbackResponse.ok) {
+                const fallbackData = await fallbackResponse.json();
+                docs = fallbackData.docs || [];
+            }
+        }
         
         if (docs.length === 0) {
             return false;

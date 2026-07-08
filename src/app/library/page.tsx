@@ -156,16 +156,25 @@ function BookLibraryPageContent() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const activeTabParam = searchParams.get("tab");
-    const [activeTab, setActiveTab] = useState(activeTabParam || "libs");
+    const [activeTab, setActiveTab] = useState("libs");
 
     useEffect(() => {
-        if (activeTabParam && activeTabParam !== activeTab) {
+        const savedTab = localStorage.getItem("book-library-active-tab");
+        if (activeTabParam) {
             setActiveTab(activeTabParam);
+        } else if (savedTab) {
+            setActiveTab(savedTab);
+            const params = new URLSearchParams(window.location.search);
+            params.set("tab", savedTab);
+            router.replace(`${pathname}?${params.toString()}`);
+        } else {
+            setActiveTab("libs");
         }
-    }, [activeTabParam]);
+    }, [activeTabParam, router, pathname]);
 
     const handleTabChange = (val: string) => {
         setActiveTab(val);
+        localStorage.setItem("book-library-active-tab", val);
         const params = new URLSearchParams(searchParams.toString());
         params.set("tab", val);
         router.push(`${pathname}?${params.toString()}`);
