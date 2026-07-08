@@ -985,15 +985,104 @@ export async function scanLibraryInternal(libraryId: string) {
                 if (!existing) {
                     const stats = fs.statSync(fullPath);
                     const cleanBase = path.basename(fullPath, ext);
-                    const titleWithoutExt = cleanBase.replace(/[_-]/g, ' ');
+                    let title = cleanBase.replace(/[_-]/g, ' ').trim();
+                    let author = "Unknown Author";
+                    let coverUrl = "";
+
+                    if (cleanBase.includes(" - ")) {
+                        const parts = cleanBase.split(" - ").map(p => p.trim());
+                        if (parts.length >= 2) {
+                            title = parts[0];
+                            author = parts[1];
+                        }
+                    }
+
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 1500);
+                        const searchQuery = author !== "Unknown Author" ? `${title} ${author}` : title;
+                        const olRes = await fetch(
+                            `https://openlibrary.org/search.json?q=${encodeURIComponent(searchQuery)}&limit=1`,
+                            {
+                                headers: { "Accept": "application/json" },
+                                signal: controller.signal
+                            }
+                        );
+                        clearTimeout(timeoutId);
+
+                        if (olRes.ok) {
+                            const olData = await olRes.json();
+                            const doc = olData?.docs?.[0];
+                            if (doc) {
+                                title = doc.title || title;
+                                author = doc.author_name?.[0] || author;
+                                if (doc.cover_i) {
+                                    coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+                                }
+                            }
+                        }
+                    } catch (olErr) { }
+
                     await prisma.book.create({
                         data: {
-                            title: titleWithoutExt,
-                            author: "Unknown Author",
+                            title,
+                            author,
+                            coverUrl,
                             filePath: fullPath,
                             fileSize: stats.size,
                             fileType: ext.replace(".", ""),
                             libraryId: libraryId
+                        }
+                    });
+                } else if (existing.author === "Unknown Author" || !existing.coverUrl) {
+                    const cleanBase = path.basename(fullPath, ext);
+                    let title = existing.title;
+                    let author = existing.author;
+                    let coverUrl = existing.coverUrl || "";
+
+                    let tempTitle = cleanBase.replace(/[_-]/g, ' ').trim();
+                    let tempAuthor = "Unknown Author";
+
+                    if (cleanBase.includes(" - ")) {
+                        const parts = cleanBase.split(" - ").map(p => p.trim());
+                        if (parts.length >= 2) {
+                            tempTitle = parts[0];
+                            tempAuthor = parts[1];
+                        }
+                    }
+
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 1500);
+                        const searchQuery = tempAuthor !== "Unknown Author" ? `${tempTitle} ${tempAuthor}` : tempTitle;
+                        const olRes = await fetch(
+                            `https://openlibrary.org/search.json?q=${encodeURIComponent(searchQuery)}&limit=1`,
+                            {
+                                headers: { "Accept": "application/json" },
+                                signal: controller.signal
+                            }
+                        );
+                        clearTimeout(timeoutId);
+
+                        if (olRes.ok) {
+                            const olData = await olRes.json();
+                            const doc = olData?.docs?.[0];
+                            if (doc) {
+                                title = doc.title || title;
+                                author = doc.author_name?.[0] || author;
+                                if (doc.cover_i) {
+                                    coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+                                }
+                            }
+                        }
+                    } catch (olErr) { }
+
+                    await prisma.book.update({
+                        where: { id: existing.id },
+                        data: {
+                            title,
+                            author: existing.author === "Unknown Author" ? author : existing.author,
+                            coverUrl: existing.coverUrl ? existing.coverUrl : coverUrl
                         }
                     });
                 }

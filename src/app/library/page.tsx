@@ -734,75 +734,113 @@ export default function BookLibraryPage() {
                                     ) : (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
                                             {filteredBooks.map(book => (
-                                                <Card key={book.id} className="relative flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border-muted/60 group">
-                                                    <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
-                                                        <div className="space-y-1">
-                                                            <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 text-[10px] w-fit mb-2">
-                                                                {book.fileType?.toUpperCase()}
-                                                            </Badge>
-                                                            <h3 className="font-bold text-base leading-snug group-hover:text-primary transition-colors line-clamp-2">{book.title}</h3>
-                                                            <p className="text-xs text-muted-foreground line-clamp-1">{book.author || "Unknown Author"}</p>
-                                                        </div>
-                                                        <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
-                                                            <span>Size: {(book.fileSize ? (book.fileSize / (1024 * 1024)).toFixed(1) : "0")} MB</span>
-                                                            <span>Added: {new Date(book.createdAt).toLocaleDateString()}</span>
-                                                        </div>
-                                                    </div>
-                                                    <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex gap-2">
-                                                        <Button 
-                                                            variant="default" 
-                                                            size="sm" 
-                                                            className="flex-1 text-xs font-semibold text-black"
-                                                            onClick={() => setActiveBook(book)}
-                                                        >
-                                                            <BookOpen className="h-3 w-3 mr-1" /> Read
-                                                        </Button>
-                                                        <Button 
-                                                            variant="outline" 
-                                                            size="sm" 
-                                                            className="text-xs border-primary/20 text-primary hover:bg-primary/10"
-                                                            title="Send to Kindle"
-                                                            disabled={sendingToKindleId !== null}
-                                                            onClick={() => handleSendToKindle(book.id)}
-                                                        >
-                                                            {sendingToKindleId === book.id ? (
-                                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                                            ) : (
-                                                                <Send className="h-3 w-3" />
-                                                            )}
-                                                        </Button>
-                                                        <Button 
-                                                            variant="outline" 
-                                                            size="sm" 
-                                                            className="text-xs" 
-                                                            asChild
-                                                        >
-                                                            <a href={`/api/books/${book.id}`} download>
-                                                                <Download className="h-3 w-3" />
-                                                            </a>
-                                                        </Button>
-                                                        <Button 
-                                                            variant="outline" 
-                                                            size="sm" 
-                                                            className="text-xs border-amber-500/20 text-amber-500 hover:bg-amber-500/10 p-2"
-                                                            title="Report an Issue"
-                                                            onClick={() => handleOpenReportIssueModal({ type: 'book', title: book.title, id: book.id })}
-                                                        >
-                                                            <AlertTriangle className="h-3 w-3" />
-                                                        </Button>
-                                                        {isAdmin && (
-                                                            <Button 
-                                                                variant="destructive" 
-                                                                size="sm" 
-                                                                onClick={() => handleDeleteBook(book.id)}
-                                                                className="text-xs p-2"
-                                                            >
-                                                                <Trash2 className="h-3.5 w-3.5" />
-                                                            </Button>
-                                                        )}
-                                                    </CardFooter>
-                                                </Card>
-                                            ))}
+                                                 <Card key={book.id} className="relative flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border-muted/60 group">
+                                                     {/* Cover Image or Fallback */}
+                                                     {book.coverUrl ? (
+                                                         <div className="relative aspect-[2/3] w-full bg-muted overflow-hidden flex items-center justify-center border-b border-muted/40">
+                                                             {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                             <img 
+                                                                 src={book.coverUrl} 
+                                                                 alt={book.title} 
+                                                                 className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105" 
+                                                             />
+                                                             <div className="absolute top-2 right-2">
+                                                                 <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
+                                                                     {book.fileType?.toUpperCase()}
+                                                                 </Badge>
+                                                             </div>
+                                                         </div>
+                                                     ) : (
+                                                         <div className="relative aspect-[2/3] w-full bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 overflow-hidden flex flex-col justify-between p-4 border-b border-muted/40 text-center select-none group-hover:from-indigo-900 group-hover:to-purple-900 transition-all duration-300">
+                                                             <div className="absolute top-2 right-2">
+                                                                 <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
+                                                                     {book.fileType?.toUpperCase()}
+                                                                 </Badge>
+                                                             </div>
+                                                             <div className="flex-1 flex flex-col justify-center items-center">
+                                                                 <BookOpen className="h-10 w-10 text-primary/40 mb-3" />
+                                                                 <div className="font-serif text-sm font-bold text-slate-100 line-clamp-3 px-2 leading-tight">
+                                                                     {book.title}
+                                                                 </div>
+                                                             </div>
+                                                             <div className="text-[10px] text-slate-400 font-semibold truncate w-full">
+                                                                 {book.author && book.author !== "Unknown Author" ? book.author : ""}
+                                                             </div>
+                                                         </div>
+                                                     )}
+
+                                                     <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
+                                                         <div className="space-y-1">
+                                                             <h3 className="font-bold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2 h-10 flex items-center">{book.title}</h3>
+                                                             <p className="text-xs text-muted-foreground truncate">{book.author || "Unknown Author"}</p>
+                                                         </div>
+                                                         <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
+                                                             <span>Size: {(book.fileSize ? (book.fileSize / (1024 * 1024)).toFixed(1) : "0")} MB</span>
+                                                             <span>Added: {new Date(book.createdAt).toLocaleDateString()}</span>
+                                                         </div>
+                                                     </div>
+                                                     <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
+                                                         <div className="flex gap-2 w-full">
+                                                             <Button 
+                                                                 variant="default" 
+                                                                 size="sm" 
+                                                                 className="flex-1 text-xs font-semibold text-black"
+                                                                 onClick={() => setActiveBook(book)}
+                                                             >
+                                                                 <BookOpen className="h-3 w-3 mr-1" /> Read
+                                                             </Button>
+                                                             <Button 
+                                                                 variant="outline" 
+                                                                 size="sm" 
+                                                                 className="flex-1 text-xs border-primary/20 text-primary hover:bg-primary/10 font-semibold"
+                                                                 title="Send to Kindle"
+                                                                 disabled={sendingToKindleId !== null}
+                                                                 onClick={() => handleSendToKindle(book.id)}
+                                                             >
+                                                                 {sendingToKindleId === book.id ? (
+                                                                     <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                                                 ) : (
+                                                                     <Send className="h-3 w-3 mr-1" />
+                                                                 )}
+                                                                 Kindle
+                                                             </Button>
+                                                         </div>
+                                                         <div className="flex gap-2 justify-end w-full border-t border-muted/40 pt-2">
+                                                             <Button 
+                                                                 variant="outline" 
+                                                                 size="sm" 
+                                                                 className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground" 
+                                                                 asChild
+                                                                 title="Download"
+                                                             >
+                                                                 <a href={`/api/books/${book.id}`} download>
+                                                                     <Download className="h-3.5 w-3.5" />
+                                                                 </a>
+                                                             </Button>
+                                                             <Button 
+                                                                 variant="outline" 
+                                                                 size="sm" 
+                                                                 className="text-xs h-7 px-2 border-amber-500/20 text-amber-500 hover:bg-amber-500/10"
+                                                                 title="Report an Issue"
+                                                                 onClick={() => handleOpenReportIssueModal({ type: 'book', title: book.title, id: book.id })}
+                                                             >
+                                                                 <AlertTriangle className="h-3.5 w-3.5" />
+                                                             </Button>
+                                                             {isAdmin && (
+                                                                 <Button 
+                                                                     variant="destructive" 
+                                                                     size="sm" 
+                                                                     onClick={() => handleDeleteBook(book.id)}
+                                                                     className="text-xs h-7 px-2"
+                                                                     title="Delete"
+                                                                 >
+                                                                     <Trash2 className="h-3.5 w-3.5" />
+                                                                 </Button>
+                                                             )}
+                                                         </div>
+                                                     </CardFooter>
+                                                 </Card>
+                                             ))}
                                         </div>
                                     )}
                                 </>
