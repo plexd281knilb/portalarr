@@ -871,7 +871,57 @@ export async function updateBook(id: string, title: string, author: string, cove
         where: { id },
         data: { title, author, coverUrl }
     });
+    await renameBookFileOnDisk(id);
     revalidatePath("/library");
+}
+
+async function renameBookFileOnDisk(bookId: string) {
+    try {
+        const book = await prisma.book.findUnique({ where: { id: bookId } });
+        if (!book || !fs.existsSync(book.filePath)) return;
+
+        const ext = path.extname(book.filePath);
+        const dir = path.dirname(book.filePath);
+        
+        let safeAuthor = (book.author && book.author !== "Unknown Author") 
+            ? book.author.replace(/[/\\?%*:|"<>]/g, "").trim()
+            : "";
+        let safeTitle = book.title.replace(/[/\\?%*:|"<>]/g, "").trim();
+
+        if (safeTitle.length > 100) safeTitle = safeTitle.substring(0, 100).trim();
+        if (safeAuthor.length > 50) safeAuthor = safeAuthor.substring(0, 50).trim();
+
+        let newFileName = "";
+        if (safeAuthor) {
+            newFileName = `${safeAuthor} - ${safeTitle}${ext}`;
+        } else {
+            newFileName = `${safeTitle}${ext}`;
+        }
+
+        const newPath = path.join(dir, newFileName);
+        if (book.filePath === newPath) return;
+
+        let finalPath = newPath;
+        let counter = 1;
+        while (fs.existsSync(finalPath)) {
+            if (finalPath === book.filePath) break;
+            const baseWithoutExt = path.basename(newPath, ext);
+            finalPath = path.join(dir, `${baseWithoutExt}_${counter}${ext}`);
+            counter++;
+        }
+
+        if (book.filePath !== finalPath && fs.existsSync(book.filePath)) {
+            console.log(`[FILE-RENAME] Renaming on-disk file: ${book.filePath} -> ${finalPath}`);
+            fs.renameSync(book.filePath, finalPath);
+            
+            await prisma.book.update({
+                where: { id: bookId },
+                data: { filePath: finalPath }
+            });
+        }
+    } catch (err: any) {
+        console.error(`[FILE-RENAME] Failed to rename file for book ${bookId}:`, err.message);
+    }
 }
 
 export async function deleteBookRequest(id: string) {
@@ -1344,7 +1394,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         }
                     } catch (olErr) { }
 
-                    await prisma.book.create({
+                    const newBook = await prisma.book.create({
                         data: {
                             title,
                             author,
@@ -1355,6 +1405,7 @@ export async function scanLibraryInternal(libraryId: string) {
                             libraryId: libraryId
                         }
                     });
+                    await renameBookFileOnDisk(newBook.id);
                 } else if (existing.author === "Unknown Author" || !existing.coverUrl) {
                     const cleanBase = path.basename(fullPath, ext);
                     let title = existing.title;
@@ -1440,7 +1491,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         }
                     } catch (olErr) { }
 
-                    await prisma.book.update({
+                    const updatedBook = await prisma.book.update({
                         where: { id: existing.id },
                         data: {
                             title,
@@ -1448,6 +1499,7 @@ export async function scanLibraryInternal(libraryId: string) {
                             coverUrl: existing.coverUrl ? existing.coverUrl : coverUrl
                         }
                     });
+                    await renameBookFileOnDisk(updatedBook.id);
                 }
             }
         }
