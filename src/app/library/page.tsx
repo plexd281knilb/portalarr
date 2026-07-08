@@ -110,6 +110,21 @@ export default function BookLibraryPage() {
     const [editBookAuthor, setEditBookAuthor] = useState("");
     const [editBookCoverUrl, setEditBookCoverUrl] = useState("");
     const [updatingBook, setUpdatingBook] = useState(false);
+
+    // Sort states
+    const [sortBy, setSortBy] = useState("recent");
+
+    useEffect(() => {
+        const savedSort = localStorage.getItem("book-library-sort");
+        if (savedSort) {
+            setSortBy(savedSort);
+        }
+    }, []);
+
+    const handleSortChange = (value: string) => {
+        setSortBy(value);
+        localStorage.setItem("book-library-sort", value);
+    };
     const [editBookError, setEditBookError] = useState("");
 
     // Book Upload states
@@ -568,10 +583,28 @@ export default function BookLibraryPage() {
         }
     }
 
-    const filteredBooks = books.filter(book => 
-        book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (book.author && book.author.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const sortedBooks = [...books]
+        .filter(book => 
+            book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (book.author && book.author.toLowerCase().includes(searchQuery.toLowerCase()))
+        )
+        .sort((a, b) => {
+            if (sortBy === "title-asc") {
+                return a.title.localeCompare(b.title);
+            }
+            if (sortBy === "title-desc") {
+                return b.title.localeCompare(a.title);
+            }
+            if (sortBy === "author-asc") {
+                return (a.author || "").localeCompare(b.author || "");
+            }
+            if (sortBy === "author-desc") {
+                return (b.author || "").localeCompare(a.author || "");
+            }
+            const dateA = new Date(a.createdAt || 0).getTime();
+            const dateB = new Date(b.createdAt || 0).getTime();
+            return dateB - dateA;
+        });
 
     const isAdmin = user?.role === "ADMIN";
 
@@ -660,23 +693,38 @@ export default function BookLibraryPage() {
                         <div className="lg:col-span-3 space-y-6">
                             {selectedLibrary ? (
                                 <>
-                                    <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                                        <div className="relative w-full sm:max-w-md">
-                                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                            <Input
-                                                type="search"
-                                                placeholder="Search books by title or author..."
-                                                className="pl-9 bg-muted/20"
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                            />
+                                    <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+                                        <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-2xl">
+                                            <div className="relative w-full sm:flex-1">
+                                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    type="search"
+                                                    placeholder="Search books by title or author..."
+                                                    className="pl-9 bg-muted/20"
+                                                    value={searchQuery}
+                                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="w-full sm:w-48 shrink-0">
+                                                <select
+                                                    value={sortBy}
+                                                    onChange={(e) => handleSortChange(e.target.value)}
+                                                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-muted/20 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-medium"
+                                                >
+                                                    <option value="recent">Recently Added</option>
+                                                    <option value="title-asc">Title (A-Z)</option>
+                                                    <option value="title-desc">Title (Z-A)</option>
+                                                    <option value="author-asc">Author (A-Z)</option>
+                                                    <option value="author-desc">Author (Z-A)</option>
+                                                </select>
+                                            </div>
                                         </div>
                                         {isAdmin && selectedLibrary.path && (
                                             <Button 
                                                 variant="outline" 
                                                 onClick={() => handleScanLibrary(selectedLibrary.id)}
                                                 disabled={scanning}
-                                                className="w-full sm:w-auto font-semibold border-primary/20 text-primary hover:bg-primary/5"
+                                                className="w-full lg:w-auto font-semibold border-primary/20 text-primary hover:bg-primary/5 shrink-0"
                                             >
                                                 {scanning ? (
                                                     <>
@@ -777,7 +825,7 @@ export default function BookLibraryPage() {
                                                 <div key={n} className="h-56 bg-muted/20 animate-pulse rounded-lg border border-muted/50" />
                                             ))}
                                         </div>
-                                    ) : filteredBooks.length === 0 ? (
+                                    ) : sortedBooks.length === 0 ? (
                                         <div className="text-center p-16 text-muted-foreground border border-dashed rounded-lg bg-muted/5">
                                             <Sparkles className="h-8 w-8 text-primary/30 mx-auto mb-2" />
                                             <p className="text-sm font-medium">No books in this library shelf.</p>
@@ -785,7 +833,7 @@ export default function BookLibraryPage() {
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                                            {filteredBooks.map(book => (
+                                            {sortedBooks.map(book => (
                                                  <Card key={book.id} className="relative flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border-muted/60 group">
                                                      {/* Cover Image or Fallback */}
                                                      {book.coverUrl ? (
