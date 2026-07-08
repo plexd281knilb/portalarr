@@ -41,23 +41,39 @@ import {
   LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle
 } from "lucide-react";
 
-function extractSeriesInfo(title: string, knownSeries: string[] = []): { seriesName: string | null, volume: string | null, bookTitle: string } {
+function matchesSeriesFuzzy(titleLower: string, seriesNameLower: string): boolean {
+    const seriesWords = seriesNameLower.split(/\s+/).filter(w => w.length > 2); // match words > 2 chars
+    if (seriesWords.length === 0) return false;
+    
+    let lastIdx = -1;
+    for (const word of seriesWords) {
+        const idx = titleLower.indexOf(word, lastIdx + 1);
+        if (idx === -1) {
+            return false;
+        }
+        lastIdx = idx;
+    }
+    return true;
+}
+
+function extractSeriesInfo(title: string, filePath: string, knownSeries: string[] = []): { seriesName: string | null, volume: string | null, bookTitle: string } {
+    const fileName = filePath ? filePath.split(/[/\\]/).pop() || "" : "";
+    const cleanFileBase = fileName.replace(/\.[^/.]+$/, "").trim();
+    const fileLower = cleanFileBase.toLowerCase();
     const titleLower = title.toLowerCase();
 
-    // First check if it matches any known series names from requests
+    // Check against known series list from requests or dynamically discovered list
     for (const series of knownSeries) {
         if (series && series.length > 3) {
-            const idx = titleLower.indexOf(series);
-            if (idx !== -1) {
-                // Try to find a volume number near it or anywhere in the title
+            if (matchesSeriesFuzzy(fileLower, series) || matchesSeriesFuzzy(titleLower, series)) {
+                // Try to find volume number in filename first, then in title
                 const volRegex = /(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*(\d+)/i;
-                let volMatch = title.match(volRegex);
+                let volMatch = cleanFileBase.match(volRegex) || title.match(volRegex);
                 let volume: string | null = null;
                 if (volMatch) {
                     volume = volMatch[1];
                 } else {
-                    // Try to find any standalone digit that isn't a 4-digit year > 1900
-                    const digitsMatch = title.match(/\b(\d+)\b/g);
+                    const digitsMatch = cleanFileBase.match(/\b(\d+)\b/g) || title.match(/\b(\d+)\b/g);
                     if (digitsMatch) {
                         for (const digit of digitsMatch) {
                             const val = parseInt(digit);
@@ -69,7 +85,7 @@ function extractSeriesInfo(title: string, knownSeries: string[] = []): { seriesN
                     }
                 }
 
-                // Clean the book title by removing the series name and any volume tag
+                // Clean the title
                 let cleanBookTitle = title
                     .replace(new RegExp(series, 'gi'), "")
                     .replace(/(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*\d+/gi, "")
@@ -92,9 +108,9 @@ function extractSeriesInfo(title: string, knownSeries: string[] = []): { seriesN
         }
     }
 
-    // 1. Check parenthesis style: "Book Title (Series Name #1)" or "Book Title (Series Name, Vol. 1)"
+    // Heuristics fallback using filename
     const parenRegex = /^(.*?)\s+\((.*?)\s*(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*(\d+)\)/i;
-    let match = title.match(parenRegex);
+    let match = cleanFileBase.match(parenRegex);
     if (match) {
         return {
             seriesName: match[2].trim(),
@@ -103,9 +119,8 @@ function extractSeriesInfo(title: string, knownSeries: string[] = []): { seriesN
         };
     }
 
-    // 2. Check title prefix style: "Series Name #1: Book Title" or "Series Name - 01 - Book Title"
     const prefixRegex = /^(.*?)\s+(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*(\d+)\s*[:-]\s*(.*)$/i;
-    match = title.match(prefixRegex);
+    match = cleanFileBase.match(prefixRegex);
     if (match) {
         return {
             seriesName: match[1].trim(),
@@ -114,9 +129,8 @@ function extractSeriesInfo(title: string, knownSeries: string[] = []): { seriesN
         };
     }
 
-    // 3. Check simple prefix with digits: "Series Name 01 - Book Title" or "Series Name 01: Book Title"
     const prefixDigitRegex = /^(.*?)\s+(\d+)\s*[:-]\s*(.*)$/i;
-    match = title.match(prefixDigitRegex);
+    match = cleanFileBase.match(prefixDigitRegex);
     if (match) {
         return {
             seriesName: match[1].trim(),
@@ -125,9 +139,8 @@ function extractSeriesInfo(title: string, knownSeries: string[] = []): { seriesN
         };
     }
 
-    // 4. Check ending hash style: "Series Name #1"
     const endHashRegex = /^(.*?)\s+(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*(\d+)$/i;
-    match = title.match(endHashRegex);
+    match = cleanFileBase.match(endHashRegex);
     if (match) {
         return {
             seriesName: match[1].trim(),
@@ -877,15 +890,29 @@ function BookLibraryPageContent() {
     const seriesGroups: { [key: string]: typeof books } = {};
     const standaloneBooks: typeof books = [];
 
-    const knownSeries = (requests || [])
+    const requestSeries = (requests || [])
         .filter(r => r && r.type === "series" && typeof r.title === "string")
         .map(r => r.title.toLowerCase().trim());
 
+    const dynamicSeriesSet = new Set<string>();
+    for (const book of sortedBooks) {
+        const info = extractSeriesInfo(book.title, book.filePath, []);
+        if (info.seriesName) {
+            dynamicSeriesSet.add(info.seriesName.toLowerCase().trim());
+        }
+    }
+
+    const combinedSeries = Array.from(new Set([...requestSeries, ...dynamicSeriesSet]));
+
     if (groupBySeries) {
         for (const book of sortedBooks) {
-            const info = extractSeriesInfo(book.title, knownSeries);
+            const info = extractSeriesInfo(book.title, book.filePath, combinedSeries);
             if (info.seriesName) {
-                const formattedSeriesName = info.seriesName
+                let sName = info.seriesName;
+                if (book.author && book.author !== "Unknown Author") {
+                    sName = sName.replace(new RegExp('^' + book.author + '[:\\-\\s]+', 'i'), '').trim();
+                }
+                const formattedSeriesName = sName
                     .split(" ")
                     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
                     .join(" ");
@@ -902,7 +929,6 @@ function BookLibraryPageContent() {
             }
         }
 
-        // Sort books inside each series group by volume number
         for (const seriesName in seriesGroups) {
             seriesGroups[seriesName].sort((a, b) => ((a as any).seriesVolume || 0) - ((b as any).seriesVolume || 0));
         }
