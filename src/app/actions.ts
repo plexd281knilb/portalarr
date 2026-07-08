@@ -1303,9 +1303,17 @@ export async function scanLibraryInternal(libraryId: string) {
     }
 
     try {
+        const dbBooks = await prisma.book.findMany({
+            where: { libraryId: libraryId }
+        });
+        const dbBooksByPathLower = new Map<string, any>();
+        for (const b of dbBooks) {
+            dbBooksByPathLower.set(b.filePath.toLowerCase(), b);
+        }
+
         const files = fs.readdirSync(library.path);
         const validExtensions = [".pdf", ".epub", ".mobi", ".cbz"];
-        const diskFilePaths = new Set<string>();
+        const matchedDbBookIds = new Set<string>();
 
         for (const file of files) {
             const ext = path.extname(file).toLowerCase();
@@ -1320,9 +1328,7 @@ export async function scanLibraryInternal(libraryId: string) {
                     }
                 }
 
-                const existing = await prisma.book.findFirst({
-                    where: { filePath: fullPath }
-                });
+                const existing = dbBooksByPathLower.get(fullPath.toLowerCase());
 
                 if (!existing) {
                     const stats = fs.statSync(fullPath);
@@ -1408,8 +1414,8 @@ export async function scanLibraryInternal(libraryId: string) {
                             libraryId: libraryId
                         }
                     });
-                    const finalPath = await renameBookFileOnDisk(newBook.id);
-                    diskFilePaths.add(finalPath);
+                    await renameBookFileOnDisk(newBook.id);
+                    matchedDbBookIds.add(newBook.id);
                 } else {
                     let finalPath = fullPath;
                     if (existing.author === "Unknown Author" || !existing.coverUrl) {
@@ -1505,21 +1511,17 @@ export async function scanLibraryInternal(libraryId: string) {
                                 coverUrl: existing.coverUrl ? existing.coverUrl : coverUrl
                             }
                         });
-                        finalPath = await renameBookFileOnDisk(updatedBook.id);
+                        await renameBookFileOnDisk(updatedBook.id);
                     } else {
-                        finalPath = await renameBookFileOnDisk(existing.id);
+                        await renameBookFileOnDisk(existing.id);
                     }
-                    diskFilePaths.add(finalPath);
+                    matchedDbBookIds.add(existing.id);
                 }
             }
         }
 
-        const dbBooks = await prisma.book.findMany({
-            where: { libraryId: libraryId }
-        });
-
         for (const dbBook of dbBooks) {
-            if (!diskFilePaths.has(dbBook.filePath)) {
+            if (!matchedDbBookIds.has(dbBook.id)) {
                 await prisma.book.delete({
                     where: { id: dbBook.id }
                 });
