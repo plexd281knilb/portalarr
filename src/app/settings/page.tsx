@@ -41,7 +41,14 @@ function SettingsPageContent() {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const activeTab = searchParams.get("tab") || "general";
+    const activeTabParam = searchParams.get("tab");
+    const [activeTab, setActiveTab] = useState(activeTabParam || "general");
+
+    useEffect(() => {
+        if (activeTabParam && activeTabParam !== activeTab) {
+            setActiveTab(activeTabParam);
+        }
+    }, [activeTabParam]);
 
     const [loading, setLoading] = useState(true);
     const [isPending, startTransition] = useTransition();
@@ -109,6 +116,7 @@ function SettingsPageContent() {
     useEffect(() => { loadAllData(); }, []);
 
     const handleTabChange = (value: string) => {
+        setActiveTab(value);
         startTransition(() => {
             const params = new URLSearchParams(searchParams.toString());
             params.set("tab", value);

@@ -155,9 +155,17 @@ function BookLibraryPageContent() {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const activeTab = searchParams.get("tab") || "libs";
+    const activeTabParam = searchParams.get("tab");
+    const [activeTab, setActiveTab] = useState(activeTabParam || "libs");
+
+    useEffect(() => {
+        if (activeTabParam && activeTabParam !== activeTab) {
+            setActiveTab(activeTabParam);
+        }
+    }, [activeTabParam]);
 
     const handleTabChange = (val: string) => {
+        setActiveTab(val);
         const params = new URLSearchParams(searchParams.toString());
         params.set("tab", val);
         router.push(`${pathname}?${params.toString()}`);
@@ -860,8 +868,8 @@ function BookLibraryPageContent() {
     const seriesGroups: { [key: string]: typeof books } = {};
     const standaloneBooks: typeof books = [];
 
-    const knownSeries = requests
-        .filter(r => r.type === "series")
+    const knownSeries = (requests || [])
+        .filter(r => r && r.type === "series" && typeof r.title === "string")
         .map(r => r.title.toLowerCase().trim());
 
     if (groupBySeries) {
