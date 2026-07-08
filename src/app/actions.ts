@@ -794,6 +794,95 @@ export async function getBookRequests() {
     }
 }
 
+async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, publishYear?: string | null }) {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            console.log("[SMTP-NOTIFICATION] SMTP is not configured. Skipping request notification.");
+            return;
+        }
+
+        const admins = await prisma.user.findMany({
+            where: { role: "ADMIN" }
+        });
+
+        if (admins.length === 0) {
+            console.log("[SMTP-NOTIFICATION] No admin users found. Skipping request notification.");
+            return;
+        }
+
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        for (const admin of admins) {
+            if (!admin.email) continue;
+            
+            let detailsHtml = "";
+            if (request.type === "checklist") {
+                detailsHtml = `
+                    <p>Multiple books were requested from a checklist by <strong>${request.requestedBy}</strong>:</p>
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 6px; font-family: monospace; white-space: pre-wrap; line-height: 1.5;">${request.author}</div>
+                `;
+            } else {
+                detailsHtml = `
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                        <tr style="background-color: #f8fafc;">
+                            <td style="padding: 10px; font-weight: bold; width: 120px; border: 1px solid #e2e8f0;">Title:</td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>${request.title}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Author:</td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${request.author || "Unknown Author"}</td>
+                        </tr>
+                        <tr style="background-color: #f8fafc;">
+                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Requested By:</td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><code>${request.requestedBy}</code></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Type:</td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><span style="text-transform: uppercase; font-size: 11px; font-weight: bold; padding: 2px 6px; background-color: #dbeafe; color: #1e40af; border-radius: 4px;">${request.type}</span></td>
+                        </tr>
+                        ${request.publishYear ? `
+                        <tr style="background-color: #f8fafc;">
+                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Publish Year:</td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${request.publishYear}</td>
+                        </tr>
+                        ` : ""}
+                    </table>
+                `;
+            }
+
+            const mailOptions = {
+                from: senderEmail,
+                to: admin.email,
+                subject: `📚 New Book Request: ${request.title}`,
+                html: `
+                    <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <h2 style="color: #4f46e5; margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">New Ebook Request</h2>
+                        ${detailsHtml}
+                        <div style="margin-top: 25px; text-align: center;">
+                            <a href="${process.env.APP_URL || 'http://localhost:3000'}/library" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Manage Requests</a>
+                        </div>
+                    </div>
+                `
+            };
+
+            await transporter.sendMail(mailOptions);
+        }
+        console.log(`[SMTP-NOTIFICATION] Request notification sent successfully for "${request.title}"`);
+    } catch (e: any) {
+        console.error("[SMTP-NOTIFICATION] Failed to send request email notification to admins:", e);
+    }
+}
+
 export async function createBookRequest(formData: FormData) {
     const session = await verifyUser();
     const title = formData.get("title") as string;
@@ -807,6 +896,15 @@ export async function createBookRequest(formData: FormData) {
     if (type === "series") {
         const expanded = await expandSeriesRequest(title, author, session.username as string);
         if (expanded) {
+            sendRequestNotificationToAdmins({
+                title: `${title} (Book Series)`,
+                author,
+                requestedBy: session.username as string,
+                type: "series",
+                publishYear: null
+            }).catch(err => {
+                console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
+            });
             revalidatePath("/library");
             return;
         }
@@ -827,6 +925,16 @@ export async function createBookRequest(formData: FormData) {
     if (type === "book") {
         autoDownloadBookRequest(request.id, title, author).catch(err => {
             console.error(`[AUTO-DOWNLOAD] Background process failed:`, err);
+        });
+        
+        sendRequestNotificationToAdmins({
+            title,
+            author,
+            requestedBy: session.username as string,
+            type: "book",
+            publishYear
+        }).catch(err => {
+            console.error(`[SMTP-NOTIFICATION] Single request email notification failed:`, err);
         });
     }
 
@@ -2328,6 +2436,19 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
         
         autoDownloadBookRequest(request.id, book.title, book.author).catch(err => {
             console.error(`[AUTO-DOWNLOAD] Failed for series book "${book.title}":`, err);
+        });
+    }
+
+    if (booksList.length > 0) {
+        const listText = booksList.map(b => `- ${b.title} by ${b.author}`).join("\n");
+        sendRequestNotificationToAdmins({
+            title: `${booksList.length} Books from checklist`,
+            author: listText,
+            requestedBy: session.username as string,
+            type: "checklist",
+            publishYear: null
+        }).catch(err => {
+            console.error(`[SMTP-NOTIFICATION] Checklist request email notification failed:`, err);
         });
     }
     
