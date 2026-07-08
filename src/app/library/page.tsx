@@ -41,6 +41,54 @@ import {
   LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle
 } from "lucide-react";
 
+function extractSeriesInfo(title: string): { seriesName: string | null, volume: string | null, bookTitle: string } {
+    // 1. Check parenthesis style: "Book Title (Series Name #1)" or "Book Title (Series Name, Vol. 1)"
+    const parenRegex = /^(.*?)\s+\((.*?)\s*(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*(\d+)\)/i;
+    let match = title.match(parenRegex);
+    if (match) {
+        return {
+            seriesName: match[2].trim(),
+            volume: match[3].trim(),
+            bookTitle: match[1].trim()
+        };
+    }
+
+    // 2. Check title prefix style: "Series Name #1: Book Title" or "Series Name - 01 - Book Title"
+    const prefixRegex = /^(.*?)\s+(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*(\d+)\s*[:-]\s*(.*)$/i;
+    match = title.match(prefixRegex);
+    if (match) {
+        return {
+            seriesName: match[1].trim(),
+            volume: match[2].trim(),
+            bookTitle: match[3].trim()
+        };
+    }
+
+    // 3. Check simple prefix with digits: "Series Name 01 - Book Title" or "Series Name 01: Book Title"
+    const prefixDigitRegex = /^(.*?)\s+(\d+)\s*[:-]\s*(.*)$/i;
+    match = title.match(prefixDigitRegex);
+    if (match) {
+        return {
+            seriesName: match[1].trim(),
+            volume: match[2].trim(),
+            bookTitle: match[3].trim()
+        };
+    }
+
+    // 4. Check ending hash style: "Series Name #1"
+    const endHashRegex = /^(.*?)\s+(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*(\d+)$/i;
+    match = title.match(endHashRegex);
+    if (match) {
+        return {
+            seriesName: match[1].trim(),
+            volume: match[2].trim(),
+            bookTitle: match[1].trim()
+        };
+    }
+
+    return { seriesName: null, volume: null, bookTitle: title };
+}
+
 export default function BookLibraryPage() {
     const router = useRouter();
     const pathname = usePathname();
@@ -113,17 +161,157 @@ export default function BookLibraryPage() {
 
     // Sort states
     const [sortBy, setSortBy] = useState("recent");
+    const [groupBySeries, setGroupBySeries] = useState(false);
 
     useEffect(() => {
         const savedSort = localStorage.getItem("book-library-sort");
         if (savedSort) {
             setSortBy(savedSort);
         }
+        const savedGroup = localStorage.getItem("book-library-group-series");
+        if (savedGroup === "true") {
+            setGroupBySeries(true);
+        }
     }, []);
 
     const handleSortChange = (value: string) => {
         setSortBy(value);
         localStorage.setItem("book-library-sort", value);
+    };
+
+    const handleGroupToggle = (checked: boolean) => {
+        setGroupBySeries(checked);
+        localStorage.setItem("book-library-group-series", String(checked));
+    };
+
+    const renderBookCard = (book: any) => {
+        const displayTitle = groupBySeries && book.cleanSeriesTitle ? book.cleanSeriesTitle : book.title;
+        const volumeBadge = groupBySeries && book.seriesVolume ? (
+            <Badge className="bg-primary text-black border border-primary/25 text-[9px] font-extrabold uppercase shadow-sm">
+                Vol. {book.seriesVolume}
+            </Badge>
+        ) : null;
+
+        return (
+             <Card key={book.id} className="relative flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border-muted/60 group">
+                 {book.coverUrl ? (
+                     <div className="relative aspect-[2/3] w-full bg-muted overflow-hidden flex items-center justify-center border-b border-muted/40">
+                         {/* eslint-disable-next-line @next/next/no-img-element */}
+                         <img 
+                             src={book.coverUrl} 
+                             alt={book.title} 
+                             className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105" 
+                         />
+                         <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
+                             <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
+                                 {book.fileType?.toUpperCase()}
+                             </Badge>
+                             {volumeBadge}
+                         </div>
+                     </div>
+                 ) : (
+                     <div className="relative aspect-[2/3] w-full bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 overflow-hidden flex flex-col justify-between p-4 border-b border-muted/40 text-center select-none group-hover:from-indigo-900 group-hover:to-purple-900 transition-all duration-300">
+                         <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
+                             <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
+                                 {book.fileType?.toUpperCase()}
+                             </Badge>
+                             {volumeBadge}
+                         </div>
+                         <div className="flex-1 flex flex-col justify-center items-center">
+                             <BookOpen className="h-10 w-10 text-primary/40 mb-3" />
+                             <div className="font-serif text-sm font-bold text-slate-100 line-clamp-3 px-2 leading-tight">
+                                 {displayTitle}
+                             </div>
+                         </div>
+                         <div className="text-[10px] text-slate-400 font-semibold truncate w-full">
+                             {book.author && book.author !== "Unknown Author" ? book.author : ""}
+                         </div>
+                     </div>
+                 )}
+
+                 <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
+                     <div className="space-y-1">
+                         <h3 className="font-bold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2 h-10 flex items-center">{displayTitle}</h3>
+                         <p className="text-xs text-muted-foreground truncate">{book.author || "Unknown Author"}</p>
+                     </div>
+                     <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
+                         <span>Size: {(book.fileSize ? (book.fileSize / (1024 * 1024)).toFixed(1) : "0")} MB</span>
+                         <span>Added: {new Date(book.createdAt).toLocaleDateString()}</span>
+                     </div>
+                 </div>
+                 <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
+                     <div className="flex gap-2 w-full">
+                         <Button 
+                             variant="default" 
+                             size="sm" 
+                             className="flex-1 text-xs font-semibold text-black"
+                             onClick={() => setActiveBook(book)}
+                         >
+                             <BookOpen className="h-3 w-3 mr-1" /> Read
+                         </Button>
+                         <Button 
+                             variant="outline" 
+                             size="sm" 
+                             className="flex-1 text-xs border-primary/20 text-primary hover:bg-primary/10 font-semibold"
+                             title="Send to Kindle"
+                             disabled={sendingToKindleId !== null}
+                             onClick={() => handleSendToKindle(book.id)}
+                         >
+                             {sendingToKindleId === book.id ? (
+                                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                             ) : (
+                                 <Send className="h-3 w-3 mr-1" />
+                             )}
+                             Kindle
+                         </Button>
+                     </div>
+                     <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
+                         <Button 
+                             variant="outline" 
+                             size="sm" 
+                             className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground" 
+                             asChild
+                             title="Download"
+                         >
+                             <a href={`/api/books/${book.id}`} download>
+                                 <Download className="h-3.5 w-3.5" />
+                             </a>
+                         </Button>
+                         <Button 
+                             variant="outline" 
+                             size="sm" 
+                             className="text-xs h-7 px-2 border-amber-500/20 text-amber-500 hover:bg-amber-500/10"
+                             title="Report an Issue"
+                             onClick={() => handleOpenReportIssueModal({ type: 'book', title: book.title, id: book.id })}
+                         >
+                             <AlertTriangle className="h-3.5 w-3.5" />
+                         </Button>
+                         {isAdmin && (
+                             <Button 
+                                 variant="outline" 
+                                 size="sm" 
+                                 className="text-xs h-7 px-2 border-blue-500/20 text-blue-500 hover:bg-blue-500/10"
+                                 title="Edit Book"
+                                 onClick={() => handleOpenEditBookModal(book)}
+                             >
+                                 <Edit3 className="h-3.5 w-3.5" />
+                             </Button>
+                         )}
+                         {isAdmin && (
+                             <Button 
+                                 variant="destructive" 
+                                 size="sm" 
+                                 onClick={() => handleDeleteBook(book.id)}
+                                 className="text-xs h-7 px-2"
+                                 title="Delete"
+                             >
+                                 <Trash2 className="h-3.5 w-3.5" />
+                             </Button>
+                         )}
+                     </div>
+                 </CardFooter>
+             </Card>
+        );
     };
     const [editBookError, setEditBookError] = useState("");
 
@@ -606,6 +794,37 @@ export default function BookLibraryPage() {
             return dateB - dateA;
         });
 
+    // Group books by series if selected
+    const seriesGroups: { [key: string]: typeof books } = {};
+    const standaloneBooks: typeof books = [];
+
+    if (groupBySeries) {
+        for (const book of sortedBooks) {
+            const info = extractSeriesInfo(book.title);
+            if (info.seriesName) {
+                const formattedSeriesName = info.seriesName
+                    .split(" ")
+                    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(" ");
+                
+                if (!seriesGroups[formattedSeriesName]) {
+                    seriesGroups[formattedSeriesName] = [];
+                }
+                const volumeNum = parseFloat(info.volume || "0") || 0;
+                (book as any).seriesVolume = volumeNum;
+                (book as any).cleanSeriesTitle = info.bookTitle;
+                seriesGroups[formattedSeriesName].push(book);
+            } else {
+                standaloneBooks.push(book);
+            }
+        }
+
+        // Sort books inside each series group by volume number
+        for (const seriesName in seriesGroups) {
+            seriesGroups[seriesName].sort((a, b) => ((a as any).seriesVolume || 0) - ((b as any).seriesVolume || 0));
+        }
+    }
+
     const isAdmin = user?.role === "ADMIN";
 
     if (loading) {
@@ -694,7 +913,7 @@ export default function BookLibraryPage() {
                             {selectedLibrary ? (
                                 <>
                                     <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-                                        <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-2xl">
+                                        <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-3xl">
                                             <div className="relative w-full sm:flex-1">
                                                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                                 <Input
@@ -705,11 +924,11 @@ export default function BookLibraryPage() {
                                                     onChange={(e) => setSearchQuery(e.target.value)}
                                                 />
                                             </div>
-                                            <div className="w-full sm:w-48 shrink-0">
+                                            <div className="flex gap-2 items-center w-full sm:w-auto shrink-0 justify-between sm:justify-start">
                                                 <select
                                                     value={sortBy}
                                                     onChange={(e) => handleSortChange(e.target.value)}
-                                                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-muted/20 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-medium"
+                                                    className="flex h-10 w-36 items-center justify-between rounded-md border border-input bg-muted/20 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-medium"
                                                 >
                                                     <option value="recent">Recently Added</option>
                                                     <option value="title-asc">Title (A-Z)</option>
@@ -717,6 +936,15 @@ export default function BookLibraryPage() {
                                                     <option value="author-asc">Author (A-Z)</option>
                                                     <option value="author-desc">Author (Z-A)</option>
                                                 </select>
+                                                <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground cursor-pointer select-none bg-muted/10 border border-muted/50 px-3 h-10 rounded-md hover:bg-muted/20 transition-all shrink-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={groupBySeries}
+                                                        onChange={(e) => handleGroupToggle(e.target.checked)}
+                                                        className="rounded border-muted bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer"
+                                                    />
+                                                    <span>Group Series</span>
+                                                </label>
                                             </div>
                                         </div>
                                         {isAdmin && selectedLibrary.path && (
@@ -831,127 +1059,38 @@ export default function BookLibraryPage() {
                                             <p className="text-sm font-medium">No books in this library shelf.</p>
                                             <p className="text-xs text-muted-foreground">Upload some books or request one in the Request tab.</p>
                                         </div>
+                                    ) : groupBySeries ? (
+                                        <div className="space-y-8">
+                                            {Object.entries(seriesGroups).map(([seriesName, seriesBooks]) => (
+                                                <div key={seriesName} className="space-y-4 border border-muted/30 p-4 rounded-xl bg-muted/5 animate-in fade-in duration-300">
+                                                    <h3 className="text-sm font-extrabold text-primary flex items-center gap-2 border-b border-muted/30 pb-2">
+                                                        📚 {seriesName} 
+                                                        <Badge variant="outline" className="text-[10px] py-0 border-primary/30 text-primary font-bold">
+                                                            {seriesBooks.length} {seriesBooks.length === 1 ? 'Book' : 'Books'}
+                                                        </Badge>
+                                                    </h3>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                                                        {seriesBooks.map(book => renderBookCard(book))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {standaloneBooks.length > 0 && (
+                                                <div className="space-y-4 pt-4 border-t border-muted/40">
+                                                    <h3 className="text-sm font-extrabold text-muted-foreground flex items-center gap-2 border-b border-muted/30 pb-2">
+                                                        📖 Standalone & Uncategorized Books 
+                                                        <Badge variant="outline" className="text-[10px] py-0 border-muted/80 text-muted-foreground font-bold">
+                                                            {standaloneBooks.length} {standaloneBooks.length === 1 ? 'Book' : 'Books'}
+                                                        </Badge>
+                                                    </h3>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                                                        {standaloneBooks.map(book => renderBookCard(book))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     ) : (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                                            {sortedBooks.map(book => (
-                                                 <Card key={book.id} className="relative flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border-muted/60 group">
-                                                     {/* Cover Image or Fallback */}
-                                                     {book.coverUrl ? (
-                                                         <div className="relative aspect-[2/3] w-full bg-muted overflow-hidden flex items-center justify-center border-b border-muted/40">
-                                                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                             <img 
-                                                                 src={book.coverUrl} 
-                                                                 alt={book.title} 
-                                                                 className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105" 
-                                                             />
-                                                             <div className="absolute top-2 right-2">
-                                                                 <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
-                                                                     {book.fileType?.toUpperCase()}
-                                                                 </Badge>
-                                                             </div>
-                                                         </div>
-                                                     ) : (
-                                                         <div className="relative aspect-[2/3] w-full bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 overflow-hidden flex flex-col justify-between p-4 border-b border-muted/40 text-center select-none group-hover:from-indigo-900 group-hover:to-purple-900 transition-all duration-300">
-                                                             <div className="absolute top-2 right-2">
-                                                                 <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
-                                                                     {book.fileType?.toUpperCase()}
-                                                                 </Badge>
-                                                             </div>
-                                                             <div className="flex-1 flex flex-col justify-center items-center">
-                                                                 <BookOpen className="h-10 w-10 text-primary/40 mb-3" />
-                                                                 <div className="font-serif text-sm font-bold text-slate-100 line-clamp-3 px-2 leading-tight">
-                                                                     {book.title}
-                                                                 </div>
-                                                             </div>
-                                                             <div className="text-[10px] text-slate-400 font-semibold truncate w-full">
-                                                                 {book.author && book.author !== "Unknown Author" ? book.author : ""}
-                                                             </div>
-                                                         </div>
-                                                     )}
-
-                                                     <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
-                                                         <div className="space-y-1">
-                                                             <h3 className="font-bold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2 h-10 flex items-center">{book.title}</h3>
-                                                             <p className="text-xs text-muted-foreground truncate">{book.author || "Unknown Author"}</p>
-                                                         </div>
-                                                         <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
-                                                             <span>Size: {(book.fileSize ? (book.fileSize / (1024 * 1024)).toFixed(1) : "0")} MB</span>
-                                                             <span>Added: {new Date(book.createdAt).toLocaleDateString()}</span>
-                                                         </div>
-                                                     </div>
-                                                     <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
-                                                         <div className="flex gap-2 w-full">
-                                                             <Button 
-                                                                 variant="default" 
-                                                                 size="sm" 
-                                                                 className="flex-1 text-xs font-semibold text-black"
-                                                                 onClick={() => setActiveBook(book)}
-                                                             >
-                                                                 <BookOpen className="h-3 w-3 mr-1" /> Read
-                                                             </Button>
-                                                             <Button 
-                                                                 variant="outline" 
-                                                                 size="sm" 
-                                                                 className="flex-1 text-xs border-primary/20 text-primary hover:bg-primary/10 font-semibold"
-                                                                 title="Send to Kindle"
-                                                                 disabled={sendingToKindleId !== null}
-                                                                 onClick={() => handleSendToKindle(book.id)}
-                                                             >
-                                                                 {sendingToKindleId === book.id ? (
-                                                                     <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                                                 ) : (
-                                                                     <Send className="h-3 w-3 mr-1" />
-                                                                 )}
-                                                                 Kindle
-                                                             </Button>
-                                                         </div>
-                                                         <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
-                                                             <Button 
-                                                                 variant="outline" 
-                                                                 size="sm" 
-                                                                 className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground" 
-                                                                 asChild
-                                                                 title="Download"
-                                                             >
-                                                                 <a href={`/api/books/${book.id}`} download>
-                                                                     <Download className="h-3.5 w-3.5" />
-                                                                 </a>
-                                                             </Button>
-                                                             <Button 
-                                                                 variant="outline" 
-                                                                 size="sm" 
-                                                                 className="text-xs h-7 px-2 border-amber-500/20 text-amber-500 hover:bg-amber-500/10"
-                                                                 title="Report an Issue"
-                                                                 onClick={() => handleOpenReportIssueModal({ type: 'book', title: book.title, id: book.id })}
-                                                             >
-                                                                 <AlertTriangle className="h-3.5 w-3.5" />
-                                                             </Button>
-                                                             {isAdmin && (
-                                                                 <Button 
-                                                                     variant="outline" 
-                                                                     size="sm" 
-                                                                     className="text-xs h-7 px-2 border-blue-500/20 text-blue-500 hover:bg-blue-500/10"
-                                                                     title="Edit Book"
-                                                                     onClick={() => handleOpenEditBookModal(book)}
-                                                                 >
-                                                                     <Edit3 className="h-3.5 w-3.5" />
-                                                                 </Button>
-                                                             )}
-                                                             {isAdmin && (
-                                                                 <Button 
-                                                                     variant="destructive" 
-                                                                     size="sm" 
-                                                                     onClick={() => handleDeleteBook(book.id)}
-                                                                     className="text-xs h-7 px-2"
-                                                                     title="Delete"
-                                                                 >
-                                                                     <Trash2 className="h-3.5 w-3.5" />
-                                                                 </Button>
-                                                             )}
-                                                         </div>
-                                                     </CardFooter>
-                                                 </Card>
-                                             ))}
+                                            {sortedBooks.map(book => renderBookCard(book))}
                                         </div>
                                     )}
                                 </>
