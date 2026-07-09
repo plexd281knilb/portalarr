@@ -1335,10 +1335,10 @@ export async function scanLibraryInternal(libraryId: string) {
                     }
                 }
 
+                const stats = fs.statSync(fullPath);
                 const existing = dbBooksByPathLower.get(fullPath.toLowerCase());
 
                 if (!existing) {
-                    const stats = fs.statSync(fullPath);
                     const cleanBase = path.basename(fullPath, ext);
                     let title = cleanBase.replace(/[_-]/g, ' ').trim();
                     let author = "Unknown Author";
@@ -1424,6 +1424,13 @@ export async function scanLibraryInternal(libraryId: string) {
                     await renameBookFileOnDisk(newBook.id);
                     matchedDbBookIds.add(newBook.id);
                 } else {
+                    if (existing.fileSize !== stats.size) {
+                        await prisma.book.update({
+                            where: { id: existing.id },
+                            data: { fileSize: stats.size }
+                        });
+                        existing.fileSize = stats.size;
+                    }
                     let finalPath = fullPath;
                     if (existing.author === "Unknown Author" || !existing.coverUrl) {
                         const cleanBase = path.basename(fullPath, ext);
