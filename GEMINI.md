@@ -85,6 +85,9 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Registry Autocomplete:** Use `onMouseDown` instead of `onClick` for dropdown suggestion list items to prevent input `onBlur` from unmounting items prematurely.
 - **Open Library Queries:** Combine series queries with the author name (e.g. `Series Author`) and filter out compilations (box sets, bundles, omnibus) to avoid duplicate or unrelated bulk results.
 - **Library Access Defaults:** New libraries must default to restricted access (`allowedUsers = ""`) so that the admin must explicitly authorize users rather than defaulting to public (`*`).
+- **Server Action Error Handling:** Server actions invoked from Client Components should return a serializable `{ success: boolean, error?: string }` object instead of throwing raw `Error`s. In production Next.js builds, raw errors are masked with a generic *"An error occurred in the Server Components render"* message, preventing detailed user-facing error reporting.
+- **Kindle & Library Scan Renaming Loops:** Keep on-disk file paths pretty (e.g. `Author - Title.ext`) and avoid cleaning or lowercase-renaming them on disk during library scans. This prevents infinite scan-rename cycles and race conditions where download/Kindle delivery checks fail because the path keeps changing. For Kindle email delivery, sanitize the attachment filename *in the email options* instead of renaming the file on disk.
+- **Download Client File Cleanup:** When a book download finishes and is successfully copied to a library, always call the download client API to delete the torrent/NZB and its files. This releases active OS/Docker file locks and automatically frees up storage on the downloads share.
 
 ## Key Files
 - `prisma/schema.prisma`: The source of truth for the database schema.
