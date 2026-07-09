@@ -32,8 +32,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# CRITICAL: Install libraries required for Prisma engines to run on Alpine
-RUN apk add --no-cache openssl libc6-compat
+# CRITICAL: Install libraries required for Prisma engines, and Calibre for EPUB sanitation
+RUN apk add --no-cache openssl libc6-compat calibre bash
 
 # CRITICAL: Install Prisma CLI globally. 
 # This is the most reliable way to ensure the 'prisma' command is in the PATH

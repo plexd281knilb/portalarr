@@ -58,6 +58,64 @@ function isForeignLanguage(title: string): boolean {
     return foreignPatterns.some(pattern => pattern.test(titleLower));
 }
 
+async function mobiBounceEpub(filePath: string): Promise<boolean> {
+    try {
+        const fs = require("fs");
+        const path = require("path");
+        const { exec } = require("child_process");
+        const { promisify } = require("util");
+        const execAsync = promisify(exec);
+
+        // 1. Check if ebook-convert is available
+        try {
+            await execAsync("which ebook-convert");
+        } catch (e) {
+            console.log("[MOBI-BOUNCE] ebook-convert is not installed or not in PATH. Skipping Mobi-Bounce.");
+            return false;
+        }
+
+        const ext = path.extname(filePath).toLowerCase();
+        if (ext !== ".epub") return false;
+
+        const dirname = path.dirname(filePath);
+        const basename = path.basename(filePath, ext);
+        const tempMobi = path.join(dirname, `${basename}.bounce.mobi`);
+        const tempOutput = path.join(dirname, `${basename}.rebuilding.epub`);
+
+        console.log(`[MOBI-BOUNCE] Starting conversion for: ${basename}`);
+        
+        // Step 1: EPUB to MOBI
+        await execAsync(`ebook-convert "${filePath}" "${tempMobi}"`);
+        
+        // Step 2: MOBI to EPUB (forcing language to en)
+        await execAsync(`ebook-convert "${tempMobi}" "${tempOutput}" --language en`);
+        
+        // Step 3: Cleanup MOBI
+        if (fs.existsSync(tempMobi)) {
+            fs.unlinkSync(tempMobi);
+        }
+
+        // Step 4: Swap files
+        if (fs.existsSync(tempOutput)) {
+            fs.unlinkSync(filePath);
+            fs.renameSync(tempOutput, filePath);
+            
+            // Set Unraid permissions (chmod 666)
+            try {
+                fs.chmodSync(filePath, 0o666);
+            } catch (permErr) {}
+
+            console.log(`[MOBI-BOUNCE] Successfully sanitized and rebuilt EPUB for: ${basename}`);
+            return true;
+        }
+        
+        return false;
+    } catch (err: any) {
+        console.error(`[MOBI-BOUNCE] Failed during conversion:`, err.message);
+        return false;
+    }
+}
+
 // ============================================================================
 // --- SECURE ADMIN ACTIONS (REQUIRES LOGIN) ---
 // ============================================================================
@@ -2115,6 +2173,13 @@ export async function monitorAndRetryDownload(
                             
                             fs.copyFileSync(foundFilePath, destPath);
                             copySuccessful = true;
+                            
+                            // Sanitize and flatten formatting (Mobi-Bounce)
+                            try {
+                                await mobiBounceEpub(destPath);
+                            } catch (bounceErr: any) {
+                                console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${destPath}:`, bounceErr.message);
+                            }
                             
                             try {
                                 try {
