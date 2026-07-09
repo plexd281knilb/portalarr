@@ -1328,6 +1328,9 @@ function cleanSearchQuery(searchQuery: string): string {
         .replace(/\b(?:0[1-9]|[1-9]\d|\d)\b/g, "") // Strip separate single/double digits (01, 1)
         .replace(/\b(?:v|vol|bk|book|part|no|#)\.?\s*\d+\b/gi, "") // Strip vol numbers
         .replace(/[()\[\]]/g, "") // Strip brackets
+        // Strip release tags and ebook metadata garbage
+        .replace(/\b(?:epub|pdf|mobi|cbz|ebook|retail|decipher|repack|web|download)\b/gi, "")
+        .replace(/\b(?:swedish|svensk|utgava|german|french|spanish|dutch|italian|danish|norwegian|russian|polish)\b/gi, "")
         .replace(/\s+/g, " ") // Clean spaces
         .trim();
 }
@@ -1490,22 +1493,29 @@ export async function scanLibraryInternal(libraryId: string) {
                         existing.fileSize = stats.size;
                     }
                     let finalPath = fullPath;
-                    if (existing.author === "Unknown Author" || !existing.coverUrl) {
-                        const cleanBase = path.basename(fullPath, ext);
-                        let title = existing.title;
-                        let author = existing.author;
+                    const cleanBase = path.basename(fullPath, ext);
+                    let parsedAuthor = "Unknown Author";
+                    let parsedTitle = cleanBase.replace(/[_-]/g, ' ').trim();
+
+                    if (cleanBase.includes(" - ")) {
+                        const parts = cleanBase.split(" - ").map(p => p.trim());
+                        if (parts.length >= 2) {
+                            parsedAuthor = parts[0];
+                            parsedTitle = parts[1];
+                        }
+                    }
+
+                    // Check if title and author are swapped in DB
+                    const isSwapped = (existing.title.toLowerCase() === parsedAuthor.toLowerCase()) && 
+                                      (existing.author.toLowerCase() === parsedTitle.toLowerCase());
+
+                    if (isSwapped || existing.author === "Unknown Author" || !existing.coverUrl) {
+                        let title = isSwapped ? parsedTitle : existing.title;
+                        let author = isSwapped ? parsedAuthor : existing.author;
                         let coverUrl = existing.coverUrl || "";
 
-                        let tempTitle = cleanBase.replace(/[_-]/g, ' ').trim();
-                        let tempAuthor = "Unknown Author";
-
-                        if (cleanBase.includes(" - ")) {
-                            const parts = cleanBase.split(" - ").map(p => p.trim());
-                            if (parts.length >= 2) {
-                                tempAuthor = parts[0];
-                                tempTitle = parts[1];
-                            }
-                        }
+                        let tempTitle = parsedTitle;
+                        let tempAuthor = parsedAuthor;
 
                         // Dynamic Author Heuristic for backfilling
                         try {
@@ -1573,14 +1583,14 @@ export async function scanLibraryInternal(libraryId: string) {
                                     title = tempTitle;
                                 }
                             }
-                        } catch (olErr) { }
+                        } catch (olErr) {}
 
                         const updatedBook = await prisma.book.update({
                             where: { id: existing.id },
                             data: {
                                 title,
-                                author: existing.author === "Unknown Author" ? author : existing.author,
-                                coverUrl: existing.coverUrl ? existing.coverUrl : coverUrl
+                                author,
+                                coverUrl
                             }
                         });
                         await renameBookFileOnDisk(updatedBook.id);
