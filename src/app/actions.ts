@@ -116,6 +116,29 @@ async function mobiBounceEpub(filePath: string): Promise<boolean> {
     }
 }
 
+async function fetchGoogleBooksCover(title: string, author: string): Promise<string | null> {
+    try {
+        const query = `${title} ${author}`;
+        const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=1`;
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.items && data.items.length > 0) {
+                const info = data.items[0].volumeInfo;
+                if (info.imageLinks) {
+                    let cover = info.imageLinks.thumbnail || info.imageLinks.smallThumbnail || "";
+                    if (cover) {
+                        return cover.replace(/^http:/, "https:");
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[GOOGLE-BOOKS-COVER] Error fetching cover:", e);
+    }
+    return null;
+}
+
 // ============================================================================
 // --- SECURE ADMIN ACTIONS (REQUIRES LOGIN) ---
 // ============================================================================
@@ -1542,24 +1565,33 @@ export async function scanLibraryInternal(libraryId: string) {
                     } catch (e) {}
 
                     try {
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 5000);
-                        const searchQuery = author !== "Unknown Author" ? `${title} ${author}` : title;
-                        const cleanedQuery = cleanSearchQuery(searchQuery);
-                        const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
-                        clearTimeout(timeoutId);
+                        const googleCover = await fetchGoogleBooksCover(title, author);
+                        if (googleCover) {
+                            coverUrl = googleCover;
+                        }
+                    } catch (e) {}
 
-                        if (olData) {
-                            const doc = olData?.docs?.[0];
-                            if (doc) {
-                                title = doc.title || title;
-                                author = doc.author_name?.[0] || author;
-                                if (doc.cover_i) {
-                                    coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+                    if (!coverUrl) {
+                        try {
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 5000);
+                            const searchQuery = author !== "Unknown Author" ? `${title} ${author}` : title;
+                            const cleanedQuery = cleanSearchQuery(searchQuery);
+                            const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
+                            clearTimeout(timeoutId);
+
+                            if (olData) {
+                                const doc = olData?.docs?.[0];
+                                if (doc) {
+                                    title = doc.title || title;
+                                    author = doc.author_name?.[0] || author;
+                                    if (doc.cover_i) {
+                                        coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+                                    }
                                 }
                             }
-                        }
-                    } catch (olErr) { }
+                        } catch (olErr) { }
+                    }
 
                     const newBook = await prisma.book.create({
                         data: {
@@ -1645,21 +1677,39 @@ export async function scanLibraryInternal(libraryId: string) {
                             }
                         } catch (e) {}
 
-                        try {
-                            const controller = new AbortController();
-                            const timeoutId = setTimeout(() => controller.abort(), 5000);
-                            const searchQuery = tempAuthor !== "Unknown Author" ? `${tempTitle} ${tempAuthor}` : tempTitle;
-                            const cleanedQuery = cleanSearchQuery(searchQuery);
-                            const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
-                            clearTimeout(timeoutId);
+                        // Try Google Books first if we don't have a cover
+                        if (!coverUrl) {
+                            try {
+                                const googleCover = await fetchGoogleBooksCover(title, author);
+                                if (googleCover) {
+                                    coverUrl = googleCover;
+                                }
+                            } catch (e) {}
+                        }
 
-                            if (olData) {
-                                const doc = olData?.docs?.[0];
-                                if (doc) {
-                                    title = doc.title || title;
-                                    author = doc.author_name?.[0] || author;
-                                    if (doc.cover_i) {
-                                        coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+                        // Fallback to OpenLibrary if still no cover
+                        if (!coverUrl) {
+                            try {
+                                const controller = new AbortController();
+                                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                                const searchQuery = tempAuthor !== "Unknown Author" ? `${tempTitle} ${tempAuthor}` : tempTitle;
+                                const cleanedQuery = cleanSearchQuery(searchQuery);
+                                const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
+                                clearTimeout(timeoutId);
+
+                                if (olData) {
+                                    const doc = olData?.docs?.[0];
+                                    if (doc) {
+                                        title = doc.title || title;
+                                        author = doc.author_name?.[0] || author;
+                                        if (doc.cover_i) {
+                                            coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+                                        }
+                                    } else {
+                                        if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
+                                            author = tempAuthor;
+                                            title = tempTitle;
+                                        }
                                     }
                                 } else {
                                     if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
@@ -1667,13 +1717,8 @@ export async function scanLibraryInternal(libraryId: string) {
                                         title = tempTitle;
                                     }
                                 }
-                            } else {
-                                if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
-                                    author = tempAuthor;
-                                    title = tempTitle;
-                                }
-                            }
-                        } catch (olErr) {}
+                            } catch (olErr) {}
+                        }
 
                         const updatedBook = await prisma.book.update({
                             where: { id: existing.id },
