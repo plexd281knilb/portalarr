@@ -1388,6 +1388,96 @@ export async function scanLibraryInternal(libraryId: string) {
             if (validExtensions.includes(ext)) {
                 let fullPath = path.join(library.path, file);
 
+                // Check and handle foreign language ebooks in library folders
+                if (isForeignLanguage(file)) {
+                    console.log(`[SCANNER] Detected foreign language file in library: ${file}. Deleting file and requesting English copy.`);
+                    
+                    const cleanBase = path.basename(file, ext);
+                    let author = "Unknown Author";
+                    let title = cleanBase.replace(/[_-]/g, ' ').trim();
+                    if (cleanBase.includes(" - ")) {
+                        const parts = cleanBase.split(" - ").map(p => p.trim());
+                        if (parts.length >= 2) {
+                            author = parts[0];
+                            title = parts[1];
+                        }
+                    }
+                    
+                    const cleanedTitle = title
+                        .replace(/\b(?:epub|pdf|mobi|cbz|ebook|retail|decipher|repack|web|download)\b/gi, "")
+                        .replace(/\b(?:swedish|svensk|utgava|german|french|spanish|dutch|italian|danish|norwegian|russian|polish)\b/gi, "")
+                        .replace(/\b\d{4}\b/g, "")
+                        .replace(/\s+/g, " ")
+                        .trim();
+
+                    try {
+                        if (fs.existsSync(fullPath)) {
+                            fs.unlinkSync(fullPath);
+                        }
+                    } catch (err: any) {
+                        console.error(`[SCANNER] Failed to delete foreign language file ${file}:`, err.message);
+                    }
+
+                    const cleanTitleLower = cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    let englishVersionExists = false;
+                    const otherFiles = fs.readdirSync(library.path);
+                    for (const otherFile of otherFiles) {
+                        if (otherFile === file) continue;
+                        const otherExt = path.extname(otherFile).toLowerCase();
+                        if (validExtensions.includes(otherExt) && !isForeignLanguage(otherFile)) {
+                            const otherClean = otherFile.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            if (otherClean.includes(cleanTitleLower)) {
+                                englishVersionExists = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!englishVersionExists) {
+                        console.log(`[SCANNER] No English version of "${cleanedTitle}" found. Resetting request or adding request to auto-download...`);
+                        
+                        let matchedRequest = await prisma.bookRequest.findFirst({
+                            where: {
+                                OR: [
+                                    {
+                                        title: { contains: cleanedTitle },
+                                        author: { contains: author === "Unknown Author" ? "" : author }
+                                    },
+                                    {
+                                        title: { contains: author === "Unknown Author" ? "" : author },
+                                        author: { contains: cleanedTitle }
+                                    }
+                                ]
+                            }
+                        });
+
+                        if (matchedRequest) {
+                            await prisma.bookRequest.update({
+                                where: { id: matchedRequest.id },
+                                data: { status: "Searching" }
+                            });
+                            autoDownloadBookRequest(matchedRequest.id, cleanedTitle, author).catch(err => {
+                                console.error(`[SCANNER] Failed to trigger auto-download for request ${matchedRequest.id}:`, err.message);
+                            });
+                        } else {
+                            const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+                            const requestedBy = adminUser ? adminUser.username : "system";
+                            const newRequest = await prisma.bookRequest.create({
+                                data: {
+                                    title: cleanedTitle,
+                                    author: author,
+                                    requestedBy,
+                                    status: "Searching"
+                                }
+                            });
+                            autoDownloadBookRequest(newRequest.id, cleanedTitle, author).catch(err => {
+                                console.error(`[SCANNER] Failed to trigger auto-download for request ${newRequest.id}:`, err.message);
+                            });
+                        }
+                    }
+                    continue;
+                }
+
                 if (ext === ".epub") {
                     try {
                         fullPath = await processEpubForKindle(fullPath);
