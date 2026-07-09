@@ -40,6 +40,24 @@ function cleanUrl(url: string): string {
     return url.replace(/\/$/, ""); 
 }
 
+function isForeignLanguage(title: string): boolean {
+    const titleLower = title.toLowerCase();
+    const foreignPatterns = [
+        /\bswedish\b/, /\bsvensk\b/, /\bsvenska\b/, /\bswesub\b/,
+        /\bgerman\b/, /\bdeutsch\b/,
+        /\bfrench\b/, /\bfrancais\b/, /\bfrançais\b/,
+        /\bspanish\b/, /\bespanol\b/, /\bespañol\b/,
+        /\bitalian\b/, /\bitaliano\b/,
+        /\bdutch\b/, /\bnederlands\b/,
+        /\bdanish\b/, /\bdansk\b/,
+        /\bnorwegian\b/, /\bnorsk\b/,
+        /\bportuguese\b/, /\bportugues\b/,
+        /\brussian\b/,
+        /\bpolish\b/, /\bpolski\b/
+    ];
+    return foreignPatterns.some(pattern => pattern.test(titleLower));
+}
+
 // ============================================================================
 // --- SECURE ADMIN ACTIONS (REQUIRES LOGIN) ---
 // ============================================================================
@@ -1601,7 +1619,8 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             const hasEpubInTitle = r.title.toLowerCase().includes("epub") || 
                                    (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
             const isValidSize = r.size > 100 * 1024 && r.size < 50 * 1024 * 1024;
-            return hasEpubInTitle && isValidSize;
+            const isForeign = isForeignLanguage(r.title);
+            return hasEpubInTitle && isValidSize && !isForeign;
         });
 
         if (epubReleases.length === 0) {
@@ -2038,16 +2057,13 @@ export async function monitorAndRetryDownload(
 
         if (downloadStatus === "completed") {
             console.log(`[AUTO-DOWNLOAD-MONITOR] Download completed successfully for: ${release.title}`);
-            const req = await prisma.bookRequest.update({
-                where: { id: requestId },
-                data: { status: "Downloaded" }
-            });
             
             await delay(5000);
             
             let targetLib: any = null;
+            let copySuccessful = false;
             try {
-                targetLib = await getTargetLibraryForUser(req.requestedBy);
+                targetLib = await getTargetLibraryForUser(currentReq.requestedBy);
                 if (targetLib) {
                     const settings = await prisma.settings.findFirst();
                     const configuredPath = settings?.downloadsPath || "/downloads";
@@ -2062,107 +2078,128 @@ export async function monitorAndRetryDownload(
                     let foundFilePath: string | null = null;
                     for (const p of searchPaths) {
                         if (fs.existsSync(p)) {
-                            foundFilePath = findDownloadedFile(p, req.title);
+                            foundFilePath = findDownloadedFile(p, currentReq.title);
                             if (foundFilePath) break;
                         }
                     }
 
                     if (foundFilePath) {
-                        const destPath = path.join(targetLib.path, path.basename(foundFilePath));
-                        console.log(`[AUTO-DOWNLOAD-MONITOR] Moving downloaded file from ${foundFilePath} to ${destPath}`);
-                        
-                        if (!fs.existsSync(targetLib.path)) {
-                            fs.mkdirSync(targetLib.path, { recursive: true });
-                        }
-                        
-                        fs.copyFileSync(foundFilePath, destPath);
-                        try {
+                        if (isForeignLanguage(path.basename(foundFilePath))) {
+                            console.warn(`[AUTO-DOWNLOAD-MONITOR] Completed download file "${path.basename(foundFilePath)}" matches foreign language indicators. Deleting and marking download as failed to retry English releases.`);
+                            
                             try {
-                                console.log(`[AUTO-DOWNLOAD-MONITOR] Requesting client to delete completed download: ${release.title}`);
                                 await deleteDownload(release.protocol, downloadId, release.title);
-                            } catch (delErr: any) {
-                                console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to delete completed download from client:`, delErr.message);
-                            }
-
-                            try {
-                                fs.chmodSync(foundFilePath, 0o666);
                             } catch (e) {}
-
-                            if (fs.existsSync(foundFilePath)) {
-                                fs.unlinkSync(foundFilePath);
-                                console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
+                            
+                            try {
+                                if (fs.existsSync(foundFilePath)) {
+                                    fs.unlinkSync(foundFilePath);
+                                }
+                            } catch (e) {}
+                            
+                            downloadStatus = "failed";
+                        } else {
+                            const destPath = path.join(targetLib.path, path.basename(foundFilePath));
+                            console.log(`[AUTO-DOWNLOAD-MONITOR] Moving downloaded file from ${foundFilePath} to ${destPath}`);
+                            
+                            if (!fs.existsSync(targetLib.path)) {
+                                fs.mkdirSync(targetLib.path, { recursive: true });
                             }
                             
-                            const parentDir = path.dirname(foundFilePath);
-                            if (parentDir !== configuredPath && parentDir !== "/downloads" && parentDir !== "./downloads" && parentDir !== "/app/downloads") {
-                                if (fs.existsSync(parentDir)) {
-                                    const remainingFiles = fs.readdirSync(parentDir);
-                                    if (remainingFiles.length === 0) {
-                                        try {
-                                            fs.chmodSync(parentDir, 0o777);
-                                        } catch (e) {}
-                                        fs.rmdirSync(parentDir);
-                                        console.log(`[AUTO-DOWNLOAD-MONITOR] Cleaned up empty parent directory: ${parentDir}`);
+                            fs.copyFileSync(foundFilePath, destPath);
+                            copySuccessful = true;
+                            
+                            try {
+                                try {
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Requesting client to delete completed download: ${release.title}`);
+                                    await deleteDownload(release.protocol, downloadId, release.title);
+                                } catch (delErr: any) {
+                                    console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to delete completed download from client:`, delErr.message);
+                                }
+
+                                try {
+                                    fs.chmodSync(foundFilePath, 0o666);
+                                } catch (e) {}
+
+                                if (fs.existsSync(foundFilePath)) {
+                                    fs.unlinkSync(foundFilePath);
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
+                                }
+                                
+                                const parentDir = path.dirname(foundFilePath);
+                                if (parentDir !== configuredPath && parentDir !== "/downloads" && parentDir !== "./downloads" && parentDir !== "/app/downloads") {
+                                    if (fs.existsSync(parentDir)) {
+                                        const remainingFiles = fs.readdirSync(parentDir);
+                                        if (remainingFiles.length === 0) {
+                                            try {
+                                                fs.chmodSync(parentDir, 0o777);
+                                            } catch (e) {}
+                                            fs.rmdirSync(parentDir);
+                                            console.log(`[AUTO-DOWNLOAD-MONITOR] Cleaned up empty parent directory: ${parentDir}`);
+                                        }
                                     }
                                 }
+                            } catch (unlinkErr: any) {
+                                console.warn(`[AUTO-DOWNLOAD-MONITOR] Copied file successfully but failed to delete the source file/folder from downloads directory:`, unlinkErr.message);
+                                console.warn(`[AUTO-DOWNLOAD-MONITOR] TIP: Ensure your Docker volume mounts and PUID/PGID permissions allow the app to write/delete inside the downloads folder.`);
                             }
-                        } catch (unlinkErr: any) {
-                            console.warn(`[AUTO-DOWNLOAD-MONITOR] Copied file successfully but failed to delete the source file/folder from downloads directory:`, unlinkErr.message);
-                            console.warn(`[AUTO-DOWNLOAD-MONITOR] TIP: Ensure your Docker volume mounts and PUID/PGID permissions allow the app to write/delete inside the downloads folder.`);
+                            console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully moved file to library path.`);
                         }
-                        console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully moved file to library path.`);
                     } else {
-                        console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find completed download file for "${req.title}" in download directories.`);
+                        console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find completed download file for "${currentReq.title}" in download directories.`);
                     }
                 }
             } catch (moveErr: any) {
                 console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to move downloaded file to library:`, moveErr);
             }
             
-            if (targetLib) {
-                try {
-                    await scanLibraryInternal(targetLib.id);
-                } catch (err) {
-                    console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${targetLib.name}":`, err);
-                }
-            } else {
-                const libraries = await prisma.library.findMany();
-                for (const lib of libraries) {
+            if (copySuccessful) {
+                const req = await prisma.bookRequest.update({
+                    where: { id: requestId },
+                    data: { status: "Downloaded" }
+                });
+
+                if (targetLib) {
                     try {
-                        await scanLibraryInternal(lib.id);
+                        await scanLibraryInternal(targetLib.id);
                     } catch (err) {
-                        console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${lib.name}":`, err);
+                        console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${targetLib.name}":`, err);
+                    }
+                } else {
+                    const libraries = await prisma.library.findMany();
+                    for (const lib of libraries) {
+                        try {
+                            await scanLibraryInternal(lib.id);
+                        } catch (err) {
+                            console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${lib.name}":`, err);
+                        }
                     }
                 }
+                
+                const allBooks = await prisma.book.findMany();
+                const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const matchedBook = allBooks.find(b => {
+                    const bTitleClean = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const bAuthorClean = b.author ? b.author.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+                    
+                    if (bTitleClean.includes(reqTitleClean) || reqTitleClean.includes(bTitleClean)) return true;
+                    if (bAuthorClean.includes(reqTitleClean) || reqTitleClean.includes(bAuthorClean)) return true;
+                    
+                    const pathClean = b.filePath.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    if (pathClean.includes(reqTitleClean)) return true;
+                    
+                    return false;
+                });
+                
+                if (matchedBook) {
+                    console.log(`[AUTO-DOWNLOAD-MONITOR] Found matching book "${matchedBook.title}". Automatically mailing to ${req.requestedBy}...`);
+                    await sendBookToUserKindleInternal(matchedBook.id, req.requestedBy);
+                } else {
+                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching request title: "${req.title}"`);
+                }
+                
+                return;
             }
-            
-            const allBooks = await prisma.book.findMany();
-            const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-            const matchedBook = allBooks.find(b => {
-                const bTitleClean = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                const bAuthorClean = b.author ? b.author.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
-                
-                // 1. Direct title match
-                if (bTitleClean.includes(reqTitleClean) || reqTitleClean.includes(bTitleClean)) return true;
-                
-                // 2. Swapped field fallback (if title/author parsed in reverse in the DB)
-                if (bAuthorClean.includes(reqTitleClean) || reqTitleClean.includes(bAuthorClean)) return true;
-                
-                // 3. File path match
-                const pathClean = b.filePath.toLowerCase().replace(/[^a-z0-9]/g, "");
-                if (pathClean.includes(reqTitleClean)) return true;
-                
-                return false;
-            });
-            
-            if (matchedBook) {
-                console.log(`[AUTO-DOWNLOAD-MONITOR] Found matching book "${matchedBook.title}". Automatically mailing to ${req.requestedBy}...`);
-                await sendBookToUserKindleInternal(matchedBook.id, req.requestedBy);
-            } else {
-                console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching request title: "${req.title}"`);
-            }
-            
-            return;
         }
 
         if (downloadStatus === "failed") {
