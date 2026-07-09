@@ -986,6 +986,24 @@ function BookLibraryPageContent() {
         }
     }
 
+    const eligibleRequestUsers = allUsers.filter(u => {
+        // 1. Has Kindle email configured
+        if (u.kindleEmail) return true;
+        
+        // 2. Is admin
+        if (u.role === "ADMIN") return true;
+        
+        // 3. Has access to at least one library
+        const hasLibraryAccess = libraries.some(lib => {
+            const allowedStr = lib.allowedUsers || "";
+            if (allowedStr === "*") return true;
+            const allowedList = allowedStr.split(",").map((usr: string) => usr.trim().toLowerCase());
+            return allowedList.includes(u.username.toLowerCase());
+        });
+        
+        return hasLibraryAccess;
+    });
+
     const isAdmin = user?.role === "ADMIN";
 
     if (loading) {
@@ -1479,7 +1497,7 @@ function BookLibraryPageContent() {
                                             </div>
                                         )}
 
-                                        {fullUser?.role === "ADMIN" && allUsers.length > 0 && (
+                                        {fullUser?.role === "ADMIN" && eligibleRequestUsers.length > 0 && (
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="requestedFor" className="text-xs font-medium">Request For (Admin Only)</Label>
                                                 <select
@@ -1489,7 +1507,7 @@ function BookLibraryPageContent() {
                                                     onChange={(e) => setRequestedFor(e.target.value)}
                                                 >
                                                     <option value="">Myself ({fullUser.username})</option>
-                                                    {allUsers.map((u) => (
+                                                    {eligibleRequestUsers.map((u) => (
                                                         <option key={u.id} value={u.username}>
                                                             {u.username} ({u.kindleEmail || "No Kindle configured"})
                                                         </option>
