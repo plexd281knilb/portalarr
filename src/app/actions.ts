@@ -1329,8 +1329,8 @@ export async function scanLibraryInternal(libraryId: string) {
                     if (cleanBase.includes(" - ")) {
                         const parts = cleanBase.split(" - ").map(p => p.trim());
                         if (parts.length >= 2) {
-                            title = parts[0];
-                            author = parts[1];
+                            author = parts[0];
+                            title = parts[1];
                         }
                     }
 
@@ -1419,8 +1419,8 @@ export async function scanLibraryInternal(libraryId: string) {
                         if (cleanBase.includes(" - ")) {
                             const parts = cleanBase.split(" - ").map(p => p.trim());
                             if (parts.length >= 2) {
-                                tempTitle = parts[0];
-                                tempAuthor = parts[1];
+                                tempAuthor = parts[0];
+                                tempTitle = parts[1];
                             }
                         }
 
@@ -2140,14 +2140,26 @@ export async function monitorAndRetryDownload(
             const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
             const matchedBook = allBooks.find(b => {
                 const bTitleClean = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                return bTitleClean.includes(reqTitleClean) || reqTitleClean.includes(bTitleClean);
+                const bAuthorClean = b.author ? b.author.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+                
+                // 1. Direct title match
+                if (bTitleClean.includes(reqTitleClean) || reqTitleClean.includes(bTitleClean)) return true;
+                
+                // 2. Swapped field fallback (if title/author parsed in reverse in the DB)
+                if (bAuthorClean.includes(reqTitleClean) || reqTitleClean.includes(bAuthorClean)) return true;
+                
+                // 3. File path match
+                const pathClean = b.filePath.toLowerCase().replace(/[^a-z0-9]/g, "");
+                if (pathClean.includes(reqTitleClean)) return true;
+                
+                return false;
             });
             
             if (matchedBook) {
                 console.log(`[AUTO-DOWNLOAD-MONITOR] Found matching book "${matchedBook.title}". Automatically mailing to ${req.requestedBy}...`);
                 await sendBookToUserKindleInternal(matchedBook.id, req.requestedBy);
             } else {
-                console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching: "${req.title}"`);
+                console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching request title: "${req.title}"`);
             }
             
             return;
