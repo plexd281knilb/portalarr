@@ -1236,17 +1236,6 @@ export async function processEpubForKindle(filePath: string): Promise<string> {
         throw new Error("Invalid file format. File is not a valid ZIP/EPUB archive.");
     }
 
-    const ext = path.extname(filePath).toLowerCase();
-    const dirname = path.dirname(filePath);
-    const basename = path.basename(filePath, ext);
-    const cleanName = basename.replace(/[^a-zA-Z0-9]/g, "_").replace(/__+/g, "_").toLowerCase() + ext;
-    const newPath = path.join(dirname, cleanName);
-
-    if (filePath !== newPath) {
-        fs.renameSync(filePath, newPath);
-        return newPath;
-    }
-
     return filePath;
 }
 
@@ -2089,21 +2078,32 @@ export async function monitorAndRetryDownload(
                         fs.copyFileSync(foundFilePath, destPath);
                         try {
                             try {
+                                console.log(`[AUTO-DOWNLOAD-MONITOR] Requesting client to delete completed download: ${release.title}`);
+                                await deleteDownload(release.protocol, downloadId, release.title);
+                            } catch (delErr: any) {
+                                console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to delete completed download from client:`, delErr.message);
+                            }
+
+                            try {
                                 fs.chmodSync(foundFilePath, 0o666);
                             } catch (e) {}
 
-                            fs.unlinkSync(foundFilePath);
-                            console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
+                            if (fs.existsSync(foundFilePath)) {
+                                fs.unlinkSync(foundFilePath);
+                                console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
+                            }
                             
                             const parentDir = path.dirname(foundFilePath);
                             if (parentDir !== configuredPath && parentDir !== "/downloads" && parentDir !== "./downloads" && parentDir !== "/app/downloads") {
-                                const remainingFiles = fs.readdirSync(parentDir);
-                                if (remainingFiles.length === 0) {
-                                    try {
-                                        fs.chmodSync(parentDir, 0o777);
-                                    } catch (e) {}
-                                    fs.rmdirSync(parentDir);
-                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Cleaned up empty parent directory: ${parentDir}`);
+                                if (fs.existsSync(parentDir)) {
+                                    const remainingFiles = fs.readdirSync(parentDir);
+                                    if (remainingFiles.length === 0) {
+                                        try {
+                                            fs.chmodSync(parentDir, 0o777);
+                                        } catch (e) {}
+                                        fs.rmdirSync(parentDir);
+                                        console.log(`[AUTO-DOWNLOAD-MONITOR] Cleaned up empty parent directory: ${parentDir}`);
+                                    }
                                 }
                             }
                         } catch (unlinkErr: any) {
@@ -2251,104 +2251,115 @@ export async function saveUserKindleSettings(formData: FormData) {
 }
 
 export async function sendBookToKindle(bookId: string) {
-    const session = await verifyUser();
-    const user = await prisma.user.findUnique({
-        where: { username: session.username as string }
-    });
-    
-    if (!user) throw new Error("User not found");
-    if (!user.kindleEmail) {
-        throw new Error("Please configure your Send-to-Kindle email address in your library settings first.");
-    }
-
-    const book = await prisma.book.findUnique({
-        where: { id: bookId }
-    });
-    if (!book) throw new Error("Book not found");
-    if (!fs.existsSync(book.filePath)) {
-        throw new Error("Ebook file not found on disk. Try scanning the library again.");
-    }
-
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-    if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-        throw new Error("SMTP is not configured on this server. Please contact your administrator to configure SMTP.");
-    }
-
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
-    
-    const transporter = nodemailer.createTransport({
-        host: settings.smtpHost,
-        port: settings.smtpPort || 587,
-        secure: settings.smtpPort === 465,
-        auth: {
-            user: settings.smtpUser,
-            pass: decryptData(settings.smtpPass)
-        }
-    });
-
-    const mailOptions = {
-        from: senderEmail,
-        to: user.kindleEmail,
-        subject: `Deliver Book: ${book.title}`,
-        text: `Delivering your ebook "${book.title}" to your Kindle device.`,
-        attachments: [
-            {
-                filename: path.basename(book.filePath),
-                path: book.filePath
-            }
-        ]
-    };
-
     try {
-        await transporter.sendMail(mailOptions);
-        return { success: true };
-    } catch (e: any) {
-        console.error("Kindle SMTP send failed:", e);
+        const session = await verifyUser();
+        const user = await prisma.user.findUnique({
+            where: { username: session.username as string }
+        });
         
-        if (user.email) {
-            try {
-                const failMailOptions = {
-                    from: senderEmail,
-                    to: user.email,
-                    subject: `❌ Failed to Deliver Ebook to Kindle: ${book.title}`,
-                    html: `
-                        <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                            <h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
-                            <p>We attempted to send <strong>${book.title}</strong> to your Kindle email (<code>${user.kindleEmail}</code>), but the SMTP server rejected the delivery.</p>
-                            
-                            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                            
-                            <h3 style="color: #0f172a; margin-bottom: 8px;">Troubleshooting Steps:</h3>
-                            <ol style="line-height: 1.6; padding-left: 20px;">
-                                <li>
-                                    <strong>Approve our Sender Address:</strong> Amazon will silently reject or bounce emails from addresses they don't recognize. 
-                                    Make sure you have added our server sender address to your approved list:
-                                    <br />
-                                    <code style="background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; display: inline-block; margin-top: 4px; color: #0f172a;">${senderEmail}</code>
-                                </li>
-                                <li style="margin-top: 10px;">
-                                    <strong>How to authorize:</strong>
-                                    <ul style="padding-left: 20px; margin-top: 4px;">
-                                        <li>Log into your Amazon Account.</li>
-                                        <li>Go to <em>Manage Your Content and Devices</em> &rarr; <em>Preferences</em>.</li>
-                                        <li>Scroll down to <em>Approved Personal Document E-mail List</em> and add the address above.</li>
-                                    </ul>
-                                </li>
-                                <li style="margin-top: 10px;">
-                                    <strong>Technical error detail:</strong>
-                                    <pre style="background: #f1f5f9; padding: 10px; border-radius: 4px; font-size: 12px; overflow-x: auto; color: #ef4444; border: 1px solid #fecaca; margin-top: 4px;">${e.message || "Unknown SMTP delivery error"}</pre>
-                                </li>
-                            </ol>
-                        </div>
-                    `
-                };
-                await transporter.sendMail(failMailOptions);
-            } catch (err) {
-                console.error("Failed to send Kindle failure email to personal address:", err);
-            }
+        if (!user) return { success: false, error: "User not found" };
+        if (!user.kindleEmail) {
+            return { success: false, error: "Please configure your Send-to-Kindle email address in your library settings first." };
         }
 
-        throw new Error(`Kindle delivery failed: ${e.message || "Unknown SMTP error"}`);
+        const book = await prisma.book.findUnique({
+            where: { id: bookId }
+        });
+        if (!book) return { success: false, error: "Book not found" };
+        if (!fs.existsSync(book.filePath)) {
+            return { success: false, error: "Ebook file not found on disk. Try scanning the library again." };
+        }
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
+        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            return { success: false, error: "SMTP is not configured on this server. Please contact your administrator to configure SMTP." };
+        }
+
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        const ext = path.extname(book.filePath).toLowerCase();
+        const cleanAttachmentName = path.basename(book.filePath, ext)
+            .replace(/[^a-zA-Z0-9]/g, "_")
+            .replace(/__+/g, "_")
+            .toLowerCase() + ext;
+
+        const mailOptions = {
+            from: senderEmail,
+            to: user.kindleEmail,
+            subject: `Deliver Book: ${book.title}`,
+            text: `Delivering your ebook "${book.title}" to your Kindle device.`,
+            attachments: [
+                {
+                    filename: cleanAttachmentName,
+                    path: book.filePath
+                }
+            ]
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            return { success: true };
+        } catch (e: any) {
+            console.error("Kindle SMTP send failed:", e);
+            
+            if (user.email) {
+                try {
+                    const failMailOptions = {
+                        from: senderEmail,
+                        to: user.email,
+                        subject: `❌ Failed to Deliver Ebook to Kindle: ${book.title}`,
+                        html: `
+                            <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                <h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
+                                <p>We attempted to send <strong>${book.title}</strong> to your Kindle email (<code>${user.kindleEmail}</code>), but the SMTP server rejected the delivery.</p>
+                                
+                                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                                
+                                <h3 style="color: #0f172a; margin-bottom: 8px;">Troubleshooting Steps:</h3>
+                                <ol style="line-height: 1.6; padding-left: 20px;">
+                                    <li>
+                                        <strong>Approve our Sender Address:</strong> Amazon will silently reject or bounce emails from addresses they don't recognize. 
+                                        Make sure you have added our server sender address to your approved list:
+                                        <br />
+                                        <code style="background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; display: inline-block; margin-top: 4px; color: #0f172a;">${senderEmail}</code>
+                                    </li>
+                                    <li style="margin-top: 10px;">
+                                        <strong>How to authorize:</strong>
+                                        <ul style="padding-left: 20px; margin-top: 4px;">
+                                            <li>Log into your Amazon Account.</li>
+                                            <li>Go to <em>Manage Your Content and Devices</em> &rarr; <em>Preferences</em>.</li>
+                                            <li>Scroll down to <em>Approved Personal Document E-mail List</em> and add the address above.</li>
+                                        </ul>
+                                    </li>
+                                    <li style="margin-top: 10px;">
+                                        <strong>Technical error detail:</strong>
+                                        <pre style="background: #f1f5f9; padding: 10px; border-radius: 4px; font-size: 12px; overflow-x: auto; color: #ef4444; border: 1px solid #fecaca; margin-top: 4px;">${e.message || "Unknown SMTP delivery error"}</pre>
+                                    </li>
+                                </ol>
+                            </div>
+                        `
+                    };
+                    await transporter.sendMail(failMailOptions);
+                } catch (err) {
+                    console.error("Failed to send Kindle failure email to personal address:", err);
+                }
+            }
+
+            return { success: false, error: `Kindle delivery failed: ${e.message || "Unknown SMTP error"}` };
+        }
+    } catch (e: any) {
+        console.error("Failed to send book to Kindle:", e);
+        return { success: false, error: e.message || "An unexpected error occurred." };
     }
 }
 
@@ -2396,6 +2407,12 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         }
     });
 
+    const ext = path.extname(book.filePath).toLowerCase();
+    const cleanAttachmentName = path.basename(book.filePath, ext)
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .replace(/__+/g, "_")
+        .toLowerCase() + ext;
+
     const mailOptions = {
         from: senderEmail,
         to: user.kindleEmail,
@@ -2403,7 +2420,7 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         text: `Delivering your ebook "${book.title}" to your Kindle device.`,
         attachments: [
             {
-                filename: path.basename(book.filePath),
+                filename: cleanAttachmentName,
                 path: book.filePath
             }
         ]
@@ -2491,85 +2508,90 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
 }
 
 export async function submitLibraryAccessRequest(email: string, kindleEmail: string) {
-    const session = await verifyUser();
-    
-    const user = await prisma.user.update({
-        where: { username: session.username as string },
-        data: {
-            email: email || undefined,
-            kindleEmail: kindleEmail || ""
-        }
-    });
-
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-    if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-        throw new Error("SMTP is not configured on the server. Please contact your administrator.");
-    }
-
-    const admins = await prisma.user.findMany({
-        where: { role: "ADMIN" }
-    });
-
-    const adminEmails = admins
-        .map(admin => admin.email)
-        .filter(email => !!email);
-
-    const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
-
-    const transporter = nodemailer.createTransport({
-        host: settings.smtpHost,
-        port: settings.smtpPort || 587,
-        secure: settings.smtpPort === 465,
-        auth: {
-            user: settings.smtpUser,
-            pass: decryptData(settings.smtpPass)
-        }
-    });
-
-    const mailOptions = {
-        from: senderEmail,
-        to: recipientEmails.join(", "),
-        subject: `🚨 Library Access Request from ${user.username}`,
-        html: `
-            <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                <h2 style="color: #0f172a; margin-top: 0;">Library Access Request</h2>
-                <p>The user <strong>${user.username}</strong> has requested access to the Book Library.</p>
-                
-                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                
-                <h3 style="color: #0f172a; margin-bottom: 8px;">User Details:</h3>
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-                    <tr>
-                        <td style="padding: 6px 0; font-weight: bold; width: 150px;">Username:</td>
-                        <td style="padding: 6px 0;">${user.username}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 0; font-weight: bold;">Personal Email:</td>
-                        <td style="padding: 6px 0;"><code>${user.email || "Not Provided"}</code></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 0; font-weight: bold;">Send-to-Kindle:</td>
-                        <td style="padding: 6px 0;"><code>${user.kindleEmail || "Not Provided"}</code></td>
-                    </tr>
-                </table>
-
-                <h3 style="color: #0f172a; margin-bottom: 8px;">How to Approve:</h3>
-                <p style="line-height: 1.6;">
-                    To grant access to this user, log into Portalarr and open the Book Library Manage tab. 
-                    Edit the library you want them to access (e.g. <em>Wife's Bookshelf</em> or <em>Kids' Bookshelf</em>), 
-                    and add their username <strong><code>${user.username}</code></strong> to the <strong>Allowed Users</strong> list.
-                </p>
-            </div>
-        `
-    };
-
     try {
-        await transporter.sendMail(mailOptions);
-        return { success: true };
+        const session = await verifyUser();
+        
+        const user = await prisma.user.update({
+            where: { username: session.username as string },
+            data: {
+                email: email || undefined,
+                kindleEmail: kindleEmail || ""
+            }
+        });
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
+        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            return { success: false, error: "SMTP is not configured on the server. Please contact your administrator." };
+        }
+
+        const admins = await prisma.user.findMany({
+            where: { role: "ADMIN" }
+        });
+
+        const adminEmails = admins
+            .map(admin => admin.email)
+            .filter(email => !!email);
+
+        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        const mailOptions = {
+            from: senderEmail,
+            to: recipientEmails.join(", "),
+            subject: `🚨 Library Access Request from ${user.username}`,
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <h2 style="color: #0f172a; margin-top: 0;">Library Access Request</h2>
+                    <p>The user <strong>${user.username}</strong> has requested access to the Book Library.</p>
+                    
+                    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                    
+                    <h3 style="color: #0f172a; margin-bottom: 8px;">User Details:</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                        <tr>
+                            <td style="padding: 6px 0; font-weight: bold; width: 150px;">Username:</td>
+                            <td style="padding: 6px 0;">${user.username}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px 0; font-weight: bold;">Personal Email:</td>
+                            <td style="padding: 6px 0;"><code>${user.email || "Not Provided"}</code></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px 0; font-weight: bold;">Send-to-Kindle:</td>
+                            <td style="padding: 6px 0;"><code>${user.kindleEmail || "Not Provided"}</code></td>
+                        </tr>
+                    </table>
+
+                    <h3 style="color: #0f172a; margin-bottom: 8px;">How to Approve:</h3>
+                    <p style="line-height: 1.6;">
+                        To grant access to this user, log into Portalarr and open the Book Library Manage tab. 
+                        Edit the library you want them to access (e.g. <em>Wife's Bookshelf</em> or <em>Kids' Bookshelf</em>), 
+                        and add their username <strong><code>${user.username}</code></strong> to the <strong>Allowed Users</strong> list.
+                    </p>
+                </div>
+            `
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            return { success: true };
+        } catch (e: any) {
+            console.error("Failed to email admin about access request:", e);
+            return { success: false, error: `Failed to send request: ${e.message || "Unknown mail error"}` };
+        }
     } catch (e: any) {
-        console.error("Failed to email admin about access request:", e);
-        throw new Error(`Failed to send request: ${e.message || "Unknown mail error"}`);
+        console.error("Failed library access request submission:", e);
+        return { success: false, error: e.message || "An unexpected error occurred." };
     }
 }
 

@@ -646,8 +646,12 @@ function BookLibraryPageContent() {
     async function handleSendToKindle(bookId: string) {
         setSendingToKindleId(bookId);
         try {
-            await sendBookToKindle(bookId);
-            alert("Ebook successfully queued and delivered to your Kindle device!");
+            const res = await sendBookToKindle(bookId);
+            if (res && !res.success) {
+                alert(res.error || "Delivery failed. Check your personal email inbox for instructions.");
+            } else {
+                alert("Ebook successfully queued and delivered to your Kindle device!");
+            }
         } catch (e: any) {
             alert(e.message || "Delivery failed. Check your personal email inbox for instructions.");
         } finally {

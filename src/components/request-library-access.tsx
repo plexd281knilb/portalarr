@@ -46,12 +46,16 @@ export default function RequestLibraryAccess() {
         setError("");
         
         try {
-            await submitLibraryAccessRequest(userEmail, userKindleEmail);
-            setSuccess(true);
-            setTimeout(() => {
-                setIsOpen(false);
-                setSuccess(false);
-            }, 3000);
+            const res = await submitLibraryAccessRequest(userEmail, userKindleEmail);
+            if (res && !res.success) {
+                setError(res.error || "Failed to submit access request.");
+            } else {
+                setSuccess(true);
+                setTimeout(() => {
+                    setIsOpen(false);
+                    setSuccess(false);
+                }, 3000);
+            }
         } catch (err: any) {
             setError(err.message || "Failed to submit access request.");
         } finally {
