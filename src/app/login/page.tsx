@@ -40,10 +40,20 @@ export default function LoginPage() {
     setIsPlexLoading(true);
     setError("");
 
+    // Open a blank popup synchronously inside the click handler to bypass popup blockers
+    const popup = window.open("about:blank", "PlexLogin", "width=600,height=700");
+    if (!popup) {
+      setError("Popup blocked. Please allow popups for this site in your browser settings.");
+      setIsPlexLoading(false);
+      return;
+    }
+
     try {
       const pin = await getPlexPin();
       const authUrl = `https://app.plex.tv/auth/#!?clientID=portalarr-custom-dashboard-app&code=${pin.code}&context[device][product]=Portalarr`;
-      const popup = window.open(authUrl, "PlexLogin", "width=600,height=700");
+      
+      // Update the popup location to the actual Plex Auth URL
+      popup.location.href = authUrl;
 
       let isProcessing = false;
       const pollInterval = setInterval(async () => {
@@ -53,7 +63,7 @@ export default function LoginPage() {
         if (token && !isProcessing) {
           isProcessing = true;
           clearInterval(pollInterval);
-          popup?.close();
+          popup.close();
           const plexUser = await getPlexUser(token);
           
           const res = await handlePlexCallback(plexUser);
@@ -66,13 +76,14 @@ export default function LoginPage() {
           }
         }
 
-        if (popup?.closed) {
+        if (popup.closed) {
           clearInterval(pollInterval);
           setIsPlexLoading(false);
         }
       }, 2000);
 
     } catch (err) {
+      popup.close();
       setError("Failed to connect to Plex.");
       setIsPlexLoading(false);
     }
