@@ -43,6 +43,38 @@ if (!globalForScheduler.schedulerInitialized) {
               console.error(`[BACKGROUND-JOB] Error scanning library "${lib.name}":`, libErr.message || libErr);
             }
           }
+
+          // Check for failed requests that are older than 5 days to auto-retry
+          try {
+            const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+            const failedRequests = await prisma.bookRequest.findMany({
+              where: {
+                status: { startsWith: "Failed" },
+                updatedAt: { lte: fiveDaysAgo }
+              }
+            });
+            
+            if (failedRequests.length > 0) {
+              console.log(`[BACKGROUND-JOB] Found ${failedRequests.length} failed request(s) older than 5 days. Auto-retrying...`);
+              const { autoDownloadBookRequest } = await import("../app/actions");
+              for (const req of failedRequests) {
+                try {
+                  await prisma.bookRequest.update({
+                    where: { id: req.id },
+                    data: { status: "Pending" }
+                  });
+                  
+                  autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
+                    console.error(`[AUTO-DOWNLOAD-RETRY-BG] Failed for request "${req.title}":`, err.message || err);
+                  });
+                } catch (reqErr: any) {
+                  console.error(`[BACKGROUND-JOB] Error auto-retrying request "${req.title}":`, reqErr.message || reqErr);
+                }
+              }
+            }
+          } catch (retryErr: any) {
+            console.error("[BACKGROUND-JOB] Error in scheduled auto-retry runner:", retryErr.message || retryErr);
+          }
           
           await prisma.settings.upsert({
             where: { id: "global" },
