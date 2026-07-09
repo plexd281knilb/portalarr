@@ -1497,7 +1497,7 @@ function BookLibraryPageContent() {
                                             </div>
                                         )}
 
-                                        {fullUser?.role === "ADMIN" && eligibleRequestUsers.length > 0 && (
+                                        {isAdmin && eligibleRequestUsers.length > 0 && (
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="requestedFor" className="text-xs font-medium">Request For (Admin Only)</Label>
                                                 <select
@@ -1506,7 +1506,7 @@ function BookLibraryPageContent() {
                                                     value={requestedFor}
                                                     onChange={(e) => setRequestedFor(e.target.value)}
                                                 >
-                                                    <option value="">Myself ({fullUser.username})</option>
+                                                    <option value="">Myself ({fullUser?.username || "Admin"})</option>
                                                     {eligibleRequestUsers.map((u) => (
                                                         <option key={u.id} value={u.username}>
                                                             {u.username} ({u.kindleEmail || "No Kindle configured"})
