@@ -3032,3 +3032,28 @@ export async function deleteMultipleBookRequests(ids: string[]) {
     
     revalidatePath("/library");
 }
+
+export async function retryBookRequest(requestId: string) {
+    const session = await verifyUser();
+    
+    const request = await prisma.bookRequest.findUnique({
+        where: { id: requestId }
+    });
+    if (!request) throw new Error("Request not found");
+    
+    if (session.role !== "ADMIN" && request.requestedBy !== session.username) {
+        throw new Error("Unauthorized");
+    }
+    
+    await prisma.bookRequest.update({
+        where: { id: requestId },
+        data: { status: "Pending" }
+    });
+    
+    autoDownloadBookRequest(requestId, request.title, request.author || "").catch(err => {
+        console.error(`[AUTO-DOWNLOAD-RETRY] Failed for request "${request.title}":`, err);
+    });
+    
+    revalidatePath("/library");
+    return { success: true };
+}
