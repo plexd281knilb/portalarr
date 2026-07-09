@@ -1,14 +1,14 @@
 # 1. Install dependencies
-FROM node:20-alpine AS deps
+FROM node:20-bookworm-slim AS deps
 # Install dependencies required for Prisma engines
-RUN apk add --no-cache libc6-compat openssl
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
 RUN npm ci
 
 # 2. Builder stage
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 # Copy node_modules from deps
@@ -26,22 +26,22 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # 3. Production image
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# CRITICAL: Install libraries required for Prisma engines, and Calibre for EPUB sanitation
-RUN apk add --no-cache openssl libc6-compat calibre bash
+# CRITICAL: Install libraries required for Prisma engines and Calibre for EPUB sanitation
+RUN apt-get update && apt-get install -y openssl calibre bash && rm -rf /var/lib/apt/lists/*
 
 # CRITICAL: Install Prisma CLI globally. 
 # This is the most reliable way to ensure the 'prisma' command is in the PATH
 # and that all of its own dependencies are correctly satisfied for migrations.
 RUN npm install -g prisma@6.2.1
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid 1001 -m nextjs
 
 # Copy standalone build artifacts
 COPY --from=builder /app/public ./public
