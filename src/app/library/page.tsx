@@ -225,6 +225,7 @@ function BookLibraryPageContent() {
     const [serverSmtpFrom, setServerSmtpFrom] = useState("");
     const [sendingToKindleId, setSendingToKindleId] = useState<string | null>(null);
     const [allUsers, setAllUsers] = useState<any[]>([]);
+    const [requestedFor, setRequestedFor] = useState("");
 
     // Open Library Autocomplete states
     const [openLibrarySuggestions, setOpenLibrarySuggestions] = useState<any[]>([]);
@@ -342,21 +343,64 @@ function BookLibraryPageContent() {
                              <BookOpen className="h-3 w-3 mr-1" /> Read
                          </Button>
                          <Button 
-                             variant="outline" 
-                             size="sm" 
-                             className="flex-1 text-xs border-primary/20 text-primary hover:bg-primary/10 font-semibold"
-                             title="Send to Kindle"
-                             disabled={sendingToKindleId !== null}
-                             onClick={() => handleSendToKindle(book.id)}
-                         >
-                             {sendingToKindleId === book.id ? (
-                                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                             ) : (
-                                 <Send className="h-3 w-3 mr-1" />
-                             )}
-                             Kindle
-                         </Button>
-                     </div>
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 text-xs border-primary/20 text-primary hover:bg-primary/10 font-semibold"
+                              title="Send to Kindle"
+                              disabled={sendingToKindleId !== null}
+                              onClick={() => handleSendToKindle(book.id)}
+                          >
+                              {sendingToKindleId === book.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              ) : (
+                                  <Send className="h-3 w-3 mr-1" />
+                              )}
+                              Kindle
+                          </Button>
+                      </div>
+                      {user?.role === "ADMIN" && allUsers.length > 0 && (
+                          <div className="w-full flex gap-1 items-center mt-1">
+                              <select
+                                  id={`send-to-user-${book.id}`}
+                                  className="flex-1 h-7 text-[10px] rounded border border-[#2d2d34] bg-[#111115] px-2 py-0.5 text-muted-foreground focus:outline-none cursor-pointer"
+                                  defaultValue=""
+                                  onChange={async (e) => {
+                                      const targetUsername = e.target.value;
+                                      if (!targetUsername) return;
+                                      
+                                      const confirmSend = window.confirm(`Are you sure you want to send this book to ${targetUsername}'s Kindle?`);
+                                      if (!confirmSend) {
+                                          e.target.value = "";
+                                          return;
+                                      }
+                                      
+                                      // Reset value of select
+                                      e.target.value = "";
+                                      
+                                      setSendingToKindleId(book.id);
+                                      try {
+                                          const res = await sendBookToKindle(book.id, targetUsername);
+                                          if (res && !res.success) {
+                                              alert(res.error || `Delivery to ${targetUsername}'s Kindle failed.`);
+                                          } else {
+                                              alert(`Ebook successfully sent to ${targetUsername}'s Kindle!`);
+                                          }
+                                      } catch (err: any) {
+                                          alert(err.message || `Delivery failed.`);
+                                      } finally {
+                                          setSendingToKindleId(null);
+                                      }
+                                  }}
+                              >
+                                  <option value="">Send to User's Kindle...</option>
+                                  {allUsers.filter(u => u.kindleEmail).map(u => (
+                                      <option key={u.id} value={u.username}>
+                                          {u.username} ({u.kindleEmail})
+                                      </option>
+                                  ))}
+                              </select>
+                          </div>
+                      )}
                      <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
                          <Button 
                              variant="outline" 
@@ -707,7 +751,7 @@ function BookLibraryPageContent() {
                     alert("Please select at least one book in the series to request.");
                     return;
                 }
-                await createMultipleBookRequests(checkedBooks);
+                await createMultipleBookRequests(checkedBooks, requestedFor);
             } else {
                 const formData = new FormData();
                 formData.append("title", reqTitle);
@@ -715,6 +759,9 @@ function BookLibraryPageContent() {
                 formData.append("type", reqType);
                 formData.append("coverUrl", reqCoverUrl);
                 formData.append("publishYear", reqPublishYear);
+                if (requestedFor) {
+                    formData.append("requestedFor", requestedFor);
+                }
                 await createBookRequest(formData);
             }
 
@@ -723,6 +770,7 @@ function BookLibraryPageContent() {
             setReqCoverUrl("");
             setReqPublishYear("");
             setReqType("book");
+            setRequestedFor("");
             setSeriesBooksChecklist([]);
             const reqs = await getBookRequests();
             setRequests(reqs || []);
@@ -1428,6 +1476,25 @@ function BookLibraryPageContent() {
                                                         </label>
                                                     ))}
                                                 </div>
+                                            </div>
+                                        )}
+
+                                        {fullUser?.role === "ADMIN" && allUsers.length > 0 && (
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="requestedFor" className="text-xs font-medium">Request For (Admin Only)</Label>
+                                                <select
+                                                    id="requestedFor"
+                                                    className="flex h-9 w-full rounded-md border border-[#2d2d34] bg-[#111115] px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                                                    value={requestedFor}
+                                                    onChange={(e) => setRequestedFor(e.target.value)}
+                                                >
+                                                    <option value="">Myself ({fullUser.username})</option>
+                                                    {allUsers.map((u) => (
+                                                        <option key={u.id} value={u.username}>
+                                                            {u.username} ({u.kindleEmail || "No Kindle configured"})
+                                                        </option>
+                                                    ))}
+                                                </select>
                                             </div>
                                         )}
 

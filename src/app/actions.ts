@@ -295,7 +295,7 @@ export async function getAppUsers() {
     await verifyAdmin();
     return await prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
-        select: { id: true, username: true, email: true, role: true, createdAt: true }
+        select: { id: true, username: true, email: true, role: true, createdAt: true, kindleEmail: true }
     });
 }
 
@@ -1147,16 +1147,23 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
 
 export async function createBookRequest(formData: FormData) {
     const session = await verifyUser();
+    const isAdmin = session.role === "ADMIN";
     const title = formData.get("title") as string;
     const author = formData.get("author") as string || "";
     const type = formData.get("type") as string || "book"; // "book" or "series"
     const coverUrl = formData.get("coverUrl") as string || "";
     const publishYear = formData.get("publishYear") as string || "";
+    const requestedFor = formData.get("requestedFor") as string || "";
+    
+    let targetUser = session.username as string;
+    if (isAdmin && requestedFor) {
+        targetUser = requestedFor;
+    }
     
     if (!title) throw new Error("Title is required");
     
     if (type === "series") {
-        const expanded = await expandSeriesRequest(title, author, session.username as string);
+        const expanded = await expandSeriesRequest(title, author, targetUser);
         if (expanded) {
             // Save the parent series request record itself in the DB
             await prisma.bookRequest.create({
@@ -1165,7 +1172,7 @@ export async function createBookRequest(formData: FormData) {
                     author,
                     coverUrl,
                     publishYear,
-                    requestedBy: session.username as string,
+                    requestedBy: targetUser,
                     type: "series",
                     status: "Approved"
                 }
@@ -1174,7 +1181,7 @@ export async function createBookRequest(formData: FormData) {
             sendRequestNotificationToAdmins({
                 title: `${title} (Book Series)`,
                 author,
-                requestedBy: session.username as string,
+                requestedBy: targetUser,
                 type: "series",
                 publishYear: null
             }).catch(err => {
@@ -1191,7 +1198,7 @@ export async function createBookRequest(formData: FormData) {
             author,
             coverUrl,
             publishYear,
-            requestedBy: session.username as string,
+            requestedBy: targetUser,
             type,
             status: "Pending"
         }
@@ -1205,7 +1212,7 @@ export async function createBookRequest(formData: FormData) {
         sendRequestNotificationToAdmins({
             title,
             author,
-            requestedBy: session.username as string,
+            requestedBy: targetUser,
             type: "book",
             publishYear
         }).catch(err => {
@@ -2516,11 +2523,18 @@ export async function saveUserKindleSettings(formData: FormData) {
     revalidatePath("/library");
 }
 
-export async function sendBookToKindle(bookId: string) {
+export async function sendBookToKindle(bookId: string, targetUsername?: string) {
     try {
         const session = await verifyUser();
+        const isAdmin = session.role === "ADMIN";
+        
+        let username = session.username as string;
+        if (isAdmin && targetUsername) {
+            username = targetUsername;
+        }
+
         const user = await prisma.user.findUnique({
-            where: { username: session.username as string }
+            where: { username }
         });
         
         if (!user) return { success: false, error: "User not found" };
@@ -2955,9 +2969,15 @@ export async function getSeriesBooksList(seriesTitle: string, author: string = "
     }
 }
 
-export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[]) {
+export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[], requestedFor?: string) {
     const session = await verifyUser();
+    const isAdmin = session.role === "ADMIN";
     if (!booksList || booksList.length === 0) return;
+    
+    let targetUser = session.username as string;
+    if (isAdmin && requestedFor) {
+        targetUser = requestedFor;
+    }
     
     for (const book of booksList) {
         const request = await prisma.bookRequest.create({
@@ -2966,7 +2986,7 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
                 author: book.author,
                 coverUrl: book.coverUrl,
                 publishYear: book.publishYear,
-                requestedBy: session.username as string,
+                requestedBy: targetUser,
                 type: "book",
                 status: "Pending"
             }
@@ -2982,7 +3002,7 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
         sendRequestNotificationToAdmins({
             title: `${booksList.length} Books from checklist`,
             author: listText,
-            requestedBy: session.username as string,
+            requestedBy: targetUser,
             type: "checklist",
             publishYear: null
         }).catch(err => {
