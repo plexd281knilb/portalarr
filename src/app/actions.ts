@@ -118,7 +118,8 @@ async function mobiBounceEpub(filePath: string): Promise<boolean> {
 
 async function fetchGoogleBooksCover(title: string, author: string): Promise<string | null> {
     try {
-        const query = `${title} ${author}`;
+        const rawQuery = `${title} ${author}`;
+        const query = cleanSearchQuery(rawQuery);
         const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=1`;
         const res = await fetch(url, { headers: { "Accept": "application/json" } });
         if (res.ok) {
@@ -1357,6 +1358,7 @@ function cleanSearchQuery(searchQuery: string): string {
         .replace(/\b\d{4}\b/g, "") // Strip 4-digit years
         .replace(/\b(?:0[1-9]|[1-9]\d|\d)\b/g, "") // Strip separate single/double digits (01, 1)
         .replace(/\b(?:v|vol|bk|book|part|no|#)\.?\s*\d+\b/gi, "") // Strip vol numbers
+        .replace(/-/g, " ") // Replace hyphens with spaces to prevent Solr exclude (-) behavior
         .replace(/[()\[\]]/g, "") // Strip brackets
         // Strip release tags and ebook metadata garbage
         .replace(/\b(?:epub|pdf|mobi|cbz|ebook|retail|decipher|repack|web|download)\b/gi, "")
