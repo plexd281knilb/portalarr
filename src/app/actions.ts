@@ -1411,6 +1411,14 @@ export async function scanLibraryInternal(libraryId: string) {
 
         const files = fs.readdirSync(library.path);
         const validExtensions = [".pdf", ".epub", ".mobi", ".cbz"];
+
+        // Safety check to prevent database wipeout due to unmounted remote shares
+        const bookFiles = files.filter(f => validExtensions.includes(path.extname(f).toLowerCase()));
+        if (bookFiles.length === 0 && dbBooks.length > 0) {
+            console.warn(`[SCANNER] Library directory "${library.path}" contains 0 ebook files, but the database contains ${dbBooks.length} books. Skipping scan to prevent accidental database wiping (likely due to an unmounted remote share or transient network issue).`);
+            return { success: true };
+        }
+
         const matchedDbBookIds = new Set<string>();
 
         for (const file of files) {
@@ -1429,7 +1437,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         const parts = cleanBase.split(" - ").map(p => p.trim());
                         if (parts.length >= 2) {
                             author = parts[0];
-                            title = parts[1];
+                            title = parts.slice(1).join(" - ");
                         }
                     }
                     
@@ -1529,7 +1537,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         const parts = cleanBase.split(" - ").map(p => p.trim());
                         if (parts.length >= 2) {
                             author = parts[0];
-                            title = parts[1];
+                            title = parts.slice(1).join(" - ");
                         }
                     }
 
@@ -1630,7 +1638,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         const parts = cleanBase.split(" - ").map(p => p.trim());
                         if (parts.length >= 2) {
                             parsedAuthor = parts[0];
-                            parsedTitle = parts[1];
+                            parsedTitle = parts.slice(1).join(" - ");
                         }
                     }
 
@@ -2125,16 +2133,18 @@ async function checkQbitStatus(qbitUrl: string, releaseTitle: string): Promise<{
     }
 }
 
-async function deleteDownload(protocol: string, downloadId: string, title: string) {
+async function deleteDownload(protocol: string, downloadId: string, title: string): Promise<boolean> {
     try {
         if (protocol === "usenet") {
             const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
             if (sabApp) {
                 const sabUrl = cleanUrl(sabApp.url);
                 const sabKey = decryptData(sabApp.apiKey as string);
-                await fetch(`${sabUrl}/api?mode=queue&name=delete&value=${downloadId}&apikey=${sabKey}`);
-                await fetch(`${sabUrl}/api?mode=history&name=delete&value=${downloadId}&apikey=${sabKey}`);
+                const res1 = await fetch(`${sabUrl}/api?mode=queue&name=delete&value=${downloadId}&apikey=${sabKey}`);
+                const res2 = await fetch(`${sabUrl}/api?mode=history&name=delete&value=${downloadId}&del_files=1&apikey=${sabKey}`);
+                return res1.ok && res2.ok;
             }
+            return false;
         } else {
             const qbitApp = await prisma.mediaApp.findFirst({
                 where: { type: "qbittorrent" }
@@ -2158,7 +2168,7 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
                         if (cookie) cookieHeader = cookie;
                     } catch (e) {}
 
-                    await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
+                    const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
                         method: "POST",
                         body: new URLSearchParams({ hashes: hash, deleteFiles: "true" }),
                         headers: {
@@ -2166,11 +2176,14 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
                             ...(cookieHeader ? { "Cookie": cookieHeader } : {})
                         }
                     });
+                    return res.ok;
                 }
             }
+            return false;
         }
     } catch (e) {
-        console.error("Failed to delete failed download:", e);
+        console.error("Failed to delete download from client:", e);
+        return false;
     }
 }
 
@@ -2333,10 +2346,11 @@ export async function monitorAndRetryDownload(
                                 console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${destPath}:`, bounceErr.message);
                             }
                             
+                            let clientDeleted = false;
                             try {
                                 try {
                                     console.log(`[AUTO-DOWNLOAD-MONITOR] Requesting client to delete completed download: ${release.title}`);
-                                    await deleteDownload(release.protocol, downloadId, release.title);
+                                    clientDeleted = await deleteDownload(release.protocol, downloadId, release.title);
                                 } catch (delErr: any) {
                                     console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to delete completed download from client:`, delErr.message);
                                 }
@@ -2364,8 +2378,12 @@ export async function monitorAndRetryDownload(
                                     }
                                 }
                             } catch (unlinkErr: any) {
-                                console.warn(`[AUTO-DOWNLOAD-MONITOR] Copied file successfully but failed to delete the source file/folder from downloads directory:`, unlinkErr.message);
-                                console.warn(`[AUTO-DOWNLOAD-MONITOR] TIP: Ensure your Docker volume mounts and PUID/PGID permissions allow the app to write/delete inside the downloads folder.`);
+                                if (!clientDeleted) {
+                                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Copied file successfully but failed to delete the source file/folder from downloads directory:`, unlinkErr.message);
+                                    console.warn(`[AUTO-DOWNLOAD-MONITOR] TIP: Ensure your Docker volume mounts and PUID/PGID permissions allow the app to write/delete inside the downloads folder.`);
+                                } else {
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Cleanup: Manual deletion skipped or failed (likely handled by download client):`, unlinkErr.message);
+                                }
                             }
                             console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully moved file to library path.`);
                         }
