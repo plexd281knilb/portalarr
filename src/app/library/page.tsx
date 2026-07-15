@@ -1597,74 +1597,9 @@ function BookLibraryPageContent() {
                                                                 </Button>
                                                             </div>
                                                         )}
-                                                        {isAdmin && req.status === "Pending" && (
-                                                            <div className="flex gap-1.5 items-center">
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold"
-                                                                    onClick={() => triggerProwlarrSearch(req)}
-                                                                >
-                                                                    <Search className="h-3 w-3 mr-1" /> Search Release
-                                                                </Button>
-                                                                <Button 
-                                                                    size="sm" 
-                                                                    variant="outline" 
-                                                                    className="p-1 h-7 w-7 text-green-500 hover:text-green-600 border-green-500/30 bg-green-500/5 hover:bg-green-500/10"
-                                                                    onClick={() => handleUpdateRequestStatus(req.id, "Approved")}
-                                                                >
-                                                                    <Check className="h-4 w-4" />
-                                                                </Button>
-                                                                <Button 
-                                                                    size="sm" 
-                                                                    variant="outline" 
-                                                                    className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
-                                                                    onClick={() => handleUpdateRequestStatus(req.id, "Rejected")}
-                                                                >
-                                                                    <X className="h-4 w-4" />
-                                                                </Button>
-                                                            </div>
-                                                        )}
-                                                        {isAdmin && req.status === "Approved" && (
-                                                             <Button
-                                                                 size="sm"
-                                                                 variant="outline"
-                                                                 className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold mr-2"
-                                                                 onClick={() => triggerProwlarrSearch(req)}
-                                                             >
-                                                                 <Search className="h-3 w-3 mr-1" /> Re-Search
-                                                             </Button>
-                                                         )}
-                                                         {isAdmin && req.status === "Approved" && (
-                                                             <Button 
-                                                                 size="sm" 
-                                                                 variant="outline"
-                                                                 className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
-                                                                 onClick={() => handleUpdateRequestStatus(req.id, "Downloaded")}
-                                                             >
-                                                                 Mark Downloaded
-                                                             </Button>
-                                                         )}
-                                                         {req.status.startsWith("Failed") && (
+                                                        {req.status === "Pending" && (
                                                              <div className="flex gap-1.5 items-center">
-                                                                 <Button
-                                                                     size="sm"
-                                                                     variant="outline"
-                                                                     className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold"
-                                                                     onClick={async () => {
-                                                                         try {
-                                                                             await retryBookRequest(req.id);
-                                                                             alert("Retry search successfully queued in the background!");
-                                                                             const reqs = await getBookRequests();
-                                                                             setRequests(reqs || []);
-                                                                         } catch (err: any) {
-                                                                             alert(err.message || "Failed to retry request.");
-                                                                         }
-                                                                     }}
-                                                                 >
-                                                                     Retry Search
-                                                                 </Button>
-                                                                 {isAdmin && (
+                                                                 {(isAdmin || req.requestedBy === user?.username) && (
                                                                      <Button
                                                                          size="sm"
                                                                          variant="outline"
@@ -1674,8 +1609,79 @@ function BookLibraryPageContent() {
                                                                          <Search className="h-3 w-3 mr-1" /> Search Release
                                                                      </Button>
                                                                  )}
+                                                                 {isAdmin && (
+                                                                     <>
+                                                                         <Button 
+                                                                             size="sm" 
+                                                                             variant="outline" 
+                                                                             className="p-1 h-7 w-7 text-green-500 hover:text-green-600 border-green-500/30 bg-green-500/5 hover:bg-green-500/10"
+                                                                             onClick={() => handleUpdateRequestStatus(req.id, "Approved")}
+                                                                         >
+                                                                             <Check className="h-4 w-4" />
+                                                                         </Button>
+                                                                         <Button 
+                                                                             size="sm" 
+                                                                             variant="outline" 
+                                                                             className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
+                                                                             onClick={() => handleUpdateRequestStatus(req.id, "Rejected")}
+                                                                         >
+                                                                             <X className="h-4 w-4" />
+                                                                         </Button>
+                                                                     </>
+                                                                 )}
                                                              </div>
                                                          )}
+                                                         {(isAdmin || req.requestedBy === user?.username) && req.status === "Approved" && (
+                                                              <Button
+                                                                  size="sm"
+                                                                  variant="outline"
+                                                                  className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold mr-2"
+                                                                  onClick={() => triggerProwlarrSearch(req)}
+                                                              >
+                                                                  <Search className="h-3 w-3 mr-1" /> Re-Search
+                                                              </Button>
+                                                          )}
+                                                          {isAdmin && req.status === "Approved" && (
+                                                              <Button 
+                                                                  size="sm" 
+                                                                  variant="outline"
+                                                                  className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
+                                                                  onClick={() => handleUpdateRequestStatus(req.id, "Downloaded")}
+                                                              >
+                                                                  Mark Downloaded
+                                                              </Button>
+                                                          )}
+                                                          {req.status.startsWith("Failed") && (
+                                                              <div className="flex gap-1.5 items-center">
+                                                                  <Button
+                                                                      size="sm"
+                                                                      variant="outline"
+                                                                      className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold"
+                                                                      onClick={async () => {
+                                                                          try {
+                                                                              await retryBookRequest(req.id);
+                                                                              alert("Retry search successfully queued in the background!");
+                                                                              const reqs = await getBookRequests();
+                                                                              setRequests(reqs || []);
+                                                                          } catch (err: any) {
+                                                                              alert(err.message || "Failed to retry request.");
+                                                                          }
+                                                                      }}
+                                                                  >
+                                                                      Retry Search
+                                                                  </Button>
+                                                                  {(isAdmin || req.requestedBy === user?.username) && (
+                                                                      <Button
+                                                                          size="sm"
+                                                                          variant="outline"
+                                                                          className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold"
+                                                                          onClick={() => triggerProwlarrSearch(req)}
+                                                                      >
+                                                                          <Search className="h-3 w-3 mr-1" /> Search Release
+                                                                      </Button>
+                                                                  )}
+                                                              </div>
+                                                          )}
                                                     </div>
                                                 </div>
                                             )})}

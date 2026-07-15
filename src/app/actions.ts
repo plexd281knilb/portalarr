@@ -1833,8 +1833,9 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const prowlarrUrl = cleanUrl(prowlarrApp.url);
         const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
         const queryText = author ? `${title} ${author}` : title;
+        const cleanedQuery = cleanSearchQuery(queryText);
 
-        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(queryText)}&categories=7000&categories=7010&categories=7020&apikey=${prowlarrKey}`;
+        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}&categories=7000&categories=7010&categories=7020&apikey=${prowlarrKey}`;
         const res = await fetch(searchUrl, { cache: "no-store" });
         if (!res.ok) throw new Error(`Prowlarr error: status ${res.status}`);
         
@@ -1848,11 +1849,20 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         }
 
         const epubReleases = results.filter((r: any) => {
-            const hasEpubInTitle = r.title.toLowerCase().includes("epub") || 
+            const titleLower = r.title.toLowerCase();
+            const hasEpubInTitle = titleLower.includes("epub") || 
                                    (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
-            const isValidSize = r.size > 100 * 1024 && r.size < 50 * 1024 * 1024;
+            const hasOtherFormat = titleLower.includes("pdf") || 
+                                   titleLower.includes("mobi") || 
+                                   titleLower.includes("cbz") || 
+                                   titleLower.includes("cbr") || 
+                                   titleLower.includes("audiobook") || 
+                                   titleLower.includes("mp3") || 
+                                   titleLower.includes("m4b");
+            const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
+            const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
             const isForeign = isForeignLanguage(r.title);
-            return hasEpubInTitle && isValidSize && !isForeign;
+            return isEpubOrGeneric && isValidSize && !isForeign;
         });
 
         if (epubReleases.length === 0) {
@@ -1940,7 +1950,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
 }
 
 export async function searchProwlarrIndexers(query: string) {
-    await verifyAdmin();
+    await verifyUser();
     
     const prowlarrApp = await prisma.mediaApp.findFirst({
         where: { type: "prowlarr" }
@@ -1952,9 +1962,10 @@ export async function searchProwlarrIndexers(query: string) {
     
     const prowlarrUrl = cleanUrl(prowlarrApp.url);
     const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
+    const cleanedQuery = cleanSearchQuery(query);
     
     try {
-        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(query)}&categories=7000&categories=7010&categories=7020&apikey=${prowlarrKey}`;
+        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}&categories=7000&categories=7010&categories=7020&apikey=${prowlarrKey}`;
         const res = await fetch(searchUrl, { cache: "no-store" });
         if (!res.ok) {
             throw new Error(`Prowlarr returned status ${res.status}`);
@@ -1962,7 +1973,25 @@ export async function searchProwlarrIndexers(query: string) {
         
         const results = await res.json();
         
-        return (results || []).map((r: any) => ({
+        // Filter results keeping it limited to books and epub (broadened)
+        const filtered = (results || []).filter((r: any) => {
+            const titleLower = r.title.toLowerCase();
+            const hasEpubInTitle = titleLower.includes("epub") || 
+                                   (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
+            const hasOtherFormat = titleLower.includes("pdf") || 
+                                   titleLower.includes("mobi") || 
+                                   titleLower.includes("cbz") || 
+                                   titleLower.includes("cbr") || 
+                                   titleLower.includes("audiobook") || 
+                                   titleLower.includes("mp3") || 
+                                   titleLower.includes("m4b");
+            const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
+            const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
+            const isForeign = isForeignLanguage(r.title);
+            return isEpubOrGeneric && isValidSize && !isForeign;
+        });
+        
+        return filtered.map((r: any) => ({
             title: r.title,
             size: r.size,
             downloadUrl: r.downloadUrl,
@@ -1977,12 +2006,20 @@ export async function searchProwlarrIndexers(query: string) {
 }
 
 export async function sendReleaseToDownloadClient(requestId: string, downloadUrl: string, title: string, protocol: string) {
-    await verifyAdmin();
+    const session = await verifyUser();
     
     const req = await prisma.bookRequest.findUnique({
         where: { id: requestId }
     });
-    const requester = req?.requestedBy || "";
+    if (!req) {
+        throw new Error("Request not found");
+    }
+    
+    if (session.role !== "ADMIN" && req.requestedBy !== session.username) {
+        throw new Error("You are not authorized to grab releases for this request");
+    }
+    
+    const requester = req.requestedBy || "";
     const targetLib = await getTargetLibraryForUser(requester);
     const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name) : "books";
     
