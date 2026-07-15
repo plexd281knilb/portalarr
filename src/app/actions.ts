@@ -2383,11 +2383,42 @@ export async function monitorAndRetryDownload(
                             fs.copyFileSync(foundFilePath, destPath);
                             copySuccessful = true;
                             
+                            let finalDestPath = destPath;
+                            const ext = path.extname(destPath).toLowerCase();
+                            if (ext === ".mobi") {
+                                try {
+                                    const epubPath = destPath.replace(/\.mobi$/i, ".epub");
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Attempting to convert MOBI to EPUB: ${destPath} -> ${epubPath}`);
+                                    const { exec } = require("child_process");
+                                    const { promisify } = require("util");
+                                    const execAsync = promisify(exec);
+                                    
+                                    let hasConverter = false;
+                                    try {
+                                        await execAsync("which ebook-convert");
+                                        hasConverter = true;
+                                    } catch (e) {
+                                        console.log("[AUTO-DOWNLOAD-MONITOR] ebook-convert is not in PATH. Skipping MOBI conversion.");
+                                    }
+                                    
+                                    if (hasConverter) {
+                                        await execAsync(`ebook-convert "${destPath}" "${epubPath}" --language en`);
+                                        if (fs.existsSync(epubPath)) {
+                                            fs.unlinkSync(destPath);
+                                            finalDestPath = epubPath;
+                                            console.log(`[AUTO-DOWNLOAD-MONITOR] MOBI successfully converted to EPUB!`);
+                                        }
+                                    }
+                                } catch (convErr: any) {
+                                    console.error(`[AUTO-DOWNLOAD-MONITOR] MOBI to EPUB conversion failed:`, convErr.message);
+                                }
+                            }
+                            
                             // Sanitize and flatten formatting (Mobi-Bounce)
                             try {
-                                await mobiBounceEpub(destPath);
+                                await mobiBounceEpub(finalDestPath);
                             } catch (bounceErr: any) {
-                                console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${destPath}:`, bounceErr.message);
+                                console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${finalDestPath}:`, bounceErr.message);
                             }
                             
                             let clientDeleted = false;
