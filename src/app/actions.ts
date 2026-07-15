@@ -1610,6 +1610,10 @@ export async function scanLibraryInternal(libraryId: string) {
                         } catch (olErr) { }
                     }
 
+                    const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
+                        ? stats.birthtime
+                        : (stats.mtime || new Date());
+
                     const newBook = await prisma.book.create({
                         data: {
                             title,
@@ -1618,7 +1622,8 @@ export async function scanLibraryInternal(libraryId: string) {
                             filePath: fullPath,
                             fileSize: stats.size,
                             fileType: ext.replace(".", ""),
-                            libraryId: libraryId
+                            libraryId: libraryId,
+                            createdAt: fileAddedDate
                         }
                     });
                     await renameBookFileOnDisk(newBook.id);

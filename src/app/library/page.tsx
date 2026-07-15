@@ -1295,47 +1295,7 @@ function BookLibraryPageContent() {
                                 </CardHeader>
                                 <CardContent>
                                     <form onSubmit={handleCreateRequest} className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-2 bg-muted/20 p-1 rounded-md border border-muted/50">
-                                            <button
-                                                type="button"
-                                                className={`py-1.5 text-xs font-semibold rounded transition-all ${
-                                                    reqType === "book" 
-                                                        ? "bg-primary text-black shadow-sm" 
-                                                        : "text-muted-foreground hover:text-foreground"
-                                                }`}
-                                                onClick={() => {
-                                                    setReqType("book");
-                                                    setSeriesBooksChecklist([]);
-                                                }}
-                                            >
-                                                Single Book
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`py-1.5 text-xs font-semibold rounded transition-all ${
-                                                    reqType === "series" 
-                                                        ? "bg-purple-600 text-white shadow-sm" 
-                                                        : "text-muted-foreground hover:text-foreground"
-                                                }`}
-                                                onClick={async () => {
-                                                    setReqType("series");
-                                                    setSeriesBooksChecklist([]);
-                                                    if (reqTitle) {
-                                                        setSearchingRegistry(true);
-                                                        try {
-                                                            const list = await getSeriesBooksList(reqTitle, reqAuthor);
-                                                            setSeriesBooksChecklist(list.map(b => ({ ...b, checked: true })));
-                                                        } catch (err) {
-                                                            console.error("Failed to load series books list:", err);
-                                                        } finally {
-                                                            setSearchingRegistry(false);
-                                                        }
-                                                    }
-                                                }}
-                                            >
-                                                Book Series
-                                            </button>
-                                        </div>
+                                        {/* Single Book request only */}
 
                                         <div className="space-y-1.5 relative">
                                             <Label htmlFor="reqTitle" className="text-xs font-medium">
