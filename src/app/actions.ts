@@ -2245,7 +2245,17 @@ function findDownloadedFile(dir: string, bookTitle: string): string | null {
     }
     
     const cleanBookTitle = bookTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const titleWords = bookTitle.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 2);
+    
+    const stopWords = new Set(["and", "the", "for", "with", "from", "that", "this", "these", "those", "a", "an", "of", "to", "in", "on", "at", "by", "or", "but", "as", "is", "are", "was", "were", "be", "been", "has", "have", "had", "do", "does", "did", "epub", "pdf", "mobi", "cbz"]);
+    
+    const titleWords = bookTitle.toLowerCase()
+        .split(/[^a-z0-9]/)
+        .filter(w => w.length > 2 && !stopWords.has(w));
+        
+    let finalTitleWords = titleWords;
+    if (finalTitleWords.length === 0) {
+        finalTitleWords = bookTitle.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 0);
+    }
     
     try {
         const files = fs.readdirSync(dir);
@@ -2269,13 +2279,15 @@ function findDownloadedFile(dir: string, bookTitle: string): string | null {
                     }
                     
                     let matchCount = 0;
-                    for (const word of titleWords) {
+                    for (const word of finalTitleWords) {
                         if (file.toLowerCase().includes(word)) {
                             matchCount++;
                         }
                     }
-                    console.log(`[DOWNLOAD-FINDER] Word match count: ${matchCount}/${titleWords.length} (needed at least ${Math.min(2, titleWords.length)})`);
-                    if (titleWords.length > 0 && matchCount >= Math.min(2, titleWords.length)) {
+                    
+                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
+                    console.log(`[DOWNLOAD-FINDER] Word match count: ${matchCount}/${finalTitleWords.length} (needed at least ${requiredMatches})`);
+                    if (finalTitleWords.length > 0 && matchCount >= requiredMatches) {
                         console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (fuzzy word match)`);
                         return fullPath;
                     }
@@ -2284,6 +2296,7 @@ function findDownloadedFile(dir: string, bookTitle: string): string | null {
         }
     } catch (e: any) {
         console.error(`[BACKGROUND-DOWNLOAD-FINDER] Error reading directory ${dir}:`, e.message);
+        return null;
     }
     return null;
 }
