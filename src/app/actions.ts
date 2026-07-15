@@ -1858,7 +1858,10 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                                    titleLower.includes("cbr") || 
                                    titleLower.includes("audiobook") || 
                                    titleLower.includes("mp3") || 
-                                   titleLower.includes("m4b");
+                                   titleLower.includes("m4b") ||
+                                   titleLower.includes(".rar") ||
+                                   titleLower.includes(".zip") ||
+                                   /\b(?:rar|zip)\b/i.test(titleLower);
             const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
             const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
             const isForeign = isForeignLanguage(r.title);
@@ -1984,7 +1987,10 @@ export async function searchProwlarrIndexers(query: string) {
                                    titleLower.includes("cbr") || 
                                    titleLower.includes("audiobook") || 
                                    titleLower.includes("mp3") || 
-                                   titleLower.includes("m4b");
+                                   titleLower.includes("m4b") ||
+                                   titleLower.includes(".rar") ||
+                                   titleLower.includes(".zip") ||
+                                   /\b(?:rar|zip)\b/i.test(titleLower);
             const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
             const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
             const isForeign = isForeignLanguage(r.title);
