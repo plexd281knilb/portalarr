@@ -1688,15 +1688,32 @@ export async function scanLibraryInternal(libraryId: string) {
 
         collectFiles(library.path);
 
+        let finalMediaItems = foundMediaItems;
+        if (isAudiobookLib) {
+            const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: fs.Stats }>();
+            for (const item of foundMediaItems) {
+                const effBase = getEffectiveBookBaseName(item.fullPath, item.file, item.ext);
+                const key = effBase.toLowerCase().trim();
+                if (consolidatedMap.has(key)) {
+                    const existingItem = consolidatedMap.get(key)!;
+                    const accumulatedSize = existingItem.stats.size + item.stats.size;
+                    existingItem.stats = { ...existingItem.stats, size: accumulatedSize } as any;
+                } else {
+                    consolidatedMap.set(key, { ...item });
+                }
+            }
+            finalMediaItems = Array.from(consolidatedMap.values());
+        }
+
         // Safety check to prevent database wipeout due to unmounted remote shares
-        if (foundMediaItems.length === 0 && dbBooks.length > 0) {
+        if (finalMediaItems.length === 0 && dbBooks.length > 0) {
             console.warn(`[SCANNER] Library directory "${library.path}" contains 0 ${isAudiobookLib ? "audiobook" : "ebook"} files, but the database contains ${dbBooks.length} items. Skipping scan to prevent accidental database wiping (likely due to an unmounted remote share or transient network issue).`);
             return { success: true };
         }
 
         const matchedDbBookIds = new Set<string>();
 
-        for (const item of foundMediaItems) {
+        for (const item of finalMediaItems) {
             const { file, ext, stats } = item;
             let fullPath = item.fullPath;
 
@@ -2632,6 +2649,22 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
     return null;
 }
 
+function copyFolderRecursiveSync(source: string, target: string) {
+    if (!fs.existsSync(target)) {
+        fs.mkdirSync(target, { recursive: true });
+    }
+    const files = fs.readdirSync(source, { withFileTypes: true });
+    for (const file of files) {
+        const srcPath = path.join(source, file.name);
+        const destPath = path.join(target, file.name);
+        if (file.isDirectory()) {
+            copyFolderRecursiveSync(srcPath, destPath);
+        } else {
+            fs.copyFileSync(srcPath, destPath);
+        }
+    }
+}
+
 export async function monitorAndRetryDownload(
     requestId: string,
     releases: any[],
@@ -2724,22 +2757,43 @@ export async function monitorAndRetryDownload(
                             
                             downloadStatus = "failed";
                         } else {
-                            const destPath = path.join(targetLib.path, path.basename(foundFilePath));
-                            console.log(`[AUTO-DOWNLOAD-MONITOR] Moving downloaded file from ${foundFilePath} to ${destPath}`);
-                            
                             if (!fs.existsSync(targetLib.path)) {
                                 fs.mkdirSync(targetLib.path, { recursive: true });
                             }
+
+                            const parentFolder = path.dirname(foundFilePath);
+                            const discPattern = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i;
+                            const isDiscSubfolder = discPattern.test(path.basename(parentFolder).trim());
+                            const rootBookFolder = isDiscSubfolder ? path.dirname(parentFolder) : parentFolder;
+
+                            const isRootDownloadsDir = rootBookFolder === configuredPath || 
+                                                       rootBookFolder === "/downloads" || 
+                                                       rootBookFolder === "./downloads" || 
+                                                       rootBookFolder === "/app/downloads" || 
+                                                       rootBookFolder === process.env.DOWNLOADS_DIR;
+
+                            let finalDestPath = "";
+
+                            if (!isRootDownloadsDir && fs.existsSync(rootBookFolder) && fs.statSync(rootBookFolder).isDirectory()) {
+                                const folderName = path.basename(rootBookFolder);
+                                const destFolder = path.join(targetLib.path, folderName);
+                                console.log(`[AUTO-DOWNLOAD-MONITOR] Copying complete multi-disc/multi-track folder from ${rootBookFolder} to ${destFolder}`);
+                                copyFolderRecursiveSync(rootBookFolder, destFolder);
+                                copySuccessful = true;
+                                finalDestPath = path.join(destFolder, path.basename(foundFilePath));
+                            } else {
+                                const destPath = path.join(targetLib.path, path.basename(foundFilePath));
+                                console.log(`[AUTO-DOWNLOAD-MONITOR] Moving downloaded file from ${foundFilePath} to ${destPath}`);
+                                fs.copyFileSync(foundFilePath, destPath);
+                                copySuccessful = true;
+                                finalDestPath = destPath;
+                            }
                             
-                            fs.copyFileSync(foundFilePath, destPath);
-                            copySuccessful = true;
-                            
-                            let finalDestPath = destPath;
-                            const ext = path.extname(destPath).toLowerCase();
+                            const ext = path.extname(finalDestPath).toLowerCase();
                             if (ext === ".mobi") {
                                 try {
-                                    const epubPath = destPath.replace(/\.mobi$/i, ".epub");
-                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Attempting to convert MOBI to EPUB: ${destPath} -> ${epubPath}`);
+                                    const epubPath = finalDestPath.replace(/\.mobi$/i, ".epub");
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Attempting to convert MOBI to EPUB: ${finalDestPath} -> ${epubPath}`);
                                     const { exec } = require("child_process");
                                     const { promisify } = require("util");
                                     const execAsync = promisify(exec);
@@ -2753,9 +2807,9 @@ export async function monitorAndRetryDownload(
                                     }
                                     
                                     if (hasConverter) {
-                                        await execAsync(`ebook-convert "${destPath}" "${epubPath}" --language en`);
+                                        await execAsync(`ebook-convert "${finalDestPath}" "${epubPath}" --language en`);
                                         if (fs.existsSync(epubPath)) {
-                                            fs.unlinkSync(destPath);
+                                            fs.unlinkSync(finalDestPath);
                                             finalDestPath = epubPath;
                                             console.log(`[AUTO-DOWNLOAD-MONITOR] MOBI successfully converted to EPUB!`);
                                         }
@@ -2786,22 +2840,15 @@ export async function monitorAndRetryDownload(
                                 } catch (e) {}
 
                                 if (fs.existsSync(foundFilePath)) {
-                                    fs.unlinkSync(foundFilePath);
+                                    try { fs.unlinkSync(foundFilePath); } catch (e) {}
                                     console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
                                 }
                                 
-                                const parentDir = path.dirname(foundFilePath);
-                                if (parentDir !== configuredPath && parentDir !== "/downloads" && parentDir !== "./downloads" && parentDir !== "/app/downloads") {
-                                    if (fs.existsSync(parentDir)) {
-                                        const remainingFiles = fs.readdirSync(parentDir);
-                                        if (remainingFiles.length === 0) {
-                                            try {
-                                                fs.chmodSync(parentDir, 0o777);
-                                            } catch (e) {}
-                                            fs.rmdirSync(parentDir);
-                                            console.log(`[AUTO-DOWNLOAD-MONITOR] Cleaned up empty parent directory: ${parentDir}`);
-                                        }
-                                    }
+                                if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+                                    try {
+                                        fs.rmdirSync(rootBookFolder, { recursive: true });
+                                        console.log(`[AUTO-DOWNLOAD-MONITOR] Cleaned up completed download folder: ${rootBookFolder}`);
+                                    } catch (e) {}
                                 }
                             } catch (unlinkErr: any) {
                                 if (!clientDeleted) {
