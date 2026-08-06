@@ -535,11 +535,10 @@ export async function submitSupportTicket(formData: FormData) {
 
 export async function getActiveDownloads() {
     const apps = await prisma.mediaApp.findMany({
-        where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent"] } }
+        where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent", "qbittorrent", "SABnzbd", "NZBGet"] } }
     });
 
     const results = await Promise.all(apps.map(async (app) => {
-        // 1. Initialize the data object for THIS specific app iteration
         let data: any = { 
             id: app.id, 
             type: app.type, 
@@ -552,32 +551,62 @@ export async function getActiveDownloads() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000); 
             const cleanUrl = app.url.replace(/\/$/, "");
-            
-            // Decrypt the API key from your secure storage
-            const decryptedKey = decryptData(app.apiKey as string);
+            const decryptedKey = app.apiKey ? decryptData(app.apiKey as string) : "";
+            const appType = app.type.toLowerCase();
 
-            const res = await fetch(`${cleanUrl}/api?mode=queue&output=json&apikey=${decryptedKey}`, { 
-                signal: controller.signal, 
-                cache: "no-store" 
-            });
-            clearTimeout(timeoutId);
-            
-            const json = await res.json();
+            if (appType === "qbittorrent") {
+                const res = await fetch(`${cleanUrl}/api/v2/torrents/info?filter=downloading`, { 
+                    signal: controller.signal, 
+                    cache: "no-store" 
+                });
+                clearTimeout(timeoutId);
 
-            // 2. Now 'data' is defined and can be updated
-            if (json.queue) {
-                data.online = true;
-                data.queue = (json.queue.slots || []).map((slot: any) => ({
-                    filename: slot.filename || "Unknown Download",
-                    percentage: slot.percentage || "0",
-                    timeleft: slot.timeleft || "0:00",
-                    mb: slot.mb || 0,
-                    mbleft: slot.mbleft || 0
-                }));
+                if (res.ok) {
+                    const torrents = await res.json();
+                    if (Array.isArray(torrents)) {
+                        data.online = true;
+                        data.queue = torrents.map((t: any) => {
+                            const sizeMb = t.size ? Math.round(t.size / (1024 * 1024)) : 0;
+                            const leftMb = t.amount_left ? Math.round(t.amount_left / (1024 * 1024)) : 0;
+                            const pct = t.progress ? (t.progress * 100).toFixed(1) : "0";
+                            const etaSec = t.eta || 0;
+                            const mins = Math.floor(etaSec / 60);
+                            const secs = etaSec % 60;
+                            const timeleftStr = etaSec > 0 ? `${mins}m ${secs}s` : "Unknown";
+
+                            return {
+                                filename: t.name || "Unknown Torrent",
+                                percentage: pct,
+                                timeleft: timeleftStr,
+                                mb: sizeMb,
+                                mbleft: leftMb
+                            };
+                        });
+                    }
+                }
+            } else {
+                const res = await fetch(`${cleanUrl}/api?mode=queue&output=json&apikey=${decryptedKey}`, { 
+                    signal: controller.signal, 
+                    cache: "no-store" 
+                });
+                clearTimeout(timeoutId);
+
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.queue) {
+                        data.online = true;
+                        data.queue = (json.queue.slots || []).map((slot: any) => ({
+                            filename: slot.filename || "Unknown Download",
+                            percentage: slot.percentage || "0",
+                            timeleft: slot.timeleft || "0:00",
+                            mb: slot.mb || 0,
+                            mbleft: slot.mbleft || 0
+                        }));
+                    }
+                }
             }
             return data;
         } catch (e) {
-            // Return the initialized 'data' object (which has online: false) if the fetch fails
             return data;
         }
     }));

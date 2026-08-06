@@ -48,8 +48,16 @@ export default function ActiveDownloads() {
         );
     }
 
-    // Flatten all queues from all download apps into a single array
-    const allQueueItems = downloads.flatMap(app => app.queue || []);
+    // Flatten all queues from all download apps and deduplicate by filename/title
+    const rawQueueItems = downloads.flatMap(app => app.queue || []);
+    const seenTitles = new Set<string>();
+    const allQueueItems = rawQueueItems.filter((item: any) => {
+        const title = (item.filename || item.title || "").trim().toLowerCase();
+        if (!title) return true;
+        if (seenTitles.has(title)) return false;
+        seenTitles.add(title);
+        return true;
+    });
 
     return (
         <Card className="w-full animate-in fade-in duration-700">
