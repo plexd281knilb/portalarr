@@ -24,6 +24,7 @@ import { Switch } from "@/components/ui/switch";
 import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, CheckCircle2, XCircle, MailCheck, RefreshCw, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import AccessSettingsPage from "@/app/settings/access/page";
 
 export default function SettingsPage() {
     return (
@@ -413,45 +414,7 @@ function SettingsPageContent() {
 
                 {/* --- TAB 2: ACCESS CONTROL --- */}
                 <TabsContent value="access" className="space-y-4">
-                     <div className="grid gap-4 md:grid-cols-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Create Account</CardTitle>
-                                <CardDescription>Add a new administrator.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={(e) => handleForm(e, createAppUser)} className="space-y-4">
-                                    <div className="space-y-2"><Label>Username</Label><Input name="username" required autoComplete="off" /></div>
-                                    <div className="space-y-2"><Label>Email</Label><Input name="email" type="email" required autoComplete="off" /></div>
-                                    <div className="space-y-2"><Label>Password</Label><Input name="password" type="password" required autoComplete="new-password" /></div>
-                                    <div className="space-y-2">
-                                        <Label>Role</Label>
-                                        <Select name="role" defaultValue="USER">
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent><SelectItem value="ADMIN">Admin</SelectItem><SelectItem value="USER">User</SelectItem></SelectContent>
-                                        </Select>
-                                    </div>
-                                    <Button type="submit" className="w-full"><UserPlus className="h-4 w-4 mr-2"/> Create</Button>
-                                </form>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader><CardTitle>Existing Users</CardTitle></CardHeader>
-                            <CardContent>
-                                <div className="space-y-4 max-h-[400px] overflow-y-auto">
-                                    {users.map((user) => (
-                                        <div key={user.id} className="flex justify-between items-center border p-3 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">{user.role === "ADMIN" ? <Shield className="h-4 w-4"/> : <User className="h-4 w-4"/>}</div>
-                                                <div><div className="font-medium">{user.username}</div><div className="text-xs text-muted-foreground">{user.email}</div></div>
-                                            </div>
-                                            <Button size="icon" variant="ghost" className="text-red-500" onClick={() => handleDelete(user.id, deleteAppUser)}><Trash2 className="h-4 w-4"/></Button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                    <AccessSettingsPage />
                 </TabsContent>
 
                 {/* --- TAB 3: MONITORING & APPS --- */}
