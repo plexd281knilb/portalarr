@@ -15,10 +15,11 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
   - **Auth:** Custom JWT-based session management using `jose` and `bcryptjs`.
   - **Security:** AES-256-GCM encryption for sensitive service tokens (Plex, SMTP, etc.).
 - **Core Features:**
-  - **Unified Status Widgets:** Real-time stream stats (Tautulli), server health metrics (Glances), and active download queues.
+  - **Unified Status Widgets:** Real-time stream stats (Tautulli), server health metrics (Glances), and deduplicated active download queues (qBittorrent, SABnzbd, NZBGet).
   - **Support System:** Direct ticket submission for users, and a ticket management panel at `/admin/tickets` for administrators (with SMTP email updates).
   - **Interactive Beta Portal:** A modular dashboard at `/beta` showcasing active and upcoming beta features/services.
   - **Announcements & Roadmap:** Centralized banner controls and GFM-supported Markdown roadmaps updated directly from admin settings.
+  - **Persistent 30-Day Sessions:** Signed HttpOnly JWT session cookies with 30-day lifetime and sliding auto-renewal.
 
 ## Building and Running
 
@@ -75,15 +76,18 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 ### 3. Encryption
 - **Sensitive Fields:** Fields like `mainPlexToken`, `smtpPass`, and service `apiKey`s must be encrypted before saving to the database using `encryptData` and decrypted before use with `decryptData` (from `src/lib/encryption.ts`).
 
-### 4. Global Route Protection
+### 4. Global Route Protection & Edge Security
 - **Proxy Configuration:** All routes are protected by `src/proxy.ts` (Next.js 16 convention).
-- **Enforcement:** Users are redirected to `/login` if no valid session exists.
+- **Enforcement:** Users are redirected to `/login` if no valid session exists. API requests without valid sessions are rejected at the edge with HTTP 401.
 - **Role & Status Protection:** Admin routes (`/settings`, `/admin/*`) are restricted to users with the `ADMIN` role. Users with `PENDING` or `REJECTED` status are blocked from all app/API routes by `src/proxy.ts` and redirected to `/pending`.
+- **Static Asset Guards:** Static asset bypass checks in `proxy.ts` explicitly exclude `/api` paths to prevent API route session bypasses via file extension tricks.
 
-### 5. Account Approval & Plex Auto-Sync
+### 5. Account Approval, Plex Auto-Sync & Session Resilience
 - **Pending Account Requests:** New users can submit a temporary account request on `/login`. This sets `status = "PENDING"` and emails an admin notification via SMTP. Admins manage approval/rejection at `/settings/access`.
-- **Plex Friends Auto-Sync:** The background scheduler in `src/lib/prisma.ts` periodically scans the owner's Plex friends list (`/api/v2/friends`). It auto-provisions `APPROVED` accounts for new friends, updates changed emails/usernames, and revokes access (`status = "REJECTED"`) for users removed from Plex (protecting `ADMIN` accounts).
-- **Send-to-Kindle Email Gate:** Users must configure a valid Send-to-Kindle email (`kindleEmail`) to unlock access to books and requests on `/library`.
+- **Plex Owner Token Auto-Save & Friend Sync:** Logging in as the Plex server owner automatically saves the owner's encrypted token into `prisma.settings` and triggers a background sync. The scheduler in `src/lib/prisma.ts` scans `/api/v2/friends`, auto-provisions `APPROVED` accounts for new friends, updates changed emails/usernames, and revokes access (`status = "REJECTED"`) for removed friends.
+- **Session Desync & Loop Prevention:** `getCurrentUser()` detects changes between the database status/role and the active JWT payload. If an admin approves a pending user, `getCurrentUser()` automatically re-issues a fresh session cookie with `status = "APPROVED"`, preventing redirect loops between `proxy.ts` and `/pending`.
+- **Persistent Login:** Session cookies persist for 30 days with sliding renewal so active users stay logged in across browser restarts and reboots.
+- **Send-to-Kindle Email Gate & Settings Header:** Users must configure a valid Send-to-Kindle email (`kindleEmail`) to unlock access to books on `/library`. A prominent Kindle Settings action button in the `/library` header allows users to manage delivery preferences and view the Amazon Approved Senders Guide.
 - **Forgot Password Email Workflow:** Users can click "Forgot password?" on `/login`. Entering an email or username generates a temporary password, updates the user's password in SQLite, and sends the temp password via SMTP. Users can update to a new permanent password on `/settings/access`.
 
 ### 6. Gotchas & Best Practices
@@ -94,17 +98,18 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Library Access Defaults:** Public libraries use `allowedUsers = "*"` or empty string to allow all approved users access.
 - **Server Action Error Handling:** Server actions invoked from Client Components should return a serializable `{ success: boolean, error?: string }` object instead of throwing raw `Error`s. In production Next.js builds, raw errors are masked with a generic *"An error occurred in the Server Components render"* message, preventing detailed user-facing error reporting.
 - **Kindle & Library Scan Renaming Loops:** Keep on-disk file paths pretty (e.g. `Author - Title.ext`) and avoid cleaning or lowercase-renaming them on disk during library scans. This prevents infinite scan-rename cycles and race conditions where download/Kindle delivery checks fail because the path keeps changing. For Kindle email delivery, sanitize the attachment filename *in the email options* instead of renaming the file on disk.
-- **Download Client File Cleanup:** When a book download finishes and is successfully copied to a library, always call the download client API to delete the torrent/NZB and its files. This releases active OS/Docker file locks and automatically frees up storage on the downloads share.
+- **Download Client File Cleanup & Deduplication:** When a book download finishes and is successfully copied to a library, call the download client API to delete the torrent/NZB and its files. Active downloads fetched from SABnzbd, NZBGet, and qBittorrent are deduplicated by clean filename/title on both server and client.
 - **Foreign Language Ebook Filtering:** To maintain an English-centric library on automated grabs, use the `isForeignLanguage` helper. Releases with foreign indicators (e.g. `swedish`, `svensk`, `german`, `french`, etc.) must be filtered out during Prowlarr search. If a downloaded file contains these keywords, delete it from the client and disk, and set `downloadStatus = "failed"` to trigger the monitor failover and attempt the next release.
 
 ## Key Files
 - `prisma/schema.prisma`: The source of truth for the database schema.
-- `src/proxy.ts`: Global authentication, role-based, and user status access control.
-- `src/app/actions.ts`: Main repository for system logic, Plex friend sync, and database mutations.
-- `src/app/auth-actions.ts`: Logic for login, session creation, account requests, and Plex authentication.
+- `src/proxy.ts`: Global edge authentication, role-based, static file, and user status access control.
+- `src/app/actions.ts`: Main repository for system logic, Plex friend sync, active download parsing, and database mutations.
+- `src/app/auth-actions.ts`: Logic for login, 30-day session creation, account requests, Plex authentication, and session cookie resync.
 - `src/app/pending/page.tsx`: Pending account approval status screen for non-approved users.
 - `src/app/settings/access/page.tsx`: Admin management screen for users, pending access requests, and Plex sync.
 - `src/app/admin/tickets/page.tsx`: Admin management screen for user support tickets.
-- `src/app/beta/page.tsx`: User dashboard displaying active beta testing services.
+- `src/app/library/page.tsx`: Book library page with Send-to-Kindle gate and Kindle settings header.
+- `src/components/active-downloads.tsx`: Client component for deduplicated active downloads queue rendering.
 - `src/components/sidebar.tsx`: Main navigation component.
 - `src/lib/encryption.ts`: AES-256-GCM encryption utilities.
