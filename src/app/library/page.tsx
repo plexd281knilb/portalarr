@@ -320,16 +320,69 @@ function BookLibraryPageContent() {
         localStorage.setItem("book-library-group-series", String(checked));
     };
 
-    const renderBookCard = (book: any) => {
-        let displayTitle = groupBySeries && book.cleanSeriesTitle ? book.cleanSeriesTitle : book.title;
-        let displayAuthor = book.author || "Unknown Author";
+function normalizeBookCardMetadata(book: any) {
+    let rawTitle = (book.title || "").trim();
+    let rawAuthor = (book.author || "Unknown Author").trim();
 
-        if (book.title && book.title.includes(" - ") && (!book.author || book.author === "Unknown Author" || /^(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/i.test(book.author.trim()))) {
-            const parts = book.title.split(" - ").map((p: string) => p.trim());
-            if (parts.length >= 2) {
-                displayTitle = parts[0];
-                displayAuthor = parts.slice(1).join(" - ").replace(/\b(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/gi, "").trim();
-            }
+    const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(rawTitle);
+    const isDiscAuthor = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(rawAuthor);
+
+    let displayTitle = rawTitle;
+    let displayAuthor = rawAuthor;
+
+    if (isDiscTitle && !isDiscAuthor && rawAuthor !== "Unknown Author") {
+        displayTitle = rawAuthor;
+        displayAuthor = "Unknown Author";
+    } else if (isDiscAuthor) {
+        displayAuthor = "Unknown Author";
+    }
+
+    if (displayTitle.includes(" - ") && (!displayAuthor || displayAuthor === "Unknown Author" || /^(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/i.test(displayAuthor.trim()))) {
+        const parts = displayTitle.split(" - ").map((p: string) => p.trim());
+        if (parts.length >= 2) {
+            displayTitle = parts[0];
+            displayAuthor = parts.slice(1).join(" - ").replace(/\b(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/gi, "").trim();
+        }
+    }
+
+    // Clean scene noise (e.g. "(Rob Inglis)-PoF", "-PoF", "03 - The Two Towers")
+    displayTitle = displayTitle.replace(/\s*-\s*[A-Za-z0-9]+$/i, "");
+    displayTitle = displayTitle.replace(/\s*\([^)]*PoF[^)]*\)/gi, "");
+    displayTitle = displayTitle.replace(/\s*\(Rob Inglis\)/gi, "");
+    displayTitle = displayTitle.replace(/\s*\(Unabridged\)/gi, "");
+    displayTitle = displayTitle.replace(/\s*\(Narrated by [^)]+\)/gi, "");
+    displayTitle = displayTitle.replace(/^[0-9]{2}\s*-\s*/, "");
+
+    // Lord of the Rings & Tolkien Master Rules
+    const lowerTitle = displayTitle.toLowerCase();
+    if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("lord of the rings") || lowerTitle.includes("hobbit")) {
+        displayAuthor = "J. R. R. Tolkien";
+        if (lowerTitle.includes("fellowship of the ring")) displayTitle = "The Fellowship of the Ring";
+        else if (lowerTitle.includes("two towers")) displayTitle = "The Two Towers";
+        else if (lowerTitle.includes("return of the king")) displayTitle = "The Return of the King";
+    }
+
+    // Harry Potter & Rowling Master Rules
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
+        displayAuthor = "J. K. Rowling";
+    }
+
+    // Handle title === author duplication
+    if (displayAuthor.toLowerCase() === displayTitle.toLowerCase()) {
+        if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king")) {
+            displayAuthor = "J. R. R. Tolkien";
+        } else {
+            displayAuthor = "Unknown Author";
+        }
+    }
+
+    return { displayTitle, displayAuthor };
+}
+
+    const renderBookCard = (book: any) => {
+        let { displayTitle, displayAuthor } = normalizeBookCardMetadata(book);
+        if (groupBySeries && book.cleanSeriesTitle) {
+            displayTitle = book.cleanSeriesTitle;
         }
 
         const volumeBadge = groupBySeries && book.seriesVolume ? (
@@ -532,9 +585,7 @@ function BookLibraryPageContent() {
     };
 
     const renderAudiobookCard = (book: any) => {
-        const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test((book.title || "").trim());
-        const displayTitle = isDiscTitle && book.author && book.author !== "Unknown Author" ? book.author : book.title;
-        const displayAuthor = isDiscTitle ? book.title : (book.author || "Unknown Author");
+        const { displayTitle, displayAuthor } = normalizeBookCardMetadata(book);
         const ext = book.fileType ? book.fileType.toUpperCase() : "AUDIO";
 
         return (

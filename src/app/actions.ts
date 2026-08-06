@@ -1775,6 +1775,13 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     clean = clean.replace(/\.(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
     clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
     
+    // Strip trailing scene tags like (Rob Inglis)-PoF, -PoF, (Unabridged), etc.
+    clean = clean.replace(/\s*-\s*[A-Za-z0-9]+$/i, "");
+    clean = clean.replace(/\s*\([^)]*PoF[^)]*\)/gi, "");
+    clean = clean.replace(/\s*\(Rob Inglis\)/gi, "");
+    clean = clean.replace(/\s*\(Unabridged\)/gi, "");
+    clean = clean.replace(/\s*\(Narrated by [^)]+\)/gi, "");
+
     // Only strip 4-digit numbers if they look like scene release years (2000-2029) and NOT book title years like 1984
     clean = clean.replace(/\b(20[0-2]\d)\b/g, " ");
 
@@ -1803,11 +1810,9 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
             const partAMatch = partA.match(knownAuthorsRegex);
 
             if (partBMatch && !partAMatch) {
-                // Title - Author format
                 title = partA;
                 author = cleanPartB || partB;
             } else {
-                // Author - Title format
                 author = partA;
                 title = partB;
             }
@@ -1827,10 +1832,38 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
         }
     }
 
-    // Strip superfluous series clauses if title still starts with main title
-    const cleanTitle = title.replace(/\b(?:The Lord Of The Rings|Lord Of The Rings)\b/gi, "").trim();
-    if (cleanTitle.length > 2) {
-        title = cleanTitle;
+    // Disc / Numbered title fixes
+    const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(title.trim());
+    const isDiscAuthor = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(author.trim());
+
+    if (isDiscTitle && !isDiscAuthor && author !== "Unknown Author") {
+        title = author;
+        author = "Unknown Author";
+    } else if (isDiscAuthor) {
+        author = "Unknown Author";
+    }
+
+    // Lord of the Rings & Tolkien Master Rules
+    const lowerTitle = title.toLowerCase();
+    if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("lord of the rings") || lowerTitle.includes("hobbit")) {
+        author = "J. R. R. Tolkien";
+        if (lowerTitle.includes("fellowship of the ring")) title = "The Fellowship of the Ring";
+        else if (lowerTitle.includes("two towers")) title = "The Two Towers";
+        else if (lowerTitle.includes("return of the king")) title = "The Return of the King";
+    }
+
+    // Harry Potter & Rowling Master Rules
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
+        author = "J. K. Rowling";
+    }
+
+    // Handle Title === Author duplication
+    if (author.toLowerCase() === title.toLowerCase()) {
+        if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king")) {
+            author = "J. R. R. Tolkien";
+        } else {
+            author = "Unknown Author";
+        }
     }
 
     return {
