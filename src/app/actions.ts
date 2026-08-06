@@ -1175,7 +1175,7 @@ export async function getBookRequests() {
     }
 }
 
-async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, publishYear?: string | null }) {
+async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, mediaType?: string, publishYear?: string | null }) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
@@ -1191,6 +1191,12 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
             console.log("[SMTP-NOTIFICATION] No admin users found. Skipping request notification.");
             return;
         }
+
+        const isAudiobook = request.mediaType === "audiobook";
+        const mediaLabel = isAudiobook ? "Audiobook" : "Ebook";
+        const mediaBadge = isAudiobook
+            ? `<span style="font-size: 11px; font-weight: bold; padding: 2px 8px; background-color: #fef3c7; color: #b45309; border-radius: 4px;">🎧 AUDIOBOOK</span>`
+            : `<span style="font-size: 11px; font-weight: bold; padding: 2px 8px; background-color: #dbeafe; color: #1e40af; border-radius: 4px;">📖 EBOOK</span>`;
 
         const senderEmail = settings.smtpFrom || settings.smtpUser;
         const transporter = nodemailer.createTransport({
@@ -1209,7 +1215,7 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
             let detailsHtml = "";
             if (request.type === "checklist") {
                 detailsHtml = `
-                    <p>Multiple books were requested from a checklist by <strong>${request.requestedBy}</strong>:</p>
+                    <p>Multiple ${isAudiobook ? "audiobooks" : "books"} were requested from a checklist by <strong>${request.requestedBy}</strong>:</p>
                     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 6px; font-family: monospace; white-space: pre-wrap; line-height: 1.5;">${request.author}</div>
                 `;
             } else {
@@ -1224,15 +1230,19 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
                             <td style="padding: 10px; border: 1px solid #e2e8f0;">${request.author || "Unknown Author"}</td>
                         </tr>
                         <tr style="background-color: #f8fafc;">
+                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Format:</td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${mediaBadge}</td>
+                        </tr>
+                        <tr>
                             <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Requested By:</td>
                             <td style="padding: 10px; border: 1px solid #e2e8f0;"><code>${request.requestedBy}</code></td>
                         </tr>
-                        <tr>
+                        <tr style="background-color: #f8fafc;">
                             <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Type:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><span style="text-transform: uppercase; font-size: 11px; font-weight: bold; padding: 2px 6px; background-color: #dbeafe; color: #1e40af; border-radius: 4px;">${request.type}</span></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><span style="text-transform: uppercase; font-size: 11px; font-weight: bold; padding: 2px 6px; background-color: #e2e8f0; color: #334155; border-radius: 4px;">${request.type}</span></td>
                         </tr>
                         ${request.publishYear ? `
-                        <tr style="background-color: #f8fafc;">
+                        <tr>
                             <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Publish Year:</td>
                             <td style="padding: 10px; border: 1px solid #e2e8f0;">${request.publishYear}</td>
                         </tr>
@@ -1244,13 +1254,13 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
             const mailOptions = {
                 from: senderEmail,
                 to: admin.email,
-                subject: `📚 New Book Request: ${request.title}`,
+                subject: `${isAudiobook ? "🎧 New Audiobook Request" : "📚 New Ebook Request"}: ${request.title}`,
                 html: `
                     <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                        <h2 style="color: #4f46e5; margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">New Ebook Request</h2>
+                        <h2 style="color: ${isAudiobook ? "#d97706" : "#4f46e5"}; margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">${isAudiobook ? "New Audiobook Request 🎧" : "New Ebook Request 📖"}</h2>
                         ${detailsHtml}
                         <div style="margin-top: 25px; text-align: center;">
-                            <a href="${process.env.APP_URL || 'http://localhost:3000'}/library" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Manage Requests</a>
+                            <a href="${process.env.APP_URL || 'http://localhost:3000'}/library" style="background-color: ${isAudiobook ? "#d97706" : "#4f46e5"}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Manage Requests</a>
                         </div>
                     </div>
                 `
@@ -1258,7 +1268,7 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
 
             await transporter.sendMail(mailOptions);
         }
-        console.log(`[SMTP-NOTIFICATION] Request notification sent successfully for "${request.title}"`);
+        console.log(`[SMTP-NOTIFICATION] Request notification sent successfully for "${request.title}" (${mediaLabel})`);
     } catch (e: any) {
         console.error("[SMTP-NOTIFICATION] Failed to send request email notification to admins:", e);
     }
@@ -1304,6 +1314,7 @@ export async function createBookRequest(formData: FormData) {
                 author,
                 requestedBy: targetUser,
                 type: "series",
+                mediaType,
                 publishYear: null
             }).catch(err => {
                 console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
@@ -1336,6 +1347,7 @@ export async function createBookRequest(formData: FormData) {
             author,
             requestedBy: targetUser,
             type: "book",
+            mediaType,
             publishYear
         }).catch(err => {
             console.error(`[SMTP-NOTIFICATION] Single request email notification failed:`, err);
@@ -3587,10 +3599,11 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
     if (booksList.length > 0) {
         const listText = booksList.map(b => `- ${b.title} by ${b.author}`).join("\n");
         sendRequestNotificationToAdmins({
-            title: `${booksList.length} Books from checklist`,
+            title: `${booksList.length} ${mediaType === "audiobook" ? "Audiobooks" : "Books"} from checklist`,
             author: listText,
             requestedBy: targetUser,
             type: "checklist",
+            mediaType,
             publishYear: null
         }).catch(err => {
             console.error(`[SMTP-NOTIFICATION] Checklist request email notification failed:`, err);
