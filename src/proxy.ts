@@ -63,16 +63,20 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/", req.url));
     }
 
-    // 5. Role-based protection for Admin routes (excl. /settings/profile which is user self-management)
-    const isAdminRoute = 
-      pathname.startsWith("/admin") || 
-      (pathname.startsWith("/settings") && pathname !== "/settings/profile");
-
-    if (isAdminRoute && payload.role !== "ADMIN") {
+    // 5. Role-based protection for Admin routes
+    if (pathname.startsWith("/admin") && payload.role !== "ADMIN") {
       if (pathname.startsWith("/api")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
       return NextResponse.redirect(new URL("/", req.url));
+    }
+
+    if (pathname.startsWith("/settings") && pathname !== "/settings/profile" && payload.role !== "ADMIN") {
+      if (pathname.startsWith("/api")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      // Direct non-admin users to their Account Settings / Password Change screen
+      return NextResponse.redirect(new URL("/settings/profile", req.url));
     }
 
     return NextResponse.next();

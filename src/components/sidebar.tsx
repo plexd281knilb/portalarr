@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { logout } from "@/app/auth-actions" 
+import { logout, getSession } from "@/app/auth-actions" 
 import { 
   LayoutDashboard, 
   Settings, 
@@ -19,6 +19,15 @@ import {
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   const pathname = usePathname()
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    getSession().then((session) => {
+      if (session?.role === "ADMIN") {
+        setIsAdmin(true);
+      }
+    });
+  }, []);
 
   return (
     <div className={cn("pb-12 h-screen border-r bg-sidebar text-sidebar-foreground border-sidebar-border flex flex-col justify-between", className)}>
@@ -56,12 +65,14 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
-            <Link href="/settings">
-              <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
-                <Settings className="mr-2 h-4 w-4" />
-                System Settings
-              </Button>
-            </Link>
+            {isAdmin && (
+              <Link href="/settings">
+                <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
+                  <Settings className="mr-2 h-4 w-4" />
+                  System Settings
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -82,6 +93,15 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
 export function MobileSidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getSession().then((session) => {
+      if (session?.role === "ADMIN") {
+        setIsAdmin(true);
+      }
+    });
+  }, []);
 
   return (
     <>
@@ -127,11 +147,13 @@ export function MobileSidebar() {
                     </Button>
                   </Link>
 
-                  <Link href="/settings" onClick={() => setIsOpen(false)}>
-                    <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
-                      <Settings className="mr-2 h-4 w-4" /> System Settings
-                    </Button>
-                  </Link>
+                  {isAdmin && (
+                    <Link href="/settings" onClick={() => setIsOpen(false)}>
+                      <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
+                        <Settings className="mr-2 h-4 w-4" /> System Settings
+                      </Button>
+                    </Link>
+                  )}
 
                    <div className="mt-8 border-t pt-4">
                         <Button variant="ghost" className="w-full justify-start text-red-500" onClick={() => logout()}>
