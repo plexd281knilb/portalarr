@@ -6,6 +6,7 @@ import nodemailer from "nodemailer";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { encryptData, decryptData } from "@/lib/encryption";
+import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
 const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
@@ -3298,43 +3299,9 @@ export async function syncPlexFriendsInternal() {
 
         const adminToken = decryptData(settings.mainPlexToken);
 
-        // Fetch Plex Friends list (supports both v2 JSON API and legacy XML API)
-        let friendsList: any[] = [];
-        try {
-            const friendsRes = await fetch("https://plex.tv/api/v2/friends", {
-                headers: {
-                    "Accept": "application/json",
-                    "X-Plex-Token": adminToken,
-                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                }
-            });
-            if (friendsRes.ok) {
-                const json = await friendsRes.json();
-                if (Array.isArray(json)) friendsList = json;
-            }
-        } catch (e) {
-            console.warn("[PLEX-SYNC] v2 friends API error, trying legacy endpoint...", e);
-        }
-
-        // Legacy Plex XML Fallback (/api/users)
-        try {
-            const xmlRes = await fetch(`https://plex.tv/api/users?X-Plex-Token=${adminToken}`);
-            if (xmlRes.ok) {
-                const xmlText = await xmlRes.text();
-                const userMatches = xmlText.matchAll(/<User\s+[^>]*\bemail="([^"]*)"[^>]*\busername="([^"]*)"/gi);
-                for (const match of userMatches) {
-                    const xmlEmail = (match[1] || "").toLowerCase().trim();
-                    const xmlUsername = (match[2] || "").trim();
-                    if (xmlEmail || xmlUsername) {
-                        if (!friendsList.some(f => (f.email || f.user?.email || "").toLowerCase().trim() === xmlEmail)) {
-                            friendsList.push({ email: xmlEmail, username: xmlUsername });
-                        }
-                    }
-                }
-            }
-        } catch (xmlErr) {
-            console.warn("[PLEX-SYNC] Legacy /api/users fallback check failed:", xmlErr);
-        }
+        // Fetch all Plex Friends & Shared Users across API endpoints
+        const friendsList = await getPlexServerFriends(adminToken);
+        console.log(`[PLEX-SYNC] Fetched ${friendsList.length} Plex friends from server.`);
 
         // Fetch Plex Admin Owner profile
         let adminPlexProfile: any = null;
@@ -3369,9 +3336,8 @@ export async function syncPlexFriendsInternal() {
         }
 
         for (const friend of friendsList) {
-            const uObj = friend.user || friend;
-            const fEmail = (uObj.email || friend.email || "").toLowerCase().trim();
-            const fUsername = (uObj.username || friend.username || uObj.title || friend.title || (fEmail ? fEmail.split('@')[0] : "")).trim();
+            const fEmail = (friend.email || "").toLowerCase().trim();
+            const fUsername = (friend.username || (fEmail ? fEmail.split('@')[0] : "")).trim();
 
             if (!fEmail && !fUsername) continue;
 
