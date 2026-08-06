@@ -1517,12 +1517,14 @@ async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortS
 function parseFilenameMetadata(rawBase: string): { title: string, author: string, cleanQuery: string } {
     let clean = rawBase;
 
-    // 1. Strip scene release tags and ebook metadata garbage
-    clean = clean.replace(/\.(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
-    clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
-    clean = clean.replace(/\b\d{4}\b/g, " ");
+    // 1. Strip scene release tags, formats, group names (CTO, BKS, PB2, etc.) and metadata garbage
+    clean = clean.replace(/\.(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB2|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
+    clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB2|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
+    
+    // Only strip 4-digit numbers if they look like scene release years (2000-2029) and NOT book title years like 1984
+    clean = clean.replace(/\b(20[0-2]\d)\b/g, " ");
 
-    // 2. Normalize scene dots into spaces while preserving author initials (e.g. J.R.R., G.R.R., C.S.)
+    // 2. Normalize scene dots into spaces while preserving author initials (e.g. J.K., J.R.R., G.R.R., C.S.)
     clean = clean.replace(/([a-zA-Z0-9]{2,})\.([a-zA-Z0-9]{2,})/g, "$1 $2");
     clean = clean.replace(/([a-zA-Z0-9]{2,})\.([a-zA-Z0-9])/g, "$1 $2");
     clean = clean.replace(/([a-zA-Z0-9])\.([a-zA-Z0-9]{2,})/g, "$1 $2");
@@ -1533,19 +1535,40 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     let title = clean;
     let author = "Unknown Author";
 
-    // 3. Handle " - " author/title separator
+    const knownAuthorsRegex = /\b(J\.?\s*K\.?\s*Rowling|J\.?\s*R\.?\s*R\.?\s*Tolkien|George\s+Orwell|G\.?\s*R\.?\s*R\.?\s*Martin|Stephen\s+King|Brandon\s+Sanderson|Agatha\s+Christie|Isaac\s+Asimov|Neil\s+Gaiman|Terry\s+Pratchett|Frank\s+Herbert|Robert\s+Jordan|C\.?\s*S\.?\s*Lewis|James\s+Patterson|Dan\s+Brown|Rick\s+Riordan|Suzanne\s+Collins|H\.?\s*G\.?\s*Wells|Arthur\s+Conan\s+Doyle|Mark\s+Twain|Ernest\s+Hemingway|Charles\s+Dickens)\b/i;
+
+    // 3. Handle " - " separator (Title - Author vs Author - Title)
     if (clean.includes(" - ")) {
         const parts = clean.split(" - ").map(p => p.trim());
         if (parts.length >= 2) {
-            author = parts[0];
-            title = parts.slice(1).join(" - ");
+            const partA = parts[0];
+            const partB = parts.slice(1).join(" - ");
+
+            const partBMatch = partB.match(knownAuthorsRegex) || partB.match(/^[A-Z]\.?\s*[A-Z]?\s*[A-Z][a-z]+$/i);
+            const partAMatch = partA.match(knownAuthorsRegex);
+
+            if (partBMatch && !partAMatch) {
+                // Title - Author format
+                title = partA;
+                author = partB;
+            } else {
+                // Author - Title format
+                author = partA;
+                title = partB;
+            }
         }
     } else {
-        // 4. Try matching author patterns or initials at start of filename
-        const authorMatch = clean.match(/^(J\.?\s*R\.?\s*R\.?\s*Tolkien|G\.?\s*R\.?\s*R\.?\s*Martin|Stephen\s+King|Brandon\s+Sanderson|Agatha\s+Christie|Isaac\s+Asimov|Neil\s+Gaiman|Terry\s+Pratchett|Frank\s+Herbert|Robert\s+Jordan|C\.?\s*S\.?\s*Lewis|J\.?\s*K\.?\s*Rowling|[A-Z]\.?\s*[A-Z]\.?\s*[A-Z]?\s*[A-Z][a-z]+)\b/i);
-        if (authorMatch) {
-            author = authorMatch[0];
+        // 4. Match author at START or END of clean string
+        const startAuthorMatch = clean.match(/^(J\.?\s*K\.?\s*Rowling|J\.?\s*R\.?\s*R\.?\s*Tolkien|George\s+Orwell|G\.?\s*R\.?\s*R\.?\s*Martin|Stephen\s+King|Brandon\s+Sanderson|Agatha\s+Christie|Isaac\s+Asimov|Neil\s+Gaiman|Terry\s+Pratchett|Frank\s+Herbert|Robert\s+Jordan|C\.?\s*S\.?\s*Lewis)\b/i);
+        if (startAuthorMatch) {
+            author = startAuthorMatch[0];
             title = clean.substring(author.length).replace(/^[:\-\s]+/, "").trim();
+        } else {
+            const endAuthorMatch = clean.match(/\b(J\.?\s*K\.?\s*Rowling|J\.?\s*R\.?\s*R\.?\s*Tolkien|George\s+Orwell|G\.?\s*R\.?\s*R\.?\s*Martin|Stephen\s+King|Brandon\s+Sanderson|Agatha\s+Christie|Isaac\s+Asimov|Neil\s+Gaiman|Terry\s+Pratchett|Frank\s+Herbert|Robert\s+Jordan|C\.?\s*S\.?\s*Lewis)$/i);
+            if (endAuthorMatch) {
+                author = endAuthorMatch[0];
+                title = clean.substring(0, clean.length - author.length).replace(/[:\-\s]+$/, "").trim();
+            }
         }
     }
 
