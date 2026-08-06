@@ -487,7 +487,9 @@ function BookLibraryPageContent() {
     };
 
     const renderAudiobookCard = (book: any) => {
-        const displayTitle = book.title;
+        const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test((book.title || "").trim());
+        const displayTitle = isDiscTitle && book.author && book.author !== "Unknown Author" ? book.author : book.title;
+        const displayAuthor = isDiscTitle ? book.title : (book.author || "Unknown Author");
         const ext = book.fileType ? book.fileType.toUpperCase() : "AUDIO";
 
         return (
@@ -516,7 +518,7 @@ function BookLibraryPageContent() {
                 <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
                     <div className="space-y-1">
                         <h3 className="font-bold text-sm leading-snug group-hover:text-amber-400 transition-colors line-clamp-2 h-10 flex items-center">{displayTitle}</h3>
-                        <p className="text-xs text-muted-foreground truncate">{book.author || "Unknown Author"}</p>
+                        <p className="text-xs text-muted-foreground truncate">{displayAuthor}</p>
                     </div>
                     <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
                         <span>Size: {(book.fileSize ? (book.fileSize / (1024 * 1024)).toFixed(1) : "0")} MB</span>
