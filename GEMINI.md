@@ -107,6 +107,7 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - `src/app/actions.ts`: Main repository for system logic, Plex friend sync, active download parsing, and database mutations.
 - `src/app/auth-actions.ts`: Logic for login, 30-day session creation, account requests, Plex authentication, and session cookie resync.
 - `src/app/pending/page.tsx`: Pending account approval status screen for non-approved users.
+- `src/app/settings/profile/page.tsx`: Self-service account profile and password change screen for all users.
 - `src/app/settings/access/page.tsx`: Admin management screen for users, pending access requests, and Plex sync.
 - `src/app/admin/tickets/page.tsx`: Admin management screen for user support tickets.
 - `src/app/library/page.tsx`: Book library page with Send-to-Kindle gate and Kindle settings header.

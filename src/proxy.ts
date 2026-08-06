@@ -63,10 +63,10 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/", req.url));
     }
 
-    // 5. Role-based protection for Admin routes
+    // 5. Role-based protection for Admin routes (excl. /settings/profile which is user self-management)
     const isAdminRoute = 
       pathname.startsWith("/admin") || 
-      pathname.startsWith("/settings");
+      (pathname.startsWith("/settings") && pathname !== "/settings/profile");
 
     if (isAdminRoute && payload.role !== "ADMIN") {
       if (pathname.startsWith("/api")) {

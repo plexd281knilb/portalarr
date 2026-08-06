@@ -13,7 +13,8 @@ import {
   X,
   LogOut,
   LifeBuoy,
-  BookOpen
+  BookOpen,
+  User
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -48,10 +49,17 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
+            <Link href="/settings/profile">
+              <Button variant={pathname === "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
+                <User className="mr-2 h-4 w-4" />
+                Account Settings
+              </Button>
+            </Link>
+
             <Link href="/settings">
-              <Button variant={pathname.startsWith("/settings") ? "secondary" : "ghost"} className="w-full justify-start">
+              <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
                 <Settings className="mr-2 h-4 w-4" />
-                Settings
+                System Settings
               </Button>
             </Link>
           </div>
@@ -112,9 +120,16 @@ export function MobileSidebar() {
                       <LifeBuoy className="mr-2 h-4 w-4" /> Support Tickets
                     </Button>
                   </Link>
+
+                  <Link href="/settings/profile" onClick={() => setIsOpen(false)}>
+                    <Button variant={pathname === "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
+                      <User className="mr-2 h-4 w-4" /> Account Settings
+                    </Button>
+                  </Link>
+
                   <Link href="/settings" onClick={() => setIsOpen(false)}>
-                    <Button variant={pathname.startsWith("/settings") ? "secondary" : "ghost"} className="w-full justify-start">
-                      <Settings className="mr-2 h-4 w-4" /> Settings
+                    <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
+                      <Settings className="mr-2 h-4 w-4" /> System Settings
                     </Button>
                   </Link>
 
