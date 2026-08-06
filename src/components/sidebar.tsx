@@ -113,7 +113,7 @@ export function MobileSidebar() {
                     </Button>
                   </Link>
                   <Link href="/settings" onClick={() => setIsOpen(false)}>
-                    <Button variant={pathname === "/settings" ? "secondary" : "ghost"} className="w-full justify-start">
+                    <Button variant={pathname.startsWith("/settings") ? "secondary" : "ghost"} className="w-full justify-start">
                       <Settings className="mr-2 h-4 w-4" /> Settings
                     </Button>
                   </Link>
