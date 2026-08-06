@@ -17,6 +17,7 @@ export default function AccessSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [syncingPlex, setSyncingPlex] = useState(false);
     const [syncMessage, setSyncMessage] = useState("");
+    const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL");
 
     // Change Password state
     const [passCurrent, setPassCurrent] = useState("");
@@ -222,9 +223,45 @@ export default function AccessSettingsPage() {
 
             {/* USER LIST */}
             <Card>
-                <CardHeader>
-                    <CardTitle>Existing Users & Requests</CardTitle>
-                    <CardDescription>Review pending requests and manage current access.</CardDescription>
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <CardTitle>Existing Users & Requests</CardTitle>
+                        <CardDescription>Review pending requests and manage current access.</CardDescription>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 bg-muted/30 p-1 rounded-lg border border-muted/50 text-xs">
+                        <Button 
+                            variant={filterStatus === "ALL" ? "secondary" : "ghost"} 
+                            size="sm" 
+                            className="h-7 text-xs px-2.5"
+                            onClick={() => setFilterStatus("ALL")}
+                        >
+                            All ({users.length})
+                        </Button>
+                        <Button 
+                            variant={filterStatus === "PENDING" ? "secondary" : "ghost"} 
+                            size="sm" 
+                            className="h-7 text-xs px-2.5 text-amber-400"
+                            onClick={() => setFilterStatus("PENDING")}
+                        >
+                            Pending ({users.filter(u => u.status === "PENDING").length})
+                        </Button>
+                        <Button 
+                            variant={filterStatus === "APPROVED" ? "secondary" : "ghost"} 
+                            size="sm" 
+                            className="h-7 text-xs px-2.5 text-emerald-400"
+                            onClick={() => setFilterStatus("APPROVED")}
+                        >
+                            Approved ({users.filter(u => u.status === "APPROVED" || !u.status).length})
+                        </Button>
+                        <Button 
+                            variant={filterStatus === "REJECTED" ? "secondary" : "ghost"} 
+                            size="sm" 
+                            className="h-7 text-xs px-2.5 text-red-400"
+                            onClick={() => setFilterStatus("REJECTED")}
+                        >
+                            Rejected ({users.filter(u => u.status === "REJECTED").length})
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-4">
@@ -233,7 +270,14 @@ export default function AccessSettingsPage() {
                         ) : users.length === 0 ? (
                             <div className="text-sm text-muted-foreground italic">No users created yet.</div>
                         ) : (
-                            users.map((user) => (
+                            users
+                                .filter(u => {
+                                    if (filterStatus === "PENDING") return u.status === "PENDING";
+                                    if (filterStatus === "APPROVED") return u.status === "APPROVED" || !u.status;
+                                    if (filterStatus === "REJECTED") return u.status === "REJECTED";
+                                    return true;
+                                })
+                                .map((user) => (
                                 <div key={user.id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 border rounded-xl gap-3 ${user.status === "PENDING" ? "bg-amber-500/10 border-amber-500/30" : "bg-muted/20"}`}>
                                     <div className="flex items-start sm:items-center gap-3">
                                         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
