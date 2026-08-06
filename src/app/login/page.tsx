@@ -216,11 +216,16 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
     const [forgotSuccess, setForgotSuccess] = useState("");
     const [forgotError, setForgotError] = useState("");
     const [isForgotLoading, setIsForgotLoading] = useState(false);
+    const [forgotInput, setForgotInput] = useState("");
+    const [prefilledUser, setPrefilledUser] = useState("");
 
     async function handleForgotSubmit(formData: FormData) {
         setIsForgotLoading(true);
         setForgotSuccess("");
         setForgotError("");
+        const inputVal = (formData.get("emailOrUsername") as string) || "";
+        setPrefilledUser(inputVal);
+
         const res = await requestForgotPassword(formData);
         setIsForgotLoading(false);
 
@@ -241,38 +246,57 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
                     </p>
                 </div>
 
-                {forgotSuccess && (
-                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-start gap-2">
-                        <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-                        <span>{forgotSuccess}</span>
-                    </div>
-                )}
-
-                {forgotError && (
-                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                        <span>{forgotError}</span>
-                    </div>
-                )}
-
-                <form action={handleForgotSubmit} className="space-y-3">
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="forgot-email" className="text-xs">Username or Email</Label>
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                                id="forgot-email" name="emailOrUsername" type="text" required
-                                className="pl-9" placeholder="Enter username or email"
-                                autoComplete="email"
-                            />
+                {forgotSuccess ? (
+                    <div className="space-y-3">
+                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3.5 rounded-xl flex items-start gap-2.5 leading-relaxed">
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+                            <div>
+                                <strong>Temporary Password Dispatched!</strong>
+                                <p className="mt-1 text-emerald-300/80">{forgotSuccess}</p>
+                            </div>
                         </div>
-                    </div>
 
-                    <Button type="submit" className="w-full h-10 font-medium" disabled={isForgotLoading}>
-                        {isForgotLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                        Send Temp Password
-                    </Button>
-                </form>
+                        <Button 
+                            type="button" 
+                            className="w-full h-11 font-semibold text-black gap-2"
+                            onClick={() => {
+                                setShowForgot(false);
+                            }}
+                        >
+                            <KeyRound className="h-4 w-4" /> Sign In with Temporary Password
+                        </Button>
+                    </div>
+                ) : (
+                    <>
+                        {forgotError && (
+                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-start gap-2">
+                                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                                <span>{forgotError}</span>
+                            </div>
+                        )}
+
+                        <form action={handleForgotSubmit} className="space-y-3">
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="forgot-email" className="text-xs">Username or Email</Label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        id="forgot-email" name="emailOrUsername" type="text" required
+                                        className="pl-9" placeholder="Enter username or email"
+                                        autoComplete="email"
+                                        value={forgotInput}
+                                        onChange={(e) => setForgotInput(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <Button type="submit" className="w-full h-10 font-medium" disabled={isForgotLoading}>
+                                {isForgotLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+                                Send Temp Password
+                            </Button>
+                        </form>
+                    </>
+                )}
 
                 <Button 
                     type="button" 
@@ -296,6 +320,7 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
                     key={isSetupMode ? "setup-user" : "login-user"}
                     id="username" name="username" type="text" required 
                     className="pl-9"
+                    defaultValue={prefilledUser || ""}
                     placeholder={isSetupMode ? "e.g. admin" : "Username or email"}
                     autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck="false"
                 />
@@ -314,7 +339,7 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
 
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Password (or Temp Password)</Label>
                 {!isSetupMode && (
                   <button 
                     type="button" 
@@ -331,6 +356,8 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
                     key={isSetupMode ? "setup-pass" : "login-pass"}
                     id="password" name="password" type="password" required 
                     className="pl-9"
+                    autoFocus={!!prefilledUser}
+                    placeholder="Enter password or temp password"
                     autoComplete={isSetupMode ? "new-password" : "current-password"}
                 />
               </div>
