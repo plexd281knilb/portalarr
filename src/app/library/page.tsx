@@ -193,6 +193,14 @@ function BookLibraryPageContent() {
         const params = new URLSearchParams(searchParams.toString());
         params.set("tab", val);
         router.push(`${pathname}?${params.toString()}`);
+
+        if (val === "libs") {
+            const topEbook = libraries.find((l: any) => (l.mediaType || "ebook") === "ebook");
+            if (topEbook) setSelectedLibrary(topEbook);
+        } else if (val === "audiobooks") {
+            const topAudio = libraries.find((l: any) => l.mediaType === "audiobook");
+            if (topAudio) setSelectedLibrary(topAudio);
+        }
     };
 
     const [user, setUser] = useState<any>(null);
@@ -624,7 +632,15 @@ function BookLibraryPageContent() {
                 const libs = await getLibraries();
                 setLibraries(libs || []);
                 if (libs && libs.length > 0) {
-                    setSelectedLibrary(libs[0]);
+                    const savedTab = typeof window !== "undefined" ? localStorage.getItem("book-library-active-tab") : null;
+                    const initialTab = savedTab || activeTabParam || "libs";
+                    if (initialTab === "audiobooks") {
+                        const topAudio = libs.find((l: any) => l.mediaType === "audiobook") || libs[0];
+                        setSelectedLibrary(topAudio);
+                    } else {
+                        const topEbook = libs.find((l: any) => (l.mediaType || "ebook") === "ebook") || libs[0];
+                        setSelectedLibrary(topEbook);
+                    }
                 }
 
                 const reqs = await getBookRequests();
@@ -642,6 +658,22 @@ function BookLibraryPageContent() {
         }
         loadInitData();
     }, []);
+
+    useEffect(() => {
+        if (!libraries || libraries.length === 0) return;
+
+        if (activeTab === "libs") {
+            if (!selectedLibrary || selectedLibrary.mediaType === "audiobook") {
+                const topEbook = libraries.find((l: any) => (l.mediaType || "ebook") === "ebook");
+                if (topEbook) setSelectedLibrary(topEbook);
+            }
+        } else if (activeTab === "audiobooks") {
+            if (!selectedLibrary || (selectedLibrary.mediaType || "ebook") === "ebook") {
+                const topAudio = libraries.find((l: any) => l.mediaType === "audiobook");
+                if (topAudio) setSelectedLibrary(topAudio);
+            }
+        }
+    }, [activeTab, libraries, selectedLibrary]);
 
     useEffect(() => {
         if (!reqTitle || reqTitle.trim().length < 2) {
