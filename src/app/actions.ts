@@ -1586,6 +1586,33 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     };
 }
 
+function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): string {
+    const rawBase = path.basename(file, ext);
+    const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Track)\s*\d+$/i;
+    const pureNumPattern = /^\d+$/;
+
+    if (discPattern.test(rawBase.trim()) || pureNumPattern.test(rawBase.trim())) {
+        const dirName = path.basename(path.dirname(fullPath));
+        if (!discPattern.test(dirName.trim()) && !pureNumPattern.test(dirName.trim()) && dirName.length > 2) {
+            return dirName;
+        }
+        const parentDirName = path.basename(path.dirname(path.dirname(fullPath)));
+        if (parentDirName && parentDirName !== "." && parentDirName !== "/" && parentDirName.length > 2) {
+            return parentDirName;
+        }
+    }
+
+    const parentFolder = path.basename(path.dirname(fullPath));
+    if (discPattern.test(parentFolder.trim())) {
+        const grandParentFolder = path.basename(path.dirname(path.dirname(fullPath)));
+        if (grandParentFolder && grandParentFolder !== "." && grandParentFolder !== "/" && grandParentFolder.length > 2) {
+            return grandParentFolder;
+        }
+    }
+
+    return rawBase;
+}
+
 export async function scanLibraryInternal(libraryId: string) {
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
@@ -1774,7 +1801,7 @@ export async function scanLibraryInternal(libraryId: string) {
                 const existing = dbBooksByPathLower.get(fullPath.toLowerCase());
 
                 if (!existing) {
-                    const cleanBase = path.basename(fullPath, ext);
+                    const cleanBase = getEffectiveBookBaseName(fullPath, file, ext);
                     const parsedMeta = parseFilenameMetadata(cleanBase);
                     let title = parsedMeta.title;
                     let author = parsedMeta.author;
@@ -1883,7 +1910,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         existing.fileSize = stats.size;
                     }
                     let finalPath = fullPath;
-                    const cleanBase = path.basename(fullPath, ext);
+                    const cleanBase = getEffectiveBookBaseName(fullPath, path.basename(fullPath), ext);
                     const parsedMeta = parseFilenameMetadata(cleanBase);
                     let parsedAuthor = parsedMeta.author;
                     let parsedTitle = parsedMeta.title;
@@ -1904,9 +1931,11 @@ export async function scanLibraryInternal(libraryId: string) {
                                          existing.title.toLowerCase().includes("epub") ||
                                          existing.title.toLowerCase().includes("cto") ||
                                          (existing.title.includes(".") && existing.title.toLowerCase().includes("the."));
+                    
+                    const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(existing.title.trim());
 
-                    if (isSwapped || existing.author === "Unknown Author" || hasSceneNoise || !existing.coverUrl) {
-                        let title = (isSwapped || hasSceneNoise) ? parsedTitle : existing.title;
+                    if (isSwapped || existing.author === "Unknown Author" || hasSceneNoise || isDiscTitle || !existing.coverUrl) {
+                        let title = (isSwapped || hasSceneNoise || isDiscTitle) ? parsedTitle : existing.title;
                         let author = (isSwapped || existing.author === "Unknown Author") ? parsedAuthor : existing.author;
                         let coverUrl = existing.coverUrl || "";
 
