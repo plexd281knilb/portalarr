@@ -417,7 +417,15 @@ export async function getCurrentUser() {
     where: { id: payload.userId as string },
     select: { id: true, username: true, email: true, kindleEmail: true, role: true, status: true }
   });
+
+  if (!user) return null;
   
+  // Prevent login loops: If user status or role in DB changed, re-issue updated session cookie immediately
+  if (user.status !== payload.status || user.role !== payload.role) {
+    console.log(`[AUTH] User status/role updated for ${user.username} (Status: ${payload.status} -> ${user.status}). Updating session cookie.`);
+    await createSession(user.id, user.username, user.role, user.status);
+  }
+
   return user;
 }
 
