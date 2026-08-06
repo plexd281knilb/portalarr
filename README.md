@@ -1,6 +1,6 @@
 # Portalarr
 
-Portalarr is a modern, self-hosted dashboard for managing your media server ecosystem. It provides a unified "mission control" interface to monitor system status, track active downloads, and manage service links, book reading, and support requests.
+Portalarr is a modern, self-hosted dashboard for managing your media server ecosystem. It provides a unified "mission control" interface to monitor system status, track active downloads, and manage service links, book reading, audiobooks, and support requests.
 
 ![Portalarr Dashboard](public/next.svg)
 
@@ -8,13 +8,19 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 
 - **Unified Dashboard:** Aggregate status from Plex, Tautulli, Glances, and your "Arr" stack.
 - **Deduplicated Active Downloads:** Real-time progress and queue tracking for SABnzbd, NZBGet, and qBittorrent.
+- **Audiobook & Ebook Library:** Dedicated tabs for Ebooks and Audiobooks, built-in HTML5 audio player, multi-disc folder copy (`Disc 01/`, `Disc 02/`), Send-to-Kindle integration, and Prowlarr category routing.
+- **3-Tier Cover Artwork Engine:** Automated 600x600 HD cover resolution (iTunes → Open Library → Google Books) with instant 1-click artwork fetch buttons (`🖼️`).
+- **Live Auto-Refreshing Requests:** Real-time 5-second polling updates request statuses (`Pending` → `Searching` → `Downloading` → `Downloaded`) and automatically syncs completed downloads to your library shelf.
+- **Robust Settings & Diagnostic Tools:**
+  - **Live App Connection Testing:** Test connectivity to Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Bazarr, etc., directly from settings.
+  - **Access Control Overhaul:** Admin/User role toggles, Send-to-Kindle email manager, admin password reset modal (`🔑`), live user search, and 1-click bulk approvals (`CheckCheck`).
+  - **Folder Path Validator:** Inspect permissions and item counts for completed download directories.
 - **Plex Friends Auto-Sync:** Automatically scans your Plex friends list and provisions approved accounts with role synchronization.
 - **30-Day Persistent Login:** Persistent JWT session cookies with sliding auto-renewal keep active users signed in seamlessly.
 - **Air-Tight Edge Security:** Every page and API endpoint is secured at the edge behind authentication with role and user status (`PENDING`/`APPROVED`/`REJECTED`) enforcement.
-- **Book Library & Kindle Integration:** Public book library access with mandatory Send-to-Kindle configuration and a dedicated Kindle Settings management tab.
-- **Support & Password Recovery:** Direct support ticket submission with SMTP notifications, plus built-in temporary password email workflows.
-- **Secure Storage:** Sensitive API keys and service tokens are encrypted at rest using AES-256-GCM.
-- **Docker Ready:** Optimized for Docker and Unraid with automatic migrations and persistent data volumes.
+- **Support & Password Recovery:** Direct support ticket submission with SMTP notifications, format-specific request email badges (`🎧 AUDIOBOOK` vs `📖 EBOOK`), plus built-in temporary password email recovery.
+- **Secure Encryption:** Sensitive API keys and service tokens are encrypted at rest using AES-256-GCM.
+- **Automated CI/CD & Docker:** GitHub Actions pipeline automatically builds and publishes `ghcr.io/plexd281knilb/portalarr:latest` with concurrency rate-limiting safeguards.
 
 ## 🛠️ Quick Start
 
@@ -44,11 +50,18 @@ Portalarr is designed to run seamlessly in Docker. See [GEMINI.md](./GEMINI.md) 
 docker-compose up --build
 ```
 
+### 4. Updating via Docker
+To update to the latest release while keeping your SQLite database and settings intact:
+```bash
+docker-compose pull
+docker-compose up -d
+```
+
 ## 🔒 Security
 Portalarr takes security seriously:
 - **Global Proxy:** All page and `/api/*` traffic is intercepted and validated at the edge.
 - **JWT Sessions:** Authentication uses signed, HttpOnly JWT cookies with automatic status desync resolution.
-- **Admin Lockdown:** Sensitive settings (`/settings`, `/admin/*`) are only accessible to accounts with the `ADMIN` role.
+- **Admin Lockdown:** Sensitive settings (`/settings`, `/admin/*`) are restricted to accounts with the `ADMIN` role. Non-admin users visiting `/settings` are safely redirected to `/settings/profile`.
 
 ## 🤝 Contributing
 For developers looking to contribute, please refer to [GEMINI.md](./GEMINI.md) for architecture details, development conventions, and project structure.

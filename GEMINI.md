@@ -7,19 +7,26 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 - **Core Purpose:** To provide a single "mission control" interface for media server stacks (Plex, Tautulli, Glances, and "Arr" apps).
 - **Architecture:** Next.js 16 (App Router) with React 19. It uses Server Actions for backend logic and Prisma with SQLite for data persistence.
 - **Tech Stack:**
-  - **Framework:** Next.js 16
+  - **Framework:** Next.js 16 (App Router, Turbopack)
   - **Database:** SQLite (Prisma 6 ORM)
     - **CRITICAL:** Do NOT upgrade to Prisma 7+. The project is locked to Prisma 6 for stability.
   - **Styling:** Tailwind CSS, Radix UI (Shadcn UI style)
   - **Icons:** Lucide React
   - **Auth:** Custom JWT-based session management using `jose` and `bcryptjs`.
-  - **Security:** AES-256-GCM encryption for sensitive service tokens (Plex, SMTP, etc.).
+  - **Security:** AES-256-GCM encryption for sensitive service tokens (Plex, SMTP, API keys).
 - **Core Features:**
   - **Unified Status Widgets:** Real-time stream stats (Tautulli), server health metrics (Glances), and deduplicated active download queues (qBittorrent, SABnzbd, NZBGet).
-  - **Audiobook & Ebook Unified Library:** Dedicated tabs for Ebooks and Audiobooks, library media type filtering (`ebook` vs `audiobook`), built-in floating HTML5 audio player, Send-to-Kindle integration, and Prowlarr category routing (`3030` Audiobooks vs `3040` Ebooks).
+  - **Audiobook & Ebook Unified Library:** Dedicated tabs for Ebooks and Audiobooks, library media type filtering (`ebook` vs `audiobook`), built-in floating HTML5 audio player, Send-to-Kindle integration, multi-disc folder ingestion (`Disc 01/`, `Disc 02/`), and Prowlarr category routing (`3030` Audiobooks vs `3040` Ebooks).
+  - **3-Tier Cover Artwork Engine:** Automated high-definition artwork resolution (iTunes 600x600 HD → Open Library `-L.jpg` → Google Books `zoom=0`), with an instant **"Fetch Cover" (`🖼️`)** action button on library cards.
+  - **Live Request Auto-Refresh:** Reactive polling on `/library` updates media request states every 5 seconds (`Pending` → `Searching` → `Downloading` → `Downloaded`) and automatically syncs new library items upon completion.
+  - **Audiobook vs Ebook Request Email Notifications:** HTML notification emails sent to administrators feature styled format badges (`🎧 AUDIOBOOK` vs `📖 EBOOK`) and distinct subject headers.
+  - **Overhauled System Settings Tabs:**
+    - **General & Email:** Dashboard alert banner, SMTP server setup, test email dispatch, Send-to-Kindle Amazon approved senders guide, and Completed Downloads folder path access validator (`FolderCheck`).
+    - **Access Control:** User directory live search, status filters, inline role toggling (`Admin` vs `User`), Kindle email manager (`✏️`), Admin password reset modal (`🔑`), 1-click bulk approvals (`CheckCheck`), and Plex friends auto-sync.
+    - **Monitoring & Apps:** Live connection diagnostic buttons (`"Test"`) for Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Jellyseerr, Bazarr, etc.
+    - **Beta & Announcements:** Markdown Roadmap editor and interactive Beta Testing Cards manager.
   - **Support System:** Direct ticket submission for users, and a ticket management panel at `/admin/tickets` for administrators (with SMTP email updates).
   - **Interactive Beta Portal:** A modular dashboard at `/beta` showcasing active and upcoming beta features/services.
-  - **Announcements & Roadmap:** Centralized banner controls and GFM-supported Markdown roadmaps updated directly from admin settings.
   - **Persistent 30-Day Sessions:** Signed HttpOnly JWT session cookies with 30-day lifetime and sliding auto-renewal.
 
 ## Building and Running
@@ -80,7 +87,7 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 ### 4. Global Route Protection & Edge Security
 - **Proxy Configuration:** All routes are protected by `src/proxy.ts` (Next.js 16 convention).
 - **Enforcement:** Users are redirected to `/login` if no valid session exists. API requests without valid sessions are rejected at the edge with HTTP 401.
-- **Role & Status Protection:** Admin routes (`/settings`, `/admin/*`) are restricted to users with the `ADMIN` role. Users with `PENDING` or `REJECTED` status are blocked from all app/API routes by `src/proxy.ts` and redirected to `/pending`.
+- **Role & Status Protection:** Admin routes (`/settings`, `/admin/*`) are restricted to users with the `ADMIN` role. Users with `PENDING` or `REJECTED` status are blocked from all app/API routes by `src/proxy.ts` and redirected to `/pending`. Non-admin users attempting to visit `/settings` are safely redirected to `/settings/profile`.
 - **Static Asset Guards:** Static asset bypass checks in `proxy.ts` explicitly exclude `/api` paths to prevent API route session bypasses via file extension tricks.
 
 ### 5. Account Approval, Plex Auto-Sync & Session Resilience
@@ -95,7 +102,7 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Windows File Locks:** SQLite database and Prisma engine files lock during `npm run dev`. Stop the dev server before running `npx prisma migrate dev`.
 - **Case-Insensitive SQLite Queries:** Perform lowercased string matching in JS when querying `prisma.user` to avoid Prisma SQLite `mode: "insensitive"` type errors and `P2002` unique constraint crashes.
 - **Registry Autocomplete:** Use `onMouseDown` instead of `onClick` for dropdown suggestion list items to prevent input `onBlur` from unmounting items prematurely.
-- **Open Library Queries:** Combine series queries with the author name (e.g. `Series Author`) and filter out compilations (box sets, bundles, omnibus) to avoid duplicate or unrelated bulk results.
+- **Open Library & iTunes Queries:** Combine title queries with author name and clean out scene release noise (`(Rob Inglis)-PoF`, `Disc 01`, `03 - `) to get crisp 600x600 cover artwork.
 - **Library Access Defaults:** Public libraries use `allowedUsers = "*"` or empty string to allow all approved users access.
 - **Server Action Error Handling:** Server actions invoked from Client Components should return a serializable `{ success: boolean, error?: string }` object instead of throwing raw `Error`s. In production Next.js builds, raw errors are masked with a generic *"An error occurred in the Server Components render"* message, preventing detailed user-facing error reporting.
 - **Kindle & Library Scan Renaming Loops:** Keep on-disk file paths pretty (e.g. `Author - Title.ext`) and avoid cleaning or lowercase-renaming them on disk during library scans. This prevents infinite scan-rename cycles and race conditions where download/Kindle delivery checks fail because the path keeps changing. For Kindle email delivery, sanitize the attachment filename *in the email options* instead of renaming the file on disk.
@@ -105,13 +112,15 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 ## Key Files
 - `prisma/schema.prisma`: The source of truth for the database schema.
 - `src/proxy.ts`: Global edge authentication, role-based, static file, and user status access control.
-- `src/app/actions.ts`: Main repository for system logic, Plex friend sync, active download parsing, and database mutations.
+- `src/app/actions.ts`: Main repository for system logic, Plex friend sync, active download parsing, cover resolution, connection testers, and database mutations.
 - `src/app/auth-actions.ts`: Logic for login, 30-day session creation, account requests, Plex authentication, and session cookie resync.
 - `src/app/pending/page.tsx`: Pending account approval status screen for non-approved users.
+- `src/app/settings/page.tsx`: System settings page embedding tab views for General, Access Control, Monitoring, and Beta.
+- `src/app/settings/access/page.tsx`: Admin management screen for users, role toggling, Kindle emails, admin password resets, and Plex sync.
 - `src/app/settings/profile/page.tsx`: Self-service account profile and password change screen for all users.
-- `src/app/settings/access/page.tsx`: Admin management screen for users, pending access requests, and Plex sync.
 - `src/app/admin/tickets/page.tsx`: Admin management screen for user support tickets.
-- `src/app/library/page.tsx`: Book library page with Send-to-Kindle gate and Kindle settings header.
+- `src/app/library/page.tsx`: Book & Audiobook library page with Send-to-Kindle gate, Kindle settings header, live request auto-polling, and cover artwork fetchers.
 - `src/components/active-downloads.tsx`: Client component for deduplicated active downloads queue rendering.
 - `src/components/sidebar.tsx`: Main navigation component.
 - `src/lib/encryption.ts`: AES-256-GCM encryption utilities.
+- `.github/workflows/docker-publish.yml`: GitHub Actions CI/CD workflow for automated Docker build and push to GHCR.
