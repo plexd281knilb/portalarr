@@ -197,9 +197,11 @@ function BookLibraryPageContent() {
         if (val === "libs") {
             const topEbook = libraries.find((l: any) => (l.mediaType || "ebook") === "ebook");
             if (topEbook) setSelectedLibrary(topEbook);
+            setReqMediaType("ebook");
         } else if (val === "audiobooks") {
             const topAudio = libraries.find((l: any) => l.mediaType === "audiobook");
             if (topAudio) setSelectedLibrary(topAudio);
+            setReqMediaType("audiobook");
         }
     };
 
@@ -223,6 +225,7 @@ function BookLibraryPageContent() {
     const [scanning, setScanning] = useState(false);
     const [activeAudiobook, setActiveAudiobook] = useState<any>(null);
     const [reqMediaType, setReqMediaType] = useState<"ebook" | "audiobook">("ebook");
+    const [reqLogFilter, setReqLogFilter] = useState<"all" | "ebook" | "audiobook">("all");
 
     // Prowlarr Search states
     const [prowlarrResults, setProwlarrResults] = useState<any[]>([]);
@@ -961,6 +964,7 @@ function BookLibraryPageContent() {
             setReqCoverUrl("");
             setReqPublishYear("");
             setReqType("book");
+            setReqMediaType("ebook");
             setRequestedFor("");
             setSeriesBooksChecklist([]);
             const reqs = await getBookRequests();
@@ -1957,12 +1961,41 @@ function BookLibraryPageContent() {
                                         <LifeBuoy className="h-4.5 w-4.5 text-primary" /> Active Requests Log
                                     </CardTitle>
                                     {requests.length > 0 && (
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <div className="flex items-center gap-1 bg-muted/20 p-1 rounded-lg border border-muted/50">
+                                                <Button
+                                                    size="sm"
+                                                    type="button"
+                                                    variant={reqLogFilter === "all" ? "default" : "ghost"}
+                                                    className={`h-7 text-[11px] px-2.5 font-medium ${reqLogFilter === "all" ? "bg-primary text-black font-semibold" : "text-muted-foreground"}`}
+                                                    onClick={() => setReqLogFilter("all")}
+                                                >
+                                                    All ({requests.length})
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    type="button"
+                                                    variant={reqLogFilter === "ebook" ? "default" : "ghost"}
+                                                    className={`h-7 text-[11px] px-2.5 font-medium ${reqLogFilter === "ebook" ? "bg-blue-600 text-white font-semibold" : "text-muted-foreground"}`}
+                                                    onClick={() => setReqLogFilter("ebook")}
+                                                >
+                                                    <BookOpen className="h-3 w-3 mr-1" /> Ebooks ({requests.filter(r => r.mediaType !== "audiobook").length})
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    type="button"
+                                                    variant={reqLogFilter === "audiobook" ? "default" : "ghost"}
+                                                    className={`h-7 text-[11px] px-2.5 font-medium ${reqLogFilter === "audiobook" ? "bg-amber-400 text-black font-semibold" : "text-muted-foreground"}`}
+                                                    onClick={() => setReqLogFilter("audiobook")}
+                                                >
+                                                    <Headphones className="h-3 w-3 mr-1" /> Audiobooks ({requests.filter(r => r.mediaType === "audiobook").length})
+                                                </Button>
+                                            </div>
                                             {selectedRequestIds.length > 0 && (
                                                 <Button
                                                     size="sm"
                                                     variant="destructive"
-                                                    className="h-8 text-xs font-semibold px-3"
+                                                    className="h-7 text-xs font-semibold px-3"
                                                     onClick={handleBulkDeleteRequests}
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete Selected ({selectedRequestIds.length})
@@ -1971,7 +2004,7 @@ function BookLibraryPageContent() {
                                             <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="h-8 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-3"
+                                                className="h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-3"
                                                 onClick={toggleSelectAllRequests}
                                             >
                                                 Select All / None
@@ -1984,9 +2017,21 @@ function BookLibraryPageContent() {
                                         <div className="p-8 text-center text-sm text-muted-foreground italic">
                                             No book requests found.
                                         </div>
+                                    ) : requests.filter(r => {
+                                        if (reqLogFilter === "audiobook") return r.mediaType === "audiobook";
+                                        if (reqLogFilter === "ebook") return r.mediaType !== "audiobook";
+                                        return true;
+                                    }).length === 0 ? (
+                                        <div className="p-8 text-center text-sm text-muted-foreground italic">
+                                            No {reqLogFilter === "audiobook" ? "audiobook" : "ebook"} requests found.
+                                        </div>
                                     ) : (
                                         <div className="divide-y divide-muted/50">
-                                            {requests.map(req => {
+                                            {requests.filter(r => {
+                                                if (reqLogFilter === "audiobook") return r.mediaType === "audiobook";
+                                                if (reqLogFilter === "ebook") return r.mediaType !== "audiobook";
+                                                return true;
+                                            }).map(req => {
                                                 const canDelete = isAdmin || req.requestedBy === user?.username;
                                                 return (
                                                     <div key={req.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
