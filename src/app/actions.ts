@@ -3222,7 +3222,7 @@ export async function syncPlexFriendsInternal() {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (!settings?.mainPlexToken) {
             console.log("[PLEX-SYNC] Skipped: Server Admin has not configured a Plex Token in Settings.");
-            return { success: false, error: "Plex Token is not configured in Settings." };
+            return { success: false, error: "Admin Plex Token is not configured. Go to Settings -> General Setup to enter your Admin Plex Token (or sign in once with Plex)." };
         }
 
         const adminToken = decryptData(settings.mainPlexToken);

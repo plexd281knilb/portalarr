@@ -91,7 +91,9 @@ export default function LoginPage() {
 
             const plexUser = await getPlexUser(token);
             setPlexStatus("Authenticating with Portalarr...");
-            const res = await handlePlexCallback(plexUser);
+            const plexUsername = plexUser.username || plexUser.title || (plexUser.email ? plexUser.email.split("@")[0] : "");
+            const plexEmail = plexUser.email || (plexUsername ? `${plexUsername}@plex.local` : "");
+            const res = await handlePlexCallback(token, plexUsername, plexEmail, isSetupMode || false);
             
             if (res.error) {
               setError(res.error);

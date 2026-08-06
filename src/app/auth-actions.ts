@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
 import nodemailer from "nodemailer";
-import { decryptData } from "@/lib/encryption";
+import { decryptData, encryptData } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
 
 const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
@@ -165,12 +165,11 @@ export async function getSession() {
 }
 
 // --- 6. PLEX CALLBACK (AUTO-PROVISION & SYNC) ---
-export async function handlePlexCallback(plexProfile: { email?: string; username?: string; title?: string; id?: string | number }) {
-  const rawEmail = (plexProfile.email || "").trim().toLowerCase();
-  const rawUsername = (plexProfile.username || plexProfile.title || (rawEmail ? rawEmail.split('@')[0] : "")).trim();
-  const plexId = plexProfile.id ? String(plexProfile.id) : null;
+export async function handlePlexCallback(authToken: string, rawUsername: string, rawEmail: string, isSetupMode: boolean = false) {
+  rawEmail = (rawEmail || "").trim().toLowerCase();
+  rawUsername = (rawUsername || (rawEmail ? rawEmail.split('@')[0] : "")).trim();
 
-  console.log(`[AUTH] Processing Plex login for: username="${rawUsername}", email="${rawEmail}", id="${plexId}"`);
+  console.log(`[AUTH] Processing Plex login for: username="${rawUsername}", email="${rawEmail}"`);
 
   if (!rawEmail && !rawUsername) {
     return { error: "Plex account profile is missing email and username details." };
@@ -198,11 +197,14 @@ export async function handlePlexCallback(plexProfile: { email?: string; username
   console.log(`[AUTH] User not in DB. Verifying Plex Server access for: ${rawUsername || rawEmail}`);
   
   const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-  if (!settings?.mainPlexToken) {
-      return { error: "The Server Admin must configure their Plex Token in Settings before new users can sign in with Plex." };
+  let adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+  if (!adminToken && authToken) {
+    adminToken = authToken;
   }
 
-  const adminToken = decryptData(settings.mainPlexToken);
+  if (!adminToken) {
+      return { error: "The Server Admin must configure their Plex Token in Settings before new users can sign in with Plex." };
+  }
 
   // Check if logging-in user IS the Plex Server Owner
   let isAdminOwner = false;
@@ -222,8 +224,7 @@ export async function handlePlexCallback(plexProfile: { email?: string; username
 
       if (
         (adminEmail && rawEmail && adminEmail === rawEmail) ||
-        (adminUsername && rawUsername && adminUsername === rawUsername.toLowerCase()) ||
-        (adminId && plexId && adminId === plexId)
+        (adminUsername && rawUsername && adminUsername === rawUsername.toLowerCase())
       ) {
         isAdminOwner = true;
         console.log(`[AUTH] User identified as Plex Server Owner.`);
@@ -231,6 +232,21 @@ export async function handlePlexCallback(plexProfile: { email?: string; username
     }
   } catch (err) {
     console.warn("[AUTH] Failed to fetch admin Plex profile for owner verification:", err);
+  }
+
+  // If owner logged in and Plex token is not saved yet, save token automatically
+  if (isAdminOwner && authToken && (!settings?.mainPlexToken)) {
+    try {
+      const encryptedToken = encryptData(authToken);
+      await prisma.settings.upsert({
+        where: { id: "global" },
+        update: { mainPlexToken: encryptedToken },
+        create: { id: "global", mainPlexToken: encryptedToken }
+      });
+      console.log("[AUTH] Automatically saved Admin Plex Token to global settings.");
+    } catch (saveErr) {
+      console.error("[AUTH] Failed to auto-save Admin Plex Token:", saveErr);
+    }
   }
 
   // If not owner, check Plex Friends / Shared list
@@ -251,17 +267,15 @@ export async function handlePlexCallback(plexProfile: { email?: string; username
           isFriend = friendsList.some((friend: any) => {
             const fEmail = (friend.email || "").toLowerCase().trim();
             const fUsername = (friend.username || friend.title || "").toLowerCase().trim();
-            const fId = friend.id ? String(friend.id) : null;
             return (
               (rawEmail && fEmail === rawEmail) ||
-              (rawUsername && fUsername === rawUsername.toLowerCase()) ||
-              (plexId && fId && fId === plexId)
+              (rawUsername && fUsername === rawUsername.toLowerCase())
             );
           });
         }
       }
     } catch (err) {
-      console.warn("[AUTH] Error checking Plex friends list:", err);
+      console.warn("[AUTH] Failed to fetch Plex friends list:", err);
     }
   }
 
@@ -306,6 +320,14 @@ export async function handlePlexCallback(plexProfile: { email?: string; username
   });
 
   console.log(`[AUTH] Successfully auto-provisioned Plex user: ${user.username} (${user.role})`);
+
+  // Trigger background Plex friends sync if owner logged in
+  if (isAdminOwner) {
+    import("./actions").then(({ syncPlexFriendsInternal }) => {
+      syncPlexFriendsInternal().catch(e => console.error("[AUTH] Post-login Plex sync error:", e));
+    });
+  }
+
   await createSession(user.id, user.username, user.role, user.status);
   return { success: true };
 }
