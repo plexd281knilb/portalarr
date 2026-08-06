@@ -300,7 +300,17 @@ function BookLibraryPageContent() {
     };
 
     const renderBookCard = (book: any) => {
-        const displayTitle = groupBySeries && book.cleanSeriesTitle ? book.cleanSeriesTitle : book.title;
+        let displayTitle = groupBySeries && book.cleanSeriesTitle ? book.cleanSeriesTitle : book.title;
+        let displayAuthor = book.author || "Unknown Author";
+
+        if (book.title && book.title.includes(" - ") && (!book.author || book.author === "Unknown Author" || /^(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/i.test(book.author.trim()))) {
+            const parts = book.title.split(" - ").map((p: string) => p.trim());
+            if (parts.length >= 2) {
+                displayTitle = parts[0];
+                displayAuthor = parts.slice(1).join(" - ").replace(/\b(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/gi, "").trim();
+            }
+        }
+
         const volumeBadge = groupBySeries && book.seriesVolume ? (
             <Badge className="bg-primary text-black border border-primary/25 text-[9px] font-extrabold uppercase shadow-sm">
                 Vol. {book.seriesVolume}
@@ -339,7 +349,7 @@ function BookLibraryPageContent() {
                              </div>
                          </div>
                          <div className="text-[10px] text-slate-400 font-semibold truncate w-full">
-                             {book.author && book.author !== "Unknown Author" ? book.author : ""}
+                             {displayAuthor !== "Unknown Author" ? displayAuthor : ""}
                          </div>
                      </div>
                  )}
@@ -347,7 +357,7 @@ function BookLibraryPageContent() {
                  <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
                      <div className="space-y-1">
                          <h3 className="font-bold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2 h-10 flex items-center">{displayTitle}</h3>
-                         <p className="text-xs text-muted-foreground truncate">{book.author || "Unknown Author"}</p>
+                         <p className="text-xs text-muted-foreground truncate">{displayAuthor}</p>
                      </div>
                      <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
                          <span>Size: {(book.fileSize ? (book.fileSize / (1024 * 1024)).toFixed(1) : "0")} MB</span>

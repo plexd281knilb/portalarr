@@ -1956,6 +1956,8 @@ export async function scanLibraryInternal(libraryId: string) {
                     const isSwapped = (existing.title.toLowerCase() === parsedAuthor.toLowerCase()) && 
                                       (existing.author.toLowerCase() === parsedTitle.toLowerCase());
 
+                    const isTagAuthor = /^(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/i.test(existing.author.trim());
+                    const hasTitleHyphen = existing.title.includes(" - ");
                     const hasSceneNoise = existing.title.toLowerCase().includes("retail") ||
                                          existing.title.toLowerCase().includes("epub") ||
                                          existing.title.toLowerCase().includes("cto") ||
@@ -1963,9 +1965,9 @@ export async function scanLibraryInternal(libraryId: string) {
                     
                     const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(existing.title.trim());
 
-                    if (isSwapped || existing.author === "Unknown Author" || hasSceneNoise || isDiscTitle || !existing.coverUrl) {
-                        let title = (isSwapped || hasSceneNoise || isDiscTitle) ? parsedTitle : existing.title;
-                        let author = (isSwapped || existing.author === "Unknown Author") ? parsedAuthor : existing.author;
+                    if (isSwapped || existing.author === "Unknown Author" || isTagAuthor || hasSceneNoise || isDiscTitle || hasTitleHyphen || !existing.coverUrl) {
+                        let title = (isSwapped || hasSceneNoise || isDiscTitle || hasTitleHyphen || isTagAuthor) ? parsedTitle : existing.title;
+                        let author = (isSwapped || existing.author === "Unknown Author" || isTagAuthor || hasTitleHyphen) ? parsedAuthor : existing.author;
                         let coverUrl = existing.coverUrl || "";
 
                         let tempTitle = parsedTitle;
