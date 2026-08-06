@@ -39,7 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, 
   UploadCloud, Check, X, FileText, Download, 
-  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle
+  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info
 } from "lucide-react";
 
 function matchesSeriesFuzzy(titleLower: string, seriesNameLower: string): boolean {
@@ -223,6 +223,7 @@ function BookLibraryPageContent() {
     const [fullUser, setFullUser] = useState<any>(null);
     const [userEmail, setUserEmail] = useState("");
     const [userKindleEmail, setUserKindleEmail] = useState("");
+    const [skippedKindleGate, setSkippedKindleGate] = useState(false);
     const [serverSmtpFrom, setServerSmtpFrom] = useState("");
     const [sendingToKindleId, setSendingToKindleId] = useState<string | null>(null);
     const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -265,6 +266,10 @@ function BookLibraryPageContent() {
         const savedGroup = localStorage.getItem("book-library-group-series");
         if (savedGroup === "true") {
             setGroupBySeries(true);
+        }
+        const savedSkip = localStorage.getItem("portalarr-skip-kindle-gate") === "true";
+        if (savedSkip) {
+            setSkippedKindleGate(true);
         }
     }, []);
 
@@ -1015,7 +1020,7 @@ function BookLibraryPageContent() {
         );
     }
 
-    const isKindleConfigured = !!userKindleEmail && userKindleEmail.trim() !== "";
+    const isKindleConfigured = (!!userKindleEmail && userKindleEmail.trim() !== "") || skippedKindleGate;
 
     if (!isKindleConfigured) {
         return (
@@ -1026,10 +1031,10 @@ function BookLibraryPageContent() {
                             <Mail className="h-10 w-10 text-primary" />
                         </div>
                         <CardTitle className="text-2xl font-bold tracking-tight">
-                            Send-to-Kindle Email Required
+                            Send-to-Kindle Setup
                         </CardTitle>
                         <CardDescription className="text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
-                            To access the public book library and request ebooks, please enter your Send-to-Kindle email address.
+                            Configure your Send-to-Kindle email for 1-click automatic ebook delivery directly to your e-reader, or skip to browse and download manually.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -1041,7 +1046,6 @@ function BookLibraryPageContent() {
                                     <Input 
                                         id="gate-kindle-email"
                                         type="email"
-                                        required
                                         className="pl-9"
                                         placeholder="username_123@kindle.com"
                                         value={userKindleEmail}
@@ -1058,16 +1062,42 @@ function BookLibraryPageContent() {
                                 <Input 
                                     id="gate-personal-email"
                                     type="email"
-                                    required
                                     placeholder="you@example.com"
                                     value={userEmail}
                                     onChange={(e) => setUserEmail(e.target.value)}
                                 />
                             </div>
 
-                            <Button type="submit" className="w-full h-11 font-semibold text-black gap-2 mt-2">
-                                <Sparkles className="h-4 w-4" /> Save Email &amp; Unlock Library Access
-                            </Button>
+                            <div className="space-y-3 pt-2">
+                                <Button type="submit" className="w-full h-11 font-semibold text-black gap-2">
+                                    <Sparkles className="h-4 w-4" /> Save Email &amp; Unlock Automatic Delivery
+                                </Button>
+
+                                <div className="relative flex py-1 items-center">
+                                    <div className="flex-grow border-t border-muted/50"></div>
+                                    <span className="flex-shrink mx-3 text-[10px] text-muted-foreground uppercase font-semibold">or</span>
+                                    <div className="flex-grow border-t border-muted/50"></div>
+                                </div>
+
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    className="w-full h-10 border-muted-foreground/30 hover:bg-muted/40 text-xs font-medium gap-2"
+                                    onClick={() => {
+                                        setSkippedKindleGate(true);
+                                        localStorage.setItem("portalarr-skip-kindle-gate", "true");
+                                    }}
+                                >
+                                    <ArrowRight className="h-3.5 w-3.5" /> Skip for Now &amp; Browse Library
+                                </Button>
+
+                                <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-xs text-amber-300/90 leading-relaxed flex items-start gap-2.5">
+                                    <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                    <div>
+                                        <strong>Note:</strong> If you skip, ebooks cannot be automatically sent to your e-reader. You will need to download and add book files to your device manually, or configure your Kindle email later under Kindle Settings in the header.
+                                    </div>
+                                </div>
+                            </div>
                         </form>
                     </CardContent>
                 </Card>
