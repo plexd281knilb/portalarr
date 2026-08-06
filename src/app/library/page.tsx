@@ -18,6 +18,7 @@ import {
   sendReleaseToDownloadClient,
   saveUserKindleSettings,
   sendBookToKindle,
+  sendBookToPersonalEmail,
   getPublicSmtpFromEmail,
   getAppUsers,
   searchOpenLibrary,
@@ -229,6 +230,7 @@ function BookLibraryPageContent() {
     const [skippedKindleGate, setSkippedKindleGate] = useState(false);
     const [serverSmtpFrom, setServerSmtpFrom] = useState("");
     const [sendingToKindleId, setSendingToKindleId] = useState<string | null>(null);
+    const [sendingToPersonalEmailId, setSendingToPersonalEmailId] = useState<string | null>(null);
     const [allUsers, setAllUsers] = useState<any[]>([]);
     const [requestedFor, setRequestedFor] = useState("");
 
@@ -416,11 +418,25 @@ function BookLibraryPageContent() {
                              size="sm" 
                              className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground" 
                              asChild
-                             title="Download"
+                             title="Download File directly to your device"
                          >
                              <a href={`/api/books/${book.id}`} download>
                                  <Download className="h-3.5 w-3.5" />
                              </a>
+                         </Button>
+                         <Button 
+                             variant="outline" 
+                             size="sm" 
+                             className="text-xs h-7 px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" 
+                             title="Email File to Personal Inbox"
+                             disabled={sendingToPersonalEmailId === book.id}
+                             onClick={() => handleSendToPersonalEmail(book.id)}
+                         >
+                             {sendingToPersonalEmailId === book.id ? (
+                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                             ) : (
+                                 <Mail className="h-3.5 w-3.5" />
+                             )}
                          </Button>
                          <Button 
                              variant="outline" 
@@ -506,6 +522,20 @@ function BookLibraryPageContent() {
                             onClick={() => setActiveAudiobook(book)}
                         >
                             <Play className="h-3.5 w-3.5 fill-black" /> Listen
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs h-8 px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1" 
+                            title="Email Audio File to Personal Inbox"
+                            disabled={sendingToPersonalEmailId === book.id}
+                            onClick={() => handleSendToPersonalEmail(book.id)}
+                        >
+                            {sendingToPersonalEmailId === book.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <Mail className="h-3.5 w-3.5" />
+                            )}
                         </Button>
                         <Button 
                             variant="outline" 
@@ -812,6 +842,22 @@ function BookLibraryPageContent() {
             alert(e.message || "Delivery failed. Check your personal email inbox for instructions.");
         } finally {
             setSendingToKindleId(null);
+        }
+    }
+
+    async function handleSendToPersonalEmail(bookId: string) {
+        setSendingToPersonalEmailId(bookId);
+        try {
+            const res = await sendBookToPersonalEmail(bookId);
+            if (res && !res.success) {
+                alert(res.error || "Failed to deliver email to personal inbox.");
+            } else {
+                alert("File successfully emailed to your personal inbox!");
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed to deliver email to personal inbox.");
+        } finally {
+            setSendingToPersonalEmailId(null);
         }
     }
 

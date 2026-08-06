@@ -2916,6 +2916,95 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
     }
 }
 
+export async function sendBookToPersonalEmail(bookId: string, targetUsername?: string) {
+    try {
+        const session = await verifyUser();
+        const isAdmin = session.role === "ADMIN";
+        
+        let username = session.username as string;
+        if (isAdmin && targetUsername) {
+            username = targetUsername;
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { username }
+        });
+        
+        if (!user) return { success: false, error: "User account not found." };
+        if (!user.email) {
+            return { success: false, error: "No personal email address associated with your user account." };
+        }
+
+        const book = await prisma.book.findUnique({
+            where: { id: bookId }
+        });
+        if (!book) return { success: false, error: "File not found in database." };
+        if (!fs.existsSync(book.filePath)) {
+            return { success: false, error: "Media file not found on disk. Try scanning the library again." };
+        }
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
+        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            return { success: false, error: "SMTP email is not configured on this server. Please contact your administrator." };
+        }
+
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        const ext = path.extname(book.filePath).toLowerCase();
+        const cleanAttachmentName = path.basename(book.filePath, ext)
+            .replace(/[^a-zA-Z0-9]/g, "_")
+            .replace(/__+/g, "_")
+            .toLowerCase() + ext;
+
+        const isAudio = book.mediaType === "audiobook";
+        const itemTypeLabel = isAudio ? "Audiobook" : "Ebook";
+
+        const mailOptions = {
+            from: senderEmail,
+            to: user.email,
+            subject: `📦 Portalarr Delivery: ${book.title}`,
+            html: `
+                <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+                    <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">${itemTypeLabel} File Delivery</h2>
+                    <p style="font-size: 15px; color: #475569;">Hi <strong>${user.username}</strong>,</p>
+                    <p style="font-size: 15px; color: #475569;">Here is your requested ${itemTypeLabel.toLowerCase()} file for <strong>${book.title}</strong> by ${book.author || "Unknown Author"}.</p>
+                    
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 0; font-size: 14px; color: #334155;"><strong>Title:</strong> ${book.title}</p>
+                        <p style="margin: 4px 0 0 0; font-size: 14px; color: #334155;"><strong>Author:</strong> ${book.author || "Unknown Author"}</p>
+                        <p style="margin: 4px 0 0 0; font-size: 14px; color: #334155;"><strong>Format:</strong> ${ext.replace(".", "").toUpperCase()}</p>
+                    </div>
+
+                    <p style="font-size: 13px; color: #64748b;">The media file is attached directly to this email so you can save or transfer it to your device.</p>
+                </div>
+            `,
+            attachments: [
+                {
+                    filename: cleanAttachmentName,
+                    path: book.filePath
+                }
+            ]
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[SMTP-DELIVERY] Successfully emailed ${book.title} to ${user.email}`);
+        return { success: true };
+    } catch (e: any) {
+        console.error(`[SMTP-DELIVERY] Failed to email file:`, e);
+        return { success: false, error: e.message || "Failed to deliver email." };
+    }
+}
+
 export async function sendBookToUserKindleInternal(bookId: string, username: string) {
     const user = await prisma.user.findFirst({
         where: { username }
