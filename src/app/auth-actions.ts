@@ -279,8 +279,9 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
         const friendsList = await response.json();
         if (Array.isArray(friendsList)) {
           isFriend = friendsList.some((friend: any) => {
-            const fEmail = (friend.email || "").toLowerCase().trim();
-            const fUsername = (friend.username || friend.title || "").toLowerCase().trim();
+            const uObj = friend.user || friend;
+            const fEmail = (uObj.email || friend.email || "").toLowerCase().trim();
+            const fUsername = (uObj.username || friend.username || uObj.title || friend.title || "").toLowerCase().trim();
             return (
               (rawEmail && fEmail === rawEmail) ||
               (rawUsername && fUsername === rawUsername.toLowerCase())
@@ -290,6 +291,26 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
       }
     } catch (err) {
       console.warn("[AUTH] Failed to fetch Plex friends list:", err);
+    }
+
+    // Fallback XML check for legacy Plex server configurations (/api/users)
+    if (!isFriend) {
+      try {
+        const xmlRes = await fetch(`https://plex.tv/api/users?X-Plex-Token=${adminToken}`);
+        if (xmlRes.ok) {
+          const xmlText = await xmlRes.text();
+          if (
+            (rawEmail && xmlText.toLowerCase().includes(`email="${rawEmail}"`)) ||
+            (rawUsername && xmlText.toLowerCase().includes(`username="${rawUsername.toLowerCase()}"`)) ||
+            (rawUsername && xmlText.toLowerCase().includes(`title="${rawUsername.toLowerCase()}"`))
+          ) {
+            isFriend = true;
+            console.log(`[AUTH] Friend matched via Plex legacy API (/api/users) for: ${rawUsername || rawEmail}`);
+          }
+        }
+      } catch (xmlErr) {
+        console.warn("[AUTH] Error checking legacy Plex users endpoint:", xmlErr);
+      }
     }
   }
 

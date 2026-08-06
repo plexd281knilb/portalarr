@@ -3298,24 +3298,42 @@ export async function syncPlexFriendsInternal() {
 
         const adminToken = decryptData(settings.mainPlexToken);
 
-        // Fetch Plex Friends list
-        const friendsRes = await fetch("https://plex.tv/api/v2/friends", {
-            headers: {
-                "Accept": "application/json",
-                "X-Plex-Token": adminToken,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+        // Fetch Plex Friends list (supports both v2 JSON API and legacy XML API)
+        let friendsList: any[] = [];
+        try {
+            const friendsRes = await fetch("https://plex.tv/api/v2/friends", {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (friendsRes.ok) {
+                const json = await friendsRes.json();
+                if (Array.isArray(json)) friendsList = json;
             }
-        });
-
-        if (!friendsRes.ok) {
-            console.error(`[PLEX-SYNC] Failed to fetch Plex friends list. Status: ${friendsRes.status}`);
-            return { success: false, error: `Plex API returned HTTP status ${friendsRes.status}` };
+        } catch (e) {
+            console.warn("[PLEX-SYNC] v2 friends API error, trying legacy endpoint...", e);
         }
 
-        const friendsList = await friendsRes.json();
-        if (!Array.isArray(friendsList)) {
-            console.error("[PLEX-SYNC] Unexpected response format from Plex friends API.");
-            return { success: false, error: "Unexpected response format from Plex API." };
+        // Legacy Plex XML Fallback (/api/users)
+        try {
+            const xmlRes = await fetch(`https://plex.tv/api/users?X-Plex-Token=${adminToken}`);
+            if (xmlRes.ok) {
+                const xmlText = await xmlRes.text();
+                const userMatches = xmlText.matchAll(/<User\s+[^>]*\bemail="([^"]*)"[^>]*\busername="([^"]*)"/gi);
+                for (const match of userMatches) {
+                    const xmlEmail = (match[1] || "").toLowerCase().trim();
+                    const xmlUsername = (match[2] || "").trim();
+                    if (xmlEmail || xmlUsername) {
+                        if (!friendsList.some(f => (f.email || f.user?.email || "").toLowerCase().trim() === xmlEmail)) {
+                            friendsList.push({ email: xmlEmail, username: xmlUsername });
+                        }
+                    }
+                }
+            }
+        } catch (xmlErr) {
+            console.warn("[PLEX-SYNC] Legacy /api/users fallback check failed:", xmlErr);
         }
 
         // Fetch Plex Admin Owner profile
@@ -3344,14 +3362,16 @@ export async function syncPlexFriendsInternal() {
         const activePlexUsernames = new Set<string>();
 
         if (adminPlexProfile) {
-            if (adminPlexProfile.email) activePlexEmails.add(adminPlexProfile.email.toLowerCase().trim());
-            if (adminPlexProfile.username) activePlexUsernames.add(adminPlexProfile.username.toLowerCase().trim());
-            if (adminPlexProfile.title) activePlexUsernames.add(adminPlexProfile.title.toLowerCase().trim());
+            const adminUserObj = adminPlexProfile.user || adminPlexProfile;
+            if (adminUserObj.email) activePlexEmails.add(adminUserObj.email.toLowerCase().trim());
+            if (adminUserObj.username) activePlexUsernames.add(adminUserObj.username.toLowerCase().trim());
+            if (adminUserObj.title) activePlexUsernames.add(adminUserObj.title.toLowerCase().trim());
         }
 
         for (const friend of friendsList) {
-            const fEmail = (friend.email || "").toLowerCase().trim();
-            const fUsername = (friend.username || friend.title || (fEmail ? fEmail.split('@')[0] : "")).trim();
+            const uObj = friend.user || friend;
+            const fEmail = (uObj.email || friend.email || "").toLowerCase().trim();
+            const fUsername = (uObj.username || friend.username || uObj.title || friend.title || (fEmail ? fEmail.split('@')[0] : "")).trim();
 
             if (!fEmail && !fUsername) continue;
 
