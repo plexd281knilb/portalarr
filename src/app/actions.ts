@@ -142,29 +142,49 @@ async function fetchGoogleBooksCover(title: string, author: string): Promise<str
 }
 async function fetchITunesCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
     try {
-        const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
         const cleanAuthor = author && author !== "Unknown Author" ? author : "";
+        const cleanTitle = title.replace(/\s*-\s*[A-Za-z0-9]+$/i, "")
+                               .replace(/\s*\([^)]*PoF[^)]*\)/gi, "")
+                               .replace(/\s*\(Rob Inglis\)/gi, "")
+                               .replace(/\s*\(Unabridged\)/gi, "")
+                               .replace(/\s*\(Narrated by [^)]+\)/gi, "")
+                               .replace(/^[0-9]{2}\s*-\s*/, "")
+                               .trim();
+
+        const lowerTitle = cleanTitle.toLowerCase();
+        let canonicalTitle = cleanTitle;
+        if (lowerTitle.includes("fellowship of the ring")) canonicalTitle = "The Fellowship of the Ring";
+        else if (lowerTitle.includes("two towers")) canonicalTitle = "The Two Towers";
+        else if (lowerTitle.includes("return of the king")) canonicalTitle = "The Return of the King";
+
         const queries = [
-            `${title} ${cleanAuthor}`.trim(),
-            title.trim()
+            `${canonicalTitle} ${cleanAuthor}`.trim(),
+            `The Lord of the Rings ${canonicalTitle}`.trim(),
+            canonicalTitle,
+            `${cleanTitle} ${cleanAuthor}`.trim(),
+            cleanTitle
         ];
 
-        for (const query of queries) {
-            if (!query) continue;
-            const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${entity}&limit=5`;
-            const res = await fetch(url, { headers: { "Accept": "application/json" } });
-            if (res.ok) {
-                const data = await res.json();
-                if (data && data.results && data.results.length > 0) {
-                    const cleanTitleLower = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    const matched = data.results.find((item: any) => {
-                        const itemName = (item.trackName || item.collectionName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-                        return itemName.includes(cleanTitleLower) || cleanTitleLower.includes(itemName);
-                    }) || data.results[0];
+        const entities = mediaType === "audiobook" ? ["audiobook", "ebook"] : ["ebook", "audiobook"];
 
-                    let artwork = matched.artworkUrl100 || matched.artworkUrl60;
-                    if (artwork) {
-                        return artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
+        for (const entity of entities) {
+            for (const query of queries) {
+                if (!query) continue;
+                const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${entity}&limit=5`;
+                const res = await fetch(url, { headers: { "Accept": "application/json" } });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.results && data.results.length > 0) {
+                        const cleanTitleLower = canonicalTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+                        const matched = data.results.find((item: any) => {
+                            const itemName = (item.trackName || item.collectionName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                            return itemName.includes(cleanTitleLower) || cleanTitleLower.includes(itemName);
+                        }) || data.results[0];
+
+                        let artwork = matched.artworkUrl100 || matched.artworkUrl60;
+                        if (artwork) {
+                            return artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
+                        }
                     }
                 }
             }
@@ -184,7 +204,7 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
     try {
         const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
         const cleanedQuery = cleanSearchQuery(query);
-        const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=3&fields=cover_i`, {
+        const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
             headers: { "Accept": "application/json" }
         });
         if (res.ok) {
@@ -4093,18 +4113,33 @@ export async function refreshBookCover(bookId: string) {
     let title = book.title;
     let author = book.author || "";
 
+    // Clean scene noise (e.g. "(Rob Inglis)-PoF", "-PoF", "03 - The Two Towers")
+    title = title.replace(/\s*-\s*[A-Za-z0-9]+$/i, "")
+                 .replace(/\s*\([^)]*PoF[^)]*\)/gi, "")
+                 .replace(/\s*\(Rob Inglis\)/gi, "")
+                 .replace(/\s*\(Unabridged\)/gi, "")
+                 .replace(/\s*\(Narrated by [^)]+\)/gi, "")
+                 .replace(/^[0-9]{2}\s*-\s*/, "")
+                 .trim();
+
     const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(title.trim());
-    if (isDiscTitle && author && author !== "Unknown Author") {
+    if (isDiscTitle && author && author !== "Unknown Author" && !/^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(author.trim())) {
         title = author;
         author = "Unknown Author";
     }
 
-    if (title.includes(" - ") && (!author || author === "Unknown Author" || /^(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/i.test(author.trim()))) {
-        const parts = title.split(" - ").map(p => p.trim());
-        if (parts.length >= 2) {
-            title = parts[0];
-            author = parts.slice(1).join(" - ").replace(/\b(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/gi, "").trim();
-        }
+    // Lord of the Rings & Tolkien Master Rules
+    const lowerTitle = title.toLowerCase();
+    if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("lord of the rings") || lowerTitle.includes("hobbit")) {
+        author = "J. R. R. Tolkien";
+        if (lowerTitle.includes("fellowship of the ring")) title = "The Fellowship of the Ring";
+        else if (lowerTitle.includes("two towers")) title = "The Two Towers";
+        else if (lowerTitle.includes("return of the king")) title = "The Return of the King";
+    }
+
+    // Harry Potter & Rowling Master Rules
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
+        author = "J. K. Rowling";
     }
 
     const newCover = await fetchBookCover(title, author, book.mediaType || "ebook");
