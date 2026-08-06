@@ -30,11 +30,19 @@ if (!globalForScheduler.schedulerInitialized) {
         const now = new Date();
         
         if (!lastSync || (now.getTime() - lastSync.getTime()) >= intervalMinutes * 60 * 1000) {
-          console.log(`[BACKGROUND-JOB] Starting scheduled library scan (Interval: ${intervalMinutes}m)...`);
+          console.log(`[BACKGROUND-JOB] Starting scheduled library scan and Plex friends sync (Interval: ${intervalMinutes}m)...`);
+          
+          const { scanLibraryInternal, syncPlexFriendsInternal } = await import("../app/actions");
+
+          // Sync Plex Friends list and user accounts
+          try {
+            console.log(`[BACKGROUND-JOB] Syncing Plex friends...`);
+            await syncPlexFriendsInternal();
+          } catch (plexErr: any) {
+            console.error(`[BACKGROUND-JOB] Error syncing Plex friends:`, plexErr.message || plexErr);
+          }
           
           const libraries = await prisma.library.findMany();
-          const { scanLibraryInternal } = await import("../app/actions");
-          
           for (const lib of libraries) {
             try {
               console.log(`[BACKGROUND-JOB] Scanning library "${lib.name}"...`);

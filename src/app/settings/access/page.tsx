@@ -1,19 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getAppUsers, createAppUser, deleteAppUser } from "@/app/actions";
+import { getAppUsers, createAppUser, deleteAppUser, approveAppUser, rejectAppUser, syncPlexFriendsAction } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, UserPlus, Shield, User, Mail } from "lucide-react";
+import { Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, Clock, Play, RefreshCw, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 export default function AccessSettingsPage() {
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [syncingPlex, setSyncingPlex] = useState(false);
+    const [syncMessage, setSyncMessage] = useState("");
 
     const loadUsers = async () => {
         setLoading(true);
@@ -32,6 +34,29 @@ export default function AccessSettingsPage() {
         loadUsers();
     };
 
+    const handleSyncPlex = async () => {
+        setSyncingPlex(true);
+        setSyncMessage("");
+        const res = await syncPlexFriendsAction();
+        setSyncingPlex(false);
+        if (res.success) {
+            setSyncMessage(`Synced ${res.totalFriends} Plex friends (${res.addedCount} added, ${res.updatedCount} updated, ${res.revokedCount} revoked).`);
+            loadUsers();
+        } else {
+            setSyncMessage(res.error || "Failed to sync Plex friends.");
+        }
+    };
+
+    const handleApprove = async (id: string) => {
+        await approveAppUser(id);
+        loadUsers();
+    };
+
+    const handleReject = async (id: string) => {
+        await rejectAppUser(id);
+        loadUsers();
+    };
+
     const handleDelete = async (id: string) => {
         if (confirm("Delete this user? They will lose access immediately.")) {
             await deleteAppUser(id);
@@ -44,16 +69,46 @@ export default function AccessSettingsPage() {
             <div>
                 <h3 className="text-lg font-medium">Access Management</h3>
                 <p className="text-sm text-muted-foreground">
-                    Create accounts for accessing the Admin Dashboard.
+                    Create accounts, manage user access requests, and sync accounts from your Plex Friends list.
                 </p>
             </div>
+
+            {/* PLEX AUTO-SYNC CARD */}
+            <Card className="border-[#e5a00d]/30 bg-[#e5a00d]/5">
+                <CardContent className="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 font-medium text-foreground">
+                            <Play className="h-4 w-4 text-[#e5a00d] fill-current" />
+                            <span>Plex Friends Auto-Sync</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground max-w-xl">
+                            Scans your Plex server for friends and automatically provisions approved accounts for them. Updates user details when emails change, and revokes access if users are removed from your Plex server.
+                        </p>
+                        {syncMessage && (
+                            <div className="text-xs text-[#e5a00d] pt-1 font-medium">
+                                {syncMessage}
+                            </div>
+                        )}
+                    </div>
+                    <Button 
+                        type="button" 
+                        variant="outline"
+                        className="border-[#e5a00d]/40 text-[#e5a00d] hover:bg-[#e5a00d]/10 shrink-0 gap-2 h-10"
+                        onClick={handleSyncPlex}
+                        disabled={syncingPlex}
+                    >
+                        {syncingPlex ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        Sync Plex Friends Now
+                    </Button>
+                </CardContent>
+            </Card>
 
             <div className="grid gap-8 md:grid-cols-2">
                 {/* CREATE USER FORM */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Create Account</CardTitle>
-                        <CardDescription>Add a new administrator or standard user.</CardDescription>
+                        <CardDescription>Add a new administrator or pre-approved standard user.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleCreate} className="space-y-4">
@@ -61,7 +116,6 @@ export default function AccessSettingsPage() {
                                 <Label>Username</Label>
                                 <Input name="username" placeholder="e.g. admin" required />
                             </div>
-                            {/* NEW EMAIL INPUT */}
                             <div className="space-y-2">
                                 <Label>Email Address</Label>
                                 <Input name="email" type="email" placeholder="admin@example.com" required />
@@ -76,12 +130,12 @@ export default function AccessSettingsPage() {
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="ADMIN">Admin (Full Access)</SelectItem>
-                                        <SelectItem value="USER">User (Read Only)</SelectItem>
+                                        <SelectItem value="USER">User (Standard Access)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                             <Button type="submit" className="w-full">
-                                <UserPlus className="h-4 w-4 mr-2" /> Create User
+                                <UserPlus className="h-4 w-4 mr-2" /> Create Approved User
                             </Button>
                         </form>
                     </CardContent>
@@ -90,35 +144,64 @@ export default function AccessSettingsPage() {
                 {/* USER LIST */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Existing Users</CardTitle>
-                        <CardDescription>Manage current access.</CardDescription>
+                        <CardTitle>Existing Users & Requests</CardTitle>
+                        <CardDescription>Review pending requests and manage current access.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
                             {loading ? (
-                                <div className="text-sm text-muted-foreground">Loading...</div>
+                                <div className="text-sm text-muted-foreground">Loading users...</div>
                             ) : users.length === 0 ? (
                                 <div className="text-sm text-muted-foreground italic">No users created yet.</div>
                             ) : (
                                 users.map((user) => (
-                                    <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <div key={user.id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 border rounded-xl gap-3 ${user.status === "PENDING" ? "bg-amber-500/10 border-amber-500/30" : "bg-muted/20"}`}>
+                                        <div className="flex items-start sm:items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
                                                 {user.role === "ADMIN" ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-muted-foreground" />}
                                             </div>
-                                            <div>
-                                                <div className="font-medium">{user.username}</div>
+                                            <div className="space-y-0.5">
+                                                <div className="font-medium flex items-center gap-2">
+                                                    <span>{user.username}</span>
+                                                    {user.status === "PENDING" && (
+                                                        <Badge variant="outline" className="bg-amber-500/20 text-amber-500 border-amber-500/30 text-[10px] gap-1">
+                                                            <Clock className="h-3 w-3" /> Pending Approval
+                                                        </Badge>
+                                                    )}
+                                                    {user.status === "REJECTED" && (
+                                                        <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px]">
+                                                            Rejected
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
                                                     <Mail className="h-3 w-3" /> {user.email || "No Email"}
                                                 </div>
-                                                <div className="text-[10px] text-muted-foreground mt-0.5">
-                                                    Added {format(new Date(user.createdAt), "MMM d, yyyy")}
+                                                <div className="text-[10px] text-muted-foreground">
+                                                    Registered {format(new Date(user.createdAt), "MMM d, yyyy")}
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <Badge variant={user.role === "ADMIN" ? "default" : "secondary"}>{user.role}</Badge>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(user.id)}>
+
+                                        <div className="flex items-center gap-1.5 self-end sm:self-center">
+                                            {user.status === "PENDING" ? (
+                                                <>
+                                                    <Button size="sm" variant="default" className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white gap-1" onClick={() => handleApprove(user.id)}>
+                                                        <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" className="h-8 px-2.5 text-red-400 border-red-800/40 hover:bg-red-950/40 gap-1" onClick={() => handleReject(user.id)}>
+                                                        <XCircle className="h-3.5 w-3.5" /> Reject
+                                                    </Button>
+                                                </>
+                                            ) : user.status === "REJECTED" ? (
+                                                <Button size="sm" variant="outline" className="h-8 px-2.5 text-emerald-400 border-emerald-800/40 hover:bg-emerald-950/40 gap-1" onClick={() => handleApprove(user.id)}>
+                                                    <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                                                </Button>
+                                            ) : (
+                                                <Badge variant={user.role === "ADMIN" ? "default" : "secondary"}>{user.role}</Badge>
+                                            )}
+
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-950/40" onClick={() => handleDelete(user.id)} title="Delete User">
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>
@@ -132,3 +215,4 @@ export default function AccessSettingsPage() {
         </div>
     );
 }
+

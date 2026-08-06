@@ -292,31 +292,71 @@ export async function removeMediaApp(id: string) {
   revalidatePath("/settings");
 }
 
+import { sendUserApprovalEmail } from "@/app/auth-actions";
+
 export async function getAppUsers() {
     await verifyAdmin();
     return await prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
-        select: { id: true, username: true, email: true, role: true, createdAt: true, kindleEmail: true }
+        select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true }
     });
 }
 
 export async function createAppUser(formData: FormData) {
     await verifyAdmin();
-    const username = formData.get("username") as string;
-    const email = formData.get("email") as string;
+    const username = (formData.get("username") as string)?.trim();
+    const email = (formData.get("email") as string)?.trim().toLowerCase();
     const password = formData.get("password") as string;
-    const role = formData.get("role") as string;
+    const role = (formData.get("role") as string) || "USER";
 
-    if (!username || !password || !email) return;
+    if (!username || !password || !email) return { error: "Username, email, and password required" };
     const hashedPassword = await hash(password, 10);
 
     try {
         await prisma.user.create({
-            data: { username, email, password: hashedPassword, role }
+            data: { username, email, password: hashedPassword, role, status: "APPROVED" }
         });
         revalidatePath("/settings");
-    } catch (e) {
+        revalidatePath("/settings/access");
+        return { success: true };
+    } catch (e: any) {
         console.error("Failed to create user", e);
+        return { error: e.message || "Failed to create user" };
+    }
+}
+
+export async function approveAppUser(id: string) {
+    await verifyAdmin();
+    try {
+        const user = await prisma.user.update({
+            where: { id },
+            data: { status: "APPROVED" }
+        });
+        if (user.email) {
+            await sendUserApprovalEmail(user.email, user.username);
+        }
+        revalidatePath("/settings/access");
+        revalidatePath("/settings");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to approve user:", e);
+        return { error: e.message || "Failed to approve user" };
+    }
+}
+
+export async function rejectAppUser(id: string) {
+    await verifyAdmin();
+    try {
+        await prisma.user.update({
+            where: { id },
+            data: { status: "REJECTED" }
+        });
+        revalidatePath("/settings/access");
+        revalidatePath("/settings");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to reject user:", e);
+        return { error: e.message || "Failed to reject user" };
     }
 }
 
@@ -326,8 +366,10 @@ export async function deleteAppUser(id: string) {
         await prisma.user.delete({ where: { id } });
         revalidatePath("/settings/access");
         revalidatePath("/settings");
-    } catch (e) {
+        return { success: true };
+    } catch (e: any) {
         console.error("Failed to delete user:", e);
+        return { error: e.message || "Failed to delete user" };
     }
 }
 
@@ -748,7 +790,7 @@ async function verifyUser() {
 
 async function checkLibraryAccess(allowedUsersStr: string, username: string, role: string) {
     if (role === "ADMIN") return true;
-    if (!allowedUsersStr) return false;
+    if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
     const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
     if (allowed.includes("*") || allowed.includes(username.toLowerCase())) {
         return true;
@@ -3168,4 +3210,192 @@ export async function retryBookRequest(requestId: string) {
     
     revalidatePath("/library");
     return { success: true };
+}
+
+// ============================================================================
+// --- PLEX FRIENDS AUTO-SCAN & SYNC ACTIONS ---
+// ============================================================================
+
+export async function syncPlexFriendsInternal() {
+    console.log("[PLEX-SYNC] Starting Plex friends scanning and user account sync...");
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            console.log("[PLEX-SYNC] Skipped: Server Admin has not configured a Plex Token in Settings.");
+            return { success: false, error: "Plex Token is not configured in Settings." };
+        }
+
+        const adminToken = decryptData(settings.mainPlexToken);
+
+        // Fetch Plex Friends list
+        const friendsRes = await fetch("https://plex.tv/api/v2/friends", {
+            headers: {
+                "Accept": "application/json",
+                "X-Plex-Token": adminToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            }
+        });
+
+        if (!friendsRes.ok) {
+            console.error(`[PLEX-SYNC] Failed to fetch Plex friends list. Status: ${friendsRes.status}`);
+            return { success: false, error: `Plex API returned HTTP status ${friendsRes.status}` };
+        }
+
+        const friendsList = await friendsRes.json();
+        if (!Array.isArray(friendsList)) {
+            console.error("[PLEX-SYNC] Unexpected response format from Plex friends API.");
+            return { success: false, error: "Unexpected response format from Plex API." };
+        }
+
+        // Fetch Plex Admin Owner profile
+        let adminPlexProfile: any = null;
+        try {
+            const adminRes = await fetch("https://plex.tv/api/v2/user", {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (adminRes.ok) {
+                adminPlexProfile = await adminRes.json();
+            }
+        } catch (adminErr) {
+            console.warn("[PLEX-SYNC] Could not fetch admin Plex profile:", adminErr);
+        }
+
+        const dbUsers = await prisma.user.findMany();
+        let addedCount = 0;
+        let updatedCount = 0;
+        let revokedCount = 0;
+
+        const activePlexEmails = new Set<string>();
+        const activePlexUsernames = new Set<string>();
+
+        if (adminPlexProfile) {
+            if (adminPlexProfile.email) activePlexEmails.add(adminPlexProfile.email.toLowerCase().trim());
+            if (adminPlexProfile.username) activePlexUsernames.add(adminPlexProfile.username.toLowerCase().trim());
+            if (adminPlexProfile.title) activePlexUsernames.add(adminPlexProfile.title.toLowerCase().trim());
+        }
+
+        for (const friend of friendsList) {
+            const fEmail = (friend.email || "").toLowerCase().trim();
+            const fUsername = (friend.username || friend.title || (fEmail ? fEmail.split('@')[0] : "")).trim();
+
+            if (!fEmail && !fUsername) continue;
+
+            if (fEmail) activePlexEmails.add(fEmail);
+            if (fUsername) activePlexUsernames.add(fUsername.toLowerCase());
+
+            // Match existing user by email or username (case-insensitive)
+            let existingUser = dbUsers.find(u => 
+                (fEmail && u.email.toLowerCase() === fEmail) ||
+                (fUsername && u.username.toLowerCase() === fUsername.toLowerCase())
+            );
+
+            if (existingUser) {
+                // Update existing user details/status if needed
+                let needsUpdate = false;
+                const updateData: any = {};
+
+                if (existingUser.role !== "ADMIN" && existingUser.status !== "APPROVED") {
+                    updateData.status = "APPROVED";
+                    needsUpdate = true;
+                }
+
+                if (fEmail && existingUser.email.toLowerCase() !== fEmail) {
+                    const conflict = dbUsers.find(u => u.id !== existingUser!.id && u.email.toLowerCase() === fEmail);
+                    if (!conflict) {
+                        updateData.email = fEmail;
+                        needsUpdate = true;
+                    }
+                }
+
+                if (needsUpdate) {
+                    await prisma.user.update({
+                        where: { id: existingUser.id },
+                        data: updateData
+                    });
+                    updatedCount++;
+                }
+            } else {
+                // Create new approved user account for friend
+                let baseUsername = fUsername || (fEmail ? fEmail.split('@')[0] : "plex_friend");
+                baseUsername = baseUsername.replace(/[^a-zA-Z0-9_\-]/g, "_");
+                if (!baseUsername) baseUsername = "plex_friend";
+
+                let safeUsername = baseUsername;
+                let counter = 1;
+                while (dbUsers.some(u => u.username.toLowerCase() === safeUsername.toLowerCase())) {
+                    safeUsername = `${baseUsername}_${counter}`;
+                    counter++;
+                }
+
+                let safeEmail = fEmail;
+                if (!safeEmail || dbUsers.some(u => u.email.toLowerCase() === safeEmail.toLowerCase())) {
+                    safeEmail = `${safeUsername.toLowerCase()}@plex.local`;
+                }
+
+                const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
+                const hashedPassword = await hash(randomPassword, 10);
+
+                const newUser = await prisma.user.create({
+                    data: {
+                        username: safeUsername,
+                        email: safeEmail,
+                        password: hashedPassword,
+                        role: "USER",
+                        status: "APPROVED"
+                    }
+                });
+
+                dbUsers.push(newUser);
+                addedCount++;
+            }
+        }
+
+        // Revoke access for users no longer in Plex friends list (excluding ADMIN accounts)
+        for (const user of dbUsers) {
+            if (user.role === "ADMIN") continue;
+            
+            const isListedInPlex = 
+                (user.email && activePlexEmails.has(user.email.toLowerCase())) ||
+                (user.username && activePlexUsernames.has(user.username.toLowerCase()));
+
+            if (!isListedInPlex && user.status === "APPROVED") {
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { status: "REJECTED" }
+                });
+                revokedCount++;
+            }
+        }
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { lastAutoSync: new Date() },
+            create: { id: "global", lastAutoSync: new Date() }
+        });
+
+        console.log(`[PLEX-SYNC] Completed. Friends: ${friendsList.length}, Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}`);
+        return {
+            success: true,
+            totalFriends: friendsList.length,
+            addedCount,
+            updatedCount,
+            revokedCount
+        };
+
+    } catch (e: any) {
+        console.error("[PLEX-SYNC] Error during Plex friends sync:", e.message || e);
+        return { success: false, error: e.message || "Failed to sync Plex friends" };
+    }
+}
+
+export async function syncPlexFriendsAction() {
+    await verifyAdmin();
+    const result = await syncPlexFriendsInternal();
+    revalidatePath("/settings");
+    revalidatePath("/settings/access");
+    return result;
 }

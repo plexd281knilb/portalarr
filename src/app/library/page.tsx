@@ -1015,6 +1015,66 @@ function BookLibraryPageContent() {
         );
     }
 
+    const isKindleConfigured = !!userKindleEmail && userKindleEmail.trim() !== "";
+
+    if (!isKindleConfigured) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background px-4 py-12">
+                <Card className="w-full max-w-lg border-primary/30 shadow-2xl bg-card/95 backdrop-blur-sm">
+                    <CardHeader className="text-center space-y-3 pb-4">
+                        <div className="mx-auto bg-primary/10 border border-primary/20 p-4 rounded-2xl w-fit">
+                            <Mail className="h-10 w-10 text-primary" />
+                        </div>
+                        <CardTitle className="text-2xl font-bold tracking-tight">
+                            Send-to-Kindle Email Required
+                        </CardTitle>
+                        <CardDescription className="text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
+                            To access the public book library and request ebooks, please enter your Send-to-Kindle email address.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <form onSubmit={handleSaveKindleConfig} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="gate-kindle-email" className="text-xs font-semibold">Send-to-Kindle Email Address</Label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        id="gate-kindle-email"
+                                        type="email"
+                                        required
+                                        className="pl-9"
+                                        placeholder="username_123@kindle.com"
+                                        value={userKindleEmail}
+                                        onChange={(e) => setUserKindleEmail(e.target.value)}
+                                    />
+                                </div>
+                                <p className="text-[11px] text-muted-foreground leading-snug pt-1">
+                                    Find your Kindle email under your Amazon Account &gt; <em>Content &amp; Devices</em> &gt; <em>Preferences</em> &gt; <em>Personal Document Settings</em>.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="gate-personal-email" className="text-xs font-semibold">Personal Contact Email</Label>
+                                <Input 
+                                    id="gate-personal-email"
+                                    type="email"
+                                    required
+                                    placeholder="you@example.com"
+                                    value={userEmail}
+                                    onChange={(e) => setUserEmail(e.target.value)}
+                                />
+                            </div>
+
+                            <Button type="submit" className="w-full h-11 font-semibold text-black gap-2 mt-2">
+                                <Sparkles className="h-4 w-4" /> Save Email &amp; Unlock Library Access
+                            </Button>
+                        </form>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-background flex flex-col p-4 sm:p-6 animate-in fade-in duration-500 max-w-7xl mx-auto w-full space-y-6">
             <header className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-muted/50 gap-4">

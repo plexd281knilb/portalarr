@@ -17,21 +17,24 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Allow access to the login page
+  // 2. Allow access to the login page & pending status page without redirect loops
   if (pathname === "/login") {
-    // If already logged in, redirect to home
     if (session) {
       try {
-        await jwtVerify(session, JWT_SECRET);
+        const { payload } = await jwtVerify(session, JWT_SECRET);
+        const status = (payload.status as string) || "APPROVED";
+        if (status === "PENDING" || status === "REJECTED") {
+          return NextResponse.redirect(new URL("/pending", req.url));
+        }
         return NextResponse.redirect(new URL("/", req.url));
       } catch (e) {
-        // Invalid session, let them stay on login page
+        // Invalid session, allow login page
       }
     }
     return NextResponse.next();
   }
 
-  // 3. Require login for everything else (including all API routes)
+  // 3. Require login for everything else
   if (!session) {
     if (pathname.startsWith("/api")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -41,8 +44,25 @@ export async function proxy(req: NextRequest) {
 
   try {
     const { payload } = await jwtVerify(session, JWT_SECRET);
+    const userStatus = (payload.status as string) || "APPROVED";
 
-    // 4. Role-based protection for Admin routes
+    // 4. Pending or Rejected user protection
+    if (userStatus === "PENDING" || userStatus === "REJECTED") {
+      if (pathname === "/pending") {
+        return NextResponse.next();
+      }
+      if (pathname.startsWith("/api")) {
+        return NextResponse.json({ error: "Account Pending Approval" }, { status: 403 });
+      }
+      return NextResponse.redirect(new URL("/pending", req.url));
+    }
+
+    // If an approved user visits /pending, send them home
+    if (pathname === "/pending") {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+
+    // 5. Role-based protection for Admin routes
     const isAdminRoute = 
       pathname.startsWith("/admin") || 
       pathname.startsWith("/settings");
@@ -67,3 +87,4 @@ export async function proxy(req: NextRequest) {
     return response;
   }
 }
+

@@ -4,10 +4,9 @@ import { compare, hash } from "bcryptjs";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
+import nodemailer from "nodemailer";
 import { decryptData } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
-
-// ... (leave the rest of the file exactly as is!)
 
 const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
 if (!JWT_SECRET_RAW && process.env.NODE_ENV === "production") {
@@ -40,10 +39,10 @@ export async function setupFirstAdmin(formData: FormData) {
 
   try {
     const user = await prisma.user.create({
-      data: { username, email, password: hashedPassword, role: "ADMIN" }
+      data: { username, email, password: hashedPassword, role: "ADMIN", status: "APPROVED" }
     });
 
-    await createSession(user.id, user.username, user.role);
+    await createSession(user.id, user.username, user.role, user.status);
     return { success: true };
   } catch (e: any) {
     console.error("Setup Error:", e);
@@ -53,19 +52,27 @@ export async function setupFirstAdmin(formData: FormData) {
 
 // --- 3. LOGIN ACTION ---
 export async function login(formData: FormData) {
-  const username = formData.get("username") as string;
+  const input = (formData.get("username") as string)?.trim();
   const password = formData.get("password") as string;
 
-  if (!username || !password) {
-    return { error: "Username and password required" };
+  if (!input || !password) {
+    return { error: "Username/Email and password required" };
   }
 
-  const user = await prisma.user.findFirst({
-    where: { username }
-  });
+  const normalizedInput = input.toLowerCase();
+
+  // Support login by Username or Email (case-insensitive)
+  const allUsers = await prisma.user.findMany();
+  const user = allUsers.find(
+    (u) => u.username.toLowerCase() === normalizedInput || u.email.toLowerCase() === normalizedInput
+  );
 
   if (!user) {
     return { error: "Invalid credentials" };
+  }
+
+  if (user.status === "REJECTED") {
+    return { error: "Your account request was declined by the administrator." };
   }
 
   const isValid = await compare(password, user.password);
@@ -74,19 +81,58 @@ export async function login(formData: FormData) {
     return { error: "Invalid credentials" };
   }
 
-  await createSession(user.id, user.username, user.role);
+  await createSession(user.id, user.username, user.role, user.status);
   return { success: true };
 }
 
-// --- 4. LOGOUT ---
+// --- 4. REQUEST PENDING ACCOUNT ACTION ---
+export async function requestAccount(formData: FormData) {
+  const username = (formData.get("username") as string)?.trim();
+  const email = (formData.get("email") as string)?.trim().toLowerCase();
+  const password = formData.get("password") as string;
+
+  if (!username || !email || !password) {
+    return { error: "Username, email, and password are required." };
+  }
+
+  const allUsers = await prisma.user.findMany();
+  const existing = allUsers.find(
+    (u) => u.username.toLowerCase() === username.toLowerCase() || u.email.toLowerCase() === email
+  );
+
+  if (existing) {
+    return { error: "An account with that username or email already exists." };
+  }
+
+  const hashedPassword = await hash(password, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      username,
+      email,
+      password: hashedPassword,
+      role: "USER",
+      status: "PENDING"
+    }
+  });
+
+  // Notify administrator via SMTP email
+  await sendAdminNewAccountRequestEmail({ id: user.id, username: user.username, email: user.email });
+
+  // Log user into pending session state
+  await createSession(user.id, user.username, user.role, user.status);
+  return { success: true };
+}
+
+// --- 5. LOGOUT ---
 export async function logout() {
   (await cookies()).delete("session");
   redirect("/login");
 }
 
 // --- HELPER: CREATE SESSION ---
-async function createSession(userId: string, username: string, role: string) {
-  const token = await new SignJWT({ userId, username, role })
+async function createSession(userId: string, username: string, role: string, status: string = "APPROVED") {
+  const token = await new SignJWT({ userId, username, role, status })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("24h")
@@ -114,67 +160,252 @@ export async function getSession() {
   }
 }
 
-// --- 5. PLEX CALLBACK (OPTION 2: AUTO-SYNC) ---
-export async function handlePlexCallback(plexProfile: { email: string; username: string }) {
-  console.log(`[AUTH] Processing Plex login for: ${plexProfile.username}`);
+// --- 6. PLEX CALLBACK (AUTO-PROVISION & SYNC) ---
+export async function handlePlexCallback(plexProfile: { email?: string; username?: string; title?: string; id?: string | number }) {
+  const rawEmail = (plexProfile.email || "").trim().toLowerCase();
+  const rawUsername = (plexProfile.username || plexProfile.title || (rawEmail ? rawEmail.split('@')[0] : "")).trim();
+  const plexId = plexProfile.id ? String(plexProfile.id) : null;
 
-  if (!plexProfile.email || !plexProfile.username) {
-    return { error: "Plex account is missing an email or username." };
+  console.log(`[AUTH] Processing Plex login for: username="${rawUsername}", email="${rawEmail}", id="${plexId}"`);
+
+  if (!rawEmail && !rawUsername) {
+    return { error: "Plex account profile is missing email and username details." };
   }
 
-  let user = await prisma.user.findUnique({
-    where: { email: plexProfile.email }
-  });
+  // Check if user already exists in Portalarr
+  const allUsers = await prisma.user.findMany();
+  let user = allUsers.find(
+    (u) =>
+      (rawEmail && u.email.toLowerCase() === rawEmail) ||
+      (rawUsername && u.username.toLowerCase() === rawUsername.toLowerCase())
+  );
 
-  if (!user) {
-    console.log(`[AUTH] Checking Plex Friends List for: ${plexProfile.username}`);
-    
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings?.mainPlexToken) {
-        return { error: "The Server Admin must configure their Plex Token in Settings before users can join." };
+  // If user already exists in DB, log them in directly
+  if (user) {
+    console.log(`[AUTH] Existing user matched: ${user.username} (${user.id}) status=${user.status}`);
+    if (user.status === "REJECTED") {
+      return { error: "Your account request was declined by the administrator." };
     }
+    await createSession(user.id, user.username, user.role, user.status);
+    return { success: true };
+  }
 
-    const adminToken = decryptData(settings.mainPlexToken);
-    const response = await fetch("https://plex.tv/api/v2/friends", {
-        headers: {
-            "Accept": "application/json",
-            "X-Plex-Token": adminToken,
-            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-        }
-    });
+  // New User Auto-Provisioning: Verify access to the Plex Server
+  console.log(`[AUTH] User not in DB. Verifying Plex Server access for: ${rawUsername || rawEmail}`);
+  
+  const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+  if (!settings?.mainPlexToken) {
+      return { error: "The Server Admin must configure their Plex Token in Settings before new users can sign in with Plex." };
+  }
 
-    let isFriend = false;
-    if (response.ok) {
-        const friendsList = await response.json();
-        isFriend = friendsList.some((friend: any) => 
-            friend.email === plexProfile.email || friend.username === plexProfile.username
-        );
-    }
+  const adminToken = decryptData(settings.mainPlexToken);
 
-    if (!isFriend) {
-        console.warn(`[AUTH] BLOCKED: ${plexProfile.username} is not on the shared friends list.`);
-        return { error: "Access Denied. You do not have access to this Plex Server." };
-    }
-
-    let safeUsername = plexProfile.username;
-    const existingUsername = await prisma.user.findUnique({ where: { username: safeUsername } });
-    if (existingUsername) safeUsername = `${safeUsername}_plex`;
-
-    const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
-    const hashedPassword = await hash(randomPassword, 10);
-
-    user = await prisma.user.create({
-      data: {
-        username: safeUsername,
-        email: plexProfile.email,
-        password: hashedPassword,
-        role: "USER", 
+  // Check if logging-in user IS the Plex Server Owner
+  let isAdminOwner = false;
+  try {
+    const adminRes = await fetch("https://plex.tv/api/v2/user", {
+      headers: {
+        "Accept": "application/json",
+        "X-Plex-Token": adminToken,
+        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
       }
     });
+    if (adminRes.ok) {
+      const adminProfile = await adminRes.json();
+      const adminEmail = (adminProfile.email || "").toLowerCase().trim();
+      const adminUsername = (adminProfile.username || adminProfile.title || "").toLowerCase().trim();
+      const adminId = adminProfile.id ? String(adminProfile.id) : null;
+
+      if (
+        (adminEmail && rawEmail && adminEmail === rawEmail) ||
+        (adminUsername && rawUsername && adminUsername === rawUsername.toLowerCase()) ||
+        (adminId && plexId && adminId === plexId)
+      ) {
+        isAdminOwner = true;
+        console.log(`[AUTH] User identified as Plex Server Owner.`);
+      }
+    }
+  } catch (err) {
+    console.warn("[AUTH] Failed to fetch admin Plex profile for owner verification:", err);
   }
 
-  await createSession(user.id, user.username, user.role);
+  // If not owner, check Plex Friends / Shared list
+  let isFriend = false;
+  if (!isAdminOwner) {
+    try {
+      const response = await fetch("https://plex.tv/api/v2/friends", {
+        headers: {
+          "Accept": "application/json",
+          "X-Plex-Token": adminToken,
+          "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+        }
+      });
+
+      if (response.ok) {
+        const friendsList = await response.json();
+        if (Array.isArray(friendsList)) {
+          isFriend = friendsList.some((friend: any) => {
+            const fEmail = (friend.email || "").toLowerCase().trim();
+            const fUsername = (friend.username || friend.title || "").toLowerCase().trim();
+            const fId = friend.id ? String(friend.id) : null;
+            return (
+              (rawEmail && fEmail === rawEmail) ||
+              (rawUsername && fUsername === rawUsername.toLowerCase()) ||
+              (plexId && fId && fId === plexId)
+            );
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("[AUTH] Error checking Plex friends list:", err);
+    }
+  }
+
+  if (!isAdminOwner && !isFriend) {
+    console.warn(`[AUTH] BLOCKED: ${rawUsername || rawEmail} is not on the shared Plex friends list.`);
+    return { error: "Access Denied. You do not have access to this Plex Server." };
+  }
+
+  // Generate safe, collision-free username
+  let baseUsername = rawUsername || (rawEmail ? rawEmail.split('@')[0] : "plex_user");
+  baseUsername = baseUsername.replace(/[^a-zA-Z0-9_\-]/g, "_");
+  if (!baseUsername) baseUsername = "plex_user";
+
+  let safeUsername = baseUsername;
+  let counter = 1;
+  while (allUsers.some((u) => u.username.toLowerCase() === safeUsername.toLowerCase())) {
+    safeUsername = `${baseUsername}_${counter}`;
+    counter++;
+  }
+
+  // Generate safe, collision-free email
+  let safeEmail = rawEmail;
+  if (!safeEmail || allUsers.some((u) => u.email.toLowerCase() === safeEmail.toLowerCase())) {
+    safeEmail = `${safeUsername.toLowerCase()}@plex.local`;
+  }
+
+  const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
+  const hashedPassword = await hash(randomPassword, 10);
+
+  // If server owner, assign ADMIN + APPROVED, otherwise USER + APPROVED (since friend list verified)
+  const role = isAdminOwner ? "ADMIN" : "USER";
+  const status = "APPROVED";
+
+  user = await prisma.user.create({
+    data: {
+      username: safeUsername,
+      email: safeEmail,
+      password: hashedPassword,
+      role,
+      status
+    }
+  });
+
+  console.log(`[AUTH] Successfully auto-provisioned Plex user: ${user.username} (${user.role})`);
+  await createSession(user.id, user.username, user.role, user.status);
   return { success: true };
+}
+
+// --- HELPER: EMAIL ADMINS ON NEW ACCOUNT REQUEST ---
+async function sendAdminNewAccountRequestEmail(user: { id: string; username: string; email: string }) {
+  try {
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+      console.log("[AUTH] SMTP not configured. Account request email notification skipped.");
+      return;
+    }
+
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" }
+    });
+
+    const adminEmails = admins.map(a => a.email).filter(Boolean);
+    const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
+    const senderEmail = settings.smtpFrom || settings.smtpUser;
+
+    const transporter = nodemailer.createTransport({
+      host: settings.smtpHost,
+      port: settings.smtpPort || 587,
+      secure: settings.smtpPort === 465,
+      auth: {
+        user: settings.smtpUser,
+        pass: decryptData(settings.smtpPass)
+      }
+    });
+
+    const mailOptions = {
+      from: senderEmail,
+      to: recipientEmails.join(", "),
+      subject: `👤 New Account Request: ${user.username}`,
+      html: `
+        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+          <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">New Account Request</h2>
+          <p style="font-size: 15px; color: #475569;">A new user has registered a temporary account and is awaiting your approval to access Portalarr.</p>
+          
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold; width: 120px; color: #64748b;">Username:</td>
+                <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${user.username}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Email:</td>
+                <td style="padding: 6px 0; color: #0f172a;">${user.email}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Status:</td>
+                <td style="padding: 6px 0; color: #d97706; font-weight: bold;">PENDING APPROVAL</td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="font-size: 14px; color: #475569;">You can review and approve this user in your Portalarr Dashboard under <strong>Settings &gt; Access Control</strong>.</p>
+        </div>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[AUTH] Account request notification email sent to admins for ${user.username}`);
+  } catch (err) {
+    console.error("[AUTH] Error sending account request email:", err);
+  }
+}
+
+// --- HELPER: EMAIL USER ON APPROVAL ---
+export async function sendUserApprovalEmail(userEmail: string, username: string) {
+  try {
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass || !userEmail) {
+      return;
+    }
+
+    const senderEmail = settings.smtpFrom || settings.smtpUser;
+    const transporter = nodemailer.createTransport({
+      host: settings.smtpHost,
+      port: settings.smtpPort || 587,
+      secure: settings.smtpPort === 465,
+      auth: {
+        user: settings.smtpUser,
+        pass: decryptData(settings.smtpPass)
+      }
+    });
+
+    await transporter.sendMail({
+      from: senderEmail,
+      to: userEmail,
+      subject: `🎉 Your Portalarr Account has been Approved!`,
+      html: `
+        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #0f172a; margin-top: 0;">Account Approved!</h2>
+          <p>Hi <strong>${username}</strong>,</p>
+          <p>Great news! Your account request for Portalarr has been approved by the administrator.</p>
+          <p>You can now sign in and access media requests and services.</p>
+        </div>
+      `
+    });
+  } catch (err) {
+    console.error("[AUTH] Failed to send approval email to user:", err);
+  }
 }
 
 // --- HELPER: GET CURRENT FULL USER ---
@@ -184,7 +415,7 @@ export async function getCurrentUser() {
   
   const user = await prisma.user.findUnique({
     where: { id: payload.userId as string },
-    select: { username: true, email: true, kindleEmail: true, role: true }
+    select: { id: true, username: true, email: true, kindleEmail: true, role: true, status: true }
   });
   
   return user;

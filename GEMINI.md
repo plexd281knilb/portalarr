@@ -78,13 +78,19 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 ### 4. Global Route Protection
 - **Proxy Configuration:** All routes are protected by `src/proxy.ts` (Next.js 16 convention).
 - **Enforcement:** Users are redirected to `/login` if no valid session exists.
-- **Role-Based Access:** Admin routes (`/settings`, `/admin/*`) are restricted to users with the `ADMIN` role. Standard users are redirected back to the home page if they attempt to access these routes.
+- **Role & Status Protection:** Admin routes (`/settings`, `/admin/*`) are restricted to users with the `ADMIN` role. Users with `PENDING` or `REJECTED` status are blocked from all app/API routes by `src/proxy.ts` and redirected to `/pending`.
 
-### 5. Gotchas & Best Practices
+### 5. Account Approval & Plex Auto-Sync
+- **Pending Account Requests:** New users can submit a temporary account request on `/login`. This sets `status = "PENDING"` and emails an admin notification via SMTP. Admins manage approval/rejection at `/settings/access`.
+- **Plex Friends Auto-Sync:** The background scheduler in `src/lib/prisma.ts` periodically scans the owner's Plex friends list (`/api/v2/friends`). It auto-provisions `APPROVED` accounts for new friends, updates changed emails/usernames, and revokes access (`status = "REJECTED"`) for users removed from Plex (protecting `ADMIN` accounts).
+- **Send-to-Kindle Email Gate:** Users must configure a valid Send-to-Kindle email (`kindleEmail`) to unlock access to books and requests on `/library`.
+
+### 6. Gotchas & Best Practices
 - **Windows File Locks:** SQLite database and Prisma engine files lock during `npm run dev`. Stop the dev server before running `npx prisma migrate dev`.
+- **Case-Insensitive SQLite Queries:** Perform lowercased string matching in JS when querying `prisma.user` to avoid Prisma SQLite `mode: "insensitive"` type errors and `P2002` unique constraint crashes.
 - **Registry Autocomplete:** Use `onMouseDown` instead of `onClick` for dropdown suggestion list items to prevent input `onBlur` from unmounting items prematurely.
 - **Open Library Queries:** Combine series queries with the author name (e.g. `Series Author`) and filter out compilations (box sets, bundles, omnibus) to avoid duplicate or unrelated bulk results.
-- **Library Access Defaults:** New libraries must default to restricted access (`allowedUsers = ""`) so that the admin must explicitly authorize users rather than defaulting to public (`*`).
+- **Library Access Defaults:** Public libraries use `allowedUsers = "*"` or empty string to allow all approved users access.
 - **Server Action Error Handling:** Server actions invoked from Client Components should return a serializable `{ success: boolean, error?: string }` object instead of throwing raw `Error`s. In production Next.js builds, raw errors are masked with a generic *"An error occurred in the Server Components render"* message, preventing detailed user-facing error reporting.
 - **Kindle & Library Scan Renaming Loops:** Keep on-disk file paths pretty (e.g. `Author - Title.ext`) and avoid cleaning or lowercase-renaming them on disk during library scans. This prevents infinite scan-rename cycles and race conditions where download/Kindle delivery checks fail because the path keeps changing. For Kindle email delivery, sanitize the attachment filename *in the email options* instead of renaming the file on disk.
 - **Download Client File Cleanup:** When a book download finishes and is successfully copied to a library, always call the download client API to delete the torrent/NZB and its files. This releases active OS/Docker file locks and automatically frees up storage on the downloads share.
@@ -92,9 +98,11 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 
 ## Key Files
 - `prisma/schema.prisma`: The source of truth for the database schema.
-- `src/proxy.ts`: Global authentication and role-based access control.
-- `src/app/actions.ts`: Main repository for system logic and database mutations.
-- `src/app/auth-actions.ts`: Logic for login, session creation, and Plex authentication.
+- `src/proxy.ts`: Global authentication, role-based, and user status access control.
+- `src/app/actions.ts`: Main repository for system logic, Plex friend sync, and database mutations.
+- `src/app/auth-actions.ts`: Logic for login, session creation, account requests, and Plex authentication.
+- `src/app/pending/page.tsx`: Pending account approval status screen for non-approved users.
+- `src/app/settings/access/page.tsx`: Admin management screen for users, pending access requests, and Plex sync.
 - `src/app/admin/tickets/page.tsx`: Admin management screen for user support tickets.
 - `src/app/beta/page.tsx`: User dashboard displaying active beta testing services.
 - `src/components/sidebar.tsx`: Main navigation component.

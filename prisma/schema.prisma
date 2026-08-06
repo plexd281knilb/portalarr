@@ -68,6 +68,7 @@ model User {
   password    String   // Hashed
   kindleEmail String   @default("") // Send-to-Kindle email address
   role        String   @default("USER") // "ADMIN" or "USER"
+  status      String   @default("APPROVED") // "APPROVED", "PENDING", "REJECTED"
   createdAt   DateTime @default(now())
 }
 
