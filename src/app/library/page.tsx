@@ -868,7 +868,7 @@ function BookLibraryPageContent() {
         setSearchProwlarrError("");
         try {
             const queryText = req.author ? `${req.title} ${req.author}` : req.title;
-            const res = await searchProwlarrIndexers(queryText);
+            const res = await searchProwlarrIndexers(queryText, req.mediaType || "ebook");
             setProwlarrResults(res || []);
         } catch (e: any) {
             setSearchProwlarrError(e.message || "Failed to search indexers.");
@@ -909,7 +909,7 @@ function BookLibraryPageContent() {
                     alert("Please select at least one book in the series to request.");
                     return;
                 }
-                await createMultipleBookRequests(checkedBooks, requestedFor);
+                await createMultipleBookRequests(checkedBooks, requestedFor, reqMediaType);
             } else {
                 const formData = new FormData();
                 formData.append("title", reqTitle);

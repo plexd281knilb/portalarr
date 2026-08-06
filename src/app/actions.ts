@@ -3331,7 +3331,7 @@ export async function getSeriesBooksList(seriesTitle: string, author: string = "
     }
 }
 
-export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[], requestedFor?: string) {
+export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[], requestedFor?: string, mediaType: string = "ebook") {
     const session = await verifyUser();
     const isAdmin = session.role === "ADMIN";
     if (!booksList || booksList.length === 0) return;
@@ -3350,6 +3350,7 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
                 publishYear: book.publishYear,
                 requestedBy: targetUser,
                 type: "book",
+                mediaType: mediaType,
                 status: "Pending"
             }
         });
