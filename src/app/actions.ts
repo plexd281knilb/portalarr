@@ -144,20 +144,28 @@ async function fetchITunesCover(title: string, author: string, mediaType: string
     try {
         const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
         const cleanAuthor = author && author !== "Unknown Author" ? author : "";
-        const query = `${title} ${cleanAuthor}`.trim();
-        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${entity}&limit=3`;
-        const res = await fetch(url, { headers: { "Accept": "application/json" } });
-        if (res.ok) {
-            const data = await res.json();
-            if (data && data.results && data.results.length > 0) {
-                const matched = data.results.find((item: any) => {
-                    const itemName = (item.trackName || item.collectionName || "").toLowerCase();
-                    return itemName.includes(title.toLowerCase()) || title.toLowerCase().includes(itemName);
-                }) || data.results[0];
+        const queries = [
+            `${title} ${cleanAuthor}`.trim(),
+            title.trim()
+        ];
 
-                let artwork = matched.artworkUrl100 || matched.artworkUrl60;
-                if (artwork) {
-                    return artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
+        for (const query of queries) {
+            if (!query) continue;
+            const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${entity}&limit=5`;
+            const res = await fetch(url, { headers: { "Accept": "application/json" } });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.results && data.results.length > 0) {
+                    const cleanTitleLower = title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const matched = data.results.find((item: any) => {
+                        const itemName = (item.trackName || item.collectionName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                        return itemName.includes(cleanTitleLower) || cleanTitleLower.includes(itemName);
+                    }) || data.results[0];
+
+                    let artwork = matched.artworkUrl100 || matched.artworkUrl60;
+                    if (artwork) {
+                        return artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
+                    }
                 }
             }
         }
@@ -1308,9 +1316,20 @@ export async function deleteBook(id: string) {
 
 export async function updateBook(id: string, title: string, author: string, coverUrl: string) {
     await verifyAdmin();
+    let finalCover = coverUrl;
+
+    if (!finalCover) {
+        const book = await prisma.book.findUnique({ where: { id } });
+        const mediaType = book?.mediaType || "ebook";
+        try {
+            const fetched = await fetchBookCover(title, author, mediaType);
+            if (fetched) finalCover = fetched;
+        } catch (e) {}
+    }
+
     await prisma.book.update({
         where: { id },
-        data: { title, author, coverUrl }
+        data: { title, author, coverUrl: finalCover }
     });
     await renameBookFileOnDisk(id);
     revalidatePath("/library");
@@ -2235,7 +2254,17 @@ export async function scanLibraryInternal(libraryId: string) {
                             }
                         } catch (e) {}
 
-                        if (!coverUrl) {
+                        if (tempTitle && tempTitle !== title) title = tempTitle;
+                        if (tempAuthor && tempAuthor !== author) author = tempAuthor;
+
+                        if (isDiscTitle && (!title || /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(title.trim()))) {
+                            if (author && author !== "Unknown Author" && !/^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(author.trim())) {
+                                title = author;
+                                author = "Unknown Author";
+                            }
+                        }
+
+                        if (!coverUrl || isDiscTitle) {
                             try {
                                 const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
                                 if (fetchedCover) {
