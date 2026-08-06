@@ -11,17 +11,23 @@ import {
     getBetaDashboardText, updateBetaDashboardText,
     getBetaCards, createBetaCard, updateBetaCard, deleteBetaCard,
     getRoadmapText, updateRoadmapText,
-    getAlertBanner, updateAlertBanner
+    getAlertBanner, updateAlertBanner,
+    testAppConnectionAction, testTautulliConnectionAction, testGlancesConnectionAction, validateDownloadsPathAction
 } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea"; 
-import { Tabs, TabsContent, TabsList, TabsTrigger, } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, CheckCircle2, XCircle, MailCheck, RefreshCw, Mail } from "lucide-react";
+import { 
+    Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, 
+    AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
+    CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
+    Radio, ExternalLink, FileCode, Check
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
@@ -89,6 +95,21 @@ function SettingsPageContent() {
     const [testEmailMsg, setTestEmailMsg] = useState("");
     const [testEmailErr, setTestEmailErr] = useState("");
 
+    // Connection Testing States
+    const [testingAppId, setTestingAppId] = useState<string | null>(null);
+    const [appTestResults, setAppTestResults] = useState<{ [id: string]: { success?: boolean, msg?: string, err?: string } }>({});
+
+    const [testingTautulliId, setTestingTautulliId] = useState<string | null>(null);
+    const [tautulliTestResults, setTautulliTestResults] = useState<{ [id: string]: { success?: boolean, msg?: string, err?: string } }>({});
+
+    const [testingGlancesId, setTestingGlancesId] = useState<string | null>(null);
+    const [glancesTestResults, setGlancesTestResults] = useState<{ [id: string]: { success?: boolean, msg?: string, err?: string } }>({});
+
+    // Path Validation State
+    const [validatingPath, setValidatingPath] = useState(false);
+    const [pathResult, setPathResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
+    const [inputDownloadsPath, setInputDownloadsPath] = useState("");
+
     const handleTestSmtp = async () => {
         setTestEmailLoading(true);
         setTestEmailMsg("");
@@ -100,6 +121,44 @@ function SettingsPageContent() {
         } else {
             setTestEmailErr(res.error || "Failed to send test email.");
         }
+    };
+
+    const handleTestApp = async (id: string) => {
+        setTestingAppId(id);
+        const res = await testAppConnectionAction(id);
+        setTestingAppId(null);
+        setAppTestResults(prev => ({
+            ...prev,
+            [id]: res.success ? { success: true, msg: res.message } : { success: false, err: res.error }
+        }));
+    };
+
+    const handleTestTautulli = async (id: string) => {
+        setTestingTautulliId(id);
+        const res = await testTautulliConnectionAction(id);
+        setTestingTautulliId(null);
+        setTautulliTestResults(prev => ({
+            ...prev,
+            [id]: res.success ? { success: true, msg: res.message } : { success: false, err: res.error }
+        }));
+    };
+
+    const handleTestGlances = async (id: string) => {
+        setTestingGlancesId(id);
+        const res = await testGlancesConnectionAction(id);
+        setTestingGlancesId(null);
+        setGlancesTestResults(prev => ({
+            ...prev,
+            [id]: res.success ? { success: true, msg: res.message } : { success: false, err: res.error }
+        }));
+    };
+
+    const handleValidatePath = async (pathStr: string) => {
+        setValidatingPath(true);
+        setPathResult(null);
+        const res = await validateDownloadsPathAction(pathStr);
+        setValidatingPath(false);
+        setPathResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
     };
 
     const loadAllData = async () => {
@@ -123,6 +182,7 @@ function SettingsPageContent() {
             ]);
             setUsers(u || []);
             setSystemSettings(s || {});
+            setInputDownloadsPath(s?.downloadsPath || "/downloads");
             setTautulli(t || []);
             setGlances(g || []);
             setMediaApps(m || []);
@@ -203,7 +263,7 @@ function SettingsPageContent() {
         <div className={`space-y-6 p-4 sm:p-8 max-w-6xl mx-auto transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
             <div>
                 <h2 className="text-3xl font-bold tracking-tight">System Settings</h2>
-                <p className="text-muted-foreground">Configure the platform, integrations, and access.</p>
+                <p className="text-muted-foreground">Configure global platform settings, integrations, access control, and monitoring apps.</p>
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
@@ -233,14 +293,15 @@ function SettingsPageContent() {
                 )}
 
                 {/* --- TAB 1: GENERAL SETUP --- */}
-                <TabsContent value="general" className="space-y-4">
+                <TabsContent value="general" className="space-y-6">
                     
-                    <Card className="col-span-2 border-orange-500/50 bg-orange-500/5 dark:bg-orange-500/10">
+                    {/* ALERT BANNER CARD */}
+                    <Card className="border-orange-500/40 bg-orange-500/5">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                            <CardTitle className="flex items-center gap-2 text-orange-500">
                                 <AlertTriangle className="h-5 w-5"/> System Alert Banner
                             </CardTitle>
-                            <CardDescription>Display a warning or maintenance banner across the top of the home page.</CardDescription>
+                            <CardDescription>Display a warning or maintenance notification banner at the top of the main dashboard.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(e) => handleForm(e, updateAlertBanner)} className="space-y-4">
@@ -250,42 +311,42 @@ function SettingsPageContent() {
                                         checked={bannerEnabled} 
                                         onCheckedChange={setBannerEnabled} 
                                     />
-                                    <Label htmlFor="banner-enabled" className="cursor-pointer">Enable Banner</Label>
+                                    <Label htmlFor="banner-enabled" className="cursor-pointer font-medium">Enable Dashboard Alert Banner</Label>
                                     <input type="hidden" name="enabled" value={bannerEnabled ? "on" : "off"} />
                                 </div>
                                 <div className="space-y-2">
                                     <Input 
                                         name="text" 
                                         defaultValue={alertBanner.text} 
-                                        placeholder="⚠️ **Maintenance:** Server will be down tonight at 2AM..." 
+                                        placeholder="⚠️ **Maintenance Notice:** Server maintenance scheduled for 2:00 AM EST..." 
                                     />
                                 </div>
-                                <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-600 dark:text-orange-400 font-semibold">
+                                <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-500 font-semibold">
                                     Save Alert Banner
                                 </Button>
                             </form>
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <Card className="col-span-2 md:col-span-1">
+                    <div className="grid gap-6 md:grid-cols-2">
+                        {/* SMTP & EMAIL INTEGRATION */}
+                        <Card>
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <CardTitle className="flex items-center gap-2">
-                                            <Mail className="h-5 w-5 text-primary" /> Global Integrations & Email
+                                            <Mail className="h-5 w-5 text-primary" /> Global SMTP & Kindle Sender
                                         </CardTitle>
-                                        <CardDescription>Configure SMTP servers, Send-to-Kindle sender address, and Plex Owner Tokens.</CardDescription>
+                                        <CardDescription>Configure outbound SMTP server for Send-to-Kindle delivery & admin notifications.</CardDescription>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-1.5">
-                                        {systemSettings?.smtpHost && (
-                                            <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px]">
-                                                SMTP Active
+                                        {systemSettings?.smtpHost ? (
+                                            <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                                <CheckCircle2 className="h-3 w-3" /> SMTP Configured
                                             </Badge>
-                                        )}
-                                        {systemSettings?.mainPlexToken && (
-                                            <Badge className="bg-amber-600/20 text-amber-400 border border-amber-500/30 text-[10px]">
-                                                Plex Token Saved
+                                        ) : (
+                                            <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
+                                                SMTP Inactive
                                             </Badge>
                                         )}
                                     </div>
@@ -316,10 +377,13 @@ function SettingsPageContent() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Sender Email Address (From)</Label>
-                                        <Input name="smtpFrom" defaultValue={systemSettings.smtpFrom || ""} placeholder="portalarr@gmail.com"/>
-                                        <p className="text-[10px] text-muted-foreground">
-                                            The email address from which ebooks will be delivered (must be added to your users' Amazon Approved Senders list).
-                                        </p>
+                                        <Input name="smtpFrom" defaultValue={systemSettings.smtpFrom || ""} placeholder="portalarr@domain.com"/>
+                                        <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
+                                            <div className="font-semibold text-foreground flex items-center gap-1">
+                                                <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
+                                            </div>
+                                            <div>Add this Sender Email to your users' <strong>Amazon Approved Personal Document E-mail List</strong> under Amazon → Manage Your Content and Devices → Preferences.</div>
+                                        </div>
                                     </div>
                                     
                                     {/* PLEX TOKEN SECTION */}
@@ -328,7 +392,7 @@ function SettingsPageContent() {
                                             <Label htmlFor="mainPlexToken" className="text-xs font-semibold">Admin Plex Token (Auto-Syncs Friends List)</Label>
                                             {systemSettings?.mainPlexToken && (
                                                 <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                                                    <CheckCircle2 className="h-3 w-3" /> Encrypted & Configured
+                                                    <CheckCircle2 className="h-3 w-3" /> Encrypted & Saved
                                                 </span>
                                             )}
                                         </div>
@@ -339,15 +403,12 @@ function SettingsPageContent() {
                                             defaultValue={systemSettings.mainPlexToken || ""} 
                                             placeholder="xxxxxxxxxxxxxxxxxxxx" 
                                         />
-                                        <p className="text-[10px] text-muted-foreground">
-                                            Auto-saved when you log in via Plex. Scans your Plex friends list to provision and approve user accounts.
-                                        </p>
                                     </div>
 
                                     <div className="flex flex-wrap gap-2 pt-2">
                                         <Button type="submit" className="flex-1 font-bold">
                                             <Send className="h-4 w-4 mr-2"/> 
-                                            Save Settings
+                                            Save SMTP Settings
                                         </Button>
 
                                         <Button 
@@ -359,7 +420,7 @@ function SettingsPageContent() {
                                             title="Send a test email to your SMTP account"
                                         >
                                             {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
-                                            Test SMTP
+                                            Test Connection
                                         </Button>
                                         
                                         {(systemSettings?.smtpHost || systemSettings?.mainPlexToken) && (
@@ -367,7 +428,7 @@ function SettingsPageContent() {
                                                 type="button" 
                                                 variant="destructive" 
                                                 onClick={async () => {
-                                                    if(confirm("Are you sure you want to wipe these SMTP settings?")) {
+                                                    if(confirm("Are you sure you want to wipe SMTP settings?")) {
                                                         await clearSmtpSettings();
                                                         loadAllData();
                                                     }
@@ -382,29 +443,52 @@ function SettingsPageContent() {
                             </CardContent>
                         </Card>
 
-                        <div className="space-y-4">
+                        {/* AUTOMATION & DOWNLOAD DIRECTORY VALIDATOR */}
+                        <div className="space-y-6">
                             <Card>
-                                <CardHeader><CardTitle>Automation & Downloads</CardTitle></CardHeader>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <FolderCheck className="h-5 w-5 text-primary" /> Automation & Directory Paths
+                                    </CardTitle>
+                                    <CardDescription>Configure scan intervals and inspect completed downloads path access.</CardDescription>
+                                </CardHeader>
                                 <CardContent>
                                     <form onSubmit={(e) => handleForm(e, saveJobSettings)} className="space-y-4">
-                                        <div className="grid gap-4 md:grid-cols-2">
-                                            <div className="space-y-2">
-                                                <Label>Scan Interval (Minutes)</Label>
-                                                <Input name="autoSyncInterval" type="number" defaultValue={systemSettings.autoSyncInterval || 5} />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Completed Downloads Folder</Label>
+                                        <div className="space-y-2">
+                                            <Label>Library Auto-Scan Interval (Minutes)</Label>
+                                            <Input name="autoSyncInterval" type="number" defaultValue={systemSettings.autoSyncInterval || 5} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Completed Downloads Folder</Label>
+                                            <div className="flex gap-2">
                                                 <Input 
                                                     name="downloadsPath" 
                                                     type="text" 
-                                                    defaultValue={systemSettings.downloadsPath || "/downloads"} 
+                                                    value={inputDownloadsPath}
+                                                    onChange={(e) => setInputDownloadsPath(e.target.value)}
                                                     placeholder="/downloads"
                                                 />
+                                                <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    className="text-xs shrink-0 font-semibold gap-1"
+                                                    disabled={validatingPath}
+                                                    onClick={() => handleValidatePath(inputDownloadsPath)}
+                                                >
+                                                    {validatingPath ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderCheck className="h-3.5 w-3.5" />}
+                                                    Check Path
+                                                </Button>
                                             </div>
+                                            {pathResult && (
+                                                <div className={`text-xs p-2.5 rounded-lg border mt-2 flex items-center gap-2 ${pathResult.success ? "text-emerald-400 bg-emerald-950/40 border-emerald-800/40" : "text-red-400 bg-red-950/40 border-red-800/40"}`}>
+                                                    {pathResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+                                                    <span>{pathResult.msg || pathResult.err}</span>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex justify-end">
-                                            <Button type="submit" variant="secondary">Save Automation Settings</Button>
-                                        </div>
+                                        <Button type="submit" variant="secondary" className="w-full font-semibold">
+                                            Save Automation Settings
+                                        </Button>
                                     </form>
                                 </CardContent>
                             </Card>
@@ -418,88 +502,150 @@ function SettingsPageContent() {
                 </TabsContent>
 
                 {/* --- TAB 3: MONITORING & APPS --- */}
-                <TabsContent value="monitoring" className="space-y-4">
+                <TabsContent value="monitoring" className="space-y-6">
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {/* TAUTULLI INSTANCES */}
                         <Card className="flex flex-col">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <PlaySquare className="h-5 w-5 text-primary"/> Tautulli
+                                    <PlaySquare className="h-5 w-5 text-primary"/> Tautulli Streams
                                 </CardTitle>
-                                <CardDescription>Plex monitoring instances.</CardDescription>
+                                <CardDescription>Plex stream monitoring instances.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 flex-1">
-                                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                                    {tautulli.length === 0 && <p className="text-xs text-muted-foreground italic">No instances added.</p>}
+                                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                    {tautulli.length === 0 && <p className="text-xs text-muted-foreground italic">No Tautulli instances added.</p>}
                                     {tautulli.map(t => (
-                                        <div key={t.id} className="flex justify-between items-center border p-2 rounded-md bg-muted/20 text-sm">
-                                            <span className="truncate font-medium">{t.name}</span>
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(t.id, removeTautulliInstance)}><Trash2 className="h-4 w-4"/></Button>
+                                        <div key={t.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
+                                            <div className="flex justify-between items-center">
+                                                <span className="truncate font-semibold">{t.name}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="ghost" 
+                                                        className="h-7 text-[11px] px-2 text-primary"
+                                                        disabled={testingTautulliId === t.id}
+                                                        onClick={() => handleTestTautulli(t.id)}
+                                                    >
+                                                        {testingTautulliId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(t.id, removeTautulliInstance)}>
+                                                        <Trash2 className="h-3.5 w-3.5"/>
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            {tautulliTestResults[t.id] && (
+                                                <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${tautulliTestResults[t.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                    {tautulliTestResults[t.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                    <span className="truncate">{tautulliTestResults[t.id].msg || tautulliTestResults[t.id].err}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                                 <form onSubmit={(e) => handleForm(e, addTautulliInstance)} className="space-y-2 border-t pt-4 mt-auto">
                                     <div className="grid gap-2">
                                         <Input name="name" placeholder="Friendly Name (e.g. Main Plex)" required className="h-9 text-sm"/>
-                                        <Input name="url" placeholder="URL (http://192.168.1.50:8181)" required className="h-9 text-sm"/>
-                                        <Input name="apiKey" placeholder="Tautulli API Key" required className="h-9 text-sm"/>
+                                        <Input name="url" placeholder="URL (http://192.168.1.50:8181)" required className="h-9 text-sm font-mono"/>
+                                        <Input name="apiKey" placeholder="Tautulli API Key" required className="h-9 text-sm font-mono"/>
                                     </div>
-                                    <Button type="submit" size="sm" className="w-full mt-2">Add Instance</Button>
+                                    <Button type="submit" size="sm" className="w-full mt-2 font-semibold">Add Tautulli Instance</Button>
                                 </form>
                             </CardContent>
                         </Card>
 
+                        {/* GLANCES INSTANCES */}
                         <Card className="flex flex-col">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <Activity className="h-5 w-5 text-primary"/> Glances
+                                    <Activity className="h-5 w-5 text-sky-400"/> Glances Hardware
                                 </CardTitle>
-                                <CardDescription>Hardware monitoring instances.</CardDescription>
+                                <CardDescription>CPU, Memory, and System Metrics.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 flex-1">
-                                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                                    {glances.length === 0 && <p className="text-xs text-muted-foreground italic">No instances added.</p>}
+                                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                    {glances.length === 0 && <p className="text-xs text-muted-foreground italic">No Glances instances added.</p>}
                                     {glances.map(g => (
-                                        <div key={g.id} className="flex justify-between items-center border p-2 rounded-md bg-muted/20 text-sm">
-                                            <span className="truncate font-medium">{g.name}</span>
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(g.id, removeGlancesInstance)}><Trash2 className="h-4 w-4"/></Button>
+                                        <div key={g.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
+                                            <div className="flex justify-between items-center">
+                                                <span className="truncate font-semibold">{g.name}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="ghost" 
+                                                        className="h-7 text-[11px] px-2 text-sky-400"
+                                                        disabled={testingGlancesId === g.id}
+                                                        onClick={() => handleTestGlances(g.id)}
+                                                    >
+                                                        {testingGlancesId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(g.id, removeGlancesInstance)}>
+                                                        <Trash2 className="h-3.5 w-3.5"/>
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            {glancesTestResults[g.id] && (
+                                                <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${glancesTestResults[g.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                    {glancesTestResults[g.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                    <span className="truncate">{glancesTestResults[g.id].msg || glancesTestResults[g.id].err}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                                 <form onSubmit={(e) => handleForm(e, addGlancesInstance)} className="space-y-2 border-t pt-4 mt-auto">
                                     <div className="grid gap-2">
                                         <Input name="name" placeholder="Server Name (e.g. Unraid)" required className="h-9 text-sm"/>
-                                        <Input name="url" placeholder="URL (http://192.168.1.50:61208)" required className="h-9 text-sm"/>
+                                        <Input name="url" placeholder="URL (http://192.168.1.50:61208)" required className="h-9 text-sm font-mono"/>
                                     </div>
-                                    <Button type="submit" size="sm" className="w-full mt-2">Add Instance</Button>
+                                    <Button type="submit" size="sm" className="w-full mt-2 font-semibold">Add Glances Server</Button>
                                 </form>
                             </CardContent>
                         </Card>
 
+                        {/* MEDIA APPS & DOWNLOAD CLIENTS */}
                         <Card className="flex flex-col">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <Shield className="h-5 w-5 text-primary"/> {editingApp ? "Edit Application" : "Applications"}
+                                    <Shield className="h-5 w-5 text-emerald-400"/> {editingApp ? "Edit Application" : "Media Stack & Apps"}
                                 </CardTitle>
-                                <CardDescription>{editingApp ? `Modifying ${editingApp.name}` : "Connect your Arr apps and requests."}</CardDescription>
+                                <CardDescription>{editingApp ? `Modifying ${editingApp.name}` : "Connect Arr apps & download clients."}</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 flex-1">
                                 {!editingApp && (
-                                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
-                                        {mediaApps.length === 0 && <p className="text-xs text-muted-foreground italic">No apps added.</p>}
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {mediaApps.length === 0 && <p className="text-xs text-muted-foreground italic">No applications configured.</p>}
                                         {mediaApps.map(app => (
-                                            <div key={app.id} className="flex justify-between items-center border p-2 rounded-md bg-muted/20 text-sm">
-                                                <div className="truncate">
-                                                    <div className="font-semibold">{app.name}</div>
-                                                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{app.type}</div>
+                                            <div key={app.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
+                                                <div className="flex justify-between items-center">
+                                                    <div className="truncate">
+                                                        <div className="font-semibold">{app.name}</div>
+                                                        <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{app.type}</div>
+                                                    </div>
+                                                    <div className="flex gap-1 shrink-0">
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[11px] px-2 text-emerald-400"
+                                                            disabled={testingAppId === app.id}
+                                                            onClick={() => handleTestApp(app.id)}
+                                                        >
+                                                            {testingAppId === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400" onClick={() => setEditingApp(app)}>
+                                                            <Pencil className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(app.id, removeMediaApp)}>
+                                                            <Trash2 className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                    </div>
                                                 </div>
-                                                <div className="flex gap-1 shrink-0">
-                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500 hover:bg-blue-50" onClick={() => setEditingApp(app)}>
-                                                        <Pencil className="h-4 w-4"/>
-                                                    </Button>
-                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => handleDelete(app.id, removeMediaApp)}>
-                                                        <Trash2 className="h-4 w-4"/>
-                                                    </Button>
-                                                </div>
+                                                {appTestResults[app.id] && (
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${appTestResults[app.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                        {appTestResults[app.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                        <span className="truncate">{appTestResults[app.id].msg || appTestResults[app.id].err}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -528,10 +674,10 @@ function SettingsPageContent() {
                                                 <SelectItem value="ombi">Ombi</SelectItem>
                                             </SelectGroup>
                                             <SelectGroup>
-                                                <SelectLabel>Utility</SelectLabel>
-                                                <SelectItem value="bazarr">Bazarr</SelectItem>
+                                                <SelectLabel>Utility & Indexers</SelectLabel>
                                                 <SelectItem value="prowlarr">Prowlarr</SelectItem>
                                                 <SelectItem value="readarr">Readarr</SelectItem>
+                                                <SelectItem value="bazarr">Bazarr</SelectItem>
                                                 <SelectItem value="lidarr">Lidarr</SelectItem>
                                                 <SelectItem value="maintainerr">Maintainerr</SelectItem>
                                             </SelectGroup>
@@ -541,16 +687,16 @@ function SettingsPageContent() {
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
                                             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Internal URL</Label>
-                                            <Input name="url" placeholder="IP:PORT" required className="h-9 text-sm font-mono" defaultValue={editingApp?.url} />
+                                            <Input name="url" placeholder="http://192.168.1.50:8080" required className="h-9 text-sm font-mono" defaultValue={editingApp?.url} />
                                         </div>
                                         <div className="space-y-1">
                                             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">External URL</Label>
-                                            <Input name="externalUrl" placeholder="requests.com" className="h-9 text-sm font-mono" defaultValue={editingApp?.externalUrl} />
+                                            <Input name="externalUrl" placeholder="https://app.com" className="h-9 text-sm font-mono" defaultValue={editingApp?.externalUrl} />
                                         </div>
                                     </div>
-                                    <Input name="apiKey" placeholder="API Key" className="h-9 text-sm font-mono" defaultValue={editingApp?.apiKey} />
+                                    <Input name="apiKey" placeholder="API Key / Password" className="h-9 text-sm font-mono" defaultValue={editingApp?.apiKey} />
                                     <div className="flex gap-2">
-                                        <Button type="submit" size="sm" className="w-full h-9">{editingApp ? "Update App" : "Add App"}</Button>
+                                        <Button type="submit" size="sm" className="w-full h-9 font-semibold">{editingApp ? "Update App" : "Add Application"}</Button>
                                         {editingApp && (
                                             <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setEditingApp(null)}>
                                                 <X className="h-4 w-4"/>
@@ -565,12 +711,11 @@ function SettingsPageContent() {
 
                 {/* --- TAB 4: BETA TESTING & ROADMAP --- */}
                 <TabsContent value="beta" className="space-y-6">
-                    
                     {/* ROADMAP CARD EDITOR */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">🗺️ Roadmap & New Features</CardTitle>
-                            <CardDescription>Update the text shown on the home page Roadmap card.</CardDescription>
+                            <CardTitle className="flex items-center gap-2">🗺️ Roadmap & Feature Announcements</CardTitle>
+                            <CardDescription>Update the Markdown roadmap text displayed on the main dashboard.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
@@ -582,12 +727,12 @@ function SettingsPageContent() {
                                     placeholder="### 🚀 Upcoming Features..."
                                     required
                                 />
-                                <Button type="submit">Save Roadmap Text</Button>
+                                <Button type="submit" className="font-semibold">Save Roadmap Text</Button>
                             </form>
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-6 md:grid-cols-2">
                         {/* BETA DASHBOARD INTRO EDITOR */}
                         <Card>
                             <CardHeader>
@@ -597,7 +742,7 @@ function SettingsPageContent() {
                             <CardContent>
                                 <form onSubmit={(e) => handleForm(e, updateBetaDashboardText)} className="space-y-4">
                                     <Textarea name="text" rows={6} defaultValue={betaText} required placeholder="### Interested in Beta Testing?..." />
-                                    <Button type="submit">Save Intro Text</Button>
+                                    <Button type="submit" className="font-semibold">Save Intro Text</Button>
                                 </form>
                             </CardContent>
                         </Card>
@@ -606,13 +751,13 @@ function SettingsPageContent() {
                         <Card>
                             <CardHeader>
                                 <CardTitle>{editingBetaCard ? "Edit Beta Card" : "Beta Testing Cards"}</CardTitle>
-                                <CardDescription>Manage the instruction cards on the /beta page.</CardDescription>
+                                <CardDescription>Manage the interactive service cards on `/beta`.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 {!editingBetaCard && (
                                     <div className="space-y-4 max-h-[300px] overflow-y-auto">
                                         {betaCards.map((card: any) => (
-                                            <div key={card.id} className="flex items-start justify-between border p-3 rounded-md">
+                                            <div key={card.id} className="flex items-start justify-between border p-3 rounded-xl bg-muted/20">
                                                 <div className="space-y-1">
                                                     <div className="font-semibold">{card.title}</div>
                                                     <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
@@ -633,7 +778,7 @@ function SettingsPageContent() {
                                     {editingBetaCard && <input type="hidden" name="id" value={editingBetaCard.id} />}
                                     <div className="space-y-2">
                                         <Label>Card Title</Label>
-                                        <Input name="title" placeholder="Ex: New Music App" defaultValue={editingBetaCard?.title} required />
+                                        <Input name="title" placeholder="Ex: Audiobookshelf Beta" defaultValue={editingBetaCard?.title} required />
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Content (Markdown)</Label>
@@ -644,7 +789,7 @@ function SettingsPageContent() {
                                         <div className="space-y-2"><Label>Button URL</Label><Input name="buttonUrl" defaultValue={editingBetaCard?.buttonUrl} /></div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button type="submit" className="w-full">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
+                                        <Button type="submit" className="w-full font-semibold">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
                                         {editingBetaCard && <Button type="button" variant="outline" onClick={() => setEditingBetaCard(null)}><X className="h-4 w-4"/></Button>}
                                     </div>
                                 </form>

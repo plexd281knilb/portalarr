@@ -392,6 +392,103 @@ export async function removeMediaApp(id: string) {
   revalidatePath("/settings");
 }
 
+export async function testAppConnectionAction(id: string) {
+    await verifyAdmin();
+    const app = await prisma.mediaApp.findUnique({ where: { id } });
+    if (!app) return { success: false, error: "App not found" };
+
+    const cleanUrl = app.url.replace(/\/+$/, "");
+    const apiKey = decryptData(app.apiKey as string);
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+        let testUrl = `${cleanUrl}/api/v3/system/status?apikey=${apiKey}`;
+        if (app.type.toLowerCase() === "sabnzbd") {
+            testUrl = `${cleanUrl}/api?mode=version&output=json&apikey=${apiKey}`;
+        } else if (app.type.toLowerCase() === "qbittorrent") {
+            testUrl = `${cleanUrl}/api/v2/app/version`;
+        } else if (app.type.toLowerCase() === "nzbget") {
+            testUrl = `${cleanUrl}/jsonrpc`;
+        } else if (app.type.toLowerCase() === "prowlarr") {
+            testUrl = `${cleanUrl}/api/v1/system/status?apikey=${apiKey}`;
+        } else if (app.type.toLowerCase().includes("seerr") || app.type.toLowerCase() === "overseerr") {
+            testUrl = `${cleanUrl}/api/v1/status`;
+        }
+
+        const res = await fetch(testUrl, { signal: controller.signal, cache: "no-store" });
+        clearTimeout(timeoutId);
+
+        if (res.ok || res.status === 401) {
+            if (res.status === 401) return { success: false, error: "Authentication failed: Invalid API Key" };
+            return { success: true, message: `Successfully connected to ${app.name} (${app.type})!` };
+        }
+        return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
+    } catch (e: any) {
+        return { success: false, error: e.name === "AbortError" ? "Connection timed out after 6s" : (e.message || "Failed to connect") };
+    }
+}
+
+export async function testTautulliConnectionAction(id: string) {
+    await verifyAdmin();
+    const inst = await prisma.tautulliInstance.findUnique({ where: { id } });
+    if (!inst) return { success: false, error: "Tautulli instance not found" };
+
+    const cleanUrl = inst.url.replace(/\/+$/, "");
+    const apiKey = decryptData(inst.apiKey);
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(`${cleanUrl}/api/v2?cmd=arn_get_server_info&apikey=${apiKey}`, { signal: controller.signal, cache: "no-store" });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+            return { success: true, message: `Successfully connected to Tautulli instance "${inst.name}"!` };
+        }
+        return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
+    } catch (e: any) {
+        return { success: false, error: e.name === "AbortError" ? "Connection timed out" : (e.message || "Connection failed") };
+    }
+}
+
+export async function testGlancesConnectionAction(id: string) {
+    await verifyAdmin();
+    const inst = await prisma.glancesInstance.findUnique({ where: { id } });
+    if (!inst) return { success: false, error: "Glances instance not found" };
+
+    const cleanUrl = inst.url.replace(/\/+$/, "");
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(`${cleanUrl}/api/3/status`, { signal: controller.signal, cache: "no-store" });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+            return { success: true, message: `Successfully connected to Glances server "${inst.name}"!` };
+        }
+        return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
+    } catch (e: any) {
+        return { success: false, error: e.name === "AbortError" ? "Connection timed out" : (e.message || "Connection failed") };
+    }
+}
+
+export async function validateDownloadsPathAction(pathStr: string) {
+    await verifyAdmin();
+    if (!pathStr) return { success: false, error: "Path is empty" };
+    try {
+        if (!fs.existsSync(pathStr)) {
+            return { success: false, exists: false, error: `Directory "${pathStr}" does not exist on disk.` };
+        }
+        const entries = fs.readdirSync(pathStr);
+        return { success: true, exists: true, message: `Directory exists with ${entries.length} items.` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Cannot access directory" };
+    }
+}
+
 import { sendUserApprovalEmail } from "@/app/auth-actions";
 
 export async function getAppUsers() {
