@@ -1514,6 +1514,54 @@ async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortS
     return data;
 }
 
+function parseFilenameMetadata(rawBase: string): { title: string, author: string, cleanQuery: string } {
+    let clean = rawBase;
+
+    // 1. Strip scene release tags and ebook metadata garbage
+    clean = clean.replace(/\.(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
+    clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
+    clean = clean.replace(/\b\d{4}\b/g, " ");
+
+    // 2. Normalize scene dots into spaces while preserving author initials (e.g. J.R.R., G.R.R., C.S.)
+    clean = clean.replace(/([a-zA-Z0-9]{2,})\.([a-zA-Z0-9]{2,})/g, "$1 $2");
+    clean = clean.replace(/([a-zA-Z0-9]{2,})\.([a-zA-Z0-9])/g, "$1 $2");
+    clean = clean.replace(/([a-zA-Z0-9])\.([a-zA-Z0-9]{2,})/g, "$1 $2");
+    clean = clean.replace(/[_\.]/g, " ");
+
+    clean = clean.replace(/\s+/g, " ").trim();
+
+    let title = clean;
+    let author = "Unknown Author";
+
+    // 3. Handle " - " author/title separator
+    if (clean.includes(" - ")) {
+        const parts = clean.split(" - ").map(p => p.trim());
+        if (parts.length >= 2) {
+            author = parts[0];
+            title = parts.slice(1).join(" - ");
+        }
+    } else {
+        // 4. Try matching author patterns or initials at start of filename
+        const authorMatch = clean.match(/^(J\.?\s*R\.?\s*R\.?\s*Tolkien|G\.?\s*R\.?\s*R\.?\s*Martin|Stephen\s+King|Brandon\s+Sanderson|Agatha\s+Christie|Isaac\s+Asimov|Neil\s+Gaiman|Terry\s+Pratchett|Frank\s+Herbert|Robert\s+Jordan|C\.?\s*S\.?\s*Lewis|J\.?\s*K\.?\s*Rowling|[A-Z]\.?\s*[A-Z]\.?\s*[A-Z]?\s*[A-Z][a-z]+)\b/i);
+        if (authorMatch) {
+            author = authorMatch[0];
+            title = clean.substring(author.length).replace(/^[:\-\s]+/, "").trim();
+        }
+    }
+
+    // Strip superfluous series clauses if title still starts with main title
+    const cleanTitle = title.replace(/\b(?:The Lord Of The Rings|Lord Of The Rings)\b/gi, "").trim();
+    if (cleanTitle.length > 2) {
+        title = cleanTitle;
+    }
+
+    return {
+        title: title || clean,
+        author,
+        cleanQuery: `${title || clean} ${author !== "Unknown Author" ? author : ""}`.trim()
+    };
+}
+
 export async function scanLibraryInternal(libraryId: string) {
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
@@ -1703,8 +1751,9 @@ export async function scanLibraryInternal(libraryId: string) {
 
                 if (!existing) {
                     const cleanBase = path.basename(fullPath, ext);
-                    let title = cleanBase.replace(/[_-]/g, ' ').trim();
-                    let author = "Unknown Author";
+                    const parsedMeta = parseFilenameMetadata(cleanBase);
+                    let title = parsedMeta.title;
+                    let author = parsedMeta.author;
                     let coverUrl = "";
 
                     if (cleanBase.includes(" - ")) {
@@ -1764,7 +1813,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         try {
                             const controller = new AbortController();
                             const timeoutId = setTimeout(() => controller.abort(), 5000);
-                            const searchQuery = author !== "Unknown Author" ? `${title} ${author}` : title;
+                            const searchQuery = author !== "Unknown Author" ? `${title} ${author}` : parsedMeta.cleanQuery;
                             const cleanedQuery = cleanSearchQuery(searchQuery);
                             const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
                             clearTimeout(timeoutId);
@@ -1811,8 +1860,9 @@ export async function scanLibraryInternal(libraryId: string) {
                     }
                     let finalPath = fullPath;
                     const cleanBase = path.basename(fullPath, ext);
-                    let parsedAuthor = "Unknown Author";
-                    let parsedTitle = cleanBase.replace(/[_-]/g, ' ').trim();
+                    const parsedMeta = parseFilenameMetadata(cleanBase);
+                    let parsedAuthor = parsedMeta.author;
+                    let parsedTitle = parsedMeta.title;
 
                     if (cleanBase.includes(" - ")) {
                         const parts = cleanBase.split(" - ").map(p => p.trim());
@@ -1826,9 +1876,14 @@ export async function scanLibraryInternal(libraryId: string) {
                     const isSwapped = (existing.title.toLowerCase() === parsedAuthor.toLowerCase()) && 
                                       (existing.author.toLowerCase() === parsedTitle.toLowerCase());
 
-                    if (isSwapped || existing.author === "Unknown Author" || !existing.coverUrl) {
-                        let title = isSwapped ? parsedTitle : existing.title;
-                        let author = isSwapped ? parsedAuthor : existing.author;
+                    const hasSceneNoise = existing.title.toLowerCase().includes("retail") ||
+                                         existing.title.toLowerCase().includes("epub") ||
+                                         existing.title.toLowerCase().includes("cto") ||
+                                         (existing.title.includes(".") && existing.title.toLowerCase().includes("the."));
+
+                    if (isSwapped || existing.author === "Unknown Author" || hasSceneNoise || !existing.coverUrl) {
+                        let title = (isSwapped || hasSceneNoise) ? parsedTitle : existing.title;
+                        let author = (isSwapped || existing.author === "Unknown Author") ? parsedAuthor : existing.author;
                         let coverUrl = existing.coverUrl || "";
 
                         let tempTitle = parsedTitle;
