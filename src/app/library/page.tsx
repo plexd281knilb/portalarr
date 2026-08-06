@@ -27,7 +27,8 @@ import {
   createMultipleBookRequests,
   deleteMultipleBookRequests,
   submitSupportTicket,
-  retryBookRequest
+  retryBookRequest,
+  refreshBookCover
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -40,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, 
   UploadCloud, Check, X, FileText, Download, 
-  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc
+  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw
 } from "lucide-react";
 
 function matchesSeriesFuzzy(titleLower: string, seriesNameLower: string): boolean {
@@ -269,6 +270,26 @@ function BookLibraryPageContent() {
     const [editBookAuthor, setEditBookAuthor] = useState("");
     const [editBookCoverUrl, setEditBookCoverUrl] = useState("");
     const [updatingBook, setUpdatingBook] = useState(false);
+    const [refreshingCoverId, setRefreshingCoverId] = useState<string | null>(null);
+
+    const handleRefreshCover = async (bookId: string) => {
+        setRefreshingCoverId(bookId);
+        try {
+            const res = await refreshBookCover(bookId);
+            if (res.success) {
+                if (selectedLibrary?.id) {
+                    const freshBooks = await getLibraryBooks(selectedLibrary.id);
+                    setBooks(freshBooks || []);
+                }
+            } else {
+                alert(res.error || "Could not fetch cover artwork.");
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed to refresh cover.");
+        } finally {
+            setRefreshingCoverId(null);
+        }
+    };
 
     // Sort states
     const [sortBy, setSortBy] = useState("recent");
@@ -468,6 +489,20 @@ function BookLibraryPageContent() {
                          >
                              <AlertTriangle className="h-3.5 w-3.5" />
                          </Button>
+                         <Button 
+                             variant="outline" 
+                             size="sm" 
+                             className="text-xs h-7 px-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                             title="Fetch Cover Artwork (iTunes, Open Library, Google Books)"
+                             disabled={refreshingCoverId === book.id}
+                             onClick={() => handleRefreshCover(book.id)}
+                         >
+                             {refreshingCoverId === book.id ? (
+                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                             ) : (
+                                 <ImageIcon className="h-3.5 w-3.5" />
+                             )}
+                         </Button>
                          {isAdmin && (
                              <Button 
                                  variant="outline" 
@@ -582,6 +617,20 @@ function BookLibraryPageContent() {
                             onClick={() => handleOpenReportIssueModal({ type: 'audiobook', title: book.title, id: book.id })}
                         >
                             <AlertTriangle className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs h-7 px-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                            title="Fetch Cover Artwork (iTunes, Open Library, Google Books)"
+                            disabled={refreshingCoverId === book.id}
+                            onClick={() => handleRefreshCover(book.id)}
+                        >
+                            {refreshingCoverId === book.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <ImageIcon className="h-3.5 w-3.5" />
+                            )}
                         </Button>
                         {isAdmin && (
                             <>

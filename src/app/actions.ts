@@ -140,6 +140,63 @@ async function fetchGoogleBooksCover(title: string, author: string): Promise<str
     }
     return null;
 }
+async function fetchITunesCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
+    try {
+        const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
+        const cleanAuthor = author && author !== "Unknown Author" ? author : "";
+        const query = `${title} ${cleanAuthor}`.trim();
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${entity}&limit=3`;
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.results && data.results.length > 0) {
+                const matched = data.results.find((item: any) => {
+                    const itemName = (item.trackName || item.collectionName || "").toLowerCase();
+                    return itemName.includes(title.toLowerCase()) || title.toLowerCase().includes(itemName);
+                }) || data.results[0];
+
+                let artwork = matched.artworkUrl100 || matched.artworkUrl60;
+                if (artwork) {
+                    return artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[ITUNES-COVER] Error fetching cover:", e);
+    }
+    return null;
+}
+
+async function fetchBookCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
+    try {
+        const iTunesCover = await fetchITunesCover(title, author, mediaType);
+        if (iTunesCover) return iTunesCover;
+    } catch (e) {}
+
+    try {
+        const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
+        const cleanedQuery = cleanSearchQuery(query);
+        const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=3&fields=cover_i`, {
+            headers: { "Accept": "application/json" }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const docWithCover = data?.docs?.find((d: any) => d.cover_i);
+            if (docWithCover?.cover_i) {
+                return `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
+            }
+        }
+    } catch (e) {}
+
+    try {
+        const googleCover = await fetchGoogleBooksCover(title, author);
+        if (googleCover) {
+            return googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
+        }
+    } catch (e) {}
+
+    return null;
+}
 
 // ============================================================================
 // --- SECURE ADMIN ACTIONS (REQUIRES LOGIN) ---
@@ -1874,6 +1931,7 @@ export async function scanLibraryInternal(libraryId: string) {
                                 title = title.replace(/^[:\-\s]+/, "").trim();
                                 break;
                             } else if (titleLower.endsWith(authLower)) {
+                        } else if (titleLower.endsWith(authLower)) {
                                 author = auth;
                                 title = title.substring(0, title.length - auth.length).trim();
                                 title = title.replace(/[:\-\s]+$/, "").trim();
@@ -1883,9 +1941,9 @@ export async function scanLibraryInternal(libraryId: string) {
                     } catch (e) {}
 
                     try {
-                        const googleCover = await fetchGoogleBooksCover(title, author);
-                        if (googleCover) {
-                            coverUrl = googleCover;
+                        const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
+                        if (fetchedCover) {
+                            coverUrl = fetchedCover;
                         }
                     } catch (e) {}
 
@@ -2011,47 +2069,13 @@ export async function scanLibraryInternal(libraryId: string) {
                             }
                         } catch (e) {}
 
-                        // Try Google Books first if we don't have a cover
                         if (!coverUrl) {
                             try {
-                                const googleCover = await fetchGoogleBooksCover(title, author);
-                                if (googleCover) {
-                                    coverUrl = googleCover;
+                                const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
+                                if (fetchedCover) {
+                                    coverUrl = fetchedCover;
                                 }
                             } catch (e) {}
-                        }
-
-                        // Fallback to OpenLibrary if still no cover
-                        if (!coverUrl) {
-                            try {
-                                const controller = new AbortController();
-                                const timeoutId = setTimeout(() => controller.abort(), 5000);
-                                const searchQuery = tempAuthor !== "Unknown Author" ? `${tempTitle} ${tempAuthor}` : tempTitle;
-                                const cleanedQuery = cleanSearchQuery(searchQuery);
-                                const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
-                                clearTimeout(timeoutId);
-
-                                if (olData) {
-                                    const doc = olData?.docs?.[0];
-                                    if (doc) {
-                                        title = doc.title || title;
-                                        author = doc.author_name?.[0] || author;
-                                        if (doc.cover_i) {
-                                            coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
-                                        }
-                                    } else {
-                                        if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
-                                            author = tempAuthor;
-                                            title = tempTitle;
-                                        }
-                                    }
-                                } else {
-                                    if (author === "Unknown Author" && tempAuthor !== "Unknown Author") {
-                                        author = tempAuthor;
-                                        title = tempTitle;
-                                    }
-                                }
-                            } catch (olErr) {}
                         }
 
                         const updatedBook = await prisma.book.update({
@@ -3831,4 +3855,42 @@ export async function syncPlexFriendsAction() {
     revalidatePath("/settings");
     revalidatePath("/settings/access");
     return result;
+}
+
+export async function refreshBookCover(bookId: string) {
+    await verifyUser();
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) return { success: false, error: "Book not found" };
+
+    let title = book.title;
+    let author = book.author || "";
+
+    const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(title.trim());
+    if (isDiscTitle && author && author !== "Unknown Author") {
+        title = author;
+        author = "Unknown Author";
+    }
+
+    if (title.includes(" - ") && (!author || author === "Unknown Author" || /^(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/i.test(author.trim()))) {
+        const parts = title.split(" - ").map(p => p.trim());
+        if (parts.length >= 2) {
+            title = parts[0];
+            author = parts.slice(1).join(" - ").replace(/\b(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/gi, "").trim();
+        }
+    }
+
+    const newCover = await fetchBookCover(title, author, book.mediaType || "ebook");
+    if (newCover) {
+        await prisma.book.update({
+            where: { id: bookId },
+            data: { 
+                coverUrl: newCover,
+                title,
+                author: author && author !== "Unknown Author" ? author : book.author
+            }
+        });
+        revalidatePath("/library");
+        return { success: true, coverUrl: newCover };
+    }
+    return { success: false, error: "No cover artwork found across iTunes, Open Library, or Google Books." };
 }
