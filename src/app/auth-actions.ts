@@ -131,19 +131,23 @@ export async function logout() {
 }
 
 // --- HELPER: CREATE SESSION ---
-async function createSession(userId: string, username: string, role: string, status: string = "APPROVED") {
+export async function createSession(userId: string, username: string, role: string, status: string = "APPROVED") {
+  const THIRTY_DAYS_SEC = 60 * 60 * 24 * 30; // 30 Days persistent login
+  const expiresAt = new Date(Date.now() + THIRTY_DAYS_SEC * 1000);
+
   const token = await new SignJWT({ userId, username, role, status })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("24h")
+    .setExpirationTime("30d")
     .sign(JWT_SECRET);
 
   (await cookies()).set("session", token, {
     httpOnly: true,
-    secure: false,
-    maxAge: 60 * 60 * 24, 
+    secure: process.env.NODE_ENV === "production",
+    maxAge: THIRTY_DAYS_SEC, 
     path: "/",
     sameSite: "lax",
+    expires: expiresAt
   });
 }
 
