@@ -1721,9 +1721,21 @@ function BookLibraryPageContent() {
                             <Card className="border-muted/60 bg-muted/10 sticky top-6">
                                 <CardHeader>
                                     <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                        <Plus className="h-5 w-5 text-primary" /> Request a Book
+                                        {reqMediaType === "audiobook" ? (
+                                            <>
+                                                <Headphones className="h-5 w-5 text-amber-400" /> Request an Audiobook
+                                            </>
+                                        ) : (
+                                            <>
+                                                <BookOpen className="h-5 w-5 text-primary" /> Request an Ebook
+                                            </>
+                                        )}
                                     </CardTitle>
-                                    <CardDescription>Can't find what you're looking for? Ask the admin to download it.</CardDescription>
+                                    <CardDescription>
+                                        {reqMediaType === "audiobook"
+                                            ? "Can't find an audiobook in the library? Ask the admin to download it."
+                                            : "Can't find an ebook in the library? Ask the admin to download it."}
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     <form onSubmit={handleCreateRequest} className="space-y-4">
@@ -1752,7 +1764,7 @@ function BookLibraryPageContent() {
 
                                         <div className="space-y-1.5 relative">
                                             <Label htmlFor="reqTitle" className="text-xs font-medium">
-                                                {reqType === "series" ? "Series Title" : "Book Title"}
+                                                {reqType === "series" ? "Series Title" : (reqMediaType === "audiobook" ? "Audiobook Title" : "Book Title")}
                                             </Label>
                                             <Input
                                                 id="reqTitle"
@@ -1930,8 +1942,8 @@ function BookLibraryPageContent() {
                                             </div>
                                         )}
 
-                                        <Button type="submit" className="w-full font-semibold text-black">
-                                            Submit Request
+                                        <Button type="submit" className={`w-full font-semibold text-black ${reqMediaType === "audiobook" ? "bg-amber-400 hover:bg-amber-300" : "bg-primary hover:bg-primary/90"}`}>
+                                            {reqMediaType === "audiobook" ? "Submit Audiobook Request" : "Submit Ebook Request"}
                                         </Button>
                                     </form>
                                 </CardContent>
@@ -2001,13 +2013,17 @@ function BookLibraryPageContent() {
                                                         <div className="space-y-1 min-w-0 flex-1">
                                                              <div className="flex items-center gap-2 flex-wrap">
                                                                  <h4 className="font-semibold text-sm truncate" title={req.title}>{req.title}</h4>
-                                                                 {req.type === "series" ? (
+                                                                 {req.mediaType === "audiobook" ? (
+                                                                     <Badge variant="outline" className="text-[10px] py-0 px-1 border-amber-500/40 text-amber-400 bg-amber-500/10 font-bold flex items-center gap-1">
+                                                                         <Headphones className="h-3 w-3" /> AUDIOBOOK
+                                                                     </Badge>
+                                                                 ) : req.type === "series" ? (
                                                                      <Badge variant="outline" className="text-[10px] py-0 px-1 border-purple-500/30 text-purple-400 bg-purple-500/5 font-semibold">
                                                                          SERIES
                                                                      </Badge>
                                                                  ) : (
                                                                      <Badge variant="outline" className="text-[10px] py-0 px-1 border-blue-500/30 text-blue-400 bg-blue-500/5 font-semibold">
-                                                                         BOOK
+                                                                         EBOOK
                                                                      </Badge>
                                                                  )}
                                                              </div>
