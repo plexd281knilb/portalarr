@@ -84,6 +84,7 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Pending Account Requests:** New users can submit a temporary account request on `/login`. This sets `status = "PENDING"` and emails an admin notification via SMTP. Admins manage approval/rejection at `/settings/access`.
 - **Plex Friends Auto-Sync:** The background scheduler in `src/lib/prisma.ts` periodically scans the owner's Plex friends list (`/api/v2/friends`). It auto-provisions `APPROVED` accounts for new friends, updates changed emails/usernames, and revokes access (`status = "REJECTED"`) for users removed from Plex (protecting `ADMIN` accounts).
 - **Send-to-Kindle Email Gate:** Users must configure a valid Send-to-Kindle email (`kindleEmail`) to unlock access to books and requests on `/library`.
+- **Forgot Password Email Workflow:** Users can click "Forgot password?" on `/login`. Entering an email or username generates a temporary password, updates the user's password in SQLite, and sends the temp password via SMTP. Users can update to a new permanent password on `/settings/access`.
 
 ### 6. Gotchas & Best Practices
 - **Windows File Locks:** SQLite database and Prisma engine files lock during `npm run dev`. Stop the dev server before running `npx prisma migrate dev`.

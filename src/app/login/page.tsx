@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { login, setupFirstAdmin, checkSystemInitialized, handlePlexCallback, requestAccount } from "@/app/auth-actions"; 
+import { login, setupFirstAdmin, checkSystemInitialized, handlePlexCallback, requestAccount, requestForgotPassword } from "@/app/auth-actions"; 
 import { getPlexPin, checkPlexPin, getPlexUser } from "@/app/plex-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, ShieldCheck, Loader2, Play, Lock, User, KeyRound, UserPlus, Mail } from "lucide-react";
+import { AlertCircle, ShieldCheck, Loader2, Play, Lock, User, KeyRound, UserPlus, Mail, CheckCircle2 } from "lucide-react";
 
 export default function LoginPage() {
   const [isSetupMode, setIsSetupMode] = useState<boolean | null>(null);
@@ -129,73 +129,58 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background px-4 py-8">
-      <Card className="w-full max-w-md border-border/40 shadow-2xl bg-card/95 backdrop-blur-sm">
-        <CardHeader className="text-center space-y-2 pb-4">
-          <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-1">
-            {isSetupMode ? (
-              <ShieldCheck className="h-8 w-8 text-primary" />
-            ) : (
-              <div className="flex items-center justify-center h-8 w-8 rounded-full bg-[#e5a00d]/20 text-[#e5a00d]">
-                <Play className="h-5 w-5 fill-current ml-0.5" />
-              </div>
-            )}
+    <div className="flex h-screen items-center justify-center bg-background p-4 animate-in fade-in duration-500">
+      <Card className="w-full max-w-md shadow-2xl border-muted/60">
+        <CardHeader className="space-y-1 text-center">
+          <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
+            {isSetupMode ? <ShieldCheck className="h-8 w-8 text-primary" /> : <Lock className="h-8 w-8 text-primary" />}
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">
-             {isSetupMode ? "Setup Owner Account" : "Portalarr Dashboard"}
+            {isSetupMode ? "Initial System Setup" : "Welcome Back"}
           </CardTitle>
-          <CardDescription className="text-muted-foreground text-sm">
+          <CardDescription>
             {isSetupMode 
-                ? "Create the master administrator account to initialize Portalarr." 
-                : "Sign in with your media account to access services and requests."}
+              ? "Create your owner account to secure the dashboard." 
+              : "Sign in to access your media server portal"}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-4">
           
           {error && (
-            <div className="mb-4 flex items-start gap-2.5 text-sm text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg animate-in fade-in slide-in-from-top-1">
-              <AlertCircle className="h-5 w-5 shrink-0 text-red-400 mt-0.5" />
+            <div className="text-sm font-medium text-red-500 bg-red-500/10 border border-red-500/20 p-3 rounded-md flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
+          {isPlexLoading && (
+            <div className="text-xs font-medium text-amber-500 bg-amber-500/10 border border-amber-500/20 p-3 rounded-md flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+              <span>{plexStatus || "Authenticating..."}</span>
+            </div>
+          )}
+
           {isSetupMode ? (
-             <PasswordForm handleSubmit={handlePasswordSubmit} isSetupMode={true} />
+            <PasswordForm handleSubmit={handlePasswordSubmit} isSetupMode={true} />
           ) : (
             <Tabs defaultValue="plex" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-6 text-xs">
-                <TabsTrigger value="plex" className="gap-1.5 px-2">
-                  <Play className="h-3.5 w-3.5 text-[#e5a00d]" /> Plex
+              <TabsList className="grid w-full grid-cols-3 mb-4">
+                <TabsTrigger value="plex" className="text-xs font-semibold gap-1">
+                  <Play className="h-3.5 w-3.5 text-[#e5a00d] fill-current" /> Plex
                 </TabsTrigger>
-                <TabsTrigger value="password" className="gap-1.5 px-2">
+                <TabsTrigger value="password" className="text-xs font-semibold gap-1">
                   <KeyRound className="h-3.5 w-3.5" /> Login
                 </TabsTrigger>
-                <TabsTrigger value="register" className="gap-1.5 px-2">
-                  <UserPlus className="h-3.5 w-3.5 text-primary" /> Request
+                <TabsTrigger value="register" className="text-xs font-semibold gap-1">
+                  <UserPlus className="h-3.5 w-3.5" /> Request
                 </TabsTrigger>
               </TabsList>
               
-              <TabsContent value="plex" className="space-y-4">
-                <div className="flex flex-col items-center justify-center py-4 space-y-4 text-center">
-                    <div className="bg-[#e5a00d]/10 border border-[#e5a00d]/20 p-4 rounded-2xl">
-                        <Play className="h-10 w-10 text-[#e5a00d] fill-current ml-1" />
-                    </div>
-                    <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">
-                            Plex Single Sign-On
-                        </p>
-                        <p className="text-xs text-muted-foreground max-w-xs">
-                            Use your Plex account. Server owners and invited friends are granted immediate access.
-                        </p>
-                    </div>
-
-                    {plexStatus && (
-                      <div className="flex items-center gap-2 text-xs text-[#e5a00d] bg-[#e5a00d]/10 px-3 py-2 rounded-md border border-[#e5a00d]/20 animate-pulse">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-                        <span>{plexStatus}</span>
-                      </div>
-                    )}
-
+              <TabsContent value="plex">
+                <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground text-center px-2">
+                        Sign in instantly using your official Plex.tv account.
+                    </p>
                     <Button 
                         type="button" 
                         className="w-full bg-[#e5a00d] text-black font-semibold hover:bg-[#c98c0b] transition-colors h-11"
@@ -225,6 +210,80 @@ export default function LoginPage() {
 }
 
 function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: FormData) => void, isSetupMode: boolean }) {
+    const [showForgot, setShowForgot] = useState(false);
+    const [forgotSuccess, setForgotSuccess] = useState("");
+    const [forgotError, setForgotError] = useState("");
+    const [isForgotLoading, setIsForgotLoading] = useState(false);
+
+    async function handleForgotSubmit(formData: FormData) {
+        setIsForgotLoading(true);
+        setForgotSuccess("");
+        setForgotError("");
+        const res = await requestForgotPassword(formData);
+        setIsForgotLoading(false);
+
+        if (res && "error" in res && res.error) {
+            setForgotError(res.error);
+        } else if (res && "message" in res && res.message) {
+            setForgotSuccess(res.message);
+        }
+    }
+
+    if (showForgot) {
+        return (
+            <div className="space-y-4 animate-in fade-in">
+                <div className="space-y-1 text-center sm:text-left">
+                    <h4 className="text-sm font-semibold">Reset Password</h4>
+                    <p className="text-xs text-muted-foreground">
+                        Enter your username or email address. We will send a temporary password to your email.
+                    </p>
+                </div>
+
+                {forgotSuccess && (
+                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                        <span>{forgotSuccess}</span>
+                    </div>
+                )}
+
+                {forgotError && (
+                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <span>{forgotError}</span>
+                    </div>
+                )}
+
+                <form action={handleForgotSubmit} className="space-y-3">
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="forgot-email" className="text-xs">Username or Email</Label>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                id="forgot-email" name="emailOrUsername" type="text" required
+                                className="pl-9" placeholder="Enter username or email"
+                                autoComplete="email"
+                            />
+                        </div>
+                    </div>
+
+                    <Button type="submit" className="w-full h-10 font-medium" disabled={isForgotLoading}>
+                        {isForgotLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+                        Send Temp Password
+                    </Button>
+                </form>
+
+                <Button 
+                    type="button" 
+                    variant="ghost" 
+                    className="w-full text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => { setShowForgot(false); setForgotSuccess(""); setForgotError(""); }}
+                >
+                    Back to Sign In
+                </Button>
+            </div>
+        );
+    }
+
     return (
         <form action={handleSubmit} className="grid gap-4 animate-in fade-in">
             <div className="grid gap-2">
@@ -252,7 +311,18 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
             )}
 
             <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                {!isSetupMode && (
+                  <button 
+                    type="button" 
+                    onClick={() => setShowForgot(true)}
+                    className="text-xs text-primary hover:underline font-medium"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input 

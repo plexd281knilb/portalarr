@@ -420,3 +420,108 @@ export async function getCurrentUser() {
   
   return user;
 }
+
+// --- 7. FORGOT PASSWORD ACTION ---
+export async function requestForgotPassword(formData: FormData) {
+  const input = (formData.get("emailOrUsername") as string)?.trim();
+  if (!input) {
+    return { error: "Please enter your username or email address." };
+  }
+
+  const normalizedInput = input.toLowerCase();
+  const allUsers = await prisma.user.findMany();
+  const user = allUsers.find(
+    (u) => u.username.toLowerCase() === normalizedInput || u.email.toLowerCase() === normalizedInput
+  );
+
+  const genericResponse = {
+    success: true,
+    message: "If an account with that username/email exists, a temporary password has been sent to your email inbox."
+  };
+
+  if (!user || !user.email || user.email.endsWith("@plex.local")) {
+    return genericResponse;
+  }
+
+  const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+  if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+    return { error: "SMTP email is not configured on this server. Please contact your administrator to reset your password." };
+  }
+
+  const tempPassword = "Portalarr-" + Math.random().toString(36).slice(-6) + "!";
+  const hashedPassword = await hash(tempPassword, 10);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { password: hashedPassword }
+  });
+
+  try {
+    const senderEmail = settings.smtpFrom || settings.smtpUser;
+    const transporter = nodemailer.createTransport({
+      host: settings.smtpHost,
+      port: settings.smtpPort || 587,
+      secure: settings.smtpPort === 465,
+      auth: {
+        user: settings.smtpUser,
+        pass: decryptData(settings.smtpPass)
+      }
+    });
+
+    await transporter.sendMail({
+      from: senderEmail,
+      to: user.email,
+      subject: `🔑 Temporary Password for Portalarr`,
+      html: `
+        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+          <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">Temporary Password Request</h2>
+          <p style="font-size: 15px; color: #475569;">Hi <strong>${user.username}</strong>,</p>
+          <p style="font-size: 15px; color: #475569;">We received a password reset request for your Portalarr account. Here is your temporary password:</p>
+          
+          <div style="background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 20px; font-weight: bold; text-align: center; letter-spacing: 2px; color: #0f172a; margin: 20px 0;">
+            ${tempPassword}
+          </div>
+
+          <p style="font-size: 14px; color: #475569;">Please log in with this temporary password and update your password in your settings or profile.</p>
+        </div>
+      `
+    });
+    console.log(`[AUTH] Sent temporary password email to ${user.email} (${user.username})`);
+  } catch (err: any) {
+    console.error("[AUTH] Error sending temporary password email:", err);
+    return { error: "Failed to send email. Please verify SMTP settings with your administrator." };
+  }
+
+  return genericResponse;
+}
+
+// --- 8. CHANGE PASSWORD ACTION ---
+export async function changeUserPassword(formData: FormData) {
+  const payload = await getSession();
+  if (!payload || !payload.userId) return { error: "Unauthorized" };
+
+  const currentPassword = formData.get("currentPassword") as string;
+  const newPassword = formData.get("newPassword") as string;
+
+  if (!currentPassword || !newPassword) {
+    return { error: "Current password and new password are required." };
+  }
+
+  if (newPassword.length < 6) {
+    return { error: "New password must be at least 6 characters long." };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: payload.userId as string } });
+  if (!user) return { error: "User not found." };
+
+  const isValid = await compare(currentPassword, user.password);
+  if (!isValid) return { error: "Current password is incorrect." };
+
+  const hashedPassword = await hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { password: hashedPassword }
+  });
+
+  return { success: true, message: "Your password has been successfully updated!" };
+}
