@@ -202,6 +202,48 @@ export async function clearSmtpSettings() {
   revalidatePath("/settings");
 }
 
+export async function sendTestEmailAction() {
+    await verifyAdmin();
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+        return { success: false, error: "SMTP host, username, and password must be saved before testing." };
+    }
+
+    try {
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        await transporter.sendMail({
+            from: senderEmail,
+            to: settings.smtpUser,
+            subject: "🧪 Portalarr SMTP Email Test",
+            html: `
+                <div style="font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 550px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; background-color: #ffffff;">
+                    <h2 style="color: #0284c7; margin-top: 0; font-size: 20px;">SMTP Configuration Verified</h2>
+                    <p style="font-size: 14px; color: #334155;">Your Portalarr SMTP server configuration is working properly.</p>
+                    <div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0;">
+                        <strong>SMTP Host:</strong> ${settings.smtpHost}:${settings.smtpPort || 587}<br/>
+                        <strong>Sender:</strong> ${senderEmail}
+                    </div>
+                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from Portalarr System Settings.</p>
+                </div>
+            `
+        });
+        return { success: true, message: `Test email successfully dispatched to ${settings.smtpUser}!` };
+    } catch (e: any) {
+        console.error("Test email dispatch failed:", e);
+        return { success: false, error: e.message || "Failed to dispatch test email." };
+    }
+}
+
 export async function addTautulliInstance(formData: FormData) {
   await verifyAdmin();
   const name = formData.get("name") as string;

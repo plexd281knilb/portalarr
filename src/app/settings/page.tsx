@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
-    getSettings, saveSettings, saveJobSettings, clearSmtpSettings,
+    getSettings, saveSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction,
     getTautulliInstances, addTautulliInstance, removeTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance,
     getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger, } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, AlertTriangle, PlaySquare, Activity } from "lucide-react";
+import { Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, CheckCircle2, XCircle, MailCheck, RefreshCw, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -82,6 +82,24 @@ function SettingsPageContent() {
     // Edit Mode States
     const [editingApp, setEditingApp] = useState<any>(null);
     const [editingBetaCard, setEditingBetaCard] = useState<any>(null);
+
+    // Test Email States
+    const [testEmailLoading, setTestEmailLoading] = useState(false);
+    const [testEmailMsg, setTestEmailMsg] = useState("");
+    const [testEmailErr, setTestEmailErr] = useState("");
+
+    const handleTestSmtp = async () => {
+        setTestEmailLoading(true);
+        setTestEmailMsg("");
+        setTestEmailErr("");
+        const res = await sendTestEmailAction();
+        setTestEmailLoading(false);
+        if (res.success) {
+            setTestEmailMsg(res.message || "Test email dispatched successfully!");
+        } else {
+            setTestEmailErr(res.error || "Failed to send test email.");
+        }
+    };
 
     const loadAllData = async () => {
         setLoading(true);
@@ -187,12 +205,24 @@ function SettingsPageContent() {
                 <p className="text-muted-foreground">Configure the platform, integrations, and access.</p>
             </div>
 
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto p-1">
-                    <TabsTrigger value="general" className="py-2 cursor-pointer">General Setup</TabsTrigger>
-                    <TabsTrigger value="access" className="py-2 cursor-pointer">Access Control</TabsTrigger>
-                    <TabsTrigger value="monitoring" className="py-2 cursor-pointer">Monitoring & Apps</TabsTrigger>
-                    <TabsTrigger value="beta" className="py-2 cursor-pointer">Beta Testing</TabsTrigger>
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto p-1 max-w-4xl bg-muted/40 border border-muted/60 rounded-xl">
+                    <TabsTrigger value="general" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
+                        <Sliders className="h-4 w-4 text-primary shrink-0" />
+                        <span>General & Email</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="access" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
+                        <Shield className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <span>Access Control</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="monitoring" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
+                        <Activity className="h-4 w-4 text-sky-400 shrink-0" />
+                        <span>Monitoring & Apps</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="beta" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
+                        <Beaker className="h-4 w-4 text-purple-400 shrink-0" />
+                        <span>Beta & Announcements</span>
+                    </TabsTrigger>
                 </TabsList>
                 
                 {isPending && (
@@ -229,7 +259,7 @@ function SettingsPageContent() {
                                         placeholder="⚠️ **Maintenance:** Server will be down tonight at 2AM..." 
                                     />
                                 </div>
-                                <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                                <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-600 dark:text-orange-400 font-semibold">
                                     Save Alert Banner
                                 </Button>
                             </form>
@@ -241,37 +271,66 @@ function SettingsPageContent() {
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <CardTitle>Global Integrations</CardTitle>
-                                        <CardDescription>Configure SMTP emails and Plex Auto-Sync tokens.</CardDescription>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Mail className="h-5 w-5 text-primary" /> Global Integrations & Email
+                                        </CardTitle>
+                                        <CardDescription>Configure SMTP servers, Send-to-Kindle sender address, and Plex Owner Tokens.</CardDescription>
                                     </div>
-                                    {systemSettings?.smtpHost || systemSettings?.mainPlexToken ? (
-                                        <Badge className="bg-green-500 hover:bg-green-600">Saved</Badge>
-                                    ) : (
-                                        <Badge variant="secondary">Not Configured</Badge>
-                                    )}
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        {systemSettings?.smtpHost && (
+                                            <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px]">
+                                                SMTP Active
+                                            </Badge>
+                                        )}
+                                        {systemSettings?.mainPlexToken && (
+                                            <Badge className="bg-amber-600/20 text-amber-400 border border-amber-500/30 text-[10px]">
+                                                Plex Token Saved
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </div>
                             </CardHeader>
                             <CardContent>
                                 <form onSubmit={(e) => handleForm(e, saveSettings)} className="space-y-4">
+                                    {testEmailMsg && (
+                                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                            <span>{testEmailMsg}</span>
+                                        </div>
+                                    )}
+                                    {testEmailErr && (
+                                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <XCircle className="h-4 w-4 shrink-0" />
+                                            <span>{testEmailErr}</span>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2"><Label>SMTP Host</Label><Input name="smtpHost" defaultValue={systemSettings.smtpHost || ""} placeholder="smtp.gmail.com"/></div>
                                         <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort || ""} placeholder="587"/></div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2"><Label>User</Label><Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/></div>
+                                        <div className="space-y-2"><Label>User / Email</Label><Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/></div>
                                         <div className="space-y-2"><Label>Password</Label><Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass || ""}/></div>
                                     </div>
                                     <div className="space-y-2">
-                                        <Label>Sender Email Address</Label>
+                                        <Label>Sender Email Address (From)</Label>
                                         <Input name="smtpFrom" defaultValue={systemSettings.smtpFrom || ""} placeholder="portalarr@gmail.com"/>
                                         <p className="text-[10px] text-muted-foreground">
                                             The email address from which ebooks will be delivered (must be added to your users' Amazon Approved Senders list).
                                         </p>
                                     </div>
                                     
-                                    {/* NEW PLEX TOKEN SECTION */}
-                                    <div className="space-y-2 border-t pt-4 mt-4">
-                                        <Label htmlFor="mainPlexToken">Admin Plex Token (For Auto-Syncing Users)</Label>
+                                    {/* PLEX TOKEN SECTION */}
+                                    <div className="space-y-2 border-t border-muted/40 pt-4 mt-4">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="mainPlexToken" className="text-xs font-semibold">Admin Plex Token (Auto-Syncs Friends List)</Label>
+                                            {systemSettings?.mainPlexToken && (
+                                                <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                    <CheckCircle2 className="h-3 w-3" /> Encrypted & Configured
+                                                </span>
+                                            )}
+                                        </div>
                                         <Input 
                                             id="mainPlexToken" 
                                             name="mainPlexToken" 
@@ -279,15 +338,27 @@ function SettingsPageContent() {
                                             defaultValue={systemSettings.mainPlexToken || ""} 
                                             placeholder="xxxxxxxxxxxxxxxxxxxx" 
                                         />
-                                        <p className="text-xs text-muted-foreground">
-                                            This token securely checks your friends list to automatically approve users.
+                                        <p className="text-[10px] text-muted-foreground">
+                                            Auto-saved when you log in via Plex. Scans your Plex friends list to provision and approve user accounts.
                                         </p>
                                     </div>
 
-                                    <div className="flex gap-2 pt-2">
-                                        <Button type="submit" className="flex-1">
+                                    <div className="flex flex-wrap gap-2 pt-2">
+                                        <Button type="submit" className="flex-1 font-bold">
                                             <Send className="h-4 w-4 mr-2"/> 
-                                            Update Settings
+                                            Save Settings
+                                        </Button>
+
+                                        <Button 
+                                            type="button" 
+                                            variant="outline"
+                                            className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-semibold"
+                                            onClick={handleTestSmtp}
+                                            disabled={testEmailLoading || !systemSettings?.smtpHost}
+                                            title="Send a test email to your SMTP account"
+                                        >
+                                            {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
+                                            Test SMTP
                                         </Button>
                                         
                                         {(systemSettings?.smtpHost || systemSettings?.mainPlexToken) && (
@@ -295,11 +366,12 @@ function SettingsPageContent() {
                                                 type="button" 
                                                 variant="destructive" 
                                                 onClick={async () => {
-                                                    if(confirm("Are you sure you want to wipe these settings?")) {
+                                                    if(confirm("Are you sure you want to wipe these SMTP settings?")) {
                                                         await clearSmtpSettings();
                                                         loadAllData();
                                                     }
                                                 }}
+                                                title="Clear Credentials"
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
