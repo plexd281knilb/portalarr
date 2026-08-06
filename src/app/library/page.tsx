@@ -1086,11 +1086,23 @@ function BookLibraryPageContent() {
                         A unified portal for book requests and reading.
                     </p>
                 </div>
-                {isAdmin && (
-                    <Badge variant="outline" className="flex items-center gap-1 border-primary/30 text-primary w-fit">
-                        <Shield className="h-3 w-3" /> Admin Dashboard Mode
-                    </Badge>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+                        onClick={() => handleTabChange("kindle")}
+                        title="Configure Send-to-Kindle Settings"
+                    >
+                        <Mail className="h-3.5 w-3.5 text-primary" />
+                        <span>Kindle: {userKindleEmail || "Not Configured"}</span>
+                    </Button>
+                    {isAdmin && (
+                        <Badge variant="outline" className="flex items-center gap-1 border-primary/30 text-primary w-fit">
+                            <Shield className="h-3 w-3" /> Admin Dashboard Mode
+                        </Badge>
+                    )}
+                </div>
             </header>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
@@ -1100,8 +1112,9 @@ function BookLibraryPageContent() {
                     <TabsTrigger value="manage" className="py-2" disabled={!isAdmin}>
                         Manage
                     </TabsTrigger>
-                    <TabsTrigger value="kindle" className="py-2">
-                        Kindle Settings
+                    <TabsTrigger value="kindle" className="py-2 flex items-center justify-center gap-1">
+                        <Mail className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span>Kindle Settings</span>
                     </TabsTrigger>
                 </TabsList>
 
