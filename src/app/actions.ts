@@ -891,10 +891,12 @@ export async function createLibrary(formData: FormData) {
     const description = formData.get("description") as string;
     const path = formData.get("path") as string || "";
     const allowedUsers = formData.get("allowedUsers") as string || "";
-    const downloadCategory = formData.get("downloadCategory") as string || "books";
+    const mediaType = formData.get("mediaType") as string || "ebook";
+    const defaultCategory = mediaType === "audiobook" ? "audiobooks" : "books";
+    const downloadCategory = formData.get("downloadCategory") as string || defaultCategory;
     
     await prisma.library.create({
-        data: { name, description, path, allowedUsers, downloadCategory }
+        data: { name, description, path, allowedUsers, downloadCategory, mediaType }
     });
     revalidatePath("/library");
 
@@ -911,13 +913,15 @@ export async function updateLibrary(formData: FormData) {
     const description = formData.get("description") as string;
     const path = formData.get("path") as string || "";
     const allowedUsers = formData.get("allowedUsers") as string || "";
-    const downloadCategory = formData.get("downloadCategory") as string || "books";
+    const mediaType = formData.get("mediaType") as string || "ebook";
+    const defaultCategory = mediaType === "audiobook" ? "audiobooks" : "books";
+    const downloadCategory = formData.get("downloadCategory") as string || defaultCategory;
     
     const existing = await prisma.library.findUnique({ where: { id } });
 
     await prisma.library.update({
         where: { id },
-        data: { name, description, path, allowedUsers, downloadCategory }
+        data: { name, description, path, allowedUsers, downloadCategory, mediaType }
     });
     revalidatePath("/library");
 
@@ -1266,6 +1270,7 @@ export async function createBookRequest(formData: FormData) {
     const title = formData.get("title") as string;
     const author = formData.get("author") as string || "";
     const type = formData.get("type") as string || "book"; // "book" or "series"
+    const mediaType = formData.get("mediaType") as string || "ebook"; // "ebook" or "audiobook"
     const coverUrl = formData.get("coverUrl") as string || "";
     const publishYear = formData.get("publishYear") as string || "";
     const requestedFor = formData.get("requestedFor") as string || "";
@@ -1278,7 +1283,7 @@ export async function createBookRequest(formData: FormData) {
     if (!title) throw new Error("Title is required");
     
     if (type === "series") {
-        const expanded = await expandSeriesRequest(title, author, targetUser);
+        const expanded = await expandSeriesRequest(title, author, targetUser, mediaType);
         if (expanded) {
             // Save the parent series request record itself in the DB
             await prisma.bookRequest.create({
@@ -1289,12 +1294,13 @@ export async function createBookRequest(formData: FormData) {
                     publishYear,
                     requestedBy: targetUser,
                     type: "series",
+                    mediaType,
                     status: "Approved"
                 }
             });
 
             sendRequestNotificationToAdmins({
-                title: `${title} (Book Series)`,
+                title: `${title} (${mediaType === "audiobook" ? "Audiobook" : "Book"} Series)`,
                 author,
                 requestedBy: targetUser,
                 type: "series",
@@ -1315,6 +1321,7 @@ export async function createBookRequest(formData: FormData) {
             publishYear,
             requestedBy: targetUser,
             type,
+            mediaType,
             status: "Pending"
         }
     });
@@ -1338,7 +1345,7 @@ export async function createBookRequest(formData: FormData) {
     revalidatePath("/library");
 }
 
-async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string): Promise<boolean> {
+async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook"): Promise<boolean> {
     try {
         const query = `series:"${seriesTitle}"`;
         const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
@@ -1413,6 +1420,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                     publishYear: book.publishYear,
                     requestedBy,
                     type: "book",
+                    mediaType,
                     status: "Pending"
                 }
             });
@@ -1526,12 +1534,15 @@ export async function scanLibraryInternal(libraryId: string) {
         }
 
         const files = fs.readdirSync(library.path);
-        const validExtensions = [".pdf", ".epub", ".mobi", ".cbz"];
+        const isAudiobookLib = library.mediaType === "audiobook";
+        const validExtensions = isAudiobookLib
+            ? [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".zip", ".rar"]
+            : [".pdf", ".epub", ".mobi", ".cbz", ".cbr", ".azw3"];
 
         // Safety check to prevent database wipeout due to unmounted remote shares
         const bookFiles = files.filter(f => validExtensions.includes(path.extname(f).toLowerCase()));
         if (bookFiles.length === 0 && dbBooks.length > 0) {
-            console.warn(`[SCANNER] Library directory "${library.path}" contains 0 ebook files, but the database contains ${dbBooks.length} books. Skipping scan to prevent accidental database wiping (likely due to an unmounted remote share or transient network issue).`);
+            console.warn(`[SCANNER] Library directory "${library.path}" contains 0 ${isAudiobookLib ? "audiobook" : "ebook"} files, but the database contains ${dbBooks.length} items. Skipping scan to prevent accidental database wiping (likely due to an unmounted remote share or transient network issue).`);
             return { success: true };
         }
 
@@ -1736,6 +1747,7 @@ export async function scanLibraryInternal(libraryId: string) {
                             filePath: fullPath,
                             fileSize: stats.size,
                             fileType: ext.replace(".", ""),
+                            mediaType: library.mediaType || "ebook",
                             libraryId: libraryId,
                             createdAt: fileAddedDate
                         }
@@ -1930,8 +1942,10 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             where: { id: requestId }
         });
         const requester = req?.requestedBy || "";
+        const reqMediaType = req?.mediaType || "ebook";
+        
         const targetLib = await getTargetLibraryForUser(requester);
-        const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name) : "books";
+        const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
 
         const prowlarrApp = await prisma.mediaApp.findFirst({
             where: { type: "prowlarr" }
@@ -1949,7 +1963,11 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const queryText = author ? `${title} ${author}` : title;
         const cleanedQuery = cleanSearchQuery(queryText);
 
-        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}&categories=7000&categories=7010&categories=7020&apikey=${prowlarrKey}`;
+        const catQuery = reqMediaType === "audiobook"
+            ? "&categories=3030&categories=3000&categories=7000"
+            : "&categories=7000&categories=7010&categories=7020&categories=3040";
+
+        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
         const res = await fetch(searchUrl, { cache: "no-store" });
         if (!res.ok) throw new Error(`Prowlarr error: status ${res.status}`);
         
@@ -1962,44 +1980,53 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             return;
         }
 
-        const epubReleases = results.filter((r: any) => {
-            const titleLower = r.title.toLowerCase();
-            const hasEpubInTitle = titleLower.includes("epub") || 
-                                   (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
-            const hasOtherFormat = titleLower.includes("pdf") || 
-                                   titleLower.includes("mobi") || 
-                                   titleLower.includes("cbz") || 
-                                   titleLower.includes("cbr") || 
-                                   titleLower.includes("audiobook") || 
-                                   titleLower.includes("mp3") || 
-                                   titleLower.includes("m4b") ||
-                                   titleLower.includes(".rar") ||
-                                   titleLower.includes(".zip") ||
-                                   /\b(?:rar|zip)\b/i.test(titleLower);
-            const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
-            const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
-            const isForeign = isForeignLanguage(r.title);
-            return isEpubOrGeneric && isValidSize && !isForeign;
-        });
+        let candidates = [];
+        if (reqMediaType === "audiobook") {
+            candidates = results.filter((r: any) => {
+                const isValidSize = r.size > 10 * 1024 * 1024 && r.size < 4 * 1024 * 1024 * 1024;
+                const isForeign = isForeignLanguage(r.title);
+                return isValidSize && !isForeign;
+            });
+        } else {
+            candidates = results.filter((r: any) => {
+                const titleLower = r.title.toLowerCase();
+                const hasEpubInTitle = titleLower.includes("epub") || 
+                                       (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
+                const hasOtherFormat = titleLower.includes("pdf") || 
+                                       titleLower.includes("mobi") || 
+                                       titleLower.includes("cbz") || 
+                                       titleLower.includes("cbr") || 
+                                       titleLower.includes("audiobook") || 
+                                       titleLower.includes("mp3") || 
+                                       titleLower.includes("m4b") ||
+                                       titleLower.includes(".rar") ||
+                                       titleLower.includes(".zip") ||
+                                       /\b(?:rar|zip)\b/i.test(titleLower);
+                const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
+                const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
+                const isForeign = isForeignLanguage(r.title);
+                return isEpubOrGeneric && isValidSize && !isForeign;
+            });
+        }
 
-        if (epubReleases.length === 0) {
+        if (candidates.length === 0) {
             await prisma.bookRequest.update({
                 where: { id: requestId },
-                data: { status: "Failed - No EPUB releases found under 50MB" }
+                data: { status: `Failed - No suitable ${reqMediaType} releases found` }
             });
             return;
         }
 
-        epubReleases.sort((a: any, b: any) => {
+        candidates.sort((a: any, b: any) => {
             if (a.protocol === "usenet" && b.protocol !== "usenet") return -1;
             if (a.protocol !== "usenet" && b.protocol === "usenet") return 1;
             if (a.protocol === "torrent" && b.protocol === "torrent") {
                 return (b.seeders || 0) - (a.seeders || 0);
             }
-            return b.size - a.size;
+            return 0;
         });
 
-        const selectedRelease = epubReleases[0];
+        const selectedRelease = candidates[0];
         console.log(`[AUTO-DOWNLOAD] Selected release for grab: ${selectedRelease.title}`);
 
         let downloadId = "";
@@ -2053,7 +2080,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         });
 
         // Launch background downloader polling and failover task
-        monitorAndRetryDownload(requestId, epubReleases, 0, downloadId).catch(err => {
+        monitorAndRetryDownload(requestId, candidates, 0, downloadId).catch(err => {
             console.error(`[AUTO-DOWNLOAD-MONITOR] Background thread crashed:`, err);
         });
         
@@ -2066,7 +2093,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
     }
 }
 
-export async function searchProwlarrIndexers(query: string) {
+export async function searchProwlarrIndexers(query: string, mediaType: string = "ebook") {
     await verifyUser();
     
     const prowlarrApp = await prisma.mediaApp.findFirst({
@@ -2082,7 +2109,11 @@ export async function searchProwlarrIndexers(query: string) {
     const cleanedQuery = cleanSearchQuery(query);
     
     try {
-        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}&categories=7000&categories=7010&categories=7020&apikey=${prowlarrKey}`;
+        const catQuery = mediaType === "audiobook"
+            ? "&categories=3030&categories=3000&categories=7000"
+            : "&categories=7000&categories=7010&categories=7020&categories=3040";
+
+        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
         const res = await fetch(searchUrl, { cache: "no-store" });
         if (!res.ok) {
             throw new Error(`Prowlarr returned status ${res.status}`);
@@ -2090,25 +2121,41 @@ export async function searchProwlarrIndexers(query: string) {
         
         const results = await res.json();
         
-        // Filter results keeping it limited to books and epub (broadened)
+        // Filter results keeping it limited to books or audiobooks
         const filtered = (results || []).filter((r: any) => {
             const titleLower = r.title.toLowerCase();
-            const hasEpubInTitle = titleLower.includes("epub") || 
-                                   (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
-            const hasOtherFormat = titleLower.includes("pdf") || 
-                                   titleLower.includes("mobi") || 
-                                   titleLower.includes("cbz") || 
-                                   titleLower.includes("cbr") || 
-                                   titleLower.includes("audiobook") || 
-                                   titleLower.includes("mp3") || 
-                                   titleLower.includes("m4b") ||
-                                   titleLower.includes(".rar") ||
-                                   titleLower.includes(".zip") ||
-                                   /\b(?:rar|zip)\b/i.test(titleLower);
-            const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
-            const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
-            const isForeign = isForeignLanguage(r.title);
-            return isEpubOrGeneric && isValidSize && !isForeign;
+            const isAudio = mediaType === "audiobook";
+
+            if (isAudio) {
+                const hasAudioKw = titleLower.includes("m4b") ||
+                                   titleLower.includes("mp3") ||
+                                   titleLower.includes("audiobook") ||
+                                   titleLower.includes("m4a") ||
+                                   titleLower.includes("flac") ||
+                                   titleLower.includes("aac") ||
+                                   titleLower.includes("ogg") ||
+                                   titleLower.includes("opus");
+                const isValidSize = r.size > 10 * 1024 * 1024 && r.size < 4 * 1024 * 1024 * 1024;
+                const isForeign = isForeignLanguage(r.title);
+                return (hasAudioKw || r.category?.toString().includes("3030")) && isValidSize && !isForeign;
+            } else {
+                const hasEpubInTitle = titleLower.includes("epub") || 
+                                       (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
+                const hasOtherFormat = titleLower.includes("pdf") || 
+                                       titleLower.includes("mobi") || 
+                                       titleLower.includes("cbz") || 
+                                       titleLower.includes("cbr") || 
+                                       titleLower.includes("audiobook") || 
+                                       titleLower.includes("mp3") || 
+                                       titleLower.includes("m4b") ||
+                                       titleLower.includes(".rar") ||
+                                       titleLower.includes(".zip") ||
+                                       /\b(?:rar|zip)\b/i.test(titleLower);
+                const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
+                const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
+                const isForeign = isForeignLanguage(r.title);
+                return isEpubOrGeneric && isValidSize && !isForeign;
+            }
         });
         
         return filtered.map((r: any) => ({

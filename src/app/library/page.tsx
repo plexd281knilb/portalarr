@@ -39,7 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, 
   UploadCloud, Check, X, FileText, Download, 
-  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info
+  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc
 } from "lucide-react";
 
 function matchesSeriesFuzzy(titleLower: string, seriesNameLower: string): boolean {
@@ -209,8 +209,11 @@ function BookLibraryPageContent() {
     const [libPath, setLibPath] = useState("");
     const [libAllowedUsers, setLibAllowedUsers] = useState("");
     const [libDownloadCategory, setLibDownloadCategory] = useState("books");
+    const [libMediaType, setLibMediaType] = useState("ebook"); // "ebook" or "audiobook"
     const [editingLibId, setEditingLibId] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
+    const [activeAudiobook, setActiveAudiobook] = useState<any>(null);
+    const [reqMediaType, setReqMediaType] = useState<"ebook" | "audiobook">("ebook");
 
     // Prowlarr Search states
     const [prowlarrResults, setProwlarrResults] = useState<any[]>([]);
@@ -455,6 +458,106 @@ function BookLibraryPageContent() {
              </Card>
         );
     };
+
+    const renderAudiobookCard = (book: any) => {
+        const displayTitle = book.title;
+        const ext = book.fileType ? book.fileType.toUpperCase() : "AUDIO";
+
+        return (
+            <Card key={book.id} className="relative flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border-muted/60 group bg-card/95">
+                <div className="relative aspect-[1/1] w-full bg-gradient-to-br from-slate-900 via-slate-800 to-black overflow-hidden flex items-center justify-center border-b border-muted/40">
+                    {book.coverUrl ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img 
+                            src={book.coverUrl} 
+                            alt={book.title} 
+                            className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105" 
+                        />
+                    ) : (
+                        <div className="flex flex-col items-center justify-center p-4 text-center space-y-2">
+                            <Headphones className="h-14 w-14 text-amber-400/80 animate-pulse" />
+                            <span className="text-xs font-bold text-slate-300 line-clamp-2">{displayTitle}</span>
+                        </div>
+                    )}
+                    <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
+                        <Badge className="bg-amber-500/90 text-black border border-amber-400/50 text-[10px] uppercase font-extrabold tracking-wider shadow">
+                            🎧 {ext}
+                        </Badge>
+                    </div>
+                </div>
+
+                <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="font-bold text-sm leading-snug group-hover:text-amber-400 transition-colors line-clamp-2 h-10 flex items-center">{displayTitle}</h3>
+                        <p className="text-xs text-muted-foreground truncate">{book.author || "Unknown Author"}</p>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
+                        <span>Size: {(book.fileSize ? (book.fileSize / (1024 * 1024)).toFixed(1) : "0")} MB</span>
+                        <span>Added: {new Date(book.createdAt).toLocaleDateString()}</span>
+                    </div>
+                </div>
+
+                <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
+                    <div className="flex gap-2 w-full">
+                        <Button 
+                            variant="default" 
+                            size="sm" 
+                            className="flex-1 text-xs font-semibold text-black bg-amber-400 hover:bg-amber-300 gap-1"
+                            onClick={() => setActiveAudiobook(book)}
+                        >
+                            <Play className="h-3.5 w-3.5 fill-black" /> Listen
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground" 
+                            asChild
+                            title="Download Audio File"
+                        >
+                            <a href={`/api/books/${book.id}`} download>
+                                <Download className="h-3.5 w-3.5" />
+                            </a>
+                        </Button>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs h-7 px-2 border-amber-500/20 text-amber-500 hover:bg-amber-500/10"
+                            title="Report an Issue"
+                            onClick={() => handleOpenReportIssueModal({ type: 'audiobook', title: book.title, id: book.id })}
+                        >
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                        </Button>
+                        {isAdmin && (
+                            <>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs h-7 px-2 border-blue-500/20 text-blue-500 hover:bg-blue-500/10"
+                                    title="Edit Audiobook"
+                                    onClick={() => handleOpenEditBookModal(book)}
+                                >
+                                    <Edit3 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button 
+                                    variant="destructive" 
+                                    size="sm" 
+                                    onClick={() => handleDeleteBook(book.id)}
+                                    className="text-xs h-7 px-2"
+                                    title="Delete"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                </CardFooter>
+            </Card>
+        );
+    };
+
     const [editBookError, setEditBookError] = useState("");
 
     // Book Upload states
@@ -559,6 +662,7 @@ function BookLibraryPageContent() {
         formData.append("path", libPath);
         formData.append("allowedUsers", libAllowedUsers);
         formData.append("downloadCategory", libDownloadCategory);
+        formData.append("mediaType", libMediaType);
 
         try {
             if (editingLibId) {
@@ -572,6 +676,7 @@ function BookLibraryPageContent() {
             setLibPath("");
             setLibAllowedUsers("");
             setLibDownloadCategory("books");
+            setLibMediaType("ebook");
             setEditingLibId(null);
             
             const libs = await getLibraries();
@@ -601,7 +706,8 @@ function BookLibraryPageContent() {
         setLibDesc(lib.description || "");
         setLibPath(lib.path || "");
         setLibAllowedUsers(lib.allowedUsers || "*");
-        setLibDownloadCategory(lib.downloadCategory || "books");
+        setLibDownloadCategory(lib.downloadCategory || (lib.mediaType === "audiobook" ? "audiobooks" : "books"));
+        setLibMediaType(lib.mediaType || "ebook");
     }
 
     async function handleUploadBook(e: React.FormEvent) {
@@ -763,6 +869,7 @@ function BookLibraryPageContent() {
                 formData.append("title", reqTitle);
                 formData.append("author", reqAuthor);
                 formData.append("type", reqType);
+                formData.append("mediaType", reqMediaType);
                 formData.append("coverUrl", reqCoverUrl);
                 formData.append("publishYear", reqPublishYear);
                 if (requestedFor) {
@@ -833,7 +940,7 @@ function BookLibraryPageContent() {
         }
     }
 
-    function handleOpenReportIssueModal(item: { type: "book" | "request", title: string, id: string, status?: string }) {
+    function handleOpenReportIssueModal(item: { type: "book" | "audiobook" | "request", title: string, id: string, status?: string }) {
         setReportName(user?.username || "");
         setReportEmail(user?.email || "");
         
@@ -1105,15 +1212,18 @@ function BookLibraryPageContent() {
         );
     }
 
+    const ebookLibraries = libraries.filter(l => (l.mediaType || "ebook") === "ebook");
+    const audiobookLibraries = libraries.filter(l => l.mediaType === "audiobook");
+
     return (
         <div className="min-h-screen bg-background flex flex-col p-4 sm:p-6 animate-in fade-in duration-500 max-w-7xl mx-auto w-full space-y-6">
             <header className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-muted/50 gap-4">
                 <div>
                     <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-2">
-                        <BookOpen className="h-8 w-8 text-primary" /> Book Library
+                        <BookOpen className="h-8 w-8 text-primary" /> Book &amp; Audiobook Library
                     </h1>
                     <p className="text-muted-foreground text-sm">
-                        A unified portal for book requests and reading.
+                        A unified portal for ebooks, audiobooks, and media requests.
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1136,15 +1246,21 @@ function BookLibraryPageContent() {
             </header>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-                <TabsList className="grid w-full max-w-xl grid-cols-2 sm:grid-cols-4 h-auto p-1 mb-6">
-                    <TabsTrigger value="libs" className="py-2">Libraries</TabsTrigger>
-                    <TabsTrigger value="requests" className="py-2">Requests</TabsTrigger>
-                    <TabsTrigger value="manage" className="py-2" disabled={!isAdmin}>
-                        Manage
+                <TabsList className="grid w-full max-w-2xl grid-cols-3 sm:grid-cols-5 h-auto p-1 mb-6">
+                    <TabsTrigger value="libs" className="py-2 flex items-center justify-center gap-1.5">
+                        <BookOpen className="h-3.5 w-3.5" /> Ebooks
                     </TabsTrigger>
-                    <TabsTrigger value="kindle" className="py-2 flex items-center justify-center gap-1">
-                        <Mail className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span>Kindle Settings</span>
+                    <TabsTrigger value="audiobooks" className="py-2 flex items-center justify-center gap-1.5">
+                        <Headphones className="h-3.5 w-3.5 text-amber-400 shrink-0" /> Audiobooks
+                    </TabsTrigger>
+                    <TabsTrigger value="requests" className="py-2 flex items-center justify-center gap-1.5">
+                        <Send className="h-3.5 w-3.5" /> Requests
+                    </TabsTrigger>
+                    <TabsTrigger value="manage" className="py-2 flex items-center justify-center gap-1.5" disabled={!isAdmin}>
+                        <Plus className="h-3.5 w-3.5" /> Manage
+                    </TabsTrigger>
+                    <TabsTrigger value="kindle" className="py-2 flex items-center justify-center gap-1.5">
+                        <Mail className="h-3.5 w-3.5 text-primary shrink-0" /> Kindle
                     </TabsTrigger>
                 </TabsList>
 
@@ -1153,17 +1269,17 @@ function BookLibraryPageContent() {
                         <div className="lg:col-span-1 space-y-4">
                             <Card className="border-muted/60 bg-muted/10">
                                 <CardHeader className="py-4">
-                                    <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                                        Select Library
+                                    <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                        <BookOpen className="h-4 w-4 text-primary" /> Select Ebook Library
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-2 space-y-1">
-                                    {libraries.length === 0 ? (
+                                    {ebookLibraries.length === 0 ? (
                                         <div className="p-4 text-center text-xs text-muted-foreground italic">
-                                            No libraries available.
+                                            No ebook libraries available.
                                         </div>
                                     ) : (
-                                        libraries.map(lib => (
+                                        ebookLibraries.map(lib => (
                                             <button
                                                 key={lib.id}
                                                 onClick={() => setSelectedLibrary(lib)}
@@ -1386,6 +1502,141 @@ function BookLibraryPageContent() {
                     </div>
                 </TabsContent>
 
+                <TabsContent value="audiobooks" className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <div className="lg:col-span-1 space-y-4">
+                            <Card className="border-muted/60 bg-muted/10">
+                                <CardHeader className="py-4">
+                                    <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                        <Headphones className="h-4 w-4 text-amber-400" /> Select Audiobook Library
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-2 space-y-1">
+                                    {audiobookLibraries.length === 0 ? (
+                                        <div className="p-4 text-center text-xs text-muted-foreground italic space-y-3">
+                                            <p>No audiobook libraries configured yet.</p>
+                                            {isAdmin && (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline" 
+                                                    className="text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10 mt-1"
+                                                    onClick={() => {
+                                                        setLibName("Audiobooks");
+                                                        setLibMediaType("audiobook");
+                                                        setLibDownloadCategory("audiobooks");
+                                                        setLibPath("/audiobooks");
+                                                        handleTabChange("manage");
+                                                    }}
+                                                >
+                                                    <Plus className="h-3 w-3 mr-1" /> Add Audiobook Library
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        audiobookLibraries.map(lib => (
+                                            <button
+                                                key={lib.id}
+                                                onClick={() => setSelectedLibrary(lib)}
+                                                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-all duration-200 flex items-center justify-between ${
+                                                    selectedLibrary?.id === lib.id
+                                                        ? "bg-amber-500 text-black font-bold shadow-md"
+                                                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                }`}
+                                            >
+                                                <span>{lib.name}</span>
+                                                <Badge className={selectedLibrary?.id === lib.id ? "bg-black text-amber-400 hover:bg-black" : "bg-muted"}>
+                                                    {lib.allowedUsers === "*" ? "Public" : "Private"}
+                                                </Badge>
+                                            </button>
+                                        ))
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            {selectedLibrary && selectedLibrary.mediaType === "audiobook" && (
+                                <Card className="border-muted/60 bg-muted/10 p-4 space-y-2">
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">About Audiobook Library</h4>
+                                    <p className="text-sm font-bold">{selectedLibrary.name}</p>
+                                    <p className="text-xs text-muted-foreground">{selectedLibrary.description || "No description provided."}</p>
+                                </Card>
+                            )}
+                        </div>
+
+                        <div className="lg:col-span-3 space-y-6">
+                            {selectedLibrary && selectedLibrary.mediaType === "audiobook" ? (
+                                <>
+                                    <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+                                        <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-3xl">
+                                            <div className="relative w-full sm:flex-1">
+                                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    type="search"
+                                                    placeholder="Search audiobooks by title or author..."
+                                                    className="pl-9 bg-muted/20"
+                                                    value={searchQuery}
+                                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="flex gap-2 items-center w-full sm:w-auto shrink-0 justify-between sm:justify-start">
+                                                <select
+                                                    value={sortBy}
+                                                    onChange={(e) => handleSortChange(e.target.value)}
+                                                    className="flex h-10 w-36 items-center justify-between rounded-md border border-slate-800 bg-slate-900 text-slate-100 hover:bg-slate-800/80 px-3 py-2 text-sm focus:outline-none font-medium cursor-pointer transition-all"
+                                                >
+                                                    <option value="recent" className="bg-slate-955 text-slate-100">Recently Added</option>
+                                                    <option value="title-asc" className="bg-slate-955 text-slate-100">Title (A-Z)</option>
+                                                    <option value="title-desc" className="bg-slate-955 text-slate-100">Title (Z-A)</option>
+                                                    <option value="author-asc" className="bg-slate-955 text-slate-100">Author (A-Z)</option>
+                                                    <option value="author-desc" className="bg-slate-955 text-slate-100">Author (Z-A)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        {isAdmin && selectedLibrary.path && (
+                                            <Button 
+                                                variant="outline" 
+                                                onClick={() => handleScanLibrary(selectedLibrary.id)}
+                                                disabled={scanning}
+                                                className="w-full lg:w-auto font-semibold border-amber-500/30 text-amber-400 hover:bg-amber-500/10 shrink-0"
+                                            >
+                                                {scanning ? (
+                                                    <>
+                                                        <Loader2 className="mr-2 h-4.5 w-4.5 animate-spin" /> Scanning...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <UploadCloud className="mr-2 h-4.5 w-4.5" /> Scan Audio Folder
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {booksLoading ? (
+                                        <div className="p-12 text-center text-muted-foreground flex justify-center items-center">
+                                            <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+                                        </div>
+                                    ) : sortedBooks.length === 0 ? (
+                                        <div className="text-center p-12 text-muted-foreground border border-dashed rounded-lg bg-muted/5 space-y-2">
+                                            <Headphones className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                                            <p className="text-sm font-semibold">No audiobooks found in this library.</p>
+                                            <p className="text-xs">Scan the library share folder above or submit an Audiobook request.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                                            {sortedBooks.map(book => renderAudiobookCard(book))}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="text-center p-16 text-muted-foreground border border-dashed rounded-lg bg-muted/5 space-y-3">
+                                    <Headphones className="h-12 w-12 mx-auto text-amber-400/60" />
+                                    <p className="text-sm font-semibold">Select an audiobook library from the left panel to listen and browse files.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </TabsContent>
+
                 <TabsContent value="requests" className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-1">
@@ -1398,6 +1649,27 @@ function BookLibraryPageContent() {
                                 </CardHeader>
                                 <CardContent>
                                     <form onSubmit={handleCreateRequest} className="space-y-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-medium">Format / Media Type</Label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <Button
+                                                    type="button"
+                                                    variant={reqMediaType === "ebook" ? "default" : "outline"}
+                                                    className={`h-9 text-xs font-semibold gap-1.5 ${reqMediaType === "ebook" ? "text-black bg-primary" : ""}`}
+                                                    onClick={() => setReqMediaType("ebook")}
+                                                >
+                                                    <BookOpen className="h-3.5 w-3.5" /> Ebook
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant={reqMediaType === "audiobook" ? "default" : "outline"}
+                                                    className={`h-9 text-xs font-semibold gap-1.5 ${reqMediaType === "audiobook" ? "text-black bg-amber-400 hover:bg-amber-300" : ""}`}
+                                                    onClick={() => setReqMediaType("audiobook")}
+                                                >
+                                                    <Headphones className="h-3.5 w-3.5" /> Audiobook
+                                                </Button>
+                                            </div>
+                                        </div>
                                         {/* Single Book request only */}
 
                                         <div className="space-y-1.5 relative">
@@ -1847,6 +2119,26 @@ function BookLibraryPageContent() {
                                                 </p>
                                             </div>
                                             <div className="space-y-1.5">
+                                                 <Label htmlFor="libMediaType" className="text-xs font-semibold">Library Media Type</Label>
+                                                 <select
+                                                     id="libMediaType"
+                                                     value={libMediaType}
+                                                     onChange={(e) => {
+                                                         const selected = e.target.value;
+                                                         setLibMediaType(selected);
+                                                         if (selected === "audiobook" && (!libDownloadCategory || libDownloadCategory === "books")) {
+                                                             setLibDownloadCategory("audiobooks");
+                                                         } else if (selected === "ebook" && (!libDownloadCategory || libDownloadCategory === "audiobooks")) {
+                                                             setLibDownloadCategory("books");
+                                                         }
+                                                     }}
+                                                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none"
+                                                 >
+                                                     <option value="ebook">📖 Ebook Library (EPUB, PDF, MOBI)</option>
+                                                     <option value="audiobook">🎧 Audiobook Library (M4B, MP3, FLAC)</option>
+                                                 </select>
+                                             </div>
+                                             <div className="space-y-1.5">
                                                 <Label htmlFor="libDownloadCategory" className="text-xs">Download Client Category (SABnzbd / Torrent)</Label>
                                                 <Input
                                                     id="libDownloadCategory"
@@ -2408,6 +2700,38 @@ function BookLibraryPageContent() {
                             </Button>
                         </CardFooter>
                     </Card>
+                </div>
+            )}
+
+            {activeAudiobook && (
+                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl px-4 animate-in slide-in-from-bottom duration-300">
+                    <div className="bg-card/95 border border-amber-500/40 shadow-2xl backdrop-blur-md p-4 rounded-2xl flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 truncate">
+                                <div className="p-2 bg-amber-500/20 rounded-xl text-amber-400">
+                                    <Headphones className="h-5 w-5" />
+                                </div>
+                                <div className="truncate">
+                                    <p className="text-sm font-bold truncate text-foreground">{activeAudiobook.title}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{activeAudiobook.author || "Unknown Author"}</p>
+                                </div>
+                            </div>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
+                                onClick={() => setActiveAudiobook(null)}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <audio 
+                            controls 
+                            autoPlay 
+                            src={`/api/books/${activeAudiobook.id}`} 
+                            className="w-full h-10 rounded-lg accent-amber-400" 
+                        />
+                    </div>
                 </div>
             )}
         </div>

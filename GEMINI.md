@@ -16,6 +16,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
   - **Security:** AES-256-GCM encryption for sensitive service tokens (Plex, SMTP, etc.).
 - **Core Features:**
   - **Unified Status Widgets:** Real-time stream stats (Tautulli), server health metrics (Glances), and deduplicated active download queues (qBittorrent, SABnzbd, NZBGet).
+  - **Audiobook & Ebook Unified Library:** Dedicated tabs for Ebooks and Audiobooks, library media type filtering (`ebook` vs `audiobook`), built-in floating HTML5 audio player, Send-to-Kindle integration, and Prowlarr category routing (`3030` Audiobooks vs `3040` Ebooks).
   - **Support System:** Direct ticket submission for users, and a ticket management panel at `/admin/tickets` for administrators (with SMTP email updates).
   - **Interactive Beta Portal:** A modular dashboard at `/beta` showcasing active and upcoming beta features/services.
   - **Announcements & Roadmap:** Centralized banner controls and GFM-supported Markdown roadmaps updated directly from admin settings.
