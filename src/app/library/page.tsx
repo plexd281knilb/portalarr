@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
   getLibraries, 
@@ -677,6 +677,39 @@ function BookLibraryPageContent() {
             }
         }
     }, [activeTab, libraries, selectedLibrary]);
+
+    const refreshRequests = useCallback(async () => {
+        try {
+            const freshReqs = await getBookRequests();
+            if (freshReqs) {
+                setRequests(freshReqs);
+            }
+            if (selectedLibrary?.id) {
+                const freshBooks = await getLibraryBooks(selectedLibrary.id);
+                if (freshBooks) {
+                    setBooks(freshBooks);
+                }
+            }
+        } catch (e) {
+            console.error("Auto-refresh requests failed:", e);
+        }
+    }, [selectedLibrary?.id]);
+
+    useEffect(() => {
+        const hasActiveRequests = requests.some((r: any) => 
+            r.status === "Pending" || 
+            r.status === "Searching" || 
+            (r.status && r.status.startsWith("Downloading"))
+        );
+
+        const intervalMs = hasActiveRequests ? 5000 : (activeTab === "requests" ? 10000 : 15000);
+
+        const timer = setInterval(() => {
+            refreshRequests();
+        }, intervalMs);
+
+        return () => clearInterval(timer);
+    }, [requests, activeTab, refreshRequests]);
 
     useEffect(() => {
         if (!reqTitle || reqTitle.trim().length < 2) {
