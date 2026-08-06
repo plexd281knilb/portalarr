@@ -9,7 +9,7 @@ const SECRET_KEY = new TextEncoder().encode(JWT_SECRET_RAW || "build-time-fallba
 
 async function checkLibraryAccess(allowedUsersStr: string, username: string, role: string) {
     if (role === "ADMIN") return true;
-    if (!allowedUsersStr) return false;
+    if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
     const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
     if (allowed.includes("*") || allowed.includes(username.toLowerCase())) {
         return true;
@@ -34,6 +34,11 @@ export async function GET(
         payload = decoded.payload;
     } catch (e) {
         return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const userStatus = (payload.status as string) || "APPROVED";
+    if (userStatus === "PENDING" || userStatus === "REJECTED") {
+        return new NextResponse("Account Pending Approval", { status: 403 });
     }
 
     try {

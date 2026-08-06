@@ -8,11 +8,12 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const session = req.cookies.get("session")?.value;
 
-  // 1. Allow access to public static assets
+  // 1. Allow access to public static assets (strictly excluding /api endpoints)
   if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon.ico") ||
-    pathname.includes(".") // Catch other static files (images, fonts, etc.)
+    !pathname.startsWith("/api") &&
+    (pathname.startsWith("/_next") ||
+     pathname === "/favicon.ico" ||
+     /\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot|mp4|webm)$/i.test(pathname))
   ) {
     return NextResponse.next();
   }
