@@ -697,7 +697,7 @@ function BookLibraryPageContent() {
                 setLibraries(libs || []);
                 if (libs && libs.length > 0) {
                     const savedTab = typeof window !== "undefined" ? localStorage.getItem("book-library-active-tab") : null;
-                    const initialTab = savedTab || activeTabParam || "libs";
+                    const initialTab = activeTabParam || savedTab || "libs";
                     if (initialTab === "audiobooks") {
                         const topAudio = libs.find((l: any) => l.mediaType === "audiobook") || libs[0];
                         setSelectedLibrary(topAudio);
