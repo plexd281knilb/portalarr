@@ -1539,19 +1539,67 @@ export async function scanLibraryInternal(libraryId: string) {
             ? [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".zip", ".rar"]
             : [".pdf", ".epub", ".mobi", ".cbz", ".cbr", ".azw3"];
 
+        const foundMediaItems: { fullPath: string, file: string, ext: string, stats: fs.Stats }[] = [];
+
+        function collectFiles(dir: string, depth = 0) {
+            if (!fs.existsSync(dir)) return;
+            try {
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                const dirAudioFiles = entries.filter(e => !e.isDirectory() && validExtensions.includes(path.extname(e.name).toLowerCase()));
+                
+                if (isAudiobookLib && dirAudioFiles.length > 1 && depth > 0) {
+                    const primary = dirAudioFiles.find(e => path.extname(e.name).toLowerCase() === ".m4b") || dirAudioFiles[0];
+                    const primaryPath = path.join(dir, primary.name);
+                    let totalSize = 0;
+                    for (const af of dirAudioFiles) {
+                        try { totalSize += fs.statSync(path.join(dir, af.name)).size; } catch (e) {}
+                    }
+                    const st = fs.statSync(primaryPath);
+                    foundMediaItems.push({
+                        fullPath: primaryPath,
+                        file: primary.name,
+                        ext: path.extname(primary.name).toLowerCase(),
+                        stats: { ...st, size: totalSize } as any
+                    });
+                } else {
+                    for (const entry of entries) {
+                        const fullP = path.join(dir, entry.name);
+                        if (entry.isDirectory()) {
+                            if (depth < 2) {
+                                collectFiles(fullP, depth + 1);
+                            }
+                        } else {
+                            const ext = path.extname(entry.name).toLowerCase();
+                            if (validExtensions.includes(ext)) {
+                                try {
+                                    const st = fs.statSync(fullP);
+                                    foundMediaItems.push({
+                                        fullPath: fullP,
+                                        file: entry.name,
+                                        ext,
+                                        stats: st
+                                    });
+                                } catch (e) {}
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        collectFiles(library.path);
+
         // Safety check to prevent database wipeout due to unmounted remote shares
-        const bookFiles = files.filter(f => validExtensions.includes(path.extname(f).toLowerCase()));
-        if (bookFiles.length === 0 && dbBooks.length > 0) {
+        if (foundMediaItems.length === 0 && dbBooks.length > 0) {
             console.warn(`[SCANNER] Library directory "${library.path}" contains 0 ${isAudiobookLib ? "audiobook" : "ebook"} files, but the database contains ${dbBooks.length} items. Skipping scan to prevent accidental database wiping (likely due to an unmounted remote share or transient network issue).`);
             return { success: true };
         }
 
         const matchedDbBookIds = new Set<string>();
 
-        for (const file of files) {
-            const ext = path.extname(file).toLowerCase();
-            if (validExtensions.includes(ext)) {
-                let fullPath = path.join(library.path, file);
+        for (const item of foundMediaItems) {
+            const { file, ext, stats } = item;
+            let fullPath = item.fullPath;
 
                 // Check and handle foreign language ebooks in library folders
                 if (isForeignLanguage(file)) {
@@ -1651,7 +1699,6 @@ export async function scanLibraryInternal(libraryId: string) {
                     }
                 }
 
-                const stats = fs.statSync(fullPath);
                 const existing = dbBooksByPathLower.get(fullPath.toLowerCase());
 
                 if (!existing) {
@@ -1882,7 +1929,6 @@ export async function scanLibraryInternal(libraryId: string) {
                     }
                     matchedDbBookIds.add(existing.id);
                 }
-            }
         }
 
         for (const dbBook of dbBooks) {
@@ -1934,6 +1980,76 @@ function getDownloadCategoryForLibrary(libraryName: string): string {
     return "books";
 }
 
+export async function filterReleasesForMediaType(results: any[], mediaType: string = "ebook") {
+    if (!results || !Array.isArray(results)) return [];
+
+    const isAudio = mediaType === "audiobook";
+
+    return results.filter((r: any) => {
+        if (!r.title || !r.size) return false;
+        const titleLower = r.title.toLowerCase();
+
+        // 1. Strict foreign language filter
+        if (isForeignLanguage(r.title)) return false;
+
+        // 2. Strict Media Type separation
+        if (isAudio) {
+            // Must NOT be a plain text ebook format
+            const isTextEbook = titleLower.includes(".epub") || 
+                              titleLower.includes(".pdf") || 
+                              titleLower.includes(".mobi") || 
+                              titleLower.includes(".cbz");
+            if (isTextEbook) return false;
+
+            // Size: 10 MB to 4 GB
+            const isValidAudioSize = r.size >= 10 * 1024 * 1024 && r.size <= 4096 * 1024 * 1024;
+            if (!isValidAudioSize) return false;
+
+            const categoryStr = r.categories ? JSON.stringify(r.categories) : (r.category ? String(r.category) : "");
+            const isAudioCategory = categoryStr.includes("3030") || categoryStr.includes("3000") || categoryStr.toLowerCase().includes("audiobook");
+            
+            const hasAudioKeyword = titleLower.includes("m4b") ||
+                                    titleLower.includes("mp3") ||
+                                    titleLower.includes("audiobook") ||
+                                    titleLower.includes("audio book") ||
+                                    titleLower.includes("m4a") ||
+                                    titleLower.includes("flac") ||
+                                    titleLower.includes("aac") ||
+                                    titleLower.includes("ogg") ||
+                                    titleLower.includes("unabridged") ||
+                                    titleLower.includes("narrated");
+
+            return isAudioCategory || hasAudioKeyword;
+        } else {
+            // EBOOKS
+            // Must NOT be an audiobook format
+            const isAudiobook = titleLower.includes("audiobook") ||
+                                titleLower.includes("audio book") ||
+                                titleLower.includes(".m4b") ||
+                                titleLower.includes(".mp3") ||
+                                titleLower.includes("unabridged") ||
+                                titleLower.includes("narrated by");
+            if (isAudiobook) return false;
+
+            // Size: 50 KB to 100 MB
+            const isValidEbookSize = r.size >= 50 * 1024 && r.size <= 100 * 1024 * 1024;
+            if (!isValidEbookSize) return false;
+
+            const hasEbookExtension = titleLower.includes("epub") || 
+                                     titleLower.includes("pdf") || 
+                                     titleLower.includes("mobi") || 
+                                     titleLower.includes("azw3") || 
+                                     titleLower.includes("cbz") || 
+                                     titleLower.includes("cbr");
+            
+            const categoryStr = r.categories ? JSON.stringify(r.categories) : (r.category ? String(r.category) : "");
+            const isEbookCategory = categoryStr.includes("7000") || categoryStr.includes("7010") || categoryStr.includes("7020") || categoryStr.includes("3040") || categoryStr.toLowerCase().includes("ebook");
+
+            return hasEbookExtension || isEbookCategory || r.size < 20 * 1024 * 1024;
+        }
+    });
+}
+
 export async function autoDownloadBookRequest(requestId: string, title: string, author: string) {
     console.log(`[AUTO-DOWNLOAD] Starting auto-download check for: ${title} by ${author}`);
     
@@ -1980,34 +2096,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             return;
         }
 
-        let candidates = [];
-        if (reqMediaType === "audiobook") {
-            candidates = results.filter((r: any) => {
-                const isValidSize = r.size > 10 * 1024 * 1024 && r.size < 4 * 1024 * 1024 * 1024;
-                const isForeign = isForeignLanguage(r.title);
-                return isValidSize && !isForeign;
-            });
-        } else {
-            candidates = results.filter((r: any) => {
-                const titleLower = r.title.toLowerCase();
-                const hasEpubInTitle = titleLower.includes("epub") || 
-                                       (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
-                const hasOtherFormat = titleLower.includes("pdf") || 
-                                       titleLower.includes("mobi") || 
-                                       titleLower.includes("cbz") || 
-                                       titleLower.includes("cbr") || 
-                                       titleLower.includes("audiobook") || 
-                                       titleLower.includes("mp3") || 
-                                       titleLower.includes("m4b") ||
-                                       titleLower.includes(".rar") ||
-                                       titleLower.includes(".zip") ||
-                                       /\b(?:rar|zip)\b/i.test(titleLower);
-                const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
-                const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
-                const isForeign = isForeignLanguage(r.title);
-                return isEpubOrGeneric && isValidSize && !isForeign;
-            });
-        }
+        const candidates = await filterReleasesForMediaType(results, reqMediaType);
 
         if (candidates.length === 0) {
             await prisma.bookRequest.update({
@@ -2120,43 +2209,7 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
         }
         
         const results = await res.json();
-        
-        // Filter results keeping it limited to books or audiobooks
-        const filtered = (results || []).filter((r: any) => {
-            const titleLower = r.title.toLowerCase();
-            const isAudio = mediaType === "audiobook";
-
-            if (isAudio) {
-                const hasAudioKw = titleLower.includes("m4b") ||
-                                   titleLower.includes("mp3") ||
-                                   titleLower.includes("audiobook") ||
-                                   titleLower.includes("m4a") ||
-                                   titleLower.includes("flac") ||
-                                   titleLower.includes("aac") ||
-                                   titleLower.includes("ogg") ||
-                                   titleLower.includes("opus");
-                const isValidSize = r.size > 10 * 1024 * 1024 && r.size < 4 * 1024 * 1024 * 1024;
-                const isForeign = isForeignLanguage(r.title);
-                return (hasAudioKw || r.category?.toString().includes("3030")) && isValidSize && !isForeign;
-            } else {
-                const hasEpubInTitle = titleLower.includes("epub") || 
-                                       (r.downloadUrl && r.downloadUrl.toLowerCase().includes("epub"));
-                const hasOtherFormat = titleLower.includes("pdf") || 
-                                       titleLower.includes("mobi") || 
-                                       titleLower.includes("cbz") || 
-                                       titleLower.includes("cbr") || 
-                                       titleLower.includes("audiobook") || 
-                                       titleLower.includes("mp3") || 
-                                       titleLower.includes("m4b") ||
-                                       titleLower.includes(".rar") ||
-                                       titleLower.includes(".zip") ||
-                                       /\b(?:rar|zip)\b/i.test(titleLower);
-                const isEpubOrGeneric = hasEpubInTitle || !hasOtherFormat;
-                const isValidSize = r.size > 50 * 1024 && r.size < 50 * 1024 * 1024;
-                const isForeign = isForeignLanguage(r.title);
-                return isEpubOrGeneric && isValidSize && !isForeign;
-            }
-        });
+        const filtered = await filterReleasesForMediaType(results, mediaType);
         
         return filtered.map((r: any) => ({
             title: r.title,
