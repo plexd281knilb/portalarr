@@ -189,6 +189,20 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     if (user.status === "REJECTED") {
       return { error: "Your account request was declined by the administrator." };
     }
+    // If admin logs in with Plex, refresh mainPlexToken in global settings
+    if (user.role === "ADMIN" && authToken) {
+      try {
+        const encryptedToken = encryptData(authToken);
+        await prisma.settings.upsert({
+          where: { id: "global" },
+          update: { mainPlexToken: encryptedToken },
+          create: { id: "global", mainPlexToken: encryptedToken }
+        });
+        console.log(`[AUTH] Refreshed Admin Plex Token in settings for ${user.username}.`);
+      } catch (e) {
+        console.warn("[AUTH] Failed to refresh Admin Plex Token:", e);
+      }
+    }
     await createSession(user.id, user.username, user.role, user.status);
     return { success: true };
   }
