@@ -473,6 +473,75 @@ export async function deleteAppUser(id: string) {
     }
 }
 
+export async function updateAppUserRole(id: string, role: string) {
+    await verifyAdmin();
+    try {
+        await prisma.user.update({
+            where: { id },
+            data: { role }
+        });
+        revalidatePath("/settings/access");
+        return { success: true };
+    } catch (e: any) {
+        return { error: e.message || "Failed to update role" };
+    }
+}
+
+export async function updateAppUserKindleEmail(id: string, kindleEmail: string) {
+    await verifyAdmin();
+    try {
+        const cleanEmail = kindleEmail.trim().toLowerCase();
+        await prisma.user.update({
+            where: { id },
+            data: { kindleEmail: cleanEmail }
+        });
+        revalidatePath("/settings/access");
+        return { success: true };
+    } catch (e: any) {
+        return { error: e.message || "Failed to update Kindle email" };
+    }
+}
+
+export async function adminResetUserPassword(id: string, newPass: string) {
+    await verifyAdmin();
+    if (!newPass || newPass.length < 6) return { error: "Password must be at least 6 characters" };
+    try {
+        const hashedPassword = await hash(newPass, 10);
+        await prisma.user.update({
+            where: { id },
+            data: { password: hashedPassword }
+        });
+        return { success: true };
+    } catch (e: any) {
+        return { error: e.message || "Failed to reset password" };
+    }
+}
+
+export async function approveAllPendingAppUsers() {
+    await verifyAdmin();
+    try {
+        const pendingUsers = await prisma.user.findMany({ where: { status: "PENDING" } });
+        if (pendingUsers.length === 0) return { success: true, approvedCount: 0 };
+
+        await prisma.user.updateMany({
+            where: { status: "PENDING" },
+            data: { status: "APPROVED" }
+        });
+
+        for (const user of pendingUsers) {
+            if (user.email) {
+                try {
+                    await sendUserApprovalEmail(user.email, user.username);
+                } catch (e) {}
+            }
+        }
+        revalidatePath("/settings/access");
+        return { success: true, approvedCount: pendingUsers.length };
+    } catch (e: any) {
+        return { error: e.message || "Failed to approve all pending users" };
+    }
+}
+
 export async function getSupportTickets() {
     await verifyAdmin();
     return await prisma.supportTicket.findMany({
