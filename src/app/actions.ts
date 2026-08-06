@@ -2027,13 +2027,16 @@ export async function scanLibraryInternal(libraryId: string) {
     }
 }
 
-async function getTargetLibraryForUser(username: string) {
+async function getTargetLibraryForUser(username: string, mediaType: string = "ebook") {
     try {
         const libraries = await prisma.library.findMany();
         if (libraries.length === 0) return null;
         
+        const matchingMediaLibs = libraries.filter(lib => (lib.mediaType || "ebook") === mediaType);
+        const targetPool = matchingMediaLibs.length > 0 ? matchingMediaLibs : libraries;
+
         // 1. Find library where this specific user is allowed
-        const userLib = libraries.find(lib => {
+        const userLib = targetPool.find(lib => {
             if (!lib.allowedUsers || lib.allowedUsers === "*") return false;
             const allowed = lib.allowedUsers.split(",").map(u => u.trim());
             return allowed.includes(username);
@@ -2041,20 +2044,21 @@ async function getTargetLibraryForUser(username: string) {
         if (userLib) return userLib;
         
         // 2. Fallback: Find a library that allows everyone ("*")
-        const publicLib = libraries.find(lib => lib.allowedUsers === "*");
+        const publicLib = targetPool.find(lib => lib.allowedUsers === "*");
         if (publicLib) return publicLib;
         
         // 3. Fallback: return the first library
-        return libraries[0];
+        return targetPool[0];
     } catch (e) {
         return null;
     }
 }
 
-function getDownloadCategoryForLibrary(libraryName: string): string {
+function getDownloadCategoryForLibrary(libraryName: string, mediaType: string = "ebook"): string {
     const nameLower = libraryName.toLowerCase();
     if (nameLower.includes("kids")) return "kids-books";
     if (nameLower.includes("wife")) return "wife-books";
+    if (mediaType === "audiobook" || nameLower.includes("audio")) return "audiobooks";
     return "books";
 }
 
@@ -2138,8 +2142,8 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const requester = req?.requestedBy || "";
         const reqMediaType = req?.mediaType || "ebook";
         
-        const targetLib = await getTargetLibraryForUser(requester);
-        const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
+        const targetLib = await getTargetLibraryForUser(requester, reqMediaType);
+        const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
 
         const prowlarrApp = await prisma.mediaApp.findFirst({
             where: { type: "prowlarr" }
@@ -2318,8 +2322,9 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     }
     
     const requester = req.requestedBy || "";
-    const targetLib = await getTargetLibraryForUser(requester);
-    const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name) : "books";
+    const reqMediaType = req.mediaType || "ebook";
+    const targetLib = await getTargetLibraryForUser(requester, reqMediaType);
+    const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
     
     if (protocol === "usenet") {
         const sabApp = await prisma.mediaApp.findFirst({
@@ -2529,8 +2534,8 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
     }
 }
 
-function findDownloadedFile(dir: string, bookTitle: string): string | null {
-    console.log(`[DOWNLOAD-FINDER] Scanning directory: ${dir} for book: "${bookTitle}"`);
+function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = "ebook"): string | null {
+    console.log(`[DOWNLOAD-FINDER] Scanning directory: ${dir} for ${mediaType}: "${bookTitle}"`);
     if (!fs.existsSync(dir)) {
         console.log(`[DOWNLOAD-FINDER] Directory does not exist: ${dir}`);
         return null;
@@ -2538,7 +2543,7 @@ function findDownloadedFile(dir: string, bookTitle: string): string | null {
     
     const cleanBookTitle = bookTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
     
-    const stopWords = new Set(["and", "the", "for", "with", "from", "that", "this", "these", "those", "a", "an", "of", "to", "in", "on", "at", "by", "or", "but", "as", "is", "are", "was", "were", "be", "been", "has", "have", "had", "do", "does", "did", "epub", "pdf", "mobi", "cbz"]);
+    const stopWords = new Set(["and", "the", "for", "with", "from", "that", "this", "these", "those", "a", "an", "of", "to", "in", "on", "at", "by", "or", "but", "as", "is", "are", "was", "were", "be", "been", "has", "have", "had", "do", "does", "did", "epub", "pdf", "mobi", "cbz", "m4b", "mp3", "flac"]);
     
     const titleWords = bookTitle.toLowerCase()
         .split(/[^a-z0-9]/)
@@ -2549,6 +2554,10 @@ function findDownloadedFile(dir: string, bookTitle: string): string | null {
         finalTitleWords = bookTitle.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 0);
     }
     
+    const validExtensions = mediaType === "audiobook"
+        ? [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".zip", ".rar"]
+        : [".epub", ".pdf", ".mobi", ".cbz", ".cbr", ".azw3"];
+    
     try {
         const files = fs.readdirSync(dir);
         console.log(`[DOWNLOAD-FINDER] Found ${files.length} items in ${dir}`);
@@ -2557,15 +2566,15 @@ function findDownloadedFile(dir: string, bookTitle: string): string | null {
             const stat = fs.statSync(fullPath);
             
             if (stat.isDirectory()) {
-                const found = findDownloadedFile(fullPath, bookTitle);
+                const found = findDownloadedFile(fullPath, bookTitle, mediaType);
                 if (found) return found;
             } else {
                 const ext = path.extname(file).toLowerCase();
-                if ([".epub", ".pdf", ".mobi", ".cbz"].includes(ext)) {
+                if (validExtensions.includes(ext)) {
                     const cleanFileName = file.toLowerCase().replace(/[^a-z0-9]/g, "");
                     console.log(`[DOWNLOAD-FINDER] Inspecting file: ${file} (clean: ${cleanFileName})`);
                     
-                    if (cleanFileName.includes(cleanBookTitle) || cleanBookTitle.includes(cleanFileName.replace(/(epub|pdf|mobi|cbz)$/, ""))) {
+                    if (cleanFileName.includes(cleanBookTitle) || cleanBookTitle.includes(cleanFileName.replace(/(epub|pdf|mobi|cbz|m4b|mp3|m4a|flac)$/, ""))) {
                         console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (direct title match)`);
                         return fullPath;
                     }
@@ -2648,7 +2657,8 @@ export async function monitorAndRetryDownload(
             let targetLib: any = null;
             let copySuccessful = false;
             try {
-                targetLib = await getTargetLibraryForUser(currentReq.requestedBy);
+                const reqMedia = currentReq?.mediaType || "ebook";
+                targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia);
                 if (targetLib) {
                     const settings = await prisma.settings.findFirst();
                     const configuredPath = settings?.downloadsPath || "/downloads";
@@ -2663,7 +2673,7 @@ export async function monitorAndRetryDownload(
                     let foundFilePath: string | null = null;
                     for (const p of searchPaths) {
                         if (fs.existsSync(p)) {
-                            foundFilePath = findDownloadedFile(p, currentReq.title);
+                            foundFilePath = findDownloadedFile(p, currentReq.title, reqMedia);
                             if (foundFilePath) break;
                         }
                     }
@@ -2844,6 +2854,12 @@ export async function monitorAndRetryDownload(
         console.log(`[AUTO-DOWNLOAD-MONITOR] Attempting backup release ${nextIndex + 1}/${releases.length}: ${nextRelease.title}`);
         
         try {
+            const currentReq = await prisma.bookRequest.findUnique({ where: { id: requestId } });
+            const reqMedia = currentReq?.mediaType || "ebook";
+            const requester = currentReq?.requestedBy || "";
+            const backupLib = await getTargetLibraryForUser(requester, reqMedia);
+            const nextCategory = backupLib ? getDownloadCategoryForLibrary(backupLib.name, reqMedia) : (reqMedia === "audiobook" ? "audiobooks" : "books");
+            
             let nextDownloadId = "";
             if (nextRelease.protocol === "usenet") {
                 const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
@@ -2851,7 +2867,7 @@ export async function monitorAndRetryDownload(
                 const sabUrl = cleanUrl(sabApp.url);
                 const sabKey = decryptData(sabApp.apiKey as string);
                 
-                const pushUrl = `${sabUrl}/api?mode=addurl&name=${encodeURIComponent(nextRelease.downloadUrl)}&nzbname=${encodeURIComponent(nextRelease.title)}&cat=books&output=json&apikey=${sabKey}`;
+                const pushUrl = `${sabUrl}/api?mode=addurl&name=${encodeURIComponent(nextRelease.downloadUrl)}&nzbname=${encodeURIComponent(nextRelease.title)}&cat=${nextCategory}&output=json&apikey=${sabKey}`;
                 const res = await fetch(pushUrl, { cache: "no-store" });
                 if (!res.ok) throw new Error(`SABnzbd returned status ${res.status}`);
                 const json = await res.json();
@@ -2870,7 +2886,7 @@ export async function monitorAndRetryDownload(
                 try {
                     await fetch(`${qbitUrl}/api/v2/torrents/add`, {
                         method: "POST",
-                        body: new URLSearchParams({ urls: nextRelease.downloadUrl, category: "books" }),
+                        body: new URLSearchParams({ urls: nextRelease.downloadUrl, category: nextCategory }),
                         headers: { "Content-Type": "application/x-www-form-urlencoded" }
                     });
                 } catch (err) {
@@ -2883,7 +2899,7 @@ export async function monitorAndRetryDownload(
                     if (!cookie) throw new Error("qBit login failure");
                     await fetch(`${qbitUrl}/api/v2/torrents/add`, {
                         method: "POST",
-                        body: new URLSearchParams({ urls: nextRelease.downloadUrl, category: "books" }),
+                        body: new URLSearchParams({ urls: nextRelease.downloadUrl, category: nextCategory }),
                         headers: { "Content-Type": "application/x-www-form-urlencoded", "Cookie": cookie }
                     });
                 }
