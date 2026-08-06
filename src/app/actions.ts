@@ -1515,11 +1515,11 @@ async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortS
 }
 
 function parseFilenameMetadata(rawBase: string): { title: string, author: string, cleanQuery: string } {
-    let clean = rawBase;
+    let clean = rawBase.replace(/[\r\n]+/g, " ").trim();
 
-    // 1. Strip scene release tags, formats, group names (CTO, BKS, PB2, etc.) and metadata garbage
-    clean = clean.replace(/\.(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB2|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
-    clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB2|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
+    // 1. Strip scene release tags, formats, group names (CTO, BKS, PB, PB1, PB2, HC, TPB, EB, v1, etc.) and metadata garbage
+    clean = clean.replace(/\.(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
+    clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
     
     // Only strip 4-digit numbers if they look like scene release years (2000-2029) and NOT book title years like 1984
     clean = clean.replace(/\b(20[0-2]\d)\b/g, " ");
@@ -1544,13 +1544,14 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
             const partA = parts[0];
             const partB = parts.slice(1).join(" - ");
 
-            const partBMatch = partB.match(knownAuthorsRegex) || partB.match(/^[A-Z]\.?\s*[A-Z]?\s*[A-Z][a-z]+$/i);
+            const cleanPartB = partB.replace(/\b(?:PB\d*|v\d+|[A-Z]{2,}\d*)\b/gi, "").trim();
+            const partBMatch = cleanPartB.match(knownAuthorsRegex) || cleanPartB.match(/^[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Z][a-zA-Z'\-]+$/i);
             const partAMatch = partA.match(knownAuthorsRegex);
 
             if (partBMatch && !partAMatch) {
                 // Title - Author format
                 title = partA;
-                author = partB;
+                author = cleanPartB || partB;
             } else {
                 // Author - Title format
                 author = partA;
