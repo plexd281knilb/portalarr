@@ -760,8 +760,8 @@ function normalizeBookCardMetadata(book: any) {
                 const reqs = await getBookRequests();
                 setRequests(reqs || []);
 
-                if (session) {
-                    const ulist = await getAppUsers();
+                if (session && session.role === "ADMIN") {
+                    const ulist = await getAppUsers().catch(() => []);
                     setAllUsers(ulist || []);
                 }
             } catch (e) {

@@ -7,20 +7,23 @@ import path from "path";
 const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
 const SECRET_KEY = new TextEncoder().encode(JWT_SECRET_RAW || "build-time-fallback-key");
 
-async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string, role: string) {
+async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string = "", email: string = "", role: string = "") {
     if (role === "ADMIN") return true;
+
+    const safeUsername = (username || "").toLowerCase();
+    const safeEmail = (email || "").toLowerCase();
 
     // Explicit denial check: If user is listed in restrictedUsers, block access immediately
     if (restrictedUsersStr && restrictedUsersStr.trim() !== "") {
         const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase());
-        if (restricted.includes(username.toLowerCase())) {
+        if ((safeUsername && restricted.includes(safeUsername)) || (safeEmail && restricted.includes(safeEmail))) {
             return false;
         }
     }
 
     if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
     const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
-    return allowed.includes("*") || allowed.includes(username.toLowerCase());
+    return allowed.includes("*") || (safeUsername && allowed.includes(safeUsername)) || (safeEmail && allowed.includes(safeEmail));
 }
 
 export async function GET(
@@ -60,8 +63,9 @@ export async function GET(
         const hasAccess = await checkLibraryAccess(
             book.library.allowedUsers,
             book.library.restrictedUsers || "",
-            payload.username as string,
-            payload.role as string
+            (payload.username || "") as string,
+            (payload.email || "") as string,
+            (payload.role || "") as string
         );
 
         if (!hasAccess) {

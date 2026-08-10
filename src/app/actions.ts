@@ -511,22 +511,11 @@ export async function validateDownloadsPathAction(pathStr: string) {
 import { sendUserApprovalEmail } from "@/app/auth-actions";
 
 export async function getAppUsers() {
-    try {
-        await verifyAdmin();
-        return await prisma.user.findMany({
-            orderBy: { createdAt: 'desc' },
-            select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true }
-        });
-    } catch (e) {
-        const user = await verifyUser().catch(() => null);
-        if (user) {
-            return await prisma.user.findMany({
-                orderBy: { createdAt: 'desc' },
-                select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true }
-            });
-        }
-        return [];
-    }
+    await verifyAdmin();
+    return await prisma.user.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true }
+    });
 }
 
 export async function createAppUser(formData: FormData) {
@@ -1171,8 +1160,9 @@ export async function getLibraries() {
     try {
         session = await verifyUser();
     } catch (e) {
-        // Fallback gracefully if session token is unauthenticated or expired
+        return [];
     }
+    if (!session) return [];
     
     const libraries = await prisma.library.findMany({
         orderBy: { name: "asc" }
@@ -1281,7 +1271,10 @@ export async function getLibraryBooks(libraryId: string) {
     let session: any = null;
     try {
         session = await verifyUser();
-    } catch (e) {}
+    } catch (e) {
+        return [];
+    }
+    if (!session) return [];
 
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
