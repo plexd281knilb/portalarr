@@ -3556,8 +3556,12 @@ export async function monitorAndRetryDownload(
                 });
                 
                 if (matchedBook) {
-                    console.log(`[AUTO-DOWNLOAD-MONITOR] Found matching book "${matchedBook.title}". Automatically mailing to ${req.requestedBy}...`);
-                    await sendBookToUserKindleInternal(matchedBook.id, req.requestedBy);
+                    if (req.mediaType === "ebook") {
+                        console.log(`[AUTO-DOWNLOAD-MONITOR] Found matching ebook "${matchedBook.title}". Automatically mailing to Kindle for ${req.requestedBy}...`);
+                        await sendBookToUserKindleInternal(matchedBook.id, req.requestedBy);
+                    } else {
+                        console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully ingested audiobook "${matchedBook.title}". Skipping email delivery (audiobooks are stored in library for streaming).`);
+                    }
                 } else {
                     console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching request title: "${req.title}"`);
                 }
