@@ -41,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, 
   UploadCloud, Check, X, FileText, Download, 
-  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw
+  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX
 } from "lucide-react";
 
 function matchesSeriesFuzzy(titleLower: string, seriesNameLower: string): boolean {
@@ -220,6 +220,7 @@ function BookLibraryPageContent() {
     const [libDesc, setLibDesc] = useState("");
     const [libPath, setLibPath] = useState("");
     const [libAllowedUsers, setLibAllowedUsers] = useState("");
+    const [libRestrictedUsers, setLibRestrictedUsers] = useState("");
     const [libDownloadCategory, setLibDownloadCategory] = useState("books");
     const [libMediaType, setLibMediaType] = useState("ebook"); // "ebook" or "audiobook"
     const [editingLibId, setEditingLibId] = useState<string | null>(null);
@@ -871,6 +872,7 @@ function normalizeBookCardMetadata(book: any) {
         formData.append("description", libDesc);
         formData.append("path", libPath);
         formData.append("allowedUsers", libAllowedUsers);
+        formData.append("restrictedUsers", libRestrictedUsers);
         formData.append("downloadCategory", libDownloadCategory);
         formData.append("mediaType", libMediaType);
 
@@ -885,6 +887,7 @@ function normalizeBookCardMetadata(book: any) {
             setLibDesc("");
             setLibPath("");
             setLibAllowedUsers("");
+            setLibRestrictedUsers("");
             setLibDownloadCategory("books");
             setLibMediaType("ebook");
             setEditingLibId(null);
@@ -916,6 +919,7 @@ function normalizeBookCardMetadata(book: any) {
         setLibDesc(lib.description || "");
         setLibPath(lib.path || "");
         setLibAllowedUsers(lib.allowedUsers || "*");
+        setLibRestrictedUsers(lib.restrictedUsers || "");
         setLibDownloadCategory(lib.downloadCategory || (lib.mediaType === "audiobook" ? "audiobooks" : "books"));
         setLibMediaType(lib.mediaType || "ebook");
     }
@@ -1335,6 +1339,10 @@ function normalizeBookCardMetadata(book: any) {
         
         // 3. Has access to at least one library
         const hasLibraryAccess = libraries.some(lib => {
+            const restrictedStr = lib.restrictedUsers || "";
+            if (restrictedStr && restrictedStr.split(",").map((usr: string) => usr.trim().toLowerCase()).includes(u.username.toLowerCase())) {
+                return false;
+            }
             const allowedStr = lib.allowedUsers || "";
             if (allowedStr === "*") return true;
             const allowedList = allowedStr.split(",").map((usr: string) => usr.trim().toLowerCase());
@@ -1518,7 +1526,7 @@ function normalizeBookCardMetadata(book: any) {
                                             >
                                                 <span>{lib.name}</span>
                                                 <Badge className={selectedLibrary?.id === lib.id ? "bg-black text-primary hover:bg-black" : "bg-muted"}>
-                                                    {lib.allowedUsers === "*" ? "Public" : "Private"}
+                                                    {lib.allowedUsers === "*" ? (lib.restrictedUsers ? "Public (Restricted)" : "Public") : "Private"}
                                                 </Badge>
                                             </button>
                                         ))
@@ -1772,7 +1780,7 @@ function normalizeBookCardMetadata(book: any) {
                                             >
                                                 <span>{lib.name}</span>
                                                 <Badge className={selectedLibrary?.id === lib.id ? "bg-black text-amber-400 hover:bg-black" : "bg-muted"}>
-                                                    {lib.allowedUsers === "*" ? "Public" : "Private"}
+                                                    {lib.allowedUsers === "*" ? (lib.restrictedUsers ? "Public (Restricted)" : "Public") : "Private"}
                                                 </Badge>
                                             </button>
                                         ))
@@ -2515,6 +2523,73 @@ function normalizeBookCardMetadata(book: any) {
                                                     </div>
                                                 )}
                                             </div>
+                                            <div className="space-y-1">
+                                                <Label htmlFor="libRestrictedUsers" className="text-xs font-semibold text-red-400 flex items-center gap-1.5">
+                                                    <UserX className="h-3.5 w-3.5" /> Restricted / Blocked Users (Explicit Exclusions)
+                                                </Label>
+                                                <Input
+                                                    id="libRestrictedUsers"
+                                                    type="text"
+                                                    placeholder="e.g. kid1, kid2 (usernames to block even if Allowed Users is *)"
+                                                    value={libRestrictedUsers}
+                                                    onChange={(e) => setLibRestrictedUsers(e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div className="space-y-2 border border-red-500/20 p-3 rounded-md bg-red-950/10">
+                                                <Label className="text-xs font-semibold block border-b border-red-500/20 pb-1 mb-1 text-red-400 flex items-center gap-1.5">
+                                                    <UserX className="h-3.5 w-3.5" /> Restricted Users Quick Block List
+                                                </Label>
+                                                <div className="space-y-2">
+                                                    <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-0.5">
+                                                        {allUsers.length === 0 ? (
+                                                            <span className="text-[10px] text-muted-foreground italic">No users found.</span>
+                                                        ) : (
+                                                            allUsers.map(u => {
+                                                                const restrictedList = libRestrictedUsers.split(",")
+                                                                    .map(item => item.trim())
+                                                                    .filter(Boolean);
+                                                                const isRestricted = restrictedList.includes(u.username);
+                                                                return (
+                                                                    <Badge
+                                                                        key={u.id}
+                                                                        variant={isRestricted ? "destructive" : "outline"}
+                                                                        className={`cursor-pointer transition-colors text-[9px] px-2 py-0.5 ${
+                                                                            isRestricted 
+                                                                                ? "bg-red-600 text-white hover:bg-red-700 font-bold border-red-500" 
+                                                                                : "hover:bg-muted/30 border-muted-foreground/30 text-muted-foreground"
+                                                                        }`}
+                                                                        onClick={() => {
+                                                                            let newList;
+                                                                            if (isRestricted) {
+                                                                                newList = restrictedList.filter(item => item !== u.username);
+                                                                            } else {
+                                                                                newList = [...restrictedList, u.username];
+                                                                            }
+                                                                            setLibRestrictedUsers(newList.join(", "));
+                                                                        }}
+                                                                    >
+                                                                        {u.username}
+                                                                    </Badge>
+                                                                );
+                                                            })
+                                                        )}
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-[9px]">
+                                                        <span className="text-muted-foreground">Click badges to block/unblock users from this library shelf.</span>
+                                                        {libRestrictedUsers && (
+                                                            <Button 
+                                                                type="button" 
+                                                                variant="ghost" 
+                                                                className="h-4 text-[9px] p-0 text-red-400 hover:underline hover:bg-transparent font-semibold"
+                                                                onClick={() => setLibRestrictedUsers("")}
+                                                            >
+                                                                Clear Blocked List
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
                                             <div className="flex gap-2">
                                                 <Button type="submit" className="flex-1 font-semibold text-black">
                                                     {editingLibId ? "Update Library" : "Create Library"}
@@ -2528,6 +2603,7 @@ function normalizeBookCardMetadata(book: any) {
                                                             setLibName("");
                                                             setLibDesc("");
                                                             setLibAllowedUsers("");
+                                                            setLibRestrictedUsers("");
                                                         }}
                                                     >
                                                         Cancel
@@ -2562,6 +2638,11 @@ function normalizeBookCardMetadata(book: any) {
                                                                 <Badge className="bg-slate-900 border border-slate-800 text-slate-200 text-[10px]">
                                                                     Access: {lib.allowedUsers || "Restricted (Admin Only)"}
                                                                 </Badge>
+                                                                {lib.restrictedUsers && (
+                                                                    <Badge variant="destructive" className="bg-red-950/80 text-red-300 border border-red-800 text-[10px] flex items-center gap-1">
+                                                                        <UserX className="h-3 w-3" /> Excluded: {lib.restrictedUsers}
+                                                                    </Badge>
+                                                                )}
                                                                 {lib.path && (
                                                                     <Badge variant="outline" className="text-[10px] border-primary/20 text-primary bg-primary/5">
                                                                         Path: {lib.path}

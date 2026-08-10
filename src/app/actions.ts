@@ -1111,14 +1111,20 @@ async function verifyUser() {
     }
 }
 
-async function checkLibraryAccess(allowedUsersStr: string, username: string, role: string) {
+async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string, role: string) {
     if (role === "ADMIN") return true;
+
+    // Explicit denial check: If user is listed in restrictedUsers, block access immediately
+    if (restrictedUsersStr && restrictedUsersStr.trim() !== "") {
+        const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase());
+        if (restricted.includes(username.toLowerCase())) {
+            return false;
+        }
+    }
+
     if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
     const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
-    if (allowed.includes("*") || allowed.includes(username.toLowerCase())) {
-        return true;
-    }
-    return false;
+    return allowed.includes("*") || allowed.includes(username.toLowerCase());
 }
 
 export async function getLibraries() {
@@ -1129,7 +1135,7 @@ export async function getLibraries() {
     
     const accessible = [];
     for (const lib of libraries) {
-        if (await checkLibraryAccess(lib.allowedUsers, session.username as string, session.role as string)) {
+        if (await checkLibraryAccess(lib.allowedUsers, lib.restrictedUsers || "", session.username as string, session.role as string)) {
             accessible.push(lib);
         }
     }
@@ -1142,12 +1148,13 @@ export async function createLibrary(formData: FormData) {
     const description = formData.get("description") as string;
     const path = formData.get("path") as string || "";
     const allowedUsers = formData.get("allowedUsers") as string || "";
+    const restrictedUsers = formData.get("restrictedUsers") as string || "";
     const mediaType = formData.get("mediaType") as string || "ebook";
     const defaultCategory = mediaType === "audiobook" ? "audiobooks" : "books";
     const downloadCategory = formData.get("downloadCategory") as string || defaultCategory;
     
     await prisma.library.create({
-        data: { name, description, path, allowedUsers, downloadCategory, mediaType }
+        data: { name, description, path, allowedUsers, restrictedUsers, downloadCategory, mediaType }
     });
     revalidatePath("/library");
 }
@@ -1159,13 +1166,14 @@ export async function updateLibrary(formData: FormData) {
     const description = formData.get("description") as string;
     const path = formData.get("path") as string || "";
     const allowedUsers = formData.get("allowedUsers") as string || "";
+    const restrictedUsers = formData.get("restrictedUsers") as string || "";
     const mediaType = formData.get("mediaType") as string || "ebook";
     const defaultCategory = mediaType === "audiobook" ? "audiobooks" : "books";
     const downloadCategory = formData.get("downloadCategory") as string || defaultCategory;
     
     await prisma.library.update({
         where: { id },
-        data: { name, description, path, allowedUsers, downloadCategory, mediaType }
+        data: { name, description, path, allowedUsers, restrictedUsers, downloadCategory, mediaType }
     });
     revalidatePath("/library");
 }
@@ -1198,6 +1206,7 @@ export async function getLibraryBooks(libraryId: string) {
     
     const hasAccess = await checkLibraryAccess(
         library.allowedUsers, 
+        library.restrictedUsers || "",
         session.username as string, 
         session.role as string
     );
@@ -2260,20 +2269,33 @@ async function getTargetLibraryForUser(username: string, mediaType: string = "eb
         const matchingMediaLibs = libraries.filter(lib => (lib.mediaType || "ebook") === mediaType);
         const targetPool = matchingMediaLibs.length > 0 ? matchingMediaLibs : libraries;
 
-        // 1. Find library where this specific user is allowed
+        const lowerUsername = username.toLowerCase();
+
+        // 1. Find library where this specific user is allowed and NOT restricted
         const userLib = targetPool.find(lib => {
+            const restricted = (lib.restrictedUsers || "").split(",").map(u => u.trim().toLowerCase());
+            if (restricted.includes(lowerUsername)) return false;
+
             if (!lib.allowedUsers || lib.allowedUsers === "*") return false;
-            const allowed = lib.allowedUsers.split(",").map(u => u.trim());
-            return allowed.includes(username);
+            const allowed = lib.allowedUsers.split(",").map(u => u.trim().toLowerCase());
+            return allowed.includes(lowerUsername);
         });
         if (userLib) return userLib;
         
-        // 2. Fallback: Find a library that allows everyone ("*")
-        const publicLib = targetPool.find(lib => lib.allowedUsers === "*");
+        // 2. Fallback: Find a library that allows everyone ("*") and user is NOT restricted
+        const publicLib = targetPool.find(lib => {
+            const restricted = (lib.restrictedUsers || "").split(",").map(u => u.trim().toLowerCase());
+            if (restricted.includes(lowerUsername)) return false;
+            return lib.allowedUsers === "*";
+        });
         if (publicLib) return publicLib;
         
-        // 3. Fallback: return the first library
-        return targetPool[0];
+        // 3. Fallback: return the first non-restricted library
+        const nonRestricted = targetPool.find(lib => {
+            const restricted = (lib.restrictedUsers || "").split(",").map(u => u.trim().toLowerCase());
+            return !restricted.includes(lowerUsername);
+        });
+        return nonRestricted || targetPool[0];
     } catch (e) {
         return null;
     }
@@ -3218,9 +3240,19 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
         }
 
         const book = await prisma.book.findUnique({
-            where: { id: bookId }
+            where: { id: bookId },
+            include: { library: true }
         });
         if (!book) return { success: false, error: "Book not found" };
+
+        const hasAccess = await checkLibraryAccess(
+            book.library.allowedUsers,
+            book.library.restrictedUsers || "",
+            username,
+            session.role as string
+        );
+        if (!hasAccess) return { success: false, error: "Unauthorized access to this library book" };
+
         if (!fs.existsSync(book.filePath)) {
             return { success: false, error: "Ebook file not found on disk. Try scanning the library again." };
         }
@@ -3528,20 +3560,16 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
         const session = await verifyUser();
         if (session.role === "ADMIN") return true;
 
-        const username = session.username as string;
+        const username = (session.username as string).toLowerCase();
         
-        const libs = await prisma.library.findMany({
-            where: {
-                OR: [
-                    { allowedUsers: "*" },
-                    { allowedUsers: { contains: username } }
-                ]
-            }
-        });
+        const libs = await prisma.library.findMany();
 
         const filtered = libs.filter(lib => {
+            const restricted = (lib.restrictedUsers || "").split(",").map(u => u.trim().toLowerCase());
+            if (restricted.includes(username)) return false;
+
             if (lib.allowedUsers === "*") return true;
-            const users = lib.allowedUsers.split(",").map(u => u.trim());
+            const users = lib.allowedUsers.split(",").map(u => u.trim().toLowerCase());
             return users.includes(username);
         });
 
