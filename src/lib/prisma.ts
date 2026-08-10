@@ -54,6 +54,66 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
+async function ensureSchemaColumns() {
+    try {
+        const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Library");`);
+        const columns = tableInfo.map((c: any) => c.name);
+
+        if (!columns.includes("restrictedUsers")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'restrictedUsers' column to Library table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "restrictedUsers" TEXT DEFAULT "";`);
+        }
+        if (!columns.includes("downloadCategory")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'downloadCategory' column to Library table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "downloadCategory" TEXT DEFAULT "books";`);
+        }
+        if (!columns.includes("mediaType")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'mediaType' column to Library table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
+        }
+        if (!columns.includes("allowedUsers")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'allowedUsers' column to Library table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "allowedUsers" TEXT DEFAULT "";`);
+        }
+        if (!columns.includes("path")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'path' column to Library table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "path" TEXT DEFAULT "";`);
+        }
+        if (!columns.includes("description")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'description' column to Library table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "description" TEXT DEFAULT "";`);
+        }
+    } catch (e: any) {
+        console.error("[DB-SCHEMA-AUTOFIX] Failed to patch Library columns:", e.message || e);
+    }
+
+    try {
+        const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Book");`);
+        const columns = tableInfo.map((c: any) => c.name);
+        if (!columns.includes("mediaType")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'mediaType' column to Book table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
+        }
+    } catch (e: any) {}
+
+    try {
+        const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("BookRequest");`);
+        const columns = tableInfo.map((c: any) => c.name);
+        if (!columns.includes("mediaType")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'mediaType' column to BookRequest table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
+        }
+        if (!columns.includes("type")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'type' column to BookRequest table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "type" TEXT DEFAULT "book";`);
+        }
+    } catch (e: any) {}
+}
+
+setTimeout(() => {
+    ensureSchemaColumns();
+}, 2000);
+
 // --- BACKGROUND SCHEDULER ---
 const globalForScheduler = global as unknown as { schedulerInitialized?: boolean };
 

@@ -1176,9 +1176,29 @@ export async function getLibraries() {
         // Unauthenticated session
     }
     
-    const libraries = await prisma.library.findMany({
-        orderBy: { name: "asc" }
-    });
+    let libraries: any[] = [];
+    try {
+        libraries = await prisma.library.findMany({
+            orderBy: { name: "asc" }
+        });
+    } catch (err: any) {
+        console.warn("[getLibraries] Prisma findMany failed, attempting raw query fallback:", err.message);
+        try {
+            const rawLibs: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "Library" ORDER BY name ASC;`);
+            libraries = rawLibs.map(l => ({
+                id: l.id,
+                name: l.name,
+                description: l.description || "",
+                path: l.path || "",
+                allowedUsers: l.allowedUsers || "*",
+                restrictedUsers: l.restrictedUsers || "",
+                downloadCategory: l.downloadCategory || "books",
+                mediaType: l.mediaType || "ebook"
+            }));
+        } catch (rawErr) {
+            console.error("[getLibraries] Raw query fallback failed:", rawErr);
+        }
+    }
     
     const username = (session?.username || "") as string;
     const email = (session?.email || "") as string;
