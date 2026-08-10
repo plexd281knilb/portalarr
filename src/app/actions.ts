@@ -2871,7 +2871,7 @@ async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: st
 
 async function checkQbitStatus(qbitUrl: string, releaseTitle: string): Promise<{ status: "downloading" | "completed" | "failed" | "unknown", hash?: string }> {
     try {
-        const res = await fetch(`${qbitUrl}/api/v2/torrents/info?category=books`);
+        const res = await fetch(`${qbitUrl}/api/v2/torrents/info`);
         if (!res.ok) return { status: "unknown" };
         const torrents = await res.json();
         
@@ -2882,7 +2882,7 @@ async function checkQbitStatus(qbitUrl: string, releaseTitle: string): Promise<{
 
         if (torrent) {
             const hash = torrent.hash;
-            const state = torrent.state?.toLowerCase();
+            const state = (torrent.state || "").toLowerCase();
             
             if (state === "error" || state === "missingfiles") {
                 return { status: "failed", hash };
@@ -2890,9 +2890,9 @@ async function checkQbitStatus(qbitUrl: string, releaseTitle: string): Promise<{
             if (state === "pausedup" || state === "seeding" || state.includes("complete") || torrent.progress === 1) {
                 return { status: "completed", hash };
             }
-            if (state === "stalleddl" && torrent.num_seeds === 0) {
+            if (state.includes("stalled") && torrent.num_seeds === 0) {
                 const ageInSeconds = Math.floor(Date.now() / 1000) - torrent.added_on;
-                if (ageInSeconds > 300 && torrent.progress === 0) {
+                if (ageInSeconds > 180 && torrent.progress === 0) {
                     return { status: "failed", hash };
                 }
             }

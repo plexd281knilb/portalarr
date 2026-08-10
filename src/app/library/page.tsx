@@ -2391,26 +2391,45 @@ function normalizeBookCardMetadata(book: any) {
                                                                  )}
                                                              </div>
                                                          )}
-                                                         {(isAdmin || req.requestedBy === user?.username) && req.status === "Approved" && (
-                                                              <Button
-                                                                  size="sm"
-                                                                  variant="outline"
-                                                                  className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold mr-2"
-                                                                  onClick={() => triggerProwlarrSearch(req)}
-                                                              >
-                                                                  <Search className="h-3 w-3 mr-1" /> Re-Search
-                                                              </Button>
-                                                          )}
-                                                          {isAdmin && req.status === "Approved" && (
-                                                              <Button 
-                                                                  size="sm" 
-                                                                  variant="outline"
-                                                                  className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
-                                                                  onClick={() => handleUpdateRequestStatus(req.id, "Downloaded")}
-                                                              >
-                                                                  Mark Downloaded
-                                                              </Button>
-                                                          )}
+                                                         {(isAdmin || req.requestedBy === user?.username) && (req.status === "Approved" || req.status === "Downloading") && (
+                                                             <Button
+                                                                 size="sm"
+                                                                 variant="outline"
+                                                                 className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold mr-2"
+                                                                 onClick={() => triggerProwlarrSearch(req)}
+                                                             >
+                                                                 <Search className="h-3 w-3 mr-1" /> Search Release
+                                                             </Button>
+                                                         )}
+                                                         {(isAdmin || req.requestedBy === user?.username) && req.status === "Downloading" && (
+                                                             <Button
+                                                                 size="sm"
+                                                                 variant="outline"
+                                                                 className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold mr-2"
+                                                                 onClick={async () => {
+                                                                     try {
+                                                                         await retryBookRequest(req.id);
+                                                                         alert("Retry search successfully queued in the background!");
+                                                                         const reqs = await getBookRequests();
+                                                                         setRequests(reqs || []);
+                                                                     } catch (err: any) {
+                                                                         alert(err.message || "Failed to retry request.");
+                                                                     }
+                                                                 }}
+                                                             >
+                                                                 <RefreshCw className="h-3 w-3 mr-1" /> Retry Search
+                                                             </Button>
+                                                         )}
+                                                         {isAdmin && (req.status === "Approved" || req.status === "Downloading") && (
+                                                             <Button 
+                                                                 size="sm" 
+                                                                 variant="outline"
+                                                                 className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
+                                                                 onClick={() => handleUpdateRequestStatus(req.id, "Downloaded")}
+                                                             >
+                                                                 Mark Downloaded
+                                                             </Button>
+                                                         )}
                                                           {req.status.startsWith("Failed") && (
                                                               <div className="flex gap-1.5 items-center">
                                                                   <Button
