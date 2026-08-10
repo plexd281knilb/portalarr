@@ -4769,6 +4769,15 @@ export async function getAudiobookChapters(bookId: string) {
             });
         } else {
             collectAudioFiles(targetDir, targetDir);
+            if (chapters.length === 0 && !stat.isDirectory()) {
+                chapters.push({
+                    trackNumber: 1,
+                    title: path.basename(book.filePath, path.extname(book.filePath)),
+                    fileName: path.basename(book.filePath),
+                    relativePath: path.basename(book.filePath),
+                    size: stat.size
+                });
+            }
         }
 
         const allFiles = chapters.map(c => c.fileName);
