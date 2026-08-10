@@ -2526,18 +2526,25 @@ export async function filterReleasesForMediaType(results: any[], mediaType: stri
 
         // 2. Strict Media Type separation
         if (isAudio) {
-            // Must NOT be a plain text ebook format
-            const isTextEbook = titleLower.includes(".epub") || 
-                              titleLower.includes(".pdf") || 
-                              titleLower.includes(".mobi") || 
-                              titleLower.includes(".cbz");
+            // Must NOT be a plain text ebook format (e.g. .epub, (epub), [epub], .azw3, [mobi], .pdf, .cbz)
+            const isTextEbook = /\b(?:epub|pdf|mobi|azw3|kfx|cbz|cbr|html)\b/i.test(titleLower) ||
+                                /\.(?:epub|pdf|mobi|azw3|kfx|cbz|cbr|html)$/i.test(titleLower) ||
+                                /\((?:epub|pdf|mobi|azw3|kfx|cbz|cbr|html)\)/i.test(titleLower) ||
+                                /\[(?:epub|pdf|mobi|azw3|kfx|cbz|cbr|html)\]/i.test(titleLower);
             if (isTextEbook) return false;
 
-            // Size: 10 MB to 4 GB
-            const isValidAudioSize = r.size >= 10 * 1024 * 1024 && r.size <= 4096 * 1024 * 1024;
+            // Size: at least 15 MB up to 6 GB for Audiobooks
+            const isValidAudioSize = r.size >= 15 * 1024 * 1024 && r.size <= 6144 * 1024 * 1024;
             if (!isValidAudioSize) return false;
 
             const categoryStr = r.categories ? JSON.stringify(r.categories) : (r.category ? String(r.category) : "");
+            
+            // Cannot be purely books category 7000/7010 without audio category
+            const isPureEbookCategory = (categoryStr.includes("7000") || categoryStr.includes("7010")) && 
+                                        !categoryStr.includes("3030") && 
+                                        !categoryStr.includes("3000");
+            if (isPureEbookCategory) return false;
+
             const isAudioCategory = categoryStr.includes("3030") || categoryStr.includes("3000") || categoryStr.toLowerCase().includes("audiobook");
             
             const hasAudioKeyword = titleLower.includes("m4b") ||
@@ -2612,7 +2619,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const cleanedQuery = cleanSearchQuery(queryText);
 
         const catQuery = reqMediaType === "audiobook"
-            ? "&categories=3030&categories=3000&categories=7000"
+            ? "&categories=3030&categories=3000"
             : "&categories=7000&categories=7010&categories=7020&categories=3040";
 
         const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
@@ -2731,19 +2738,42 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
     
     try {
         const catQuery = mediaType === "audiobook"
-            ? "&categories=3030&categories=3000&categories=7000"
+            ? "&categories=3030&categories=3000"
             : "&categories=7000&categories=7010&categories=7020&categories=3040";
 
-        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
-        const res = await fetch(searchUrl, { cache: "no-store" });
-        if (!res.ok) {
-            throw new Error(`Prowlarr returned status ${res.status}`);
+        let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
+        let res = await fetch(searchUrl, { cache: "no-store" });
+        let results: any[] = [];
+        if (res.ok) {
+            results = await res.json();
+        }
+
+        // If searching for audiobook and initial query produced few audiobooks, append "audiobook" to query
+        if (mediaType === "audiobook") {
+            const initialFiltered = await filterReleasesForMediaType(results, mediaType);
+            if (initialFiltered.length < 3 && !cleanedQuery.toLowerCase().includes("audiobook")) {
+                const audioQueryUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery + " audiobook")}${catQuery}&apikey=${prowlarrKey}`;
+                const audioRes = await fetch(audioQueryUrl, { cache: "no-store" });
+                if (audioRes.ok) {
+                    const audioResults = await audioRes.json();
+                    if (Array.isArray(audioResults)) {
+                        results = [...results, ...audioResults];
+                    }
+                }
+            }
         }
         
-        const results = await res.json();
         const filtered = await filterReleasesForMediaType(results, mediaType);
         
-        return filtered.map((r: any) => ({
+        const seen = new Set<string>();
+        const uniqueFiltered = filtered.filter((r: any) => {
+            const key = (r.downloadUrl || r.title).toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        return uniqueFiltered.map((r: any) => ({
             title: r.title,
             size: r.size,
             downloadUrl: r.downloadUrl,
