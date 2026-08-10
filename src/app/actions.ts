@@ -2838,6 +2838,62 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
     }
 }
 
+async function cleanOldDownloadsForRequest(requestId: string, title: string) {
+    try {
+        console.log(`[RE-GRAB CLEANUP] Cleaning previous downloads for request "${title}" (${requestId})...`);
+
+        const qbitApp = await prisma.mediaApp.findFirst({
+            where: { type: "qbittorrent" }
+        }) || await prisma.mediaApp.findFirst({
+            where: { type: { contains: "qbit" } }
+        });
+
+        if (qbitApp) {
+            const qbitUrl = cleanUrl(qbitApp.url);
+            const { hash } = await checkQbitStatus(qbitUrl, title);
+            if (hash) {
+                await deleteDownload("torrent", hash, title);
+            }
+        }
+
+        const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
+        if (sabApp) {
+            const sabUrl = cleanUrl(sabApp.url);
+            const sabKey = decryptData(sabApp.apiKey as string);
+            await checkSabnzbdStatus(sabUrl, sabKey, "", title);
+        }
+
+        const downloadPaths = [
+            "/downloads",
+            "/downloads/books",
+            "/downloads/audiobooks",
+            "/downloads/completed",
+            "/downloads/complete"
+        ];
+        
+        const cleanTitle = title.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (cleanTitle.length > 3) {
+            for (const dp of downloadPaths) {
+                if (fs.existsSync(dp)) {
+                    try {
+                        const entries = fs.readdirSync(dp, { withFileTypes: true });
+                        for (const entry of entries) {
+                            const entryClean = entry.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            if (entryClean.includes(cleanTitle) || cleanTitle.includes(entryClean)) {
+                                const targetPath = path.join(dp, entry.name);
+                                console.log(`[RE-GRAB CLEANUP] Removing old download folder on disk: ${targetPath}`);
+                                fs.rmSync(targetPath, { recursive: true, force: true });
+                            }
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[RE-GRAB CLEANUP] Failed to clean old downloads:", e);
+    }
+}
+
 export async function sendReleaseToDownloadClient(requestId: string, downloadUrl: string, title: string, protocol: string) {
     const session = await verifyUser();
     
@@ -2851,6 +2907,9 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     if (session.role !== "ADMIN" && req.requestedBy !== session.username) {
         throw new Error("You are not authorized to grab releases for this request");
     }
+
+    // Wipes old/failed downloads from disk and download client before pushing the new grab!
+    await cleanOldDownloadsForRequest(requestId, title);
     
     const requester = req.requestedBy || "";
     const reqMediaType = req.mediaType || "ebook";
@@ -2934,7 +2993,12 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
         where: { id: requestId },
         data: { status: "Approved" }
     });
-    
+
+    // Auto-launch monitoring and importing for the newly grabbed release
+    autoDownloadBookRequest(requestId, req.title, req.author || "").catch(err => {
+        console.error("[RE-GRAB] Auto download monitor failed:", err);
+    });
+
     revalidatePath("/library");
     return { success: true };
 }
@@ -3344,11 +3408,10 @@ export async function monitorAndRetryDownload(
                                     try { fs.unlinkSync(foundFilePath); } catch (e) {}
                                     console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
                                 }
-                                
-                                if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+                                    if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
                                     try {
-                                        fs.rmdirSync(rootBookFolder, { recursive: true });
-                                        console.log(`[AUTO-DOWNLOAD-MONITOR] Cleaned up completed download folder: ${rootBookFolder}`);
+                                        fs.rmSync(rootBookFolder, { recursive: true, force: true });
+                                        console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully removed completed download folder on disk: ${rootBookFolder}`);
                                     } catch (e) {}
                                 }
                             } catch (unlinkErr: any) {
@@ -4450,12 +4513,27 @@ export async function importCompletedDownload(requestId: string) {
         finalDestPath = destPath;
     }
 
+    // Clean up original downloaded file/folder and client entries
+    try {
+        await deleteDownload("usenet", "", currentReq.title);
+        await deleteDownload("torrent", "", currentReq.title);
+    } catch (e) {}
+
+    if (fs.existsSync(foundFilePath)) {
+        try { fs.unlinkSync(foundFilePath); } catch (e) {}
+    }
+    if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+        try { fs.rmSync(rootBookFolder, { recursive: true, force: true }); } catch (e) {}
+    }
+
+    // Auto-scan target library shelf so newly imported media is immediately available
+    await scanLibraryInternal(targetLib.id);
+
     await prisma.bookRequest.update({
         where: { id: requestId },
         data: { status: "Downloaded" }
     });
 
-    await scanLibraryInternal(targetLib.id);
     revalidatePath("/library");
     return { success: true, message: `Successfully imported "${currentReq.title}" to ${targetLib.name} shelf!` };
 }
