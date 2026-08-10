@@ -1740,7 +1740,7 @@ function normalizeBookCardMetadata(book: any) {
                                                 </label>
                                             </div>
                                         </div>
-                                        {isAdmin && selectedLibrary.path && (
+                                        {selectedLibrary.path && (
                                             <Button 
                                                 variant="outline" 
                                                 onClick={() => handleScanLibrary(selectedLibrary.id)}
@@ -1985,7 +1985,7 @@ function normalizeBookCardMetadata(book: any) {
                                                 </select>
                                             </div>
                                         </div>
-                                        {isAdmin && selectedLibrary.path && (
+                                        {selectedLibrary.path && (
                                             <Button 
                                                 variant="outline" 
                                                 onClick={() => handleScanLibrary(selectedLibrary.id)}
