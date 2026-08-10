@@ -2839,13 +2839,21 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: string): Promise<"downloading" | "completed" | "failed" | "unknown"> {
+async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: string, releaseTitle: string = ""): Promise<"downloading" | "completed" | "failed" | "unknown"> {
     try {
+        const titleLower = releaseTitle.toLowerCase().trim();
         const qRes = await fetch(`${sabUrl}/api?mode=queue&output=json&apikey=${sabKey}`);
         if (qRes.ok) {
             const qData = await qRes.json();
             const slots = qData.queue?.slots || [];
-            const slot = slots.find((s: any) => s.nzo_id === downloadId);
+            let slot = downloadId ? slots.find((s: any) => s.nzo_id === downloadId) : null;
+            if (!slot && titleLower) {
+                slot = slots.find((s: any) => 
+                    (s.filename || "").toLowerCase().includes(titleLower) || 
+                    (s.name || "").toLowerCase().includes(titleLower) ||
+                    (titleLower.length > 5 && (s.filename || "").toLowerCase().includes(titleLower.substring(0, 20)))
+                );
+            }
             if (slot) {
                 if (slot.status?.toLowerCase() === "failed") return "failed";
                 return "downloading";
@@ -2856,7 +2864,14 @@ async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: st
         if (hRes.ok) {
             const hData = await hRes.json();
             const slots = hData.history?.slots || [];
-            const slot = slots.find((s: any) => s.nzo_id === downloadId);
+            let slot = downloadId ? slots.find((s: any) => s.nzo_id === downloadId) : null;
+            if (!slot && titleLower) {
+                slot = slots.find((s: any) => 
+                    (s.name || "").toLowerCase().includes(titleLower) || 
+                    (s.nzb_name || "").toLowerCase().includes(titleLower) ||
+                    (titleLower.length > 5 && (s.name || "").toLowerCase().includes(titleLower.substring(0, 20)))
+                );
+            }
             if (slot) {
                 if (slot.status?.toLowerCase() === "failed") return "failed";
                 if (slot.status?.toLowerCase() === "completed") return "completed";
@@ -3073,7 +3088,7 @@ export async function monitorAndRetryDownload(
             if (sabApp) {
                 const sabUrl = cleanUrl(sabApp.url);
                 const sabKey = decryptData(sabApp.apiKey as string);
-                downloadStatus = await checkSabnzbdStatus(sabUrl, sabKey, downloadId);
+                downloadStatus = await checkSabnzbdStatus(sabUrl, sabKey, downloadId, release.title);
             }
         } else {
             const qbitApp = await prisma.mediaApp.findFirst({
