@@ -20,20 +20,11 @@ const SECRET_KEY = new TextEncoder().encode(JWT_SECRET_RAW || "build-time-fallba
 // ============================================================================
 
 async function verifyAdmin() {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("session")?.value;
-    
-    if (!session) throw new Error("Unauthorized");
-    
-    try {
-        const { payload } = await jwtVerify(session, SECRET_KEY);
-        if (payload.role !== "ADMIN") {
-            throw new Error("Unauthorized");
-        }
-    } catch (err) {
-        console.error("JWT Verification Failed:", err);
+    const user = await verifyUser();
+    if (user.role !== "ADMIN" || (user.status && user.status !== "APPROVED")) {
         throw new Error("Unauthorized");
     }
+    return user;
 }
 
 function cleanUrl(url: string): string {

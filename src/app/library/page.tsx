@@ -176,8 +176,11 @@ function BookLibraryPageContent() {
     const [activeTab, setActiveTab] = useState("libs");
 
     useEffect(() => {
+        const savedTab = typeof window !== "undefined" ? localStorage.getItem("book-library-active-tab") : null;
         if (activeTabParam) {
             setActiveTab(activeTabParam);
+        } else if (savedTab) {
+            setActiveTab(savedTab);
         } else {
             setActiveTab("libs");
         }
