@@ -542,14 +542,23 @@ function normalizeBookCardMetadata(book: any) {
                          >
                              <AlertTriangle className="h-3.5 w-3.5" />
                          </Button>
-                         <Button 
-                             variant="outline" 
-                             size="sm" 
-                             className="text-xs h-7 px-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-                             title="Fetch Cover Artwork (iTunes, Open Library, Google Books)"
-                             disabled={refreshingCoverId === book.id}
-                             onClick={() => handleRefreshCover(book.id)}
-                         >
+                          <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-xs h-7 px-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                              title="Search & Re-Grab Complete Release (All Chapters)"
+                              onClick={() => handleSearchAndReplaceRelease(book)}
+                          >
+                              <Search className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-xs h-7 px-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                              title="Fetch Cover Artwork (iTunes, Open Library, Google Books)"
+                              disabled={refreshingCoverId === book.id}
+                              onClick={() => handleRefreshCover(book.id)}
+                          >
                              {refreshingCoverId === book.id ? (
                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                              ) : (
@@ -1175,6 +1184,48 @@ function normalizeBookCardMetadata(book: any) {
             alert(e.message || "Failed to send release to client.");
         } finally {
             setPushingReleaseId(null);
+        }
+    }
+
+    async function handleSearchAndReplaceRelease(book: any) {
+        try {
+            let req = requests.find((r: any) => 
+                r.title.toLowerCase().includes(book.title.toLowerCase()) || 
+                book.title.toLowerCase().includes(r.title.toLowerCase())
+            );
+
+            if (!req) {
+                const fd = new FormData();
+                fd.append("title", book.title);
+                fd.append("author", book.author || "");
+                if (book.publishYear) fd.append("publishYear", String(book.publishYear));
+                if (book.coverUrl) fd.append("coverUrl", book.coverUrl);
+                fd.append("mediaType", book.mediaType || "ebook");
+                fd.append("type", "single");
+
+                await createBookRequest(fd);
+                const reqs = await getBookRequests();
+                setRequests(reqs || []);
+                req = reqs?.find((r: any) => 
+                    r.title.toLowerCase().includes(book.title.toLowerCase()) || 
+                    book.title.toLowerCase().includes(r.title.toLowerCase())
+                );
+            }
+
+            if (!req) {
+                req = {
+                    id: "temp-" + Date.now(),
+                    title: book.title,
+                    author: book.author,
+                    mediaType: book.mediaType || "ebook",
+                    requestedBy: user?.username || "system",
+                    status: "Approved"
+                };
+            }
+
+            await triggerProwlarrSearch(req);
+        } catch (err: any) {
+            alert(err.message || "Failed to initiate release search.");
         }
     }
 
