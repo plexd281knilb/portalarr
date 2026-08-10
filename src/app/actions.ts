@@ -3422,18 +3422,22 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
     return null;
 }
 
-function copyFolderRecursiveSync(source: string, target: string) {
+async function copyFolderRecursiveAsync(source: string, target: string) {
     if (!fs.existsSync(target)) {
-        fs.mkdirSync(target, { recursive: true });
+        await fs.promises.mkdir(target, { recursive: true });
     }
-    const files = fs.readdirSync(source, { withFileTypes: true });
-    for (const file of files) {
-        const srcPath = path.join(source, file.name);
-        const destPath = path.join(target, file.name);
-        if (file.isDirectory()) {
-            copyFolderRecursiveSync(srcPath, destPath);
-        } else {
-            fs.copyFileSync(srcPath, destPath);
+    if (fs.promises.cp) {
+        await fs.promises.cp(source, target, { recursive: true });
+    } else {
+        const files = await fs.promises.readdir(source, { withFileTypes: true });
+        for (const file of files) {
+            const srcPath = path.join(source, file.name);
+            const destPath = path.join(target, file.name);
+            if (file.isDirectory()) {
+                await copyFolderRecursiveAsync(srcPath, destPath);
+            } else {
+                await fs.promises.copyFile(srcPath, destPath);
+            }
         }
     }
 }
@@ -3551,13 +3555,13 @@ export async function monitorAndRetryDownload(
                                 const folderName = path.basename(rootBookFolder);
                                 const destFolder = path.join(targetLib.path, folderName);
                                 console.log(`[AUTO-DOWNLOAD-MONITOR] Copying complete multi-disc/multi-track folder from ${rootBookFolder} to ${destFolder}`);
-                                copyFolderRecursiveSync(rootBookFolder, destFolder);
+                                await copyFolderRecursiveAsync(rootBookFolder, destFolder);
                                 copySuccessful = true;
                                 finalDestPath = path.join(destFolder, path.basename(foundFilePath));
                             } else {
                                 const destPath = path.join(targetLib.path, path.basename(foundFilePath));
                                 console.log(`[AUTO-DOWNLOAD-MONITOR] Moving downloaded file from ${foundFilePath} to ${destPath}`);
-                                fs.copyFileSync(foundFilePath, destPath);
+                                await fs.promises.copyFile(foundFilePath, destPath);
                                 copySuccessful = true;
                                 finalDestPath = destPath;
                             }
@@ -4723,11 +4727,11 @@ export async function importCompletedDownload(requestId: string) {
     if (!isRootDownloadsDir && fs.existsSync(rootBookFolder) && fs.statSync(rootBookFolder).isDirectory()) {
         const folderName = path.basename(rootBookFolder);
         const destFolder = path.join(targetLib.path, folderName);
-        copyFolderRecursiveSync(rootBookFolder, destFolder);
+        await copyFolderRecursiveAsync(rootBookFolder, destFolder);
         finalDestPath = path.join(destFolder, path.basename(foundFilePath));
     } else {
         const destPath = path.join(targetLib.path, path.basename(foundFilePath));
-        fs.copyFileSync(foundFilePath, destPath);
+        await fs.promises.copyFile(foundFilePath, destPath);
         finalDestPath = destPath;
     }
 
