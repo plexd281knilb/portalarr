@@ -2419,6 +2419,11 @@ export async function scanLibraryInternal(libraryId: string) {
                     let author = parsedMeta.author;
                     let coverUrl = "";
 
+                    const normT = (title || "").toLowerCase().trim();
+                    if (normT === "userbooks" || normT === "user books" || normT === "books" || normT === "audiobooks" || normT === "downloads") {
+                        continue;
+                    }
+
                     // Dynamic Author Heuristic based on existing DB authors & requested authors
                     try {
                         const dbAuthors = await prisma.book.findMany({
