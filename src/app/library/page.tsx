@@ -1460,7 +1460,7 @@ function normalizeBookCardMetadata(book: any) {
             setReqCoverUrl("");
             setReqPublishYear("");
             setReqType("book");
-            setReqMediaType("ebook");
+            setReqMediaType(activeTab === "audiobooks" ? "audiobook" : "ebook");
             setRequestedFor("");
             setSeriesBooksChecklist([]);
             const reqs = await getBookRequests();
