@@ -77,7 +77,10 @@ Click **Submit Request**. You can track its live progress under the **Requests**
 
 ## 🛠️ 5. Troubleshooting, Release Selection & 1-Click Import
 
-If an automated search doesn't find the exact edition you want, or if a download needs manual assistance:
+* **📖 Ebooks**: View available PDF, EPUB, MOBI, and AZW3 e-books across all accessible public and private libraries.
+* **🎧 Audiobooks**: Browse audiobooks with embedded chapter metadata, HD cover art, total file sizes, and floating HTML5 audio playback. Click **`Scan Audio Folder`** anytime to refresh and discover newly added audiobooks on disk!
+* **🔄 User Scan Folder**: All approved users can click **`Scan Share Folder`** or **`Scan Audio Folder`** directly on library shelves to instantly scan folders for new files without needing admin intervention.
+* **📥 Request Media**: Click the **Requests** tab to search for missing books or audiobooks. If an entry is incomplete, click **`🔍 Re-Grab Release`** / **`🔍 Search Release`** to open the interactive Prowlarr release chooser modal. Toggle between **`📖 Ebook`** and **`🎧 Audiobook`** modes in the modal header to pick specific releases!
 
 ### 🔍 Manual Release Search (`Search Release` / `Re-Search`)
 1. Go to the **Requests** tab.
