@@ -1953,6 +1953,13 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     // Harry Potter & Rowling Master Rules
     if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
         author = "J. K. Rowling";
+        if (lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) title = "Harry Potter and the Sorcerer's Stone";
+        else if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
+        else if (lowerTitle.includes("prisoner of azkaban")) title = "Harry Potter and the Prisoner of Azkaban";
+        else if (lowerTitle.includes("goblet of fire")) title = "Harry Potter and the Goblet of Fire";
+        else if (lowerTitle.includes("order of the phoenix")) title = "Harry Potter and the Order of the Phoenix";
+        else if (lowerTitle.includes("half-blood prince")) title = "Harry Potter and the Half-Blood Prince";
+        else if (lowerTitle.includes("deathly hallows")) title = "Harry Potter and the Deathly Hallows";
     }
 
     // Handle Title === Author duplication
@@ -4239,6 +4246,13 @@ export async function refreshBookCover(bookId: string) {
     // Harry Potter & Rowling Master Rules
     if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
         author = "J. K. Rowling";
+        if (lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) title = "Harry Potter and the Sorcerer's Stone";
+        else if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
+        else if (lowerTitle.includes("prisoner of azkaban")) title = "Harry Potter and the Prisoner of Azkaban";
+        else if (lowerTitle.includes("goblet of fire")) title = "Harry Potter and the Goblet of Fire";
+        else if (lowerTitle.includes("order of the phoenix")) title = "Harry Potter and the Order of the Phoenix";
+        else if (lowerTitle.includes("half-blood prince")) title = "Harry Potter and the Half-Blood Prince";
+        else if (lowerTitle.includes("deathly hallows")) title = "Harry Potter and the Deathly Hallows";
     }
 
     const newCover = await fetchBookCover(title, author, book.mediaType || "ebook");
