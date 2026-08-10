@@ -511,11 +511,22 @@ export async function validateDownloadsPathAction(pathStr: string) {
 import { sendUserApprovalEmail } from "@/app/auth-actions";
 
 export async function getAppUsers() {
-    await verifyAdmin();
-    return await prisma.user.findMany({
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true }
-    });
+    try {
+        await verifyAdmin();
+        return await prisma.user.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true }
+        });
+    } catch (e) {
+        const user = await verifyUser().catch(() => null);
+        if (user) {
+            return await prisma.user.findMany({
+                orderBy: { createdAt: 'desc' },
+                select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true }
+            });
+        }
+        return [];
+    }
 }
 
 export async function createAppUser(formData: FormData) {
