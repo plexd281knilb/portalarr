@@ -1845,14 +1845,6 @@ function normalizeBookCardMetadata(book: any) {
                                     )}
                                 </CardContent>
                             </Card>
-
-                            {selectedLibrary && (
-                                <Card className="border-muted/60 bg-muted/10 p-4 space-y-2">
-                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">About Library</h4>
-                                    <p className="text-sm font-bold">{selectedLibrary.name}</p>
-                                    <p className="text-xs text-muted-foreground">{selectedLibrary.description || "No description provided."}</p>
-                                </Card>
-                            )}
                         </div>
 
                         <div className="lg:col-span-3 space-y-6">
@@ -2112,14 +2104,6 @@ function normalizeBookCardMetadata(book: any) {
                                     )}
                                 </CardContent>
                             </Card>
-
-                            {selectedLibrary && selectedLibrary.mediaType === "audiobook" && (
-                                <Card className="border-slate-800 bg-slate-900/40 p-4 space-y-1.5 shadow-sm">
-                                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-amber-400/80">Active Library</h4>
-                                    <p className="text-sm font-bold text-slate-100">{selectedLibrary.name}</p>
-                                    <p className="text-xs text-slate-400">{selectedLibrary.description || "No description provided."}</p>
-                                </Card>
-                            )}
                         </div>
 
                         <div className="lg:col-span-3 space-y-6">
