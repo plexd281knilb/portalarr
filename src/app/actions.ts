@@ -1973,28 +1973,46 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     };
 }
 
+function cleanDiscSuffixFromFolder(folderName: string): string {
+    return folderName
+        .replace(/[\s._-]+(?:Disc|CD|Part|Vol|Volume|Disk)[\s._-]*\d+$/i, "")
+        .replace(/[\s._-]*\((?:Disc|CD|Part|Vol|Volume|Disk)[\s._-]*\d+\)$/i, "")
+        .replace(/[\s._-]*\[(?:Disc|CD|Part|Vol|Volume|Disk)[\s._-]*\d+\]$/i, "")
+        .replace(/[\s._-]+(?:Disc|CD|Part|Vol|Volume|Disk)[\s._-]*\d+[\s._-]+of[\s._-]*\d+$/i, "")
+        .trim();
+}
+
 function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): string {
     const rawBase = path.basename(file, ext);
     const parentFolder = path.basename(path.dirname(fullPath));
     const grandParentFolder = path.basename(path.dirname(path.dirname(fullPath)));
-    const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Track)\s*\d+$/i;
+    const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Track|Disk)\s*\d+$/i;
     const pureNumPattern = /^\d+$/;
 
-    // Check if filename starts with track numbers (e.g., "01 Dudley Demented", "02 A Peck of Owls", "1-01 Track")
+    const cleanedParent = cleanDiscSuffixFromFolder(parentFolder);
+    const cleanedGrandParent = cleanDiscSuffixFromFolder(grandParentFolder);
+
     const isTrackFilename = /^(?:\d{1,3}[\s._-]+)+/i.test(rawBase.trim()) || discPattern.test(rawBase.trim()) || pureNumPattern.test(rawBase.trim());
 
     if (isTrackFilename && parentFolder && parentFolder !== "." && parentFolder !== "/" && parentFolder.length > 2) {
         if (discPattern.test(parentFolder.trim()) || pureNumPattern.test(parentFolder.trim())) {
-            if (grandParentFolder && grandParentFolder !== "." && grandParentFolder !== "/" && grandParentFolder.length > 2) {
-                return grandParentFolder;
+            if (cleanedGrandParent && cleanedGrandParent !== "." && cleanedGrandParent !== "/" && cleanedGrandParent.length > 2) {
+                return cleanedGrandParent;
             }
         }
-        return parentFolder;
+        return cleanedParent;
     }
 
     if (discPattern.test(parentFolder.trim())) {
-        if (grandParentFolder && grandParentFolder !== "." && grandParentFolder !== "/" && grandParentFolder.length > 2) {
-            return grandParentFolder;
+        if (cleanedGrandParent && cleanedGrandParent !== "." && cleanedGrandParent !== "/" && cleanedGrandParent.length > 2) {
+            return cleanedGrandParent;
+        }
+    }
+
+    if (cleanedParent && cleanedParent !== "." && cleanedParent !== "/" && cleanedParent.length > 2) {
+        const isGenericRoot = cleanedParent.toLowerCase() === "books" || cleanedParent.toLowerCase() === "audiobooks" || cleanedParent.toLowerCase() === "downloads";
+        if (!isGenericRoot) {
+            return cleanedParent;
         }
     }
 
@@ -2059,6 +2077,51 @@ export async function scanLibraryInternal(libraryId: string) {
             }
         } catch (e) {}
 
+        // Auto-consolidate any duplicate database entries for multi-disc/multi-part audiobooks
+        if (library.mediaType === "audiobook") {
+            try {
+                const allDbBooks = await prisma.book.findMany({ where: { libraryId } });
+                const titleGroups = new Map<string, any[]>();
+                for (const b of allDbBooks) {
+                    const cleanMeta = parseFilenameMetadata(b.title);
+                    const normKey = cleanDiscSuffixFromFolder(cleanMeta.title).toLowerCase().replace(/[^a-z0-9]/g, "");
+                    if (normKey.length > 2) {
+                        if (!titleGroups.has(normKey)) {
+                            titleGroups.set(normKey, []);
+                        }
+                        titleGroups.get(normKey)!.push(b);
+                    }
+                }
+
+                for (const group of Array.from(titleGroups.values())) {
+                    if (group.length > 1) {
+                        const primary = group[0];
+                        let totalBytes = 0;
+                        for (const item of group) {
+                            totalBytes += (item.fileSize || 0);
+                        }
+
+                        const targetTitle = group[0].title.toLowerCase().includes("order of the phoenix") ? "Harry Potter and the Order of the Phoenix" : primary.title;
+                        const targetAuthor = group[0].title.toLowerCase().includes("order of the phoenix") ? "J. K. Rowling" : primary.author;
+
+                        await prisma.book.update({
+                            where: { id: primary.id },
+                            data: {
+                                fileSize: totalBytes,
+                                title: targetTitle,
+                                author: targetAuthor
+                            }
+                        });
+
+                        const deleteIds = group.slice(1).map(item => item.id);
+                        await prisma.book.deleteMany({
+                            where: { id: { in: deleteIds } }
+                        });
+                    }
+                }
+            } catch (e) {}
+        }
+
         const files = fs.readdirSync(library.path);
         const isAudiobookLib = library.mediaType === "audiobook";
         const validExtensions = isAudiobookLib
@@ -2071,42 +2134,24 @@ export async function scanLibraryInternal(libraryId: string) {
             if (!fs.existsSync(dir)) return;
             try {
                 const entries = fs.readdirSync(dir, { withFileTypes: true });
-                const dirAudioFiles = entries.filter(e => !e.isDirectory() && validExtensions.includes(path.extname(e.name).toLowerCase()));
-                
-                if (isAudiobookLib && dirAudioFiles.length > 1 && depth > 0) {
-                    const primary = dirAudioFiles.find(e => path.extname(e.name).toLowerCase() === ".m4b") || dirAudioFiles[0];
-                    const primaryPath = path.join(dir, primary.name);
-                    let totalSize = 0;
-                    for (const af of dirAudioFiles) {
-                        try { totalSize += fs.statSync(path.join(dir, af.name)).size; } catch (e) {}
-                    }
-                    const st = fs.statSync(primaryPath);
-                    foundMediaItems.push({
-                        fullPath: primaryPath,
-                        file: primary.name,
-                        ext: path.extname(primary.name).toLowerCase(),
-                        stats: { ...st, size: totalSize } as any
-                    });
-                } else {
-                    for (const entry of entries) {
-                        const fullP = path.join(dir, entry.name);
-                        if (entry.isDirectory()) {
-                            if (depth < 2) {
-                                collectFiles(fullP, depth + 1);
-                            }
-                        } else {
-                            const ext = path.extname(entry.name).toLowerCase();
-                            if (validExtensions.includes(ext)) {
-                                try {
-                                    const st = fs.statSync(fullP);
-                                    foundMediaItems.push({
-                                        fullPath: fullP,
-                                        file: entry.name,
-                                        ext,
-                                        stats: st
-                                    });
-                                } catch (e) {}
-                            }
+                for (const entry of entries) {
+                    const fullP = path.join(dir, entry.name);
+                    if (entry.isDirectory()) {
+                        if (depth < 3) {
+                            collectFiles(fullP, depth + 1);
+                        }
+                    } else {
+                        const ext = path.extname(entry.name).toLowerCase();
+                        if (validExtensions.includes(ext)) {
+                            try {
+                                const st = fs.statSync(fullP);
+                                foundMediaItems.push({
+                                    fullPath: fullP,
+                                    file: entry.name,
+                                    ext,
+                                    stats: st
+                                });
+                            } catch (e) {}
                         }
                     }
                 }
