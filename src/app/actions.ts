@@ -2060,7 +2060,14 @@ function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): 
     }
 
     if (cleanedParent && cleanedParent !== "." && cleanedParent !== "/" && cleanedParent.length > 2) {
-        const isGenericRoot = cleanedParent.toLowerCase() === "books" || cleanedParent.toLowerCase() === "audiobooks" || cleanedParent.toLowerCase() === "downloads";
+        const parentLower = cleanedParent.toLowerCase();
+        const isGenericRoot = parentLower === "books" || 
+                              parentLower === "audiobooks" || 
+                              parentLower === "userbooks" || 
+                              parentLower === "downloads" || 
+                              parentLower === "public library" || 
+                              parentLower === "public audiobooks" || 
+                              parentLower.includes("library");
         if (!isGenericRoot) {
             return cleanedParent;
         }
@@ -2080,6 +2087,22 @@ export async function scanLibraryInternal(libraryId: string) {
     }
 
     try {
+        // Purge any accidental generic library folder cards saved as books
+        try {
+            await prisma.book.deleteMany({
+                where: {
+                    libraryId,
+                    OR: [
+                        { title: { equals: "Userbooks" } },
+                        { title: { equals: "User Books" } },
+                        { title: { equals: "Books" } },
+                        { title: { equals: "Audiobooks" } },
+                        { title: { equals: "Downloads" } }
+                    ]
+                }
+            });
+        } catch (e) {}
+
         const dbBooks = await prisma.book.findMany({
             where: { libraryId: libraryId }
         });
