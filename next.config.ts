@@ -4,13 +4,14 @@ import { networkInterfaces } from "os";
 // --- HELPER: AUTO-DETECT LOCAL IPS ---
 function getLocalIps() {
   const nets = networkInterfaces();
-  const results: string[] = ["localhost:3000", "127.0.0.1:3000"]; 
-  const rawIps: string[] = ["localhost", "127.0.0.1"];
+  const results: string[] = ["*", "localhost:3000", "127.0.0.1:3000", "localhost", "127.0.0.1"]; 
+  const rawIps: string[] = ["*", "localhost", "127.0.0.1"];
 
   // Add custom origins from environment if provided
   if (process.env.ALLOWED_ORIGINS) {
     process.env.ALLOWED_ORIGINS.split(",").forEach(origin => {
-        results.push(origin.trim());
+        const clean = origin.trim();
+        if (clean) results.push(clean);
     });
   }
 

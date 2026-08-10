@@ -743,7 +743,18 @@ function normalizeBookCardMetadata(book: any) {
                 const smtpFromEmail = await getPublicSmtpFromEmail();
                 setServerSmtpFrom(smtpFromEmail || "");
 
-                const libs = await getLibraries();
+                let libs = await getLibraries().catch(() => []);
+                if (!libs || libs.length === 0) {
+                    try {
+                        const res = await fetch("/api/libraries");
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.libraries && data.libraries.length > 0) {
+                                libs = data.libraries;
+                            }
+                        }
+                    } catch (e) {}
+                }
                 setLibraries(libs || []);
                 if (libs && libs.length > 0) {
                     const savedTab = typeof window !== "undefined" ? localStorage.getItem("book-library-active-tab") : null;
@@ -757,14 +768,22 @@ function normalizeBookCardMetadata(book: any) {
                     }
                 }
 
-                const reqs = await getBookRequests();
+                const reqs = await getBookRequests().catch(() => []);
                 setRequests(reqs || []);
 
-                const userIsAdmin = session?.role === "ADMIN" || profile?.role === "ADMIN";
-                if (userIsAdmin) {
-                    const ulist = await getAppUsers().catch(() => []);
-                    setAllUsers(ulist || []);
+                let ulist = await getAppUsers().catch(() => []);
+                if (!ulist || ulist.length === 0) {
+                    try {
+                        const res = await fetch("/api/users");
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.users && data.users.length > 0) {
+                                ulist = data.users;
+                            }
+                        }
+                    } catch (e) {}
                 }
+                setAllUsers(ulist || []);
             } catch (e) {
                 console.error("Failed to load initial library data:", e);
             } finally {
