@@ -849,7 +849,7 @@ function normalizeBookCardMetadata(book: any) {
                 if (topAudio) setSelectedLibrary(topAudio);
             }
         }
-    }, [activeTab, libraries, selectedLibrary]);
+    }, [activeTab, libraries]);
 
     const refreshRequests = useCallback(async () => {
         try {
@@ -1785,7 +1785,7 @@ function normalizeBookCardMetadata(book: any) {
                                                 <select
                                                     value={sortBy}
                                                     onChange={(e) => handleSortChange(e.target.value)}
-                                                    className="flex h-10 w-36 items-center justify-between rounded-md border border-slate-800 bg-slate-900 text-slate-100 hover:bg-slate-800/80 px-3 py-2 text-sm focus:outline-none font-medium cursor-pointer transition-all"
+                                                    className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-md border border-slate-800 bg-slate-900 text-slate-100 hover:bg-slate-800/80 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
                                                 >
                                                     <option value="recent" className="bg-slate-955 text-slate-100">Recently Added</option>
                                                     <option value="title-asc" className="bg-slate-955 text-slate-100">Title (A-Z)</option>
@@ -1963,13 +1963,13 @@ function normalizeBookCardMetadata(book: any) {
                 <TabsContent value="audiobooks" className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="lg:col-span-1 space-y-4">
-                            <Card className="border-muted/60 bg-muted/10">
-                                <CardHeader className="py-4">
-                                    <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                        <Headphones className="h-4 w-4 text-amber-400" /> Select Audiobook Library
+                            <Card className="border-amber-500/20 bg-slate-900/60 shadow-lg overflow-hidden">
+                                <CardHeader className="bg-amber-500/10 border-b border-amber-500/20 py-3.5 px-4">
+                                    <CardTitle className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                                        <Headphones className="h-4 w-4" /> Audiobook Libraries
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="p-2 space-y-1">
+                                <CardContent className="p-3 space-y-2">
                                     {audiobookLibraries.length === 0 ? (
                                         <div className="p-4 text-center text-xs text-muted-foreground italic space-y-3">
                                             <p>No audiobook libraries configured yet.</p>
@@ -1995,14 +1995,14 @@ function normalizeBookCardMetadata(book: any) {
                                             <button
                                                 key={lib.id}
                                                 onClick={() => setSelectedLibrary(lib)}
-                                                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-all duration-200 flex items-center justify-between ${
+                                                className={`w-full text-left px-3.5 py-2.5 rounded-lg text-sm transition-all duration-200 flex items-center justify-between border ${
                                                     selectedLibrary?.id === lib.id
-                                                        ? "bg-amber-500 text-black font-bold shadow-md"
-                                                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                        ? "bg-amber-500 text-black font-bold border-amber-400 shadow-md"
+                                                        : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:text-white"
                                                 }`}
                                             >
-                                                <span>{lib.name}</span>
-                                                <Badge className={selectedLibrary?.id === lib.id ? "bg-black text-amber-400 hover:bg-black" : "bg-muted"}>
+                                                <span className="truncate mr-2">{lib.name}</span>
+                                                <Badge className={selectedLibrary?.id === lib.id ? "bg-black text-amber-400 hover:bg-black shrink-0 text-[10px]" : "bg-slate-800 text-slate-400 shrink-0 text-[10px]"}>
                                                     {lib.allowedUsers === "*" ? (lib.restrictedUsers ? "Public (Restricted)" : "Public") : "Private"}
                                                 </Badge>
                                             </button>
@@ -2012,10 +2012,10 @@ function normalizeBookCardMetadata(book: any) {
                             </Card>
 
                             {selectedLibrary && selectedLibrary.mediaType === "audiobook" && (
-                                <Card className="border-muted/60 bg-muted/10 p-4 space-y-2">
-                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">About Audiobook Library</h4>
-                                    <p className="text-sm font-bold">{selectedLibrary.name}</p>
-                                    <p className="text-xs text-muted-foreground">{selectedLibrary.description || "No description provided."}</p>
+                                <Card className="border-slate-800 bg-slate-900/40 p-4 space-y-1.5 shadow-sm">
+                                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-amber-400/80">Active Library</h4>
+                                    <p className="text-sm font-bold text-slate-100">{selectedLibrary.name}</p>
+                                    <p className="text-xs text-slate-400">{selectedLibrary.description || "No description provided."}</p>
                                 </Card>
                             )}
                         </div>
@@ -2039,7 +2039,7 @@ function normalizeBookCardMetadata(book: any) {
                                                 <select
                                                     value={sortBy}
                                                     onChange={(e) => handleSortChange(e.target.value)}
-                                                    className="flex h-10 w-36 items-center justify-between rounded-md border border-slate-800 bg-slate-900 text-slate-100 hover:bg-slate-800/80 px-3 py-2 text-sm focus:outline-none font-medium cursor-pointer transition-all"
+                                                    className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-md border border-amber-500/30 bg-slate-900 text-amber-300 hover:bg-slate-800/80 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
                                                 >
                                                     <option value="recent" className="bg-slate-955 text-slate-100">Recently Added</option>
                                                     <option value="title-asc" className="bg-slate-955 text-slate-100">Title (A-Z)</option>
