@@ -1097,16 +1097,40 @@ async function verifyUser() {
     try {
         const { payload } = await jwtVerify(session, SECRET_KEY);
         const userId = (payload.userId || payload.id) as string;
+        const username = (payload.username || "") as string;
+        const email = (payload.email || "") as string;
+
+        let dbUser = null;
         if (userId) {
-            const dbUser = await prisma.user.findUnique({
+            dbUser = await prisma.user.findUnique({
                 where: { id: userId },
                 select: { id: true, username: true, email: true, role: true, status: true }
             });
-            if (dbUser) {
-                return { userId: dbUser.id, username: dbUser.username, email: dbUser.email, role: dbUser.role, status: dbUser.status };
-            }
         }
-        return payload; // { userId, username, email, role }
+        if (!dbUser && (username || email)) {
+            const conditions = [];
+            if (username) conditions.push({ username });
+            if (email) conditions.push({ email });
+            if (username) conditions.push({ email: username });
+            if (email) conditions.push({ username: email });
+
+            dbUser = await prisma.user.findFirst({
+                where: { OR: conditions },
+                select: { id: true, username: true, email: true, role: true, status: true }
+            });
+        }
+
+        if (dbUser) {
+            return {
+                id: dbUser.id,
+                userId: dbUser.id,
+                username: dbUser.username,
+                email: dbUser.email,
+                role: dbUser.role,
+                status: dbUser.status
+            };
+        }
+        return payload;
     } catch (err) {
         throw new Error("Unauthorized");
     }
