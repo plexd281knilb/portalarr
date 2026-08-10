@@ -4224,6 +4224,7 @@ export async function refreshBookCover(bookId: string) {
         if (lowerTitle.includes("fellowship of the ring")) title = "The Fellowship of the Ring";
         else if (lowerTitle.includes("two towers")) title = "The Two Towers";
         else if (lowerTitle.includes("return of the king")) title = "The Return of the King";
+        else if (lowerTitle.includes("hobbit")) title = "The Hobbit";
     }
 
     // Harry Potter & Rowling Master Rules
