@@ -1374,10 +1374,50 @@ export async function getLibraryBooks(libraryId: string) {
     );
     if (!hasAccess) throw new Error("Unauthorized access to this library");
     
-    return await prisma.book.findMany({
+    const books = await prisma.book.findMany({
         where: { libraryId },
-        orderBy: { title: "asc" }
+        orderBy: { createdAt: "desc" }
     });
+    
+    // Instant Deduplication by Title Key
+    const titleMap = new Map<string, typeof books[number]>();
+    const deleteIds: string[] = [];
+
+    for (const b of books) {
+        let normTitle = (b.title || "").toLowerCase();
+        if (normTitle.includes("fellowship of the ring")) normTitle = "fellowship of the ring";
+        else if (normTitle.includes("two towers")) normTitle = "two towers";
+        else if (normTitle.includes("return of the king")) normTitle = "return of the king";
+        else if (normTitle.includes("hobbit")) normTitle = "hobbit";
+        else if (normTitle.includes("project hail mary") || normTitle.includes("hail mary")) normTitle = "project hail mary";
+        else normTitle = normTitle.replace(/[^a-z0-9]/g, "");
+
+        if (!normTitle) continue;
+
+        if (titleMap.has(normTitle)) {
+            const existing = titleMap.get(normTitle)!;
+            const existingSize = existing.fileSize || 0;
+            const currentSize = b.fileSize || 0;
+            if (currentSize > existingSize) {
+                deleteIds.push(existing.id);
+                titleMap.set(normTitle, b);
+            } else {
+                deleteIds.push(b.id);
+            }
+        } else {
+            titleMap.set(normTitle, b);
+        }
+    }
+
+    if (deleteIds.length > 0) {
+        prisma.book.deleteMany({
+            where: { id: { in: deleteIds } }
+        }).catch(err => console.error("[GET-BOOKS-DEDUP] Error purging duplicates:", err.message));
+    }
+
+    const uniqueBooks = Array.from(titleMap.values());
+    uniqueBooks.sort((a, b) => a.title.localeCompare(b.title));
+    return uniqueBooks;
 }
 
 export async function deleteBook(id: string) {
