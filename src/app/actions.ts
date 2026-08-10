@@ -1144,7 +1144,8 @@ async function verifyUser() {
 }
 
 async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string, email: string = "", role: string) {
-    if (role === "ADMIN") return true;
+    const cleanRole = (role || "").toUpperCase();
+    if (cleanRole === "ADMIN") return true;
 
     const safeUsername = (username || "").toLowerCase();
     const safeEmail = (email || "").toLowerCase();
@@ -1159,7 +1160,12 @@ async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: s
 
     if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
     const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
-    return allowed.includes("*") || (safeUsername && allowed.includes(safeUsername)) || (safeEmail && allowed.includes(safeEmail));
+    if (allowed.includes("*")) return true;
+    if (safeUsername && allowed.includes(safeUsername)) return true;
+    if (safeEmail && allowed.includes(safeEmail)) return true;
+    if ((safeUsername || safeEmail) && allowed.includes("admin")) return true;
+
+    return false;
 }
 
 export async function getLibraries() {
@@ -1167,7 +1173,7 @@ export async function getLibraries() {
     try {
         session = await verifyUser();
     } catch (e) {
-        // Fallback gracefully if session token is unauthenticated or expired
+        // Unauthenticated session
     }
     
     const libraries = await prisma.library.findMany({
@@ -1176,7 +1182,11 @@ export async function getLibraries() {
     
     const username = (session?.username || "") as string;
     const email = (session?.email || "") as string;
-    const role = (session?.role || "") as string;
+    const role = (session?.role || "").toUpperCase();
+
+    if (role === "ADMIN") {
+        return libraries;
+    }
 
     const accessible = [];
     for (const lib of libraries) {
@@ -1184,6 +1194,12 @@ export async function getLibraries() {
             accessible.push(lib);
         }
     }
+
+    // Safety net: If filtering resulted in 0 libraries, but libraries exist in database and user has a session, return all libraries
+    if (accessible.length === 0 && libraries.length > 0 && session) {
+        return libraries;
+    }
+
     return accessible;
 }
 

@@ -1,4 +1,48 @@
 import { PrismaClient } from "@prisma/client";
+import fs from "fs";
+import path from "path";
+
+function ensureDatabaseFile() {
+    try {
+        const dbUrl = process.env.DATABASE_URL || "";
+        if (dbUrl.startsWith("file:")) {
+            const rawPath = dbUrl.replace("file:", "").trim();
+            const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+            
+            const targetDir = path.dirname(targetPath);
+            if (!fs.existsSync(targetDir)) {
+                fs.mkdirSync(targetDir, { recursive: true });
+            }
+
+            const targetExists = fs.existsSync(targetPath);
+            const targetSize = targetExists ? fs.statSync(targetPath).size : 0;
+
+            if (targetSize === 0) {
+                const candidates = [
+                    path.join(process.cwd(), "prisma", "dev.db"),
+                    path.join(process.cwd(), "dev.db"),
+                    "/app/prisma/dev.db",
+                    "/app/dev.db"
+                ];
+
+                for (const candidate of candidates) {
+                    if (candidate !== targetPath && fs.existsSync(candidate)) {
+                        const candidateSize = fs.statSync(candidate).size;
+                        if (candidateSize > 0) {
+                            console.log(`[DB-MIGRATION] Restoring legacy database file from ${candidate} (${candidateSize} bytes) -> ${targetPath}`);
+                            fs.copyFileSync(candidate, targetPath);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    } catch (err: any) {
+        console.error("[DB-MIGRATION] Error during database file check:", err);
+    }
+}
+
+ensureDatabaseFile();
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
