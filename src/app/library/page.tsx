@@ -1159,14 +1159,16 @@ function normalizeBookCardMetadata(book: any) {
         }
     }
 
-    async function triggerProwlarrSearch(req: any) {
-        setActiveRequestForSearch(req);
+    async function triggerProwlarrSearch(req: any, overrideMediaType?: string) {
+        const targetMediaType = overrideMediaType || req.mediaType || (activeTab === "audiobooks" ? "audiobook" : "ebook");
+        const updatedReq = { ...req, mediaType: targetMediaType };
+        setActiveRequestForSearch(updatedReq);
         setSearchingProwlarr(true);
         setProwlarrResults([]);
         setSearchProwlarrError("");
         try {
             const queryText = req.author ? `${req.title} ${req.author}` : req.title;
-            const res = await searchProwlarrIndexers(queryText, req.mediaType || "ebook");
+            const res = await searchProwlarrIndexers(queryText, targetMediaType);
             setProwlarrResults(res || []);
         } catch (e: any) {
             setSearchProwlarrError(e.message || "Failed to search indexers.");
@@ -1198,9 +1200,10 @@ function normalizeBookCardMetadata(book: any) {
 
     async function handleSearchAndReplaceRelease(book: any) {
         try {
+            const detectedMediaType = (activeTab === "audiobooks" || book.mediaType === "audiobook" || book.library?.mediaType === "audiobook") ? "audiobook" : "ebook";
             let req = requests.find((r: any) => 
-                r.title.toLowerCase().includes(book.title.toLowerCase()) || 
-                book.title.toLowerCase().includes(r.title.toLowerCase())
+                (r.title.toLowerCase().includes(book.title.toLowerCase()) || book.title.toLowerCase().includes(r.title.toLowerCase())) &&
+                r.mediaType === detectedMediaType
             );
 
             if (!req) {
@@ -1209,15 +1212,15 @@ function normalizeBookCardMetadata(book: any) {
                 fd.append("author", book.author || "");
                 if (book.publishYear) fd.append("publishYear", String(book.publishYear));
                 if (book.coverUrl) fd.append("coverUrl", book.coverUrl);
-                fd.append("mediaType", book.mediaType || "ebook");
+                fd.append("mediaType", detectedMediaType);
                 fd.append("type", "single");
 
                 await createBookRequest(fd);
                 const reqs = await getBookRequests();
                 setRequests(reqs || []);
                 req = reqs?.find((r: any) => 
-                    r.title.toLowerCase().includes(book.title.toLowerCase()) || 
-                    book.title.toLowerCase().includes(r.title.toLowerCase())
+                    (r.title.toLowerCase().includes(book.title.toLowerCase()) || book.title.toLowerCase().includes(r.title.toLowerCase())) &&
+                    r.mediaType === detectedMediaType
                 );
             }
 
@@ -1226,13 +1229,13 @@ function normalizeBookCardMetadata(book: any) {
                     id: "temp-" + Date.now(),
                     title: book.title,
                     author: book.author,
-                    mediaType: book.mediaType || "ebook",
+                    mediaType: detectedMediaType,
                     requestedBy: user?.username || "system",
                     status: "Approved"
                 };
             }
 
-            await triggerProwlarrSearch(req);
+            await triggerProwlarrSearch(req, detectedMediaType);
         } catch (err: any) {
             alert(err.message || "Failed to initiate release search.");
         }
@@ -3022,8 +3025,27 @@ function normalizeBookCardMetadata(book: any) {
                                     <X className="h-5 w-5" />
                                 </Button>
                             </div>
-                            <CardDescription>
-                                Prowlarr Indexers query status: {searchingProwlarr ? "Searching indexers..." : `${prowlarrResults.length} releases found.`}
+                            <CardDescription className="flex items-center justify-between gap-2 flex-wrap">
+                                <span>Prowlarr Indexers query status: {searchingProwlarr ? "Searching indexers..." : `${prowlarrResults.length} releases found.`}</span>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-muted-foreground font-medium">Format:</span>
+                                    <Button
+                                        size="sm"
+                                        variant={activeRequestForSearch.mediaType === "ebook" ? "default" : "outline"}
+                                        className="h-6 text-xs px-2.5 font-semibold"
+                                        onClick={() => triggerProwlarrSearch(activeRequestForSearch, "ebook")}
+                                    >
+                                        📖 Ebook
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant={activeRequestForSearch.mediaType === "audiobook" ? "default" : "outline"}
+                                        className="h-6 text-xs px-2.5 font-semibold"
+                                        onClick={() => triggerProwlarrSearch(activeRequestForSearch, "audiobook")}
+                                    >
+                                        🎧 Audiobook
+                                    </Button>
+                                </div>
                             </CardDescription>
                         </CardHeader>
                         
