@@ -1815,8 +1815,13 @@ export async function processEpubForKindle(filePath: string): Promise<string> {
 }
 
 export async function scanLibrary(libraryId: string) {
-    await verifyAdmin();
-    return await scanLibraryInternal(libraryId);
+    try {
+        await verifyUser();
+        return await scanLibraryInternal(libraryId);
+    } catch (err: any) {
+        console.error("Failed to scan library:", err);
+        return { success: false, error: err.message || "Failed to scan library folder" };
+    }
 }
 
 function cleanSearchQuery(searchQuery: string): string {
@@ -2024,10 +2029,10 @@ export async function scanLibraryInternal(libraryId: string) {
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
     });
-    if (!library) throw new Error("Library not found");
-    if (!library.path) throw new Error("No folder path configured for this library");
+    if (!library) return { success: false, error: "Library entry not found in database" };
+    if (!library.path) return { success: false, error: "No folder path configured for this library in Settings -> Access Control." };
     if (!fs.existsSync(library.path)) {
-        throw new Error(`Directory does not exist: ${library.path}`);
+        return { success: false, error: `Directory does not exist on disk: ${library.path}` };
     }
 
     try {
@@ -2506,7 +2511,7 @@ export async function scanLibraryInternal(libraryId: string) {
         return { success: true };
     } catch (e: any) {
         console.error("Failed to scan library:", e);
-        throw new Error(e.message || "Failed to scan library folder");
+        return { success: false, error: e.message || "Failed to scan library folder" };
     }
 }
 

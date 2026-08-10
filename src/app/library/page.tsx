@@ -1114,7 +1114,10 @@ function normalizeBookCardMetadata(book: any) {
     async function handleScanLibrary(libId: string) {
         setScanning(true);
         try {
-            await scanLibrary(libId);
+            const res = await scanLibrary(libId);
+            if (res && !res.success && res.error) {
+                alert(res.error);
+            }
             await loadBooks(libId);
         } catch (e: any) {
             alert(e.message || "Failed to scan library folder");
