@@ -357,13 +357,20 @@ function normalizeBookCardMetadata(book: any) {
         }
     }
 
-    // Clean scene noise (e.g. "(Rob Inglis)-PoF", "-PoF", "03 - The Two Towers")
-    displayTitle = displayTitle.replace(/\s*-\s*[A-Za-z0-9]+$/i, "");
-    displayTitle = displayTitle.replace(/\s*\([^)]*PoF[^)]*\)/gi, "");
-    displayTitle = displayTitle.replace(/\s*\(Rob Inglis\)/gi, "");
-    displayTitle = displayTitle.replace(/\s*\(Unabridged\)/gi, "");
-    displayTitle = displayTitle.replace(/\s*\(Narrated by [^)]+\)/gi, "");
-    displayTitle = displayTitle.replace(/^[0-9]{2}\s*-\s*/, "");
+    // Clean scene noise (e.g. "(Rob Inglis)-PoF", "-PoF", "03 - The Two Towers", trailing dashes)
+    displayTitle = displayTitle
+        .replace(/\s*-\s*-\s*$/, "")
+        .replace(/\s*-\s*$/, "")
+        .replace(/\s*-\s*[A-Za-z0-9]+$/i, "")
+        .replace(/\s*\([^)]*PoF[^)]*\)/gi, "")
+        .replace(/\s*\(Rob Inglis\)/gi, "")
+        .replace(/\bRob Inglis\b/gi, "")
+        .replace(/\bJim Dale\b/gi, "")
+        .replace(/\bStephen Fry\b/gi, "")
+        .replace(/\s*\(Unabridged\)/gi, "")
+        .replace(/\s*\(Narrated by [^)]+\)/gi, "")
+        .replace(/^[0-9]{2}\s*-\s*/, "")
+        .trim();
 
     // Lord of the Rings & Tolkien Master Rules
     const lowerTitle = displayTitle.toLowerCase();
@@ -372,17 +379,27 @@ function normalizeBookCardMetadata(book: any) {
         if (lowerTitle.includes("fellowship of the ring")) displayTitle = "The Fellowship of the Ring";
         else if (lowerTitle.includes("two towers")) displayTitle = "The Two Towers";
         else if (lowerTitle.includes("return of the king")) displayTitle = "The Return of the King";
+        else if (lowerTitle.includes("hobbit")) displayTitle = "The Hobbit";
     }
 
     // Harry Potter & Rowling Master Rules
-    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer")) {
         displayAuthor = "J. K. Rowling";
+        if (lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer")) displayTitle = "Harry Potter and the Sorcerer's Stone";
+        else if (lowerTitle.includes("chamber of secrets")) displayTitle = "Harry Potter and the Chamber of Secrets";
+        else if (lowerTitle.includes("prisoner of azkaban")) displayTitle = "Harry Potter and the Prisoner of Azkaban";
+        else if (lowerTitle.includes("goblet of fire")) displayTitle = "Harry Potter and the Goblet of Fire";
+        else if (lowerTitle.includes("order of the phoenix")) displayTitle = "Harry Potter and the Order of the Phoenix";
+        else if (lowerTitle.includes("half-blood prince")) displayTitle = "Harry Potter and the Half-Blood Prince";
+        else if (lowerTitle.includes("deathly hallows")) displayTitle = "Harry Potter and the Deathly Hallows";
     }
 
     // Handle title === author duplication
     if (displayAuthor.toLowerCase() === displayTitle.toLowerCase()) {
-        if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king")) {
+        if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("hobbit")) {
             displayAuthor = "J. R. R. Tolkien";
+        } else if (lowerTitle.includes("harry potter")) {
+            displayAuthor = "J. K. Rowling";
         } else {
             displayAuthor = "Unknown Author";
         }
