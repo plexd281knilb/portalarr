@@ -2216,9 +2216,13 @@ export async function scanLibraryInternal(libraryId: string) {
                 
                 if (consolidatedMap.has(normKey)) {
                     const existingItem = consolidatedMap.get(normKey)!;
+                    const accumulatedSize = (existingItem.stats.size || 0) + item.stats.size;
                     if (item.stats.size > existingItem.stats.size) {
-                        consolidatedMap.set(normKey, { ...item });
+                        existingItem.fullPath = item.fullPath;
+                        existingItem.file = item.file;
+                        existingItem.ext = item.ext;
                     }
+                    existingItem.stats = { ...existingItem.stats, size: accumulatedSize } as any;
                 } else {
                     consolidatedMap.set(normKey, { ...item });
                 }

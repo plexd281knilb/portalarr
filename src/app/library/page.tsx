@@ -668,7 +668,13 @@ function normalizeBookCardMetadata(book: any) {
                         <p className="text-xs text-muted-foreground truncate">{displayAuthor}</p>
                     </div>
                     <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
-                        <span>Size: {(book.fileSize ? (book.fileSize / (1024 * 1024)).toFixed(1) : "0")} MB</span>
+                        <span>
+                            Size: {book.fileSize ? (
+                                book.fileSize >= 1024 * 1024 * 1024 
+                                    ? `${(book.fileSize / (1024 * 1024 * 1024)).toFixed(2)} GB`
+                                    : `${(book.fileSize / (1024 * 1024)).toFixed(1)} MB`
+                            ) : "0 MB"}
+                        </span>
                         <span>Added: {new Date(book.createdAt).toLocaleDateString()}</span>
                     </div>
                 </div>
@@ -720,15 +726,6 @@ function normalizeBookCardMetadata(book: any) {
                             ) : (
                                 <Mail className="h-3.5 w-3.5" />
                             )}
-                        </Button>
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-xs h-7 px-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 font-semibold"
-                            title="Search & Re-Grab Complete Audiobook Release (All Chapters)"
-                            onClick={() => handleSearchAndReplaceRelease(book)}
-                        >
-                            <Search className="h-3.5 w-3.5 mr-1" /> Re-Grab
                         </Button>
                         <Button 
                             variant="outline" 
