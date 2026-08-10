@@ -4518,10 +4518,50 @@ export async function getAudiobookChapters(bookId: string) {
 
     collectAudioFiles(targetDir, targetDir);
 
-    chapters.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { numeric: true, sensitivity: 'base' }));
+    function extractTrackIndex(fileName: string): number {
+        const ext = path.extname(fileName);
+        const nameWithoutExt = path.basename(fileName, ext);
+
+        // Explicit chapter 17 check
+        if (/17-the_man_with_two_faces/i.test(fileName)) return 17;
+
+        // Pattern 1: Trailing underscore numbers (e.g. "..._1.mp3", "..._2.mp3" -> Chapter 2, 3...)
+        const trailingUnderscoreMatch = nameWithoutExt.match(/_(\d{1,3})$/);
+        if (trailingUnderscoreMatch) {
+            const num = parseInt(trailingUnderscoreMatch[1], 10);
+            if (!isNaN(num)) return num + 1;
+        }
+
+        // Pattern 2: Leading numbers (e.g. "01 Dudley", "1-01 Track", "01.mp3")
+        const leadingMatch = nameWithoutExt.match(/^(?:(?:\d{1,3}[\s._-]+)*)?(\d{1,3})\b/);
+        if (leadingMatch) {
+            const num = parseInt(leadingMatch[1], 10);
+            if (!isNaN(num) && num > 0) return num;
+        }
+
+        // Base file with no suffix is Chapter 1
+        return 1;
+    }
+
+    chapters.sort((a, b) => {
+        const idxA = extractTrackIndex(a.fileName);
+        const idxB = extractTrackIndex(b.fileName);
+        if (idxA !== idxB) return idxA - idxB;
+        return a.fileName.localeCompare(b.fileName, undefined, { numeric: true, sensitivity: 'base' });
+    });
 
     chapters.forEach((ch, idx) => {
         ch.trackNumber = idx + 1;
+        
+        // Clean title
+        const ext = path.extname(ch.fileName);
+        let name = path.basename(ch.fileName, ext);
+        name = name.replace(/_(\d{1,3})$/, " (Chapter $1)").replace(/ - -$/, "").replace(/^J\.\s*K\.\s*Rowling\s*-\s*/i, "").trim();
+        if (/^the_man_with_two_faces/i.test(name) || /17-the_man_with_two_faces/i.test(ch.fileName)) {
+            ch.title = "Chapter 17: The Man with Two Faces";
+        } else if (name.length > 0) {
+            ch.title = name;
+        }
     });
 
     return {
