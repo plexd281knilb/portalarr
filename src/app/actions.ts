@@ -2171,13 +2171,16 @@ export async function scanLibraryInternal(libraryId: string) {
             const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: fs.Stats }>();
             for (const item of foundMediaItems) {
                 const effBase = getEffectiveBookBaseName(item.fullPath, item.file, item.ext);
-                const key = effBase.toLowerCase().trim();
-                if (consolidatedMap.has(key)) {
-                    const existingItem = consolidatedMap.get(key)!;
-                    const accumulatedSize = existingItem.stats.size + item.stats.size;
-                    existingItem.stats = { ...existingItem.stats, size: accumulatedSize } as any;
+                const parsedMeta = parseFilenameMetadata(effBase);
+                const normKey = (parsedMeta.title || effBase).toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+                
+                if (consolidatedMap.has(normKey)) {
+                    const existingItem = consolidatedMap.get(normKey)!;
+                    if (item.stats.size > existingItem.stats.size) {
+                        consolidatedMap.set(normKey, { ...item });
+                    }
                 } else {
-                    consolidatedMap.set(key, { ...item });
+                    consolidatedMap.set(normKey, { ...item });
                 }
             }
             finalMediaItems = Array.from(consolidatedMap.values());
@@ -2518,6 +2521,30 @@ export async function scanLibraryInternal(libraryId: string) {
                 }
             }
         }
+
+        // Post-scan database deduplication by title key
+        try {
+            const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
+            const titleMap = new Map<string, typeof currentDbBooks>();
+            for (const b of currentDbBooks) {
+                const cleanKey = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+                if (!cleanKey) continue;
+                if (!titleMap.has(cleanKey)) titleMap.set(cleanKey, []);
+                titleMap.get(cleanKey)!.push(b);
+            }
+
+            for (const [key, group] of titleMap.entries()) {
+                if (group.length > 1) {
+                    group.sort((a, b) => (b.fileSize || 0) - (a.fileSize || 0));
+                    const keepBook = group[0];
+                    const deleteIds = group.slice(1).map(b => b.id);
+                    console.log(`[SCANNER-DEDUP] Purging ${deleteIds.length} duplicate DB rows for book "${keepBook.title}" (Keeping ID: ${keepBook.id})`);
+                    await prisma.book.deleteMany({
+                        where: { id: { in: deleteIds } }
+                    });
+                }
+            }
+        } catch (dedupErr) {}
 
         try {
             revalidatePath("/library");
