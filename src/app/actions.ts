@@ -1943,6 +1943,7 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
         if (lowerTitle.includes("fellowship of the ring")) title = "The Fellowship of the Ring";
         else if (lowerTitle.includes("two towers")) title = "The Two Towers";
         else if (lowerTitle.includes("return of the king")) title = "The Return of the King";
+        else if (lowerTitle.includes("hobbit")) title = "The Hobbit";
     }
 
     // Harry Potter & Rowling Master Rules
@@ -4518,6 +4519,13 @@ export async function getAudiobookChapters(bookId: string) {
 
     collectAudioFiles(targetDir, targetDir);
 
+    const allFiles = chapters.map(c => c.fileName);
+
+    const allPrefixes = Array.from(new Set(allFiles.map(f => {
+        const n = path.basename(f, path.extname(f));
+        return n.replace(/_(\d{1,3})$/, "").trim();
+    }))).sort((a, b) => b.length - a.length);
+
     function extractTrackIndex(fileName: string): number {
         const ext = path.extname(fileName);
         const nameWithoutExt = path.basename(fileName, ext);
@@ -4529,22 +4537,29 @@ export async function getAudiobookChapters(bookId: string) {
             if (!isNaN(num) && num > 0) return num;
         }
 
-        // Pattern 2: Trailing underscore numbers for multi-track releases
-        if (/_1$/.test(nameWithoutExt) && /UK-2003-iND/i.test(nameWithoutExt)) {
-            return 21;
-        }
-        if (/UK-2003-iND$/i.test(nameWithoutExt)) {
-            return 20;
+        // Pattern 2: Multi-part releases with multiple prefix groups (e.g. Set A "Fellowship - Fellowship" & Set B "Fellowship")
+        const prefix = nameWithoutExt.replace(/_(\d{1,3})$/, "").trim();
+        const trailingUnderscoreMatch = nameWithoutExt.match(/_(\d{1,3})$/);
+
+        const groupIndex = allPrefixes.indexOf(prefix);
+        let baseOffset = 0;
+        if (groupIndex > 0) {
+            for (let i = 0; i < groupIndex; i++) {
+                const prevPrefix = allPrefixes[i];
+                const countInPrevGroup = allFiles.filter(f => {
+                    const n = path.basename(f, path.extname(f));
+                    return n.replace(/_(\d{1,3})$/, "").trim() === prevPrefix;
+                }).length;
+                baseOffset += countInPrevGroup;
+            }
         }
 
-        const trailingUnderscoreMatch = nameWithoutExt.match(/_(\d{1,3})$/);
         if (trailingUnderscoreMatch) {
             const num = parseInt(trailingUnderscoreMatch[1], 10);
-            if (!isNaN(num)) return num + 1;
+            if (!isNaN(num)) return baseOffset + num + 1;
         }
 
-        // Base file with no suffix (e.g., "J. K. Rowling - Harry Potter and the Order of the Phoenix.mp3") -> Chapter 1
-        return 1;
+        return baseOffset + 1;
     }
 
     chapters.sort((a, b) => {
@@ -4599,7 +4614,9 @@ export async function getAudiobookChapters(bookId: string) {
         const trackNum = idx + 1;
         ch.trackNumber = trackNum;
 
-        if (book.title.toLowerCase().includes("order of the phoenix") && orderOfPhoenixChapters[trackNum]) {
+        if (chapters.length === 1) {
+            ch.title = "Full Audiobook (Unabridged)";
+        } else if (book.title.toLowerCase().includes("order of the phoenix") && orderOfPhoenixChapters[trackNum]) {
             ch.title = `Chapter ${trackNum}: ${orderOfPhoenixChapters[trackNum]}`;
         } else {
             const ext = path.extname(ch.fileName);
@@ -4608,11 +4625,12 @@ export async function getAudiobookChapters(bookId: string) {
                 .replace(/^\d+[\s._-]+/, "")
                 .replace(/_(\d{1,3})$/, "")
                 .replace(/ - -$/, "")
+                .replace(/^J\.\s*R\.\s*R\.\s*Tolkien\s*-\s*/i, "")
                 .replace(/^J\.\s*K\.\s*Rowling\s*-\s*/i, "")
                 .replace(/_/g, " ")
                 .trim();
 
-            if (!name || name.toLowerCase().includes("order of the phoenix") || name.toLowerCase().includes("audiobook")) {
+            if (!name || name.toLowerCase().includes(book.title.toLowerCase()) || name.toLowerCase().includes("audiobook")) {
                 ch.title = `Chapter ${trackNum}`;
             } else {
                 ch.title = `Chapter ${trackNum}: ${name.charAt(0).toUpperCase() + name.slice(1)}`;
