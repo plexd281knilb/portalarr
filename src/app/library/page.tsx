@@ -359,14 +359,6 @@ function normalizeBookCardMetadata(book: any) {
         displayAuthor = "Unknown Author";
     }
 
-    if (displayTitle.includes(" - ") && (!displayAuthor || displayAuthor === "Unknown Author" || /^(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/i.test(displayAuthor.trim()))) {
-        const parts = displayTitle.split(" - ").map((p: string) => p.trim());
-        if (parts.length >= 2) {
-            displayTitle = parts[0];
-            displayAuthor = parts.slice(1).join(" - ").replace(/\b(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/gi, "").trim();
-        }
-    }
-
     // Clean scene noise (e.g. "(Rob Inglis)-PoF", "-PoF", "03 - The Two Towers", trailing dashes)
     displayTitle = displayTitle
         .replace(/\s*-\s*-\s*$/, "")
@@ -404,12 +396,23 @@ function normalizeBookCardMetadata(book: any) {
         else if (lowerTitle.includes("deathly hallows")) displayTitle = "Harry Potter and the Deathly Hallows";
     }
 
+    // Project Hail Mary & Andy Weir Master Rules
+    if (lowerTitle.includes("project hail mary") || lowerTitle.includes("hail mary") || lowerTitle.includes("martian")) {
+        displayAuthor = "Andy Weir";
+        if (lowerTitle.includes("project hail mary") || lowerTitle.includes("hail mary")) displayTitle = "Project Hail Mary";
+        else if (lowerTitle.includes("martian")) displayTitle = "The Martian";
+    }
+
     // Handle title === author duplication
-    if (displayAuthor.toLowerCase() === displayTitle.toLowerCase()) {
+    const cleanAuthNorm = displayAuthor.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanTitleNorm = displayTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (cleanAuthNorm === cleanTitleNorm || (cleanTitleNorm.includes(cleanAuthNorm) && cleanAuthNorm.length > 5 && !cleanAuthNorm.includes("tolkien") && !cleanAuthNorm.includes("rowling") && !cleanAuthNorm.includes("weir"))) {
         if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("hobbit")) {
             displayAuthor = "J. R. R. Tolkien";
         } else if (lowerTitle.includes("harry potter")) {
             displayAuthor = "J. K. Rowling";
+        } else if (lowerTitle.includes("project hail mary")) {
+            displayAuthor = "Andy Weir";
         } else {
             displayAuthor = "Unknown Author";
         }
@@ -671,32 +674,39 @@ function normalizeBookCardMetadata(book: any) {
                 </div>
 
                 <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2 relative z-20">
-                    <div className="flex gap-2 w-full">
-                        <Button 
-                            variant="default" 
-                            size="sm" 
-                            className="flex-1 text-xs font-extrabold text-black bg-amber-400 hover:bg-amber-300 gap-1.5 shadow cursor-pointer relative z-30"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenChaptersModal(book);
-                            }}
-                        >
-                            <Play className="h-3.5 w-3.5 fill-black" /> Listen &amp; Chapters
-                        </Button>
+                    <Button 
+                        variant="default" 
+                        size="sm" 
+                        className="w-full text-xs font-extrabold text-black bg-amber-400 hover:bg-amber-300 gap-1.5 shadow cursor-pointer relative z-30 py-2"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenChaptersModal(book);
+                        }}
+                    >
+                        <Play className="h-4 w-4 fill-black" /> Listen &amp; Chapters
+                    </Button>
+                    
+                    <div className="flex flex-wrap gap-1.5 justify-center w-full border-t border-muted/40 pt-2">
                         <Button 
                             variant="outline" 
                             size="sm" 
-                            className="flex-1 text-xs font-bold border-amber-500/40 text-amber-400 hover:bg-amber-500/10 gap-1.5 cursor-pointer relative z-30" 
+                            className="text-xs h-7 px-2.5 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold gap-1 cursor-pointer relative z-30" 
                             asChild
-                            title="Download Audiobook file directly to device"
+                            title="Download Audiobook"
                         >
                             <a href={`/api/books/${book.id}`} download>
                                 <Download className="h-3.5 w-3.5" /> Download
                             </a>
                         </Button>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-1.5 justify-center w-full border-t border-muted/40 pt-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs h-7 px-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 font-semibold gap-1"
+                            title="Search & Re-Grab Release"
+                            onClick={() => handleSearchAndReplaceRelease(book)}
+                        >
+                            <Search className="h-3.5 w-3.5" /> Re-Grab
+                        </Button>
                         <Button 
                             variant="outline" 
                             size="sm" 
