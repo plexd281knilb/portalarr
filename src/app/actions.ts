@@ -1945,13 +1945,13 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     }
 
     // Harry Potter & Rowling Master Rules
-    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone") || lowerTitle.includes("dudley demented")) {
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone") || lowerTitle.includes("dudley demented") || lowerTitle.includes("peck of owls") || lowerTitle.includes("advanced guard") || lowerTitle.includes("grimmauld place")) {
         author = "J. K. Rowling";
         if (lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) title = "Harry Potter and the Sorcerer's Stone";
         else if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
         else if (lowerTitle.includes("prisoner of azkaban")) title = "Harry Potter and the Prisoner of Azkaban";
         else if (lowerTitle.includes("goblet of fire")) title = "Harry Potter and the Goblet of Fire";
-        else if (lowerTitle.includes("order of the phoenix") || lowerTitle.includes("dudley demented")) title = "Harry Potter and the Order of the Phoenix";
+        else if (lowerTitle.includes("order of the phoenix") || lowerTitle.includes("dudley demented") || lowerTitle.includes("peck of owls") || lowerTitle.includes("advanced guard") || lowerTitle.includes("grimmauld place")) title = "Harry Potter and the Order of the Phoenix";
         else if (lowerTitle.includes("half-blood prince")) title = "Harry Potter and the Half-Blood Prince";
         else if (lowerTitle.includes("deathly hallows")) title = "Harry Potter and the Deathly Hallows";
     }
@@ -1974,23 +1974,24 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
 
 function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): string {
     const rawBase = path.basename(file, ext);
+    const parentFolder = path.basename(path.dirname(fullPath));
+    const grandParentFolder = path.basename(path.dirname(path.dirname(fullPath)));
     const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Track)\s*\d+$/i;
     const pureNumPattern = /^\d+$/;
 
-    if (discPattern.test(rawBase.trim()) || pureNumPattern.test(rawBase.trim())) {
-        const dirName = path.basename(path.dirname(fullPath));
-        if (!discPattern.test(dirName.trim()) && !pureNumPattern.test(dirName.trim()) && dirName.length > 2) {
-            return dirName;
+    // Check if filename starts with track numbers (e.g., "01 Dudley Demented", "02 A Peck of Owls", "1-01 Track")
+    const isTrackFilename = /^(?:\d{1,3}[\s._-]+)+/i.test(rawBase.trim()) || discPattern.test(rawBase.trim()) || pureNumPattern.test(rawBase.trim());
+
+    if (isTrackFilename && parentFolder && parentFolder !== "." && parentFolder !== "/" && parentFolder.length > 2) {
+        if (discPattern.test(parentFolder.trim()) || pureNumPattern.test(parentFolder.trim())) {
+            if (grandParentFolder && grandParentFolder !== "." && grandParentFolder !== "/" && grandParentFolder.length > 2) {
+                return grandParentFolder;
+            }
         }
-        const parentDirName = path.basename(path.dirname(path.dirname(fullPath)));
-        if (parentDirName && parentDirName !== "." && parentDirName !== "/" && parentDirName.length > 2) {
-            return parentDirName;
-        }
+        return parentFolder;
     }
 
-    const parentFolder = path.basename(path.dirname(fullPath));
     if (discPattern.test(parentFolder.trim())) {
-        const grandParentFolder = path.basename(path.dirname(path.dirname(fullPath)));
         if (grandParentFolder && grandParentFolder !== "." && grandParentFolder !== "/" && grandParentFolder.length > 2) {
             return grandParentFolder;
         }
@@ -2018,27 +2019,40 @@ export async function scanLibraryInternal(libraryId: string) {
             dbBooksByPathLower.set(b.filePath.toLowerCase(), b);
         }
 
-        // Auto-correct any legacy track titles like "dudley demented" to official book title
+        // Auto-correct & consolidate any legacy track titles (e.g. "dudley demented", "a peck of owls") into official book title
         try {
             const badBooks = await prisma.book.findMany({
                 where: {
                     libraryId,
                     OR: [
                         { title: { contains: "dudley demented" } },
-                        { title: { contains: "Dudley Demented" } }
+                        { title: { contains: "Dudley Demented" } },
+                        { title: { contains: "peck of owls" } },
+                        { title: { contains: "Peck of Owls" } },
+                        { title: { contains: "advanced guard" } },
+                        { title: { contains: "grimmauld place" } }
                     ]
                 }
             });
-            for (const bb of badBooks) {
+
+            if (badBooks.length > 0) {
                 const hdCover = await fetchBookCover("Harry Potter and the Order of the Phoenix", "J. K. Rowling", "audiobook");
+                const primaryBook = badBooks[0];
                 await prisma.book.update({
-                    where: { id: bb.id },
+                    where: { id: primaryBook.id },
                     data: {
                         title: "Harry Potter and the Order of the Phoenix",
                         author: "J. K. Rowling",
                         ...(hdCover ? { coverUrl: hdCover } : {})
                     }
                 });
+
+                if (badBooks.length > 1) {
+                    const extraIds = badBooks.slice(1).map(b => b.id);
+                    await prisma.book.deleteMany({
+                        where: { id: { in: extraIds } }
+                    });
+                }
             }
         } catch (e) {}
 
