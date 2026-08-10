@@ -50,9 +50,6 @@ import {
 
 function getAccessBadge(lib: any) {
     if (lib.allowedUsers === "*") {
-        if (lib.restrictedUsers && lib.restrictedUsers.trim().length > 0) {
-            return { label: "Restricted", color: "bg-amber-500/10 text-amber-400 border-amber-500/30" };
-        }
         return { label: "Public", color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" };
     }
     return { label: "Private", color: "bg-purple-500/10 text-purple-400 border-purple-500/30" };
@@ -2996,7 +2993,7 @@ function normalizeBookCardMetadata(book: any) {
                                                             <p className="text-xs text-muted-foreground">{lib.description || "No description."}</p>
                                                             <div className="flex items-center gap-2 pt-1 flex-wrap">
                                                                 <Badge className="bg-slate-900 border border-slate-800 text-slate-200 text-[10px]">
-                                                                    Access: {lib.allowedUsers || "Restricted (Admin Only)"}
+                                                                    Access: {lib.allowedUsers === "*" ? "Public" : (lib.allowedUsers || "Private")}
                                                                 </Badge>
                                                                 {lib.restrictedUsers && (
                                                                     <Badge variant="destructive" className="bg-red-950/80 text-red-300 border border-red-800 text-[10px] flex items-center gap-1">
