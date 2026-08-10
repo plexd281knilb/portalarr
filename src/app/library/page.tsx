@@ -1637,22 +1637,24 @@ function normalizeBookCardMetadata(book: any) {
                 </div>
             </header>
 
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-                <TabsList className="grid w-full max-w-2xl grid-cols-3 sm:grid-cols-5 h-auto p-1 mb-6">
-                    <TabsTrigger value="libs" className="py-2 flex items-center justify-center gap-1.5">
-                        <BookOpen className="h-3.5 w-3.5" /> Ebooks
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
+                <TabsList className="flex flex-wrap sm:flex-nowrap w-full max-w-3xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
+                    <TabsTrigger value="libs" className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md">
+                        <BookOpen className="h-4 w-4 shrink-0" /> <span>Ebooks</span>
                     </TabsTrigger>
-                    <TabsTrigger value="audiobooks" className="py-2 flex items-center justify-center gap-1.5">
-                        <Headphones className="h-3.5 w-3.5 text-amber-400 shrink-0" /> Audiobooks
+                    <TabsTrigger value="audiobooks" className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md">
+                        <Headphones className="h-4 w-4 text-amber-400 data-[state=active]:text-slate-950 shrink-0" /> <span>Audiobooks</span>
                     </TabsTrigger>
-                    <TabsTrigger value="requests" className="py-2 flex items-center justify-center gap-1.5">
-                        <Send className="h-3.5 w-3.5" /> Requests
+                    <TabsTrigger value="requests" className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md">
+                        <Send className="h-4 w-4 shrink-0" /> <span>Requests</span>
                     </TabsTrigger>
-                    <TabsTrigger value="manage" className="py-2 flex items-center justify-center gap-1.5" disabled={!isAdmin}>
-                        <Plus className="h-3.5 w-3.5" /> Manage
-                    </TabsTrigger>
-                    <TabsTrigger value="kindle" className="py-2 flex items-center justify-center gap-1.5">
-                        <Mail className="h-3.5 w-3.5 text-primary shrink-0" /> Kindle
+                    {isAdmin && (
+                        <TabsTrigger value="manage" className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md">
+                            <Plus className="h-4 w-4 shrink-0" /> <span>Manage</span>
+                        </TabsTrigger>
+                    )}
+                    <TabsTrigger value="kindle" className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md">
+                        <Mail className="h-4 w-4 text-primary data-[state=active]:text-slate-950 shrink-0" /> <span>Kindle</span>
                     </TabsTrigger>
                 </TabsList>
 
