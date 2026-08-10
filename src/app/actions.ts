@@ -4522,24 +4522,28 @@ export async function getAudiobookChapters(bookId: string) {
         const ext = path.extname(fileName);
         const nameWithoutExt = path.basename(fileName, ext);
 
-        // Explicit chapter 17 check
-        if (/17-the_man_with_two_faces/i.test(fileName)) return 17;
+        // Pattern 1: Leading standalone chapter numbers (e.g., "22-st._mungos.mp3", "01 Dudley.mp3", "38-the_second_war.mp3")
+        const leadingMatch = nameWithoutExt.match(/^(\d{1,3})[\s._-]+/);
+        if (leadingMatch) {
+            const num = parseInt(leadingMatch[1], 10);
+            if (!isNaN(num) && num > 0) return num;
+        }
 
-        // Pattern 1: Trailing underscore numbers (e.g. "..._1.mp3", "..._2.mp3" -> Chapter 2, 3...)
+        // Pattern 2: Trailing underscore numbers for multi-track releases
+        if (/_1$/.test(nameWithoutExt) && /UK-2003-iND/i.test(nameWithoutExt)) {
+            return 21;
+        }
+        if (/UK-2003-iND$/i.test(nameWithoutExt)) {
+            return 20;
+        }
+
         const trailingUnderscoreMatch = nameWithoutExt.match(/_(\d{1,3})$/);
         if (trailingUnderscoreMatch) {
             const num = parseInt(trailingUnderscoreMatch[1], 10);
             if (!isNaN(num)) return num + 1;
         }
 
-        // Pattern 2: Leading numbers (e.g. "01 Dudley", "1-01 Track", "01.mp3")
-        const leadingMatch = nameWithoutExt.match(/^(?:(?:\d{1,3}[\s._-]+)*)?(\d{1,3})\b/);
-        if (leadingMatch) {
-            const num = parseInt(leadingMatch[1], 10);
-            if (!isNaN(num) && num > 0) return num;
-        }
-
-        // Base file with no suffix is Chapter 1
+        // Base file with no suffix (e.g., "J. K. Rowling - Harry Potter and the Order of the Phoenix.mp3") -> Chapter 1
         return 1;
     }
 
@@ -4550,17 +4554,69 @@ export async function getAudiobookChapters(bookId: string) {
         return a.fileName.localeCompare(b.fileName, undefined, { numeric: true, sensitivity: 'base' });
     });
 
+    const orderOfPhoenixChapters: Record<number, string> = {
+        1: "Dudley Demented",
+        2: "A Peck of Owls",
+        3: "The Advanced Guard",
+        4: "Number Twelve, Grimmauld Place",
+        5: "The Order of the Phoenix",
+        6: "The Noble and Most Ancient House of Black",
+        7: "The Ministry of Magic",
+        8: "The Hearing",
+        9: "The Woes of Mrs. Weasley",
+        10: "Luna Lovegood",
+        11: "The Sorting Hat's New Song",
+        12: "Professor Umbridge",
+        13: "Detention with Dolores",
+        14: "Percy and Padfoot",
+        15: "The Hogwarts High Inquisitor",
+        16: "In the Hog's Head",
+        17: "Educational Decree Number Twenty-Four",
+        18: "Dumbledore's Army",
+        19: "The Lion and the Serpent",
+        20: "Hagrid's Tale",
+        21: "The Eye of the Snake",
+        22: "St. Mungo's Hospital for Magical Maladies and Injuries",
+        23: "Christmas on the Closed Ward",
+        24: "Occlumency",
+        25: "The Beetle at Bay",
+        26: "Seen and Unforeseen",
+        27: "The Centaur and the Sneak",
+        28: "Snape's Worst Memory",
+        29: "Career Advice",
+        30: "Grawp",
+        31: "O.W.L.s",
+        32: "Out of the Fire",
+        33: "Fight and Flight",
+        34: "The Department of Mysteries",
+        35: "Beyond the Veil",
+        36: "The Only One He Ever Feared",
+        37: "The Lost Prophecy",
+        38: "The Second War Begins"
+    };
+
     chapters.forEach((ch, idx) => {
-        ch.trackNumber = idx + 1;
-        
-        // Clean title
-        const ext = path.extname(ch.fileName);
-        let name = path.basename(ch.fileName, ext);
-        name = name.replace(/_(\d{1,3})$/, " (Chapter $1)").replace(/ - -$/, "").replace(/^J\.\s*K\.\s*Rowling\s*-\s*/i, "").trim();
-        if (/^the_man_with_two_faces/i.test(name) || /17-the_man_with_two_faces/i.test(ch.fileName)) {
-            ch.title = "Chapter 17: The Man with Two Faces";
-        } else if (name.length > 0) {
-            ch.title = name;
+        const trackNum = idx + 1;
+        ch.trackNumber = trackNum;
+
+        if (book.title.toLowerCase().includes("order of the phoenix") && orderOfPhoenixChapters[trackNum]) {
+            ch.title = `Chapter ${trackNum}: ${orderOfPhoenixChapters[trackNum]}`;
+        } else {
+            const ext = path.extname(ch.fileName);
+            let name = path.basename(ch.fileName, ext);
+            name = name
+                .replace(/^\d+[\s._-]+/, "")
+                .replace(/_(\d{1,3})$/, "")
+                .replace(/ - -$/, "")
+                .replace(/^J\.\s*K\.\s*Rowling\s*-\s*/i, "")
+                .replace(/_/g, " ")
+                .trim();
+
+            if (!name || name.toLowerCase().includes("order of the phoenix") || name.toLowerCase().includes("audiobook")) {
+                ch.title = `Chapter ${trackNum}`;
+            } else {
+                ch.title = `Chapter ${trackNum}: ${name.charAt(0).toUpperCase() + name.slice(1)}`;
+            }
         }
     });
 
