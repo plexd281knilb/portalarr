@@ -893,27 +893,36 @@ function normalizeBookCardMetadata(book: any) {
 
     const refreshRequests = useCallback(async () => {
         try {
-            let freshReqs = await getBookRequests().catch(() => null);
-            if (!freshReqs) {
-                try {
-                    const res = await fetch("/api/requests");
-                    if (res.ok) {
-                        const data = await res.json();
-                        freshReqs = data.requests || [];
-                    }
-                } catch (e) {}
-            }
+            let freshReqs = null;
+            try {
+                const res = await fetch("/api/requests");
+                if (res.ok) {
+                    const data = await res.json();
+                    freshReqs = data.requests || [];
+                }
+            } catch (e) {}
+
             if (freshReqs) {
                 setRequests(freshReqs);
             }
+
             if (selectedLibrary?.id) {
-                const freshBooks = await getLibraryBooks(selectedLibrary.id);
-                if (freshBooks) {
-                    setBooks(freshBooks);
+                try {
+                    const freshBooks = await getLibraryBooks(selectedLibrary.id);
+                    if (freshBooks) {
+                        setBooks(freshBooks);
+                    }
+                } catch (actionErr: any) {
+                    if (actionErr?.message?.includes("Failed to find Server Action") || String(actionErr).includes("older or newer deployment")) {
+                        console.warn("[DESYNC-RECOVERY] Deployment updated. Auto-reloading stale browser tab...");
+                        window.location.reload();
+                    }
                 }
             }
-        } catch (e) {
-            console.error("Auto-refresh requests failed:", e);
+        } catch (e: any) {
+            if (e?.message?.includes("Failed to find Server Action") || String(e).includes("older or newer deployment")) {
+                window.location.reload();
+            }
         }
     }, [selectedLibrary?.id]);
 
