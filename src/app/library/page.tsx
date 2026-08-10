@@ -917,7 +917,16 @@ function normalizeBookCardMetadata(book: any) {
             setLibMediaType("ebook");
             setEditingLibId(null);
             
-            const libs = await getLibraries();
+            let libs = await getLibraries().catch(() => []);
+            if (!libs || libs.length === 0) {
+                try {
+                    const apiRes = await fetch("/api/libraries");
+                    if (apiRes.ok) {
+                        const data = await apiRes.json();
+                        libs = data.libraries || [];
+                    }
+                } catch (e) {}
+            }
             setLibraries(libs || []);
         } catch (e: any) {
             console.error("Failed to save library:", e);
@@ -933,7 +942,16 @@ function normalizeBookCardMetadata(book: any) {
                 alert(res.error);
                 return;
             }
-            const libs = await getLibraries();
+            let libs = await getLibraries().catch(() => []);
+            if (!libs || libs.length === 0) {
+                try {
+                    const apiRes = await fetch("/api/libraries");
+                    if (apiRes.ok) {
+                        const data = await apiRes.json();
+                        libs = data.libraries || [];
+                    }
+                } catch (e) {}
+            }
             setLibraries(libs || []);
             if (selectedLibrary?.id === id) {
                 setSelectedLibrary(libs && libs.length > 0 ? libs[0] : null);
@@ -946,14 +964,27 @@ function normalizeBookCardMetadata(book: any) {
 
     async function handleSeedLibraries() {
         try {
-            await seedDefaultLibraries();
-            const libs = await getLibraries();
+            const res = await seedDefaultLibraries();
+            if (res && res.error) {
+                alert(res.error);
+            }
+            let libs = await getLibraries().catch(() => []);
+            if (!libs || libs.length === 0) {
+                try {
+                    const apiRes = await fetch("/api/libraries");
+                    if (apiRes.ok) {
+                        const data = await apiRes.json();
+                        libs = data.libraries || [];
+                    }
+                } catch (e) {}
+            }
             setLibraries(libs || []);
             if (libs && libs.length > 0) {
                 setSelectedLibrary(libs[0]);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to seed default libraries:", e);
+            alert(e.message || "Failed to seed default libraries.");
         }
     }
 
@@ -2668,7 +2699,7 @@ function normalizeBookCardMetadata(book: any) {
                                         {libraries.length === 0 ? (
                                             <div className="p-8 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-3">
                                                 <p className="italic">No libraries configured yet. Fill out the form on the left or seed standard default libraries to get started instantly!</p>
-                                                {user?.role === "ADMIN" && (
+                                                {isAdmin && (
                                                     <Button
                                                         type="button"
                                                         onClick={handleSeedLibraries}

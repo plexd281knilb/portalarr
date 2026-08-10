@@ -1241,31 +1241,42 @@ export async function seedDefaultLibraries() {
     try {
         await verifyAdmin();
         const existing = await prisma.library.findMany();
-        if (existing.length > 0) {
-            return { success: false, error: "Libraries are already configured." };
+        
+        const hasEbook = existing.some(l => (l.mediaType || "ebook") === "ebook");
+        const hasAudio = existing.some(l => l.mediaType === "audiobook");
+
+        if (hasEbook && hasAudio) {
+            return { success: false, error: "Default Ebook and Audiobook libraries are already configured." };
         }
-        await prisma.library.createMany({
-            data: [
-                {
-                    name: "Ebooks Library",
-                    description: "Main Ebook library for EPUBs, PDFs, and MOBI files",
-                    path: "",
-                    allowedUsers: "*",
-                    restrictedUsers: "",
-                    mediaType: "ebook",
-                    downloadCategory: "books"
-                },
-                {
-                    name: "Audiobooks Library",
-                    description: "Main Audiobook library for M4B, MP3, and FLAC files",
-                    path: "",
-                    allowedUsers: "*",
-                    restrictedUsers: "",
-                    mediaType: "audiobook",
-                    downloadCategory: "audiobooks"
-                }
-            ]
-        });
+
+        const toCreate = [];
+        if (!hasEbook) {
+            toCreate.push({
+                name: "Ebooks Library",
+                description: "Main Ebook library for EPUBs, PDFs, and MOBI files",
+                path: "",
+                allowedUsers: "*",
+                restrictedUsers: "",
+                mediaType: "ebook",
+                downloadCategory: "books"
+            });
+        }
+        if (!hasAudio) {
+            toCreate.push({
+                name: "Audiobooks Library",
+                description: "Main Audiobook library for M4B, MP3, and FLAC files",
+                path: "",
+                allowedUsers: "*",
+                restrictedUsers: "",
+                mediaType: "audiobook",
+                downloadCategory: "audiobooks"
+            });
+        }
+
+        if (toCreate.length > 0) {
+            await prisma.library.createMany({ data: toCreate });
+        }
+
         revalidatePath("/library");
         return { success: true };
     } catch (e: any) {
