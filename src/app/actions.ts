@@ -3012,16 +3012,18 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 const ext = path.extname(file).toLowerCase();
                 if (validExtensions.includes(ext)) {
                     const cleanFileName = file.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    console.log(`[DOWNLOAD-FINDER] Inspecting file: ${file} (clean: ${cleanFileName})`);
+                    const cleanFullPath = fullPath.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    console.log(`[DOWNLOAD-FINDER] Inspecting file: ${file} (path: ${fullPath})`);
                     
-                    if (cleanFileName.includes(cleanBookTitle) || cleanBookTitle.includes(cleanFileName.replace(/(epub|pdf|mobi|cbz|m4b|mp3|m4a|flac)$/, ""))) {
+                    if (cleanFileName.includes(cleanBookTitle) || cleanFullPath.includes(cleanBookTitle) || cleanBookTitle.includes(cleanFileName.replace(/(epub|pdf|mobi|cbz|m4b|mp3|m4a|flac)$/, ""))) {
                         console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (direct title match)`);
                         return fullPath;
                     }
                     
+                    const combinedSearchStr = `${file} ${fullPath}`.toLowerCase();
                     let matchCount = 0;
                     for (const word of finalTitleWords) {
-                        if (file.toLowerCase().includes(word)) {
+                        if (combinedSearchStr.includes(word)) {
                             matchCount++;
                         }
                     }
@@ -3029,7 +3031,7 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                     const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
                     console.log(`[DOWNLOAD-FINDER] Word match count: ${matchCount}/${finalTitleWords.length} (needed at least ${requiredMatches})`);
                     if (finalTitleWords.length > 0 && matchCount >= requiredMatches) {
-                        console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (fuzzy word match)`);
+                        console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (fuzzy path match)`);
                         return fullPath;
                     }
                 }
@@ -4278,4 +4280,76 @@ export async function refreshBookCover(bookId: string) {
         return { success: true, coverUrl: newCover };
     }
     return { success: false, error: "No cover artwork found across iTunes, Open Library, or Google Books." };
+}
+
+export async function importCompletedDownload(requestId: string) {
+    await verifyUser();
+    const currentReq = await prisma.bookRequest.findUnique({ where: { id: requestId } });
+    if (!currentReq) return { success: false, error: "Request not found" };
+
+    const reqMedia = currentReq.mediaType || "ebook";
+    const targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia);
+    if (!targetLib) return { success: false, error: "No target library shelf configured for user" };
+
+    const settings = await prisma.settings.findFirst();
+    const configuredPath = settings?.downloadsPath || "/downloads";
+    const searchPaths = [
+        configuredPath,
+        path.join(configuredPath, "completed"),
+        path.join(configuredPath, "complete"),
+        path.join(configuredPath, "audiobooks"),
+        path.join(configuredPath, "books"),
+        process.env.DOWNLOADS_DIR || "/downloads",
+        "/downloads",
+        "/downloads/completed",
+        "/downloads/complete",
+        "/downloads/audiobooks",
+        "/downloads/books",
+        "/app/downloads",
+        "./downloads"
+    ];
+
+    let foundFilePath: string | null = null;
+    for (const p of searchPaths) {
+        if (fs.existsSync(p)) {
+            foundFilePath = findDownloadedFile(p, currentReq.title, reqMedia);
+            if (foundFilePath) break;
+        }
+    }
+
+    if (!foundFilePath) {
+        return { success: false, error: `Could not locate downloaded file or folder for "${currentReq.title}" in downloads directory. Please verify SABnzbd/qBittorrent completed path.` };
+    }
+
+    if (!fs.existsSync(targetLib.path)) {
+        fs.mkdirSync(targetLib.path, { recursive: true });
+    }
+
+    const parentFolder = path.dirname(foundFilePath);
+    const discPattern = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i;
+    const isDiscSubfolder = discPattern.test(path.basename(parentFolder).trim());
+    const rootBookFolder = isDiscSubfolder ? path.dirname(parentFolder) : parentFolder;
+
+    const isRootDownloadsDir = searchPaths.includes(rootBookFolder);
+
+    let finalDestPath = "";
+    if (!isRootDownloadsDir && fs.existsSync(rootBookFolder) && fs.statSync(rootBookFolder).isDirectory()) {
+        const folderName = path.basename(rootBookFolder);
+        const destFolder = path.join(targetLib.path, folderName);
+        copyFolderRecursiveSync(rootBookFolder, destFolder);
+        finalDestPath = path.join(destFolder, path.basename(foundFilePath));
+    } else {
+        const destPath = path.join(targetLib.path, path.basename(foundFilePath));
+        fs.copyFileSync(foundFilePath, destPath);
+        finalDestPath = destPath;
+    }
+
+    await prisma.bookRequest.update({
+        where: { id: requestId },
+        data: { status: "Downloaded" }
+    });
+
+    await scanLibraryInternal(targetLib.id);
+    revalidatePath("/library");
+    return { success: true, message: `Successfully imported "${currentReq.title}" to ${targetLib.name} shelf!` };
 }

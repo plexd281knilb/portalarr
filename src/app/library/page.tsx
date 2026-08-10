@@ -29,7 +29,8 @@ import {
   submitSupportTicket,
   retryBookRequest,
   refreshBookCover,
-  seedDefaultLibraries
+  seedDefaultLibraries,
+  importCompletedDownload
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -2420,16 +2421,39 @@ function normalizeBookCardMetadata(book: any) {
                                                                  <RefreshCw className="h-3 w-3 mr-1" /> Retry Search
                                                              </Button>
                                                          )}
-                                                         {isAdmin && (req.status === "Approved" || req.status === "Downloading") && (
-                                                             <Button 
-                                                                 size="sm" 
-                                                                 variant="outline"
-                                                                 className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
-                                                                 onClick={() => handleUpdateRequestStatus(req.id, "Downloaded")}
-                                                             >
-                                                                 Mark Downloaded
-                                                             </Button>
-                                                         )}
+                                                         {(isAdmin || req.requestedBy === user?.username) && (req.status === "Approved" || req.status === "Downloading") && (
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline"
+                                                                className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 bg-blue-500/5 font-semibold mr-1"
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        const res = await importCompletedDownload(req.id);
+                                                                        if (res.success) {
+                                                                            alert(res.message || "Imported completed download to library!");
+                                                                        } else {
+                                                                            alert(res.error || "Failed to locate completed download.");
+                                                                        }
+                                                                        const reqs = await getBookRequests();
+                                                                        setRequests(reqs || []);
+                                                                    } catch (err: any) {
+                                                                        alert(err.message || "Failed to import download.");
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Download className="h-3 w-3 mr-1" /> Import Download
+                                                            </Button>
+                                                        )}
+                                                        {isAdmin && (req.status === "Approved" || req.status === "Downloading") && (
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline"
+                                                                className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
+                                                                onClick={() => handleUpdateRequestStatus(req.id, "Downloaded")}
+                                                            >
+                                                                Mark Downloaded
+                                                            </Button>
+                                                        )}
                                                           {req.status.startsWith("Failed") && (
                                                               <div className="flex gap-1.5 items-center">
                                                                   <Button
