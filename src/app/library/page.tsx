@@ -1983,8 +1983,8 @@ function normalizeBookCardMetadata(book: any) {
                                     </CardTitle>
                                     <CardDescription>
                                         {reqMediaType === "audiobook"
-                                            ? "Can't find an audiobook in the library? Ask the admin to download it."
-                                            : "Can't find an ebook in the library? Ask the admin to download it."}
+                                            ? "Can't find an audiobook in the library? Request to download it."
+                                            : "Can't find an ebook in the library? Request to download it."}
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
