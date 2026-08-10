@@ -1649,86 +1649,92 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
 }
 
 export async function createBookRequest(formData: FormData) {
-    const session = await verifyUser();
-    const isAdmin = session.role === "ADMIN";
-    const title = formData.get("title") as string;
-    const author = formData.get("author") as string || "";
-    const type = formData.get("type") as string || "book"; // "book" or "series"
-    const mediaType = formData.get("mediaType") as string || "ebook"; // "ebook" or "audiobook"
-    const coverUrl = formData.get("coverUrl") as string || "";
-    const publishYear = formData.get("publishYear") as string || "";
-    const requestedFor = formData.get("requestedFor") as string || "";
-    
-    let targetUser = session.username as string;
-    if (isAdmin && requestedFor) {
-        targetUser = requestedFor;
-    }
-    
-    if (!title) throw new Error("Title is required");
-    
-    if (type === "series") {
-        const expanded = await expandSeriesRequest(title, author, targetUser, mediaType);
-        if (expanded) {
-            // Save the parent series request record itself in the DB
-            await prisma.bookRequest.create({
-                data: {
-                    title,
+    try {
+        const session = await verifyUser();
+        const isAdmin = session.role === "ADMIN";
+        const title = formData.get("title") as string;
+        const author = formData.get("author") as string || "";
+        const type = formData.get("type") as string || "book"; // "book" or "series"
+        const mediaType = formData.get("mediaType") as string || "ebook"; // "ebook" or "audiobook"
+        const coverUrl = formData.get("coverUrl") as string || "";
+        const publishYear = formData.get("publishYear") as string || "";
+        const requestedFor = formData.get("requestedFor") as string || "";
+        
+        let targetUser = session.username as string;
+        if (isAdmin && requestedFor) {
+            targetUser = requestedFor;
+        }
+        
+        if (!title) return { success: false, error: "Title is required" };
+        
+        if (type === "series") {
+            const expanded = await expandSeriesRequest(title, author, targetUser, mediaType);
+            if (expanded) {
+                // Save the parent series request record itself in the DB
+                await prisma.bookRequest.create({
+                    data: {
+                        title,
+                        author,
+                        coverUrl,
+                        publishYear,
+                        requestedBy: targetUser,
+                        type: "series",
+                        mediaType,
+                        status: "Approved"
+                    }
+                });
+
+                sendRequestNotificationToAdmins({
+                    title: `${title} (${mediaType === "audiobook" ? "Audiobook" : "Book"} Series)`,
                     author,
-                    coverUrl,
-                    publishYear,
                     requestedBy: targetUser,
                     type: "series",
                     mediaType,
-                    status: "Approved"
-                }
-            });
-
-            sendRequestNotificationToAdmins({
-                title: `${title} (${mediaType === "audiobook" ? "Audiobook" : "Book"} Series)`,
+                    publishYear: null
+                }).catch(err => {
+                    console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
+                });
+                revalidatePath("/library");
+                return { success: true, message: "Series request submitted successfully!" };
+            }
+        }
+        
+        const request = await prisma.bookRequest.create({
+            data: {
+                title,
                 author,
+                coverUrl,
+                publishYear,
                 requestedBy: targetUser,
-                type: "series",
+                type,
                 mediaType,
-                publishYear: null
-            }).catch(err => {
-                console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
-            });
-            revalidatePath("/library");
-            return;
-        }
-    }
-    
-    const request = await prisma.bookRequest.create({
-        data: {
-            title,
-            author,
-            coverUrl,
-            publishYear,
-            requestedBy: targetUser,
-            type,
-            mediaType,
-            status: "Pending"
-        }
-    });
-    
-    if (type === "book") {
-        autoDownloadBookRequest(request.id, title, author).catch(err => {
-            console.error(`[AUTO-DOWNLOAD] Background process failed:`, err);
+                status: "Pending"
+            }
         });
         
+        if (type === "book") {
+            autoDownloadBookRequest(request.id, title, author).catch(err => {
+                console.error(`[AUTO-DOWNLOAD-BG] Failed for request "${title}":`, err);
+            });
+        }
+
         sendRequestNotificationToAdmins({
             title,
             author,
             requestedBy: targetUser,
-            type: "book",
+            type,
             mediaType,
             publishYear
         }).catch(err => {
-            console.error(`[SMTP-NOTIFICATION] Single request email notification failed:`, err);
+            console.error(`[SMTP-NOTIFICATION] Email notification failed for request "${title}":`, err);
         });
-    }
 
-    revalidatePath("/library");
+        revalidatePath("/library");
+        return { success: true, message: "Request submitted successfully!" };
+    } catch (e: any) {
+        console.error("[CREATE-BOOK-REQUEST-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to submit request" };
+    }
 }
 
 async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook"): Promise<boolean> {
@@ -4251,49 +4257,55 @@ export async function getSeriesBooksList(seriesTitle: string, author: string = "
 }
 
 export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[], requestedFor?: string, mediaType: string = "ebook") {
-    const session = await verifyUser();
-    const isAdmin = session.role === "ADMIN";
-    if (!booksList || booksList.length === 0) return;
-    
-    let targetUser = session.username as string;
-    if (isAdmin && requestedFor) {
-        targetUser = requestedFor;
-    }
-    
-    for (const book of booksList) {
-        const request = await prisma.bookRequest.create({
-            data: {
-                title: book.title,
-                author: book.author,
-                coverUrl: book.coverUrl,
-                publishYear: book.publishYear,
-                requestedBy: targetUser,
-                type: "book",
-                mediaType: mediaType,
-                status: "Pending"
-            }
-        });
+    try {
+        const session = await verifyUser();
+        const isAdmin = session.role === "ADMIN";
+        if (!booksList || booksList.length === 0) return { success: false, error: "No books provided" };
         
-        autoDownloadBookRequest(request.id, book.title, book.author).catch(err => {
-            console.error(`[AUTO-DOWNLOAD] Failed for series book "${book.title}":`, err);
-        });
-    }
+        let targetUser = session.username as string;
+        if (isAdmin && requestedFor) {
+            targetUser = requestedFor;
+        }
+        
+        for (const book of booksList) {
+            const request = await prisma.bookRequest.create({
+                data: {
+                    title: book.title,
+                    author: book.author,
+                    coverUrl: book.coverUrl,
+                    publishYear: book.publishYear,
+                    requestedBy: targetUser,
+                    type: "book",
+                    mediaType: mediaType,
+                    status: "Pending"
+                }
+            });
+            
+            autoDownloadBookRequest(request.id, book.title, book.author).catch(err => {
+                console.error(`[AUTO-DOWNLOAD] Failed for series book "${book.title}":`, err);
+            });
+        }
 
-    if (booksList.length > 0) {
-        const listText = booksList.map(b => `- ${b.title} by ${b.author}`).join("\n");
-        sendRequestNotificationToAdmins({
-            title: `${booksList.length} ${mediaType === "audiobook" ? "Audiobooks" : "Books"} from checklist`,
-            author: listText,
-            requestedBy: targetUser,
-            type: "checklist",
-            mediaType,
-            publishYear: null
-        }).catch(err => {
-            console.error(`[SMTP-NOTIFICATION] Checklist request email notification failed:`, err);
-        });
+        if (booksList.length > 0) {
+            const listText = booksList.map(b => `- ${b.title} by ${b.author}`).join("\n");
+            sendRequestNotificationToAdmins({
+                title: `${booksList.length} ${mediaType === "audiobook" ? "Audiobooks" : "Books"} from checklist`,
+                author: listText,
+                requestedBy: targetUser,
+                type: "checklist",
+                mediaType,
+                publishYear: null
+            }).catch(err => {
+                console.error(`[SMTP-NOTIFICATION] Checklist request email notification failed:`, err);
+            });
+        }
+        
+        revalidatePath("/library");
+        return { success: true, message: `${booksList.length} requests submitted successfully!` };
+    } catch (e: any) {
+        console.error("[CREATE-MULTIPLE-BOOK-REQUESTS-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to submit requests" };
     }
-    
-    revalidatePath("/library");
 }
 
 export async function deleteMultipleBookRequests(ids: string[]) {

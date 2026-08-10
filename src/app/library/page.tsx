@@ -1434,13 +1434,14 @@ function normalizeBookCardMetadata(book: any) {
         if (!reqTitle) return;
 
         try {
+            let res: any;
             if (reqType === "series" && seriesBooksChecklist.length > 0) {
                 const checkedBooks = seriesBooksChecklist.filter(b => b.checked);
                 if (checkedBooks.length === 0) {
-                    alert("Please select at least one book in the series to request.");
+                    showErrorModal("Please select at least one book in the series to request.", "Form Validation Error");
                     return;
                 }
-                await createMultipleBookRequests(checkedBooks, requestedFor, reqMediaType);
+                res = await createMultipleBookRequests(checkedBooks, requestedFor, reqMediaType);
             } else {
                 const formData = new FormData();
                 formData.append("title", reqTitle);
@@ -1452,7 +1453,12 @@ function normalizeBookCardMetadata(book: any) {
                 if (requestedFor) {
                     formData.append("requestedFor", requestedFor);
                 }
-                await createBookRequest(formData);
+                res = await createBookRequest(formData);
+            }
+
+            if (res && res.error) {
+                showErrorModal(res.error, "Request Error");
+                return;
             }
 
             setReqTitle("");
@@ -1467,7 +1473,7 @@ function normalizeBookCardMetadata(book: any) {
             setRequests(reqs || []);
         } catch (e: any) {
             console.error("Failed to submit request:", e);
-            alert(e.message || "Failed to submit request.");
+            showErrorModal(e.message || "Failed to submit request.", "Request Error");
         }
     }
 
