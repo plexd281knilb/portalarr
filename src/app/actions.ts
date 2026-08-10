@@ -1105,37 +1105,39 @@ async function verifyUser() {
     if (!session) throw new Error("Unauthorized");
     try {
         const { payload } = await jwtVerify(session, SECRET_KEY);
-        if (payload.userId) {
+        const userId = (payload.userId || payload.id) as string;
+        if (userId) {
             const dbUser = await prisma.user.findUnique({
-                where: { id: payload.userId as string },
-                select: { id: true, username: true, role: true, status: true }
+                where: { id: userId },
+                select: { id: true, username: true, email: true, role: true, status: true }
             });
             if (dbUser) {
-                return { userId: dbUser.id, username: dbUser.username, role: dbUser.role, status: dbUser.status };
+                return { userId: dbUser.id, username: dbUser.username, email: dbUser.email, role: dbUser.role, status: dbUser.status };
             }
         }
-        return payload; // { userId, username, role }
+        return payload; // { userId, username, email, role }
     } catch (err) {
         throw new Error("Unauthorized");
     }
 }
 
-async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string, role: string) {
+async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string, email: string = "", role: string) {
     if (role === "ADMIN") return true;
 
     const safeUsername = (username || "").toLowerCase();
+    const safeEmail = (email || "").toLowerCase();
 
     // Explicit denial check: If user is listed in restrictedUsers, block access immediately
     if (restrictedUsersStr && restrictedUsersStr.trim() !== "") {
         const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase());
-        if (restricted.includes(safeUsername)) {
+        if ((safeUsername && restricted.includes(safeUsername)) || (safeEmail && restricted.includes(safeEmail))) {
             return false;
         }
     }
 
     if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
     const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
-    return allowed.includes("*") || allowed.includes(safeUsername);
+    return allowed.includes("*") || (safeUsername && allowed.includes(safeUsername)) || (safeEmail && allowed.includes(safeEmail));
 }
 
 export async function getLibraries() {
@@ -1146,7 +1148,7 @@ export async function getLibraries() {
     
     const accessible = [];
     for (const lib of libraries) {
-        if (await checkLibraryAccess(lib.allowedUsers, lib.restrictedUsers || "", session.username as string, session.role as string)) {
+        if (await checkLibraryAccess(lib.allowedUsers, lib.restrictedUsers || "", (session.username || "") as string, (session.email || "") as string, (session.role || "") as string)) {
             accessible.push(lib);
         }
     }
@@ -1168,6 +1170,38 @@ export async function createLibrary(formData: FormData) {
         data: { name, description, path, allowedUsers, restrictedUsers, downloadCategory, mediaType }
     });
     revalidatePath("/library");
+}
+
+export async function seedDefaultLibraries() {
+    await verifyAdmin();
+    const existing = await prisma.library.findMany();
+    if (existing.length > 0) {
+        return { success: false, error: "Libraries are already configured." };
+    }
+    await prisma.library.createMany({
+        data: [
+            {
+                name: "Ebooks Library",
+                description: "Main Ebook library for EPUBs, PDFs, and MOBI files",
+                path: "",
+                allowedUsers: "*",
+                restrictedUsers: "",
+                mediaType: "ebook",
+                downloadCategory: "books"
+            },
+            {
+                name: "Audiobooks Library",
+                description: "Main Audiobook library for M4B, MP3, and FLAC files",
+                path: "",
+                allowedUsers: "*",
+                restrictedUsers: "",
+                mediaType: "audiobook",
+                downloadCategory: "audiobooks"
+            }
+        ]
+    });
+    revalidatePath("/library");
+    return { success: true };
 }
 
 export async function updateLibrary(formData: FormData) {
@@ -1218,8 +1252,9 @@ export async function getLibraryBooks(libraryId: string) {
     const hasAccess = await checkLibraryAccess(
         library.allowedUsers, 
         library.restrictedUsers || "",
-        session.username as string, 
-        session.role as string
+        (session.username || "") as string, 
+        (session.email || "") as string,
+        (session.role || "") as string
     );
     if (!hasAccess) throw new Error("Unauthorized access to this library");
     
@@ -3260,7 +3295,8 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
             book.library.allowedUsers,
             book.library.restrictedUsers || "",
             username,
-            session.role as string
+            (user?.email || session.email || "") as string,
+            (session.role || "") as string
         );
         if (!hasAccess) return { success: false, error: "Unauthorized access to this library book" };
 

@@ -28,7 +28,8 @@ import {
   deleteMultipleBookRequests,
   submitSupportTicket,
   retryBookRequest,
-  refreshBookCover
+  refreshBookCover,
+  seedDefaultLibraries
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -904,6 +905,19 @@ function normalizeBookCardMetadata(book: any) {
             }
         } catch (e) {
             console.error("Failed to delete library:", e);
+        }
+    }
+
+    async function handleSeedLibraries() {
+        try {
+            await seedDefaultLibraries();
+            const libs = await getLibraries();
+            setLibraries(libs || []);
+            if (libs && libs.length > 0) {
+                setSelectedLibrary(libs[0]);
+            }
+        } catch (e) {
+            console.error("Failed to seed default libraries:", e);
         }
     }
 
@@ -2618,8 +2632,17 @@ function normalizeBookCardMetadata(book: any) {
                                     </CardHeader>
                                     <CardContent className="p-0">
                                         {libraries.length === 0 ? (
-                                            <div className="p-8 text-center text-sm text-muted-foreground italic">
-                                                No libraries configured. Create one to get started!
+                                            <div className="p-8 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-3">
+                                                <p className="italic">No libraries configured yet. Fill out the form on the left or seed standard default libraries to get started instantly!</p>
+                                                {user?.role === "ADMIN" && (
+                                                    <Button
+                                                        type="button"
+                                                        onClick={handleSeedLibraries}
+                                                        className="bg-primary hover:bg-primary/80 text-black font-semibold text-xs flex items-center gap-2 px-4 py-2 mt-1"
+                                                    >
+                                                        <Sparkles className="h-4 w-4 text-black" /> Seed Default Libraries (Ebooks & Audiobooks)
+                                                    </Button>
+                                                )}
                                             </div>
                                         ) : (
                                             <div className="divide-y divide-muted/50">
