@@ -1864,8 +1864,9 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     let clean = rawBase.replace(/[\r\n]+/g, " ").trim();
 
     // 1. Strip scene release tags, formats, group names (CTO, BKS, PB, PB1, PB2, HC, TPB, EB, v1, etc.) and metadata garbage
-    clean = clean.replace(/\.(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
-    clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK)\b/gi, " ");
+    clean = clean.replace(/-(?:AUDIOBOOK|AUDIO|UK|US|iND|20\d\d|19\d\d|[a-zA-Z0-9]+)$/i, "");
+    clean = clean.replace(/\.(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK|UK|US|iND)\b/gi, " ");
+    clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK|UK|US|iND)\b/gi, " ");
     
     // Strip trailing scene tags like (Rob Inglis)-PoF, -PoF, (Unabridged), etc.
     clean = clean.replace(/\s*-\s*[A-Za-z0-9]+$/i, "");
@@ -2030,7 +2031,9 @@ export async function scanLibraryInternal(libraryId: string) {
                         { title: { contains: "peck of owls" } },
                         { title: { contains: "Peck of Owls" } },
                         { title: { contains: "advanced guard" } },
-                        { title: { contains: "grimmauld place" } }
+                        { title: { contains: "grimmauld place" } },
+                        { title: { contains: "AUDIOBOOK" } },
+                        { title: { contains: "UK-2003" } }
                     ]
                 }
             });
@@ -2248,14 +2251,6 @@ export async function scanLibraryInternal(libraryId: string) {
                     let author = parsedMeta.author;
                     let coverUrl = "";
 
-                    if (cleanBase.includes(" - ")) {
-                        const parts = cleanBase.split(" - ").map(p => p.trim());
-                        if (parts.length >= 2) {
-                            author = parts[0];
-                            title = parts.slice(1).join(" - ");
-                        }
-                    }
-
                     // Dynamic Author Heuristic based on existing DB authors & requested authors
                     try {
                         const dbAuthors = await prisma.book.findMany({
@@ -2356,14 +2351,6 @@ export async function scanLibraryInternal(libraryId: string) {
                     const parsedMeta = parseFilenameMetadata(cleanBase);
                     let parsedAuthor = parsedMeta.author;
                     let parsedTitle = parsedMeta.title;
-
-                    if (cleanBase.includes(" - ")) {
-                        const parts = cleanBase.split(" - ").map(p => p.trim());
-                        if (parts.length >= 2) {
-                            parsedAuthor = parts[0];
-                            parsedTitle = parts.slice(1).join(" - ");
-                        }
-                    }
 
                     // Check if title and author are swapped in DB
                     const isSwapped = (existing.title.toLowerCase() === parsedAuthor.toLowerCase()) && 
