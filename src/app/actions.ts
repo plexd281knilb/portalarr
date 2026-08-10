@@ -1156,14 +1156,24 @@ async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: s
 }
 
 export async function getLibraries() {
-    const session = await verifyUser();
+    let session: any = null;
+    try {
+        session = await verifyUser();
+    } catch (e) {
+        // Fallback gracefully if session token is unauthenticated or expired
+    }
+    
     const libraries = await prisma.library.findMany({
         orderBy: { name: "asc" }
     });
     
     const accessible = [];
     for (const lib of libraries) {
-        if (await checkLibraryAccess(lib.allowedUsers, lib.restrictedUsers || "", (session.username || "") as string, (session.email || "") as string, (session.role || "") as string)) {
+        const username = (session?.username || "") as string;
+        const email = (session?.email || "") as string;
+        const role = (session?.role || "") as string;
+
+        if (await checkLibraryAccess(lib.allowedUsers, lib.restrictedUsers || "", username, email, role)) {
             accessible.push(lib);
         }
     }
@@ -1257,7 +1267,11 @@ export async function deleteLibrary(id: string) {
 }
 
 export async function getLibraryBooks(libraryId: string) {
-    const session = await verifyUser();
+    let session: any = null;
+    try {
+        session = await verifyUser();
+    } catch (e) {}
+
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
     });
@@ -1267,9 +1281,9 @@ export async function getLibraryBooks(libraryId: string) {
     const hasAccess = await checkLibraryAccess(
         library.allowedUsers, 
         library.restrictedUsers || "",
-        (session.username || "") as string, 
-        (session.email || "") as string,
-        (session.role || "") as string
+        (session?.username || "") as string, 
+        (session?.email || "") as string,
+        (session?.role || "") as string
     );
     if (!hasAccess) throw new Error("Unauthorized access to this library");
     
