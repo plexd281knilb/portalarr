@@ -31,7 +31,8 @@ import {
   refreshBookCover,
   seedDefaultLibraries,
   importCompletedDownload,
-  getAudiobookChapters
+  getAudiobookChapters,
+  reorderAudiobookChapters
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -42,7 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { 
-  BookOpen, Plus, Search, Trash2, Edit3, 
+  BookOpen, Plus, Search, Trash2, Edit3, Edit2, Save, ArrowUp, ArrowDown,
   UploadCloud, Check, X, FileText, Download, 
   LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX
 } from "lucide-react";
@@ -230,6 +231,8 @@ function BookLibraryPageContent() {
     const [chaptersModalBook, setChaptersModalBook] = useState<any>(null);
     const [chaptersList, setChaptersList] = useState<any[]>([]);
     const [loadingChapters, setLoadingChapters] = useState(false);
+    const [isEditingChapters, setIsEditingChapters] = useState(false);
+    const [savingChapters, setSavingChapters] = useState(false);
     const [activePlayingTrack, setActivePlayingTrack] = useState<{
         bookId: string;
         bookTitle: string;
@@ -1195,6 +1198,7 @@ function normalizeBookCardMetadata(book: any) {
         setChaptersModalBook(book);
         setLoadingChapters(true);
         setChaptersList([]);
+        setIsEditingChapters(false);
         try {
             const res = await getAudiobookChapters(book.id);
             if (res && res.success && res.chapters) {
@@ -1207,6 +1211,54 @@ function normalizeBookCardMetadata(book: any) {
         } finally {
             setLoadingChapters(false);
         }
+    }
+
+    async function handleSaveChapterOrder() {
+        if (!chaptersModalBook || chaptersList.length === 0) return;
+        setSavingChapters(true);
+        try {
+            const updated = chaptersList.map((ch, idx) => ({
+                relativePath: ch.relativePath,
+                newTrackNumber: Number(ch.trackNumber) || (idx + 1)
+            }));
+            const res = await reorderAudiobookChapters(chaptersModalBook.id, updated);
+            if (res && res.success) {
+                const refreshed = await getAudiobookChapters(chaptersModalBook.id);
+                if (refreshed && refreshed.success && refreshed.chapters) {
+                    setChaptersList(refreshed.chapters);
+                }
+                setIsEditingChapters(false);
+                alert(res.message || "Chapters reordered and renamed successfully!");
+            } else if (res && !res.success) {
+                alert(res.error || "Failed to reorder chapters");
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed to save chapter order");
+        } finally {
+            setSavingChapters(false);
+        }
+    }
+
+    function moveChapterTrack(index: number, direction: "up" | "down") {
+        const newList = [...chaptersList];
+        const targetIndex = direction === "up" ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= newList.length) return;
+        
+        const temp = newList[index];
+        newList[index] = newList[targetIndex];
+        newList[targetIndex] = temp;
+        
+        newList.forEach((c, idx) => {
+            c.trackNumber = idx + 1;
+        });
+        setChaptersList(newList);
+    }
+
+    function updateTrackNumber(index: number, val: string) {
+        const num = parseInt(val, 10);
+        const newList = [...chaptersList];
+        newList[index].trackNumber = isNaN(num) ? "" : num;
+        setChaptersList(newList);
     }
 
     function handlePlayChapter(book: any, chapters: any[], chapterIndex: number) {
@@ -3356,12 +3408,9 @@ function normalizeBookCardMetadata(book: any) {
                             </Button>
                         </CardFooter>
                     </Card>
-                </div>
-            )}
-
-            {chaptersModalBook && (
+                   {chaptersModalBook && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-2xl max-h-[85vh] flex flex-col border-amber-500/30 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden">
+                    <Card className="w-full max-w-2xl max-h-[88vh] flex flex-col border-amber-500/30 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden">
                         <CardHeader className="border-b border-slate-800 pb-4 bg-slate-900/60">
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex items-center gap-3">
@@ -3378,18 +3427,31 @@ function normalizeBookCardMetadata(book: any) {
                                         <CardDescription className="text-xs text-slate-400 line-clamp-1">
                                             {chaptersModalBook.author || "Unknown Author"} • {chaptersList.length} Chapters Found
                                         </CardDescription>
-                                        {chaptersList.length > 0 && (
-                                            <Button
-                                                size="sm"
-                                                className="mt-2 h-7 text-xs font-bold bg-amber-400 text-black hover:bg-amber-300 gap-1.5"
-                                                onClick={() => {
-                                                    handlePlayChapter(chaptersModalBook, chaptersList, 0);
-                                                    setChaptersModalBook(null);
-                                                }}
-                                            >
-                                                <Play className="h-3.5 w-3.5 fill-black" /> Play All (Start at Chapter 1)
-                                            </Button>
-                                        )}
+                                        <div className="flex items-center gap-2 mt-2">
+                                            {chaptersList.length > 0 && !isEditingChapters && (
+                                                <Button
+                                                    size="sm"
+                                                    className="h-7 text-xs font-bold bg-amber-400 text-black hover:bg-amber-300 gap-1.5"
+                                                    onClick={() => {
+                                                        handlePlayChapter(chaptersModalBook, chaptersList, 0);
+                                                        setChaptersModalBook(null);
+                                                    }}
+                                                >
+                                                    <Play className="h-3.5 w-3.5 fill-black" /> Play All (Start at Chapter 1)
+                                                </Button>
+                                            )}
+                                            {chaptersList.length > 0 && (
+                                                <Button
+                                                    size="sm"
+                                                    variant={isEditingChapters ? "secondary" : "outline"}
+                                                    className="h-7 text-xs font-semibold border-amber-500/30 text-amber-400 hover:bg-amber-500/10 gap-1.5"
+                                                    onClick={() => setIsEditingChapters(!isEditingChapters)}
+                                                >
+                                                    <Edit2 className="h-3.5 w-3.5" />
+                                                    {isEditingChapters ? "Cancel Editing" : "✏️ Reorder & Edit Chapters"}
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setChaptersModalBook(null)}>
@@ -3397,6 +3459,21 @@ function normalizeBookCardMetadata(book: any) {
                                 </Button>
                             </div>
                         </CardHeader>
+
+                        {isEditingChapters && (
+                            <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-xs text-amber-300 flex items-center justify-between">
+                                <span>✏️ <strong>Reorder Mode Active:</strong> Change track numbers or use ⬆️ / ⬇️ buttons to reorder tracks. Click Save when done to rename files on disk.</span>
+                                <Button
+                                    size="sm"
+                                    className="h-7 text-xs font-bold bg-emerald-500 text-black hover:bg-emerald-400 gap-1 shadow"
+                                    onClick={handleSaveChapterOrder}
+                                    disabled={savingChapters}
+                                >
+                                    {savingChapters ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                    Save Order &amp; Rename Files
+                                </Button>
+                            </div>
+                        )}
                         
                         <CardContent className="flex-1 overflow-y-auto p-4 space-y-2">
                             {loadingChapters ? (
@@ -3414,11 +3491,44 @@ function normalizeBookCardMetadata(book: any) {
                                         const isCurrentlyPlaying = activePlayingTrack?.bookId === chaptersModalBook.id && activePlayingTrack?.currentChapterIndex === idx;
                                         return (
                                             <div key={idx} className={`p-3 flex items-center justify-between gap-3 hover:bg-slate-900/80 rounded-lg transition-colors ${isCurrentlyPlaying ? 'bg-amber-500/10 border border-amber-500/30' : ''}`}>
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <Badge variant="outline" className={`h-6 min-w-[32px] justify-center text-xs font-bold ${isCurrentlyPlaying ? 'border-amber-400 text-amber-400 bg-amber-400/10' : 'border-slate-800 text-slate-400'}`}>
-                                                        {ch.trackNumber}
-                                                    </Badge>
-                                                    <div className="truncate">
+                                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                    {isEditingChapters ? (
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            <Input
+                                                                type="number"
+                                                                min="1"
+                                                                max="99"
+                                                                value={ch.trackNumber}
+                                                                onChange={(e) => updateTrackNumber(idx, e.target.value)}
+                                                                className="w-14 h-8 text-center text-xs font-bold border-amber-500/50 bg-slate-900 text-amber-300"
+                                                            />
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    className="h-4 w-5 p-0 text-slate-400 hover:text-amber-300"
+                                                                    disabled={idx === 0}
+                                                                    onClick={() => moveChapterTrack(idx, "up")}
+                                                                >
+                                                                    <ArrowUp className="h-3 w-3" />
+                                                                </Button>
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    className="h-4 w-5 p-0 text-slate-400 hover:text-amber-300"
+                                                                    disabled={idx === chaptersList.length - 1}
+                                                                    onClick={() => moveChapterTrack(idx, "down")}
+                                                                >
+                                                                    <ArrowDown className="h-3 w-3" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <Badge variant="outline" className={`h-6 min-w-[32px] justify-center text-xs font-bold shrink-0 ${isCurrentlyPlaying ? 'border-amber-400 text-amber-400 bg-amber-400/10' : 'border-slate-800 text-slate-400'}`}>
+                                                            {ch.trackNumber}
+                                                        </Badge>
+                                                    )}
+                                                    <div className="truncate flex-1">
                                                         <p className={`text-xs font-semibold truncate ${isCurrentlyPlaying ? 'text-amber-400 font-bold' : 'text-slate-200'}`}>
                                                             {ch.title}
                                                         </p>
@@ -3427,33 +3537,56 @@ function normalizeBookCardMetadata(book: any) {
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <Button
-                                                    size="sm"
-                                                    variant={isCurrentlyPlaying ? "default" : "outline"}
-                                                    className={`h-7 text-xs font-semibold px-3 ${isCurrentlyPlaying ? 'bg-amber-400 text-black hover:bg-amber-300 font-bold' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}`}
-                                                    onClick={() => {
-                                                        handlePlayChapter(chaptersModalBook, chaptersList, idx);
-                                                        setChaptersModalBook(null);
-                                                    }}
-                                                >
-                                                    {isCurrentlyPlaying ? (
-                                                        <>
-                                                            <Volume2 className="h-3.5 w-3.5 mr-1 animate-pulse text-black" /> Playing
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Play className="h-3 w-3 mr-1 fill-current" /> Play
-                                                        </>
-                                                    )}
-                                                </Button>
+                                                {!isEditingChapters && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant={isCurrentlyPlaying ? "default" : "outline"}
+                                                        className={`h-7 text-xs font-semibold px-3 ${isCurrentlyPlaying ? 'bg-amber-400 text-black hover:bg-amber-300 font-bold' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}`}
+                                                        onClick={() => {
+                                                            handlePlayChapter(chaptersModalBook, chaptersList, idx);
+                                                            setChaptersModalBook(null);
+                                                        }}
+                                                    >
+                                                        {isCurrentlyPlaying ? (
+                                                            <>
+                                                                <Volume2 className="h-3.5 w-3.5 mr-1 animate-pulse text-black" /> Playing
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Play className="h-3 w-3 mr-1 fill-current" /> Play
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                )}
                                             </div>
                                         );
                                     })}
                                 </div>
                             )}
                         </CardContent>
+
+                        {isEditingChapters && chaptersList.length > 0 && (
+                            <CardFooter className="border-t border-slate-800 p-3 bg-slate-900/60 flex items-center justify-between">
+                                <span className="text-xs text-slate-400">Total {chaptersList.length} tracks</span>
+                                <div className="flex gap-2">
+                                    <Button size="sm" variant="ghost" className="h-8 text-xs text-slate-400 hover:text-white" onClick={() => setIsEditingChapters(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        className="h-8 text-xs font-bold bg-emerald-500 text-black hover:bg-emerald-400 gap-1.5 shadow"
+                                        onClick={handleSaveChapterOrder}
+                                        disabled={savingChapters}
+                                    >
+                                        {savingChapters ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                        Save Chapter Order &amp; Rename Files
+                                    </Button>
+                                </div>
+                            </CardFooter>
+                        )}
                     </Card>
                 </div>
+            )}               </div>
             )}
 
             {activePlayingTrack && (

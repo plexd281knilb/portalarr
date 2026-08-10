@@ -4737,3 +4737,60 @@ export async function getAudiobookChapters(bookId: string) {
         };
     }
 }
+
+export async function reorderAudiobookChapters(bookId: string, updatedChapters: { relativePath: string; newTrackNumber: number }[]) {
+    try {
+        await verifyUser();
+
+        const book = await prisma.book.findUnique({
+            where: { id: bookId }
+        });
+        if (!book) return { success: false, error: "Audiobook not found in database" };
+
+        if (!fs.existsSync(book.filePath)) {
+            return { success: false, error: "Audiobook folder not found on disk" };
+        }
+
+        const stat = fs.statSync(book.filePath);
+        const targetDir = stat.isDirectory() ? book.filePath : path.dirname(book.filePath);
+
+        const sortedItems = [...updatedChapters].sort((a, b) => a.newTrackNumber - b.newTrackNumber);
+
+        for (const item of sortedItems) {
+            const fullOldPath = path.join(targetDir, item.relativePath);
+            if (fs.existsSync(fullOldPath)) {
+                const dir = path.dirname(fullOldPath);
+                const ext = path.extname(fullOldPath);
+                const baseName = path.basename(fullOldPath, ext);
+                
+                // Strip existing numeric track prefixes (e.g., "03 - ", "17-", "01.")
+                const cleanBase = baseName
+                    .replace(/^(?:\d+[\s._-]+)+/, "")
+                    .replace(/_(\d{1,3})$/, "")
+                    .trim() || baseName;
+                
+                const padNum = String(item.newTrackNumber).padStart(2, "0");
+                const newFileName = `${padNum} - ${cleanBase}${ext}`;
+                const fullNewPath = path.join(dir, newFileName);
+
+                if (fullOldPath !== fullNewPath) {
+                    try {
+                        if (fs.existsSync(fullNewPath)) {
+                            const tempPath = path.join(dir, `__temp_${Date.now()}_${newFileName}`);
+                            fs.renameSync(fullNewPath, tempPath);
+                        }
+                        fs.renameSync(fullOldPath, fullNewPath);
+                    } catch (e) {
+                        console.warn(`[REORDER-CHAPTERS] Renaming failed for ${fullOldPath}:`, e);
+                    }
+                }
+            }
+        }
+
+        revalidatePath("/library");
+        return { success: true, message: "Chapters reordered and renamed successfully on disk!" };
+    } catch (err: any) {
+        console.error("Failed to reorder audiobook chapters:", err);
+        return { success: false, error: err.message || "Failed to reorder audiobook chapters" };
+    }
+}
