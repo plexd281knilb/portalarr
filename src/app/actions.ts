@@ -4924,6 +4924,9 @@ export async function reorderAudiobookChapters(bookId: string, updatedChapters: 
 
         const sortedItems = [...updatedChapters].sort((a, b) => a.newTrackNumber - b.newTrackNumber);
 
+        // Pass 1: Rename all targeted files to temporary unique paths to prevent name collision deadlocks
+        const tempMappings: { tempPath: string; finalPath: string }[] = [];
+
         for (const item of sortedItems) {
             const fullOldPath = path.join(targetDir, item.relativePath);
             if (fs.existsSync(fullOldPath)) {
@@ -4931,7 +4934,6 @@ export async function reorderAudiobookChapters(bookId: string, updatedChapters: 
                 const ext = path.extname(fullOldPath);
                 const baseName = path.basename(fullOldPath, ext);
                 
-                // Strip existing numeric track prefixes (e.g., "03 - ", "17-", "01.")
                 const cleanBase = baseName
                     .replace(/^(?:\d+[\s._-]+)+/, "")
                     .replace(/_(\d{1,3})$/, "")
@@ -4941,24 +4943,42 @@ export async function reorderAudiobookChapters(bookId: string, updatedChapters: 
                 const newFileName = `${padNum} - ${cleanBase}${ext}`;
                 const fullNewPath = path.join(dir, newFileName);
 
-                if (fullOldPath !== fullNewPath) {
-                    try {
-                        if (fs.existsSync(fullNewPath)) {
-                            const tempPath = path.join(dir, `__temp_${Date.now()}_${newFileName}`);
-                            fs.renameSync(fullNewPath, tempPath);
-                        }
-                        fs.renameSync(fullOldPath, fullNewPath);
-                    } catch (e) {
-                        console.warn(`[REORDER-CHAPTERS] Renaming failed for ${fullOldPath}:`, e);
-                    }
+                const tempPath = path.join(dir, `__reorder_tmp_${Math.random().toString(36).substring(2, 9)}${ext}`);
+                try {
+                    fs.renameSync(fullOldPath, tempPath);
+                    tempMappings.push({ tempPath, finalPath: fullNewPath });
+                } catch (e) {
+                    console.warn(`[REORDER-CHAPTERS] Temp rename failed for ${fullOldPath}:`, e);
                 }
             }
         }
 
-        revalidatePath("/library");
-        return { success: true, message: "Chapters reordered and renamed successfully on disk!" };
-    } catch (err: any) {
-        console.error("Failed to reorder audiobook chapters:", err);
-        return { success: false, error: err.message || "Failed to reorder audiobook chapters" };
+        // Pass 2: Rename all temporary files to their clean final target names
+        for (const mapping of tempMappings) {
+            if (fs.existsSync(mapping.tempPath)) {
+                try {
+                    fs.renameSync(mapping.tempPath, mapping.finalPath);
+                } catch (e) {
+                    console.warn(`[REORDER-CHAPTERS] Final rename failed for ${mapping.tempPath}:`, e);
+                }
+            }
+        }
+
+        // Clean up any stray temporary files in directory
+        try {
+            const files = fs.readdirSync(targetDir);
+            for (const f of files) {
+                if (f.startsWith("__reorder_tmp_") || f.startsWith("__temp_")) {
+                    const strayP = path.join(targetDir, f);
+                    if (fs.existsSync(strayP)) {
+                        fs.unlinkSync(strayP);
+                    }
+                }
+            }
+        } catch (e) {}
+
+        return { success: true, message: "Chapters reordered and renamed successfully!" };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to reorder chapters" };
     }
 }
