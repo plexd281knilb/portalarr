@@ -114,7 +114,7 @@ model Book {
   author      String?
   coverUrl    String?  // Optional cover image
   filePath    String   // Local path on disk to the PDF/EPUB/M4B/MP3/etc.
-  fileSize    Int?     // Size in bytes
+  fileSize    Float?   // Size in bytes (Float supports >2GB files up to 9 Petabytes)
   fileType    String   // "epub", "pdf", "m4b", "mp3", etc.
   mediaType   String   @default("ebook") // "ebook" or "audiobook"
   libraryId   String
