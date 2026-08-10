@@ -4554,14 +4554,36 @@ export async function getAudiobookChapters(bookId: string) {
         }
 
         const stat = fs.statSync(book.filePath);
-        let targetDir = stat.isDirectory() ? book.filePath : path.dirname(book.filePath);
+        const libraryPath = book.library?.path ? path.resolve(book.library.path).toLowerCase() : "";
 
-        const parentName = path.basename(targetDir);
-        const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Disk|Track)\s*\d+$/i;
-        if (discPattern.test(parentName)) {
-            const parentDir = path.dirname(targetDir);
-            if (fs.existsSync(parentDir) && parentDir !== "/" && parentDir.length > 2) {
-                targetDir = parentDir;
+        let isSingleFileBook = false;
+        let targetDir = "";
+
+        if (stat.isDirectory()) {
+            targetDir = book.filePath;
+        } else {
+            const parentDir = path.dirname(book.filePath);
+            const parentResolved = path.resolve(parentDir).toLowerCase();
+            
+            // If the file is stored directly in the root library folder, treat as single-file audiobook
+            if (libraryPath && (parentResolved === libraryPath || parentResolved === libraryPath + "/" || parentResolved === libraryPath + "\\" || parentResolved.endsWith(path.sep + path.basename(libraryPath)))) {
+                isSingleFileBook = true;
+            } else if (parentDir === "/" || parentDir.length <= 3) {
+                isSingleFileBook = true;
+            } else {
+                const parentName = path.basename(parentDir);
+                const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Disk|Track)\s*\d+$/i;
+                if (discPattern.test(parentName)) {
+                    const grandParentDir = path.dirname(parentDir);
+                    const grandResolved = path.resolve(grandParentDir).toLowerCase();
+                    if (libraryPath && grandResolved === libraryPath) {
+                        targetDir = parentDir;
+                    } else {
+                        targetDir = grandParentDir;
+                    }
+                } else {
+                    targetDir = parentDir;
+                }
             }
         }
 
@@ -4601,7 +4623,17 @@ export async function getAudiobookChapters(bookId: string) {
             } catch (e) {}
         }
 
-        collectAudioFiles(targetDir, targetDir);
+        if (isSingleFileBook || !targetDir) {
+            chapters.push({
+                trackNumber: 1,
+                title: "Full Audiobook (Unabridged)",
+                fileName: path.basename(book.filePath),
+                relativePath: path.basename(book.filePath),
+                size: stat.size
+            });
+        } else {
+            collectAudioFiles(targetDir, targetDir);
+        }
 
         const allFiles = chapters.map(c => c.fileName);
 
