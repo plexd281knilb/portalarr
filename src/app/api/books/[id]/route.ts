@@ -74,17 +74,48 @@ export async function GET(
             return new NextResponse("File Not Found on Disk", { status: 404 });
         }
 
-        const fileBuffer = fs.readFileSync(book.filePath);
-        let contentType = "application/octet-stream";
-        if (book.fileType === "pdf") contentType = "application/pdf";
-        else if (book.fileType === "epub") contentType = "application/epub+zip";
-        else if (book.fileType === "mobi") contentType = "application/x-mobipocket-ebook";
-        else if (book.fileType === "cbz") contentType = "application/x-cbz";
+        const stat = fs.statSync(book.filePath);
+        let targetPath = book.filePath;
+        
+        if (stat.isDirectory()) {
+            const validExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".epub", ".pdf", ".mobi", ".azw3"];
+            const searchParams = req.nextUrl.searchParams;
+            const reqFile = searchParams.get("file");
 
-        return new NextResponse(fileBuffer, {
+            if (reqFile) {
+                targetPath = path.join(book.filePath, reqFile);
+            } else {
+                const files = fs.readdirSync(book.filePath).filter(f => validExts.includes(path.extname(f).toLowerCase()));
+                if (files.length > 0) {
+                    files.sort();
+                    targetPath = path.join(book.filePath, files[0]);
+                }
+            }
+        }
+
+        if (!fs.existsSync(targetPath) || fs.statSync(targetPath).isDirectory()) {
+            return new NextResponse("File Not Found on Disk", { status: 404 });
+        }
+
+        const ext = path.extname(targetPath).toLowerCase();
+        let contentType = "application/octet-stream";
+        if (ext === ".pdf") contentType = "application/pdf";
+        else if (ext === ".epub") contentType = "application/epub+zip";
+        else if (ext === ".mobi") contentType = "application/x-mobipocket-ebook";
+        else if (ext === ".cbz") contentType = "application/x-cbz";
+        else if (ext === ".mp3") contentType = "audio/mpeg";
+        else if (ext === ".m4b" || ext === ".m4a") contentType = "audio/mp4";
+        else if (ext === ".flac") contentType = "audio/flac";
+
+        const fileName = path.basename(targetPath);
+        const fileStream = fs.createReadStream(targetPath);
+        const fileStat = fs.statSync(targetPath);
+
+        return new NextResponse(fileStream as any, {
             headers: {
                 "Content-Type": contentType,
-                "Content-Disposition": `inline; filename="${encodeURIComponent(book.title)}.${book.fileType}"`
+                "Content-Length": String(fileStat.size),
+                "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`
             }
         });
     } catch (e) {

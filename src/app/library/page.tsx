@@ -3574,25 +3574,38 @@ function normalizeBookCardMetadata(book: any) {
                                                     </div>
                                                 </div>
                                                 {!isEditingChapters && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant={isCurrentlyPlaying ? "default" : "outline"}
-                                                        className={`h-7 text-xs font-semibold px-3 ${isCurrentlyPlaying ? 'bg-amber-400 text-black hover:bg-amber-300 font-bold' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}`}
-                                                        onClick={() => {
-                                                            handlePlayChapter(chaptersModalBook, chaptersList, idx);
-                                                            setChaptersModalBook(null);
-                                                        }}
-                                                    >
-                                                        {isCurrentlyPlaying ? (
-                                                            <>
-                                                                <Volume2 className="h-3.5 w-3.5 mr-1 animate-pulse text-black" /> Playing
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Play className="h-3 w-3 mr-1 fill-current" /> Play
-                                                            </>
-                                                        )}
-                                                    </Button>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-7 text-xs font-semibold px-2.5 border-slate-700 text-slate-300 hover:bg-slate-800 gap-1"
+                                                            title={`Download ${ch.fileName}`}
+                                                            asChild
+                                                        >
+                                                            <a href={`/api/books/${chaptersModalBook.id}/stream?file=${encodeURIComponent(ch.relativePath)}&download=1`} download={ch.fileName}>
+                                                                <Download className="h-3 w-3" /> Download
+                                                            </a>
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant={isCurrentlyPlaying ? "default" : "outline"}
+                                                            className={`h-7 text-xs font-semibold px-3 ${isCurrentlyPlaying ? 'bg-amber-400 text-black hover:bg-amber-300 font-bold' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}`}
+                                                            onClick={() => {
+                                                                handlePlayChapter(chaptersModalBook, chaptersList, idx);
+                                                                setChaptersModalBook(null);
+                                                            }}
+                                                        >
+                                                            {isCurrentlyPlaying ? (
+                                                                <>
+                                                                    <Volume2 className="h-3.5 w-3.5 mr-1 animate-pulse text-black" /> Playing
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Play className="h-3 w-3 mr-1 fill-current" /> Play
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    </div>
                                                 )}
                                             </div>
                                         );

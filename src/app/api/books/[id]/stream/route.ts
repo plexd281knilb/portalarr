@@ -51,7 +51,20 @@ export async function GET(
         else if (ext === ".flac") contentType = "audio/flac";
         else if (ext === ".ogg") contentType = "audio/ogg";
 
-        if (range) {
+        const isDownload = searchParams.get("download") === "1";
+        const fileName = path.basename(targetFilePath);
+
+        const headers: Record<string, string> = {
+            "Content-Length": String(fileSize),
+            "Content-Type": contentType,
+            "Accept-Ranges": "bytes"
+        };
+
+        if (isDownload) {
+            headers["Content-Disposition"] = `attachment; filename="${encodeURIComponent(fileName)}"`;
+        }
+
+        if (range && !isDownload) {
             const parts = range.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
@@ -61,22 +74,15 @@ export async function GET(
             return new NextResponse(fileStream as any, {
                 status: 206,
                 headers: {
+                    ...headers,
                     "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-                    "Accept-Ranges": "bytes",
-                    "Content-Length": String(chunksize),
-                    "Content-Type": contentType
+                    "Content-Length": String(chunksize)
                 }
             });
         }
 
         const fileStream = fs.createReadStream(targetFilePath);
-        return new NextResponse(fileStream as any, {
-            headers: {
-                "Content-Length": String(fileSize),
-                "Content-Type": contentType,
-                "Accept-Ranges": "bytes"
-            }
-        });
+        return new NextResponse(fileStream as any, { headers });
     } catch (e: any) {
         return new NextResponse(e.message || "Failed to stream chapter", { status: 500 });
     }
