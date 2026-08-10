@@ -545,11 +545,11 @@ function normalizeBookCardMetadata(book: any) {
                           <Button 
                               variant="outline" 
                               size="sm" 
-                              className="text-xs h-7 px-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-                              title="Search & Re-Grab Complete Release (All Chapters)"
+                              className="text-xs h-7 px-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 font-semibold"
+                              title="Search & Re-Grab Release"
                               onClick={() => handleSearchAndReplaceRelease(book)}
                           >
-                              <Search className="h-3.5 w-3.5" />
+                              <Search className="h-3.5 w-3.5 mr-1" /> Re-Grab Release
                           </Button>
                           <Button 
                               variant="outline" 
@@ -669,6 +669,15 @@ function normalizeBookCardMetadata(book: any) {
                     </div>
                     
                     <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs h-7 px-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 font-semibold"
+                            title="Search & Re-Grab Complete Audiobook Release (All Chapters)"
+                            onClick={() => handleSearchAndReplaceRelease(book)}
+                        >
+                            <Search className="h-3.5 w-3.5 mr-1" /> Re-Grab Release
+                        </Button>
                         <Button 
                             variant="outline" 
                             size="sm" 
@@ -2443,68 +2452,49 @@ function normalizeBookCardMetadata(book: any) {
                                                                  )}
                                                              </div>
                                                          )}
-                                                         {(isAdmin || req.requestedBy === user?.username) && (req.status === "Approved" || req.status === "Downloading") && (
+                                                         {(isAdmin || req.requestedBy === user?.username) && (
                                                              <Button
                                                                  size="sm"
                                                                  variant="outline"
-                                                                 className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold mr-2"
+                                                                 className="h-7 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 bg-cyan-500/5 font-semibold mr-1"
                                                                  onClick={() => triggerProwlarrSearch(req)}
                                                              >
                                                                  <Search className="h-3 w-3 mr-1" /> Search Release
                                                              </Button>
                                                          )}
-                                                         {(isAdmin || req.requestedBy === user?.username) && req.status === "Downloading" && (
-                                                             <Button
-                                                                 size="sm"
+                                                         {(isAdmin || req.requestedBy === user?.username) && (req.status === "Approved" || req.status === "Downloading") && (
+                                                             <Button 
+                                                                 size="sm" 
                                                                  variant="outline"
-                                                                 className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold mr-2"
+                                                                 className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 bg-blue-500/5 font-semibold mr-1"
                                                                  onClick={async () => {
                                                                      try {
-                                                                         await retryBookRequest(req.id);
-                                                                         alert("Retry search successfully queued in the background!");
+                                                                         const res = await importCompletedDownload(req.id);
+                                                                         if (res.success) {
+                                                                             alert(res.message || "Imported completed download to library!");
+                                                                         } else {
+                                                                             alert(res.error || "Failed to locate completed download.");
+                                                                         }
                                                                          const reqs = await getBookRequests();
                                                                          setRequests(reqs || []);
                                                                      } catch (err: any) {
-                                                                         alert(err.message || "Failed to retry request.");
+                                                                         alert(err.message || "Failed to import download.");
                                                                      }
                                                                  }}
                                                              >
-                                                                 <RefreshCw className="h-3 w-3 mr-1" /> Retry Search
+                                                                 <Download className="h-3 w-3 mr-1" /> Import Download
                                                              </Button>
                                                          )}
-                                                         {(isAdmin || req.requestedBy === user?.username) && (req.status === "Approved" || req.status === "Downloading") && (
-                                                            <Button 
-                                                                size="sm" 
-                                                                variant="outline"
-                                                                className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 bg-blue-500/5 font-semibold mr-1"
-                                                                onClick={async () => {
-                                                                    try {
-                                                                        const res = await importCompletedDownload(req.id);
-                                                                        if (res.success) {
-                                                                            alert(res.message || "Imported completed download to library!");
-                                                                        } else {
-                                                                            alert(res.error || "Failed to locate completed download.");
-                                                                        }
-                                                                        const reqs = await getBookRequests();
-                                                                        setRequests(reqs || []);
-                                                                    } catch (err: any) {
-                                                                        alert(err.message || "Failed to import download.");
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Download className="h-3 w-3 mr-1" /> Import Download
-                                                            </Button>
-                                                        )}
-                                                        {isAdmin && (req.status === "Approved" || req.status === "Downloading") && (
-                                                            <Button 
-                                                                size="sm" 
-                                                                variant="outline"
-                                                                className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
-                                                                onClick={() => handleUpdateRequestStatus(req.id, "Downloaded")}
-                                                            >
-                                                                Mark Downloaded
-                                                            </Button>
-                                                        )}
+                                                         {isAdmin && (req.status === "Approved" || req.status === "Downloading") && (
+                                                             <Button 
+                                                                 size="sm" 
+                                                                 variant="outline"
+                                                                 className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
+                                                                 onClick={() => handleUpdateRequestStatus(req.id, "Downloaded")}
+                                                             >
+                                                                 Mark Downloaded
+                                                             </Button>
+                                                         )}
                                                           {req.status.startsWith("Failed") && (
                                                               <div className="flex gap-1.5 items-center">
                                                                   <Button
