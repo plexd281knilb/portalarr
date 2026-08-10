@@ -1105,6 +1105,15 @@ async function verifyUser() {
     if (!session) throw new Error("Unauthorized");
     try {
         const { payload } = await jwtVerify(session, SECRET_KEY);
+        if (payload.userId) {
+            const dbUser = await prisma.user.findUnique({
+                where: { id: payload.userId as string },
+                select: { id: true, username: true, role: true, status: true }
+            });
+            if (dbUser) {
+                return { userId: dbUser.id, username: dbUser.username, role: dbUser.role, status: dbUser.status };
+            }
+        }
         return payload; // { userId, username, role }
     } catch (err) {
         throw new Error("Unauthorized");
@@ -1114,17 +1123,19 @@ async function verifyUser() {
 async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string, role: string) {
     if (role === "ADMIN") return true;
 
+    const safeUsername = (username || "").toLowerCase();
+
     // Explicit denial check: If user is listed in restrictedUsers, block access immediately
     if (restrictedUsersStr && restrictedUsersStr.trim() !== "") {
         const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase());
-        if (restricted.includes(username.toLowerCase())) {
+        if (restricted.includes(safeUsername)) {
             return false;
         }
     }
 
     if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
     const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
-    return allowed.includes("*") || allowed.includes(username.toLowerCase());
+    return allowed.includes("*") || allowed.includes(safeUsername);
 }
 
 export async function getLibraries() {
