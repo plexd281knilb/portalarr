@@ -4453,3 +4453,82 @@ export async function importCompletedDownload(requestId: string) {
     revalidatePath("/library");
     return { success: true, message: `Successfully imported "${currentReq.title}" to ${targetLib.name} shelf!` };
 }
+
+export async function getAudiobookChapters(bookId: string) {
+    await verifyUser();
+
+    const book = await prisma.book.findUnique({
+        where: { id: bookId },
+        include: { library: true }
+    });
+
+    if (!book) throw new Error("Audiobook not found");
+
+    if (!fs.existsSync(book.filePath)) {
+        throw new Error("Audiobook folder not found on disk");
+    }
+
+    const stat = fs.statSync(book.filePath);
+    let targetDir = stat.isDirectory() ? book.filePath : path.dirname(book.filePath);
+
+    const parentName = path.basename(targetDir);
+    const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Disk|Track)\s*\d+$/i;
+    if (discPattern.test(parentName)) {
+        const parentDir = path.dirname(targetDir);
+        if (fs.existsSync(parentDir) && parentDir !== "/" && parentDir.length > 2) {
+            targetDir = parentDir;
+        }
+    }
+
+    const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus"];
+    const chapters: { trackNumber: number; title: string; fileName: string; relativePath: string; size: number }[] = [];
+
+    function collectAudioFiles(dir: string, baseDir: string, depth = 0) {
+        if (!fs.existsSync(dir)) return;
+        try {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                const fullP = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    if (depth < 3) {
+                        collectAudioFiles(fullP, baseDir, depth + 1);
+                    }
+                } else {
+                    const ext = path.extname(entry.name).toLowerCase();
+                    if (validAudioExts.includes(ext)) {
+                        try {
+                            const st = fs.statSync(fullP);
+                            const relP = path.relative(baseDir, fullP);
+                            const cleanName = path.basename(entry.name, ext)
+                                .replace(/^[0-9\s._-]+/, "")
+                                .trim() || entry.name;
+                            chapters.push({
+                                trackNumber: 0,
+                                title: cleanName,
+                                fileName: entry.name,
+                                relativePath: relP,
+                                size: st.size
+                            });
+                        } catch (e) {}
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    collectAudioFiles(targetDir, targetDir);
+
+    chapters.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { numeric: true, sensitivity: 'base' }));
+
+    chapters.forEach((ch, idx) => {
+        ch.trackNumber = idx + 1;
+    });
+
+    return {
+        bookId: book.id,
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        coverUrl: book.coverUrl,
+        chapters
+    };
+}

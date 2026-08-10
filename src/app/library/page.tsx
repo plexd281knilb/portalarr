@@ -30,7 +30,8 @@ import {
   retryBookRequest,
   refreshBookCover,
   seedDefaultLibraries,
-  importCompletedDownload
+  importCompletedDownload,
+  getAudiobookChapters
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -226,6 +227,17 @@ function BookLibraryPageContent() {
     const [editingLibId, setEditingLibId] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
     const [activeAudiobook, setActiveAudiobook] = useState<any>(null);
+    const [chaptersModalBook, setChaptersModalBook] = useState<any>(null);
+    const [chaptersList, setChaptersList] = useState<any[]>([]);
+    const [loadingChapters, setLoadingChapters] = useState(false);
+    const [activePlayingTrack, setActivePlayingTrack] = useState<{
+        bookId: string;
+        bookTitle: string;
+        bookAuthor?: string;
+        coverUrl?: string;
+        chapters: any[];
+        currentChapterIndex: number;
+    } | null>(null);
     const [reqMediaType, setReqMediaType] = useState<"ebook" | "audiobook">("ebook");
     const [reqLogFilter, setReqLogFilter] = useState<"all" | "ebook" | "audiobook">("all");
 
@@ -636,10 +648,10 @@ function normalizeBookCardMetadata(book: any) {
                         <Button 
                             variant="default" 
                             size="sm" 
-                            className="flex-1 text-xs font-semibold text-black bg-amber-400 hover:bg-amber-300 gap-1"
-                            onClick={() => setActiveAudiobook(book)}
+                            className="flex-1 text-xs font-extrabold text-black bg-amber-400 hover:bg-amber-300 gap-1 shadow"
+                            onClick={() => handleOpenChaptersModal(book)}
                         >
-                            <Play className="h-3.5 w-3.5 fill-black" /> Listen
+                            <Play className="h-3.5 w-3.5 fill-black" /> Listen &amp; Chapters
                         </Button>
                         <Button 
                             variant="outline" 
@@ -1156,6 +1168,53 @@ function normalizeBookCardMetadata(book: any) {
             alert(e.message || "Failed to deliver email to personal inbox.");
         } finally {
             setSendingToPersonalEmailId(null);
+        }
+    }
+
+    async function handleOpenChaptersModal(book: any) {
+        setChaptersModalBook(book);
+        setLoadingChapters(true);
+        setChaptersList([]);
+        try {
+            const res = await getAudiobookChapters(book.id);
+            if (res && res.chapters) {
+                setChaptersList(res.chapters);
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed to load audiobook chapters.");
+        } finally {
+            setLoadingChapters(false);
+        }
+    }
+
+    function handlePlayChapter(book: any, chapters: any[], chapterIndex: number) {
+        setActivePlayingTrack({
+            bookId: book.id,
+            bookTitle: book.title,
+            bookAuthor: book.author,
+            coverUrl: book.coverUrl,
+            chapters: chapters,
+            currentChapterIndex: chapterIndex
+        });
+    }
+
+    function handleNextChapter() {
+        if (!activePlayingTrack) return;
+        if (activePlayingTrack.currentChapterIndex < activePlayingTrack.chapters.length - 1) {
+            setActivePlayingTrack({
+                ...activePlayingTrack,
+                currentChapterIndex: activePlayingTrack.currentChapterIndex + 1
+            });
+        }
+    }
+
+    function handlePrevChapter() {
+        if (!activePlayingTrack) return;
+        if (activePlayingTrack.currentChapterIndex > 0) {
+            setActivePlayingTrack({
+                ...activePlayingTrack,
+                currentChapterIndex: activePlayingTrack.currentChapterIndex - 1
+            });
         }
     }
 
@@ -3278,34 +3337,179 @@ function normalizeBookCardMetadata(book: any) {
                 </div>
             )}
 
-            {activeAudiobook && (
+            {chaptersModalBook && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-2xl max-h-[85vh] flex flex-col border-amber-500/30 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden">
+                        <CardHeader className="border-b border-slate-800 pb-4 bg-slate-900/60">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-16 w-16 rounded-lg bg-slate-900 border border-slate-800 shrink-0 overflow-hidden flex items-center justify-center">
+                                        {chaptersModalBook.coverUrl ? (
+                                            /* eslint-disable-next-line @next/next/no-img-element */
+                                            <img src={chaptersModalBook.coverUrl} alt={chaptersModalBook.title} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <Headphones className="h-8 w-8 text-amber-400" />
+                                        )}
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-lg font-bold line-clamp-1">{chaptersModalBook.title}</CardTitle>
+                                        <CardDescription className="text-xs text-slate-400 line-clamp-1">
+                                            {chaptersModalBook.author || "Unknown Author"} • {chaptersList.length} Chapters Found
+                                        </CardDescription>
+                                        {chaptersList.length > 0 && (
+                                            <Button
+                                                size="sm"
+                                                className="mt-2 h-7 text-xs font-bold bg-amber-400 text-black hover:bg-amber-300 gap-1.5"
+                                                onClick={() => {
+                                                    handlePlayChapter(chaptersModalBook, chaptersList, 0);
+                                                    setChaptersModalBook(null);
+                                                }}
+                                            >
+                                                <Play className="h-3.5 w-3.5 fill-black" /> Play All (Start at Chapter 1)
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setChaptersModalBook(null)}>
+                                    <X className="h-5 w-5" />
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        
+                        <CardContent className="flex-1 overflow-y-auto p-4 space-y-2">
+                            {loadingChapters ? (
+                                <div className="flex flex-col items-center justify-center p-12 space-y-3 text-slate-400">
+                                    <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+                                    <p className="text-xs">Scanning audiobook folder for chapter tracks...</p>
+                                </div>
+                            ) : chaptersList.length === 0 ? (
+                                <div className="p-12 text-center text-sm text-slate-400 italic">
+                                    No audio chapter files detected in this folder.
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-slate-800/80">
+                                    {chaptersList.map((ch, idx) => {
+                                        const isCurrentlyPlaying = activePlayingTrack?.bookId === chaptersModalBook.id && activePlayingTrack?.currentChapterIndex === idx;
+                                        return (
+                                            <div key={idx} className={`p-3 flex items-center justify-between gap-3 hover:bg-slate-900/80 rounded-lg transition-colors ${isCurrentlyPlaying ? 'bg-amber-500/10 border border-amber-500/30' : ''}`}>
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <Badge variant="outline" className={`h-6 min-w-[32px] justify-center text-xs font-bold ${isCurrentlyPlaying ? 'border-amber-400 text-amber-400 bg-amber-400/10' : 'border-slate-800 text-slate-400'}`}>
+                                                        {ch.trackNumber}
+                                                    </Badge>
+                                                    <div className="truncate">
+                                                        <p className={`text-xs font-semibold truncate ${isCurrentlyPlaying ? 'text-amber-400 font-bold' : 'text-slate-200'}`}>
+                                                            {ch.title}
+                                                        </p>
+                                                        <p className="text-[10px] text-slate-400 truncate">
+                                                            {ch.relativePath} • {(ch.size / (1024 * 1024)).toFixed(1)} MB
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    variant={isCurrentlyPlaying ? "default" : "outline"}
+                                                    className={`h-7 text-xs font-semibold px-3 ${isCurrentlyPlaying ? 'bg-amber-400 text-black hover:bg-amber-300 font-bold' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}`}
+                                                    onClick={() => {
+                                                        handlePlayChapter(chaptersModalBook, chaptersList, idx);
+                                                        setChaptersModalBook(null);
+                                                    }}
+                                                >
+                                                    {isCurrentlyPlaying ? (
+                                                        <>
+                                                            <Volume2 className="h-3.5 w-3.5 mr-1 animate-pulse text-black" /> Playing
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Play className="h-3 w-3 mr-1 fill-current" /> Play
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {activePlayingTrack && (
                 <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl px-4 animate-in slide-in-from-bottom duration-300">
-                    <div className="bg-card/95 border border-amber-500/40 shadow-2xl backdrop-blur-md p-4 rounded-2xl flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3 truncate">
-                                <div className="p-2 bg-amber-500/20 rounded-xl text-amber-400">
+                    <div className="bg-slate-950/95 border border-amber-500/40 shadow-2xl backdrop-blur-md p-4 rounded-2xl flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 truncate min-w-0">
+                                <div className="p-2 bg-amber-500/20 rounded-xl text-amber-400 shrink-0">
                                     <Headphones className="h-5 w-5" />
                                 </div>
                                 <div className="truncate">
-                                    <p className="text-sm font-bold truncate text-foreground">{activeAudiobook.title}</p>
-                                    <p className="text-xs text-muted-foreground truncate">{activeAudiobook.author || "Unknown Author"}</p>
+                                    <p className="text-xs font-extrabold text-amber-400 uppercase tracking-wider">
+                                        Chapter {activePlayingTrack.currentChapterIndex + 1} of {activePlayingTrack.chapters.length}
+                                    </p>
+                                    <p className="text-sm font-bold truncate text-white">
+                                        {activePlayingTrack.chapters[activePlayingTrack.currentChapterIndex]?.title || activePlayingTrack.bookTitle}
+                                    </p>
+                                    <p className="text-xs text-slate-400 truncate">
+                                        {activePlayingTrack.bookTitle} • {activePlayingTrack.bookAuthor || "Unknown Author"}
+                                    </p>
                                 </div>
                             </div>
-                            <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-8 w-8 p-0 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
-                                onClick={() => setActiveAudiobook(null)}
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-1 shrink-0">
+                                {activePlayingTrack.chapters.length > 1 && (
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-8 px-2 text-xs font-semibold text-slate-300 hover:text-white"
+                                        onClick={() => handleOpenChaptersModal({ id: activePlayingTrack.bookId, title: activePlayingTrack.bookTitle, author: activePlayingTrack.bookAuthor, coverUrl: activePlayingTrack.coverUrl })}
+                                    >
+                                        Chapters
+                                    </Button>
+                                )}
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-8 w-8 p-0 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white"
+                                    onClick={() => setActivePlayingTrack(null)}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </div>
+
                         <audio 
                             controls 
                             autoPlay 
-                            src={`/api/books/${activeAudiobook.id}`} 
+                            key={`${activePlayingTrack.bookId}-${activePlayingTrack.currentChapterIndex}`}
+                            src={`/api/books/${activePlayingTrack.bookId}/stream?file=${encodeURIComponent(activePlayingTrack.chapters[activePlayingTrack.currentChapterIndex]?.relativePath || '')}`} 
+                            onEnded={handleNextChapter}
                             className="w-full h-10 rounded-lg accent-amber-400" 
                         />
+
+                        {activePlayingTrack.chapters.length > 1 && (
+                            <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800/60">
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs text-slate-300 hover:text-white disabled:opacity-40"
+                                    disabled={activePlayingTrack.currentChapterIndex === 0}
+                                    onClick={handlePrevChapter}
+                                >
+                                    ⏮ Prev Chapter
+                                </Button>
+                                <span className="text-[11px] font-semibold text-slate-400">
+                                    Autoplay On Next
+                                </span>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs text-slate-300 hover:text-white disabled:opacity-40"
+                                    disabled={activePlayingTrack.currentChapterIndex === activePlayingTrack.chapters.length - 1}
+                                    onClick={handleNextChapter}
+                                >
+                                    Next Chapter ⏭
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
