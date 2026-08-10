@@ -18,8 +18,10 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
   - **Unified Status Widgets:** Real-time stream stats (Tautulli), server health metrics (Glances), and deduplicated active download queues (qBittorrent, SABnzbd, NZBGet).
   - **Audiobook & Ebook Unified Library:** Dedicated tabs for Ebooks and Audiobooks, library media type filtering (`ebook` vs `audiobook`), built-in floating HTML5 audio player, Send-to-Kindle integration, multi-disc folder ingestion (`Disc 01/`, `Disc 02/`), and Prowlarr category routing (`3030` Audiobooks vs `3040` Ebooks).
   - **3-Tier Cover Artwork Engine:** Automated high-definition artwork resolution (iTunes 600x600 HD → Open Library `-L.jpg` → Google Books `zoom=0`), with an instant **"Fetch Cover" (`🖼️`)** action button on library cards.
+  - **Smart Multi-Track Audiobook Consolidation:** Folder-level metadata resolution for multi-track audiobooks (`01 Dudley Demented.mp3`, `02 A Peck of Owls.mp3`), auto-merging chapter tracks into unified book entries (`Harry Potter and the Order of the Phoenix` by `J. K. Rowling`) with total size calculation and HD artwork.
+  - **Interactive Release Selection & 1-Click Ingestion:** Interactive release chooser modal for indexers, manual release selection, retry search, and **`📥 Import Download`** action button for instant manual download folder ingestion.
   - **Live Request Auto-Refresh:** Reactive polling on `/library` updates media request states every 5 seconds (`Pending` → `Searching` → `Downloading` → `Downloaded`) and automatically syncs new library items upon completion.
-  - **Audiobook vs Ebook Request Email Notifications:** HTML notification emails sent to administrators feature styled format badges (`🎧 AUDIOBOOK` vs `📖 EBOOK`) and distinct subject headers.
+  - **Audiobook vs Ebook Request Email Notifications:** HTML notification emails sent to administrators feature styled format badges (`🎧 AUDIOBOOK` vs `📖 EBOOK`), distinct subject headers, and dynamic public URL resolution (`getAppUrl()`).
   - **Overhauled System Settings Tabs:**
     - **General & Email:** Dashboard alert banner, SMTP server setup, test email dispatch, Send-to-Kindle Amazon approved senders guide, and Completed Downloads folder path access validator (`FolderCheck`).
     - **Access Control:** User directory live search, status filters, inline role toggling (`Admin` vs `User`), Kindle email manager (`✏️`), Admin password reset modal (`🔑`), 1-click bulk approvals (`CheckCheck`), and Plex friends auto-sync.
@@ -87,11 +89,12 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 ### 4. Global Route Protection & Edge Security
 - **Proxy Configuration:** All routes are protected by `src/proxy.ts` (Next.js 16 convention).
 - **Enforcement:** Users are redirected to `/login` if no valid session exists. API requests without valid sessions are rejected at the edge with HTTP 401.
+- **Strict Shelf Access Control:** `checkLibraryAccess()` validates username/email directly against `allowedUsers` and `restrictedUsers`. Empty or `*` allows all users, while explicit user lists strictly grant access ONLY to listed accounts. Fallbacks returning all libraries on empty matches are strictly prohibited.
 - **Role & Status Protection:** Admin routes (`/settings`, `/admin/*`) are restricted to users with the `ADMIN` role. Users with `PENDING` or `REJECTED` status are blocked from all app/API routes by `src/proxy.ts` and redirected to `/pending`. Non-admin users attempting to visit `/settings` are safely redirected to `/settings/profile`.
 - **Static Asset Guards:** Static asset bypass checks in `proxy.ts` explicitly exclude `/api` paths to prevent API route session bypasses via file extension tricks.
 
 ### 5. Account Approval, Plex Auto-Sync & Session Resilience
-- **Pending Account Requests:** New users can submit a temporary account request on `/login`. This sets `status = "PENDING"` and emails an admin notification via SMTP. Admins manage approval/rejection at `/settings/access`.
+- **Pending Account Requests:** New users can submit a temporary account request on `/login`. This sets `status = "PENDING"` and emails an admin notification via SMTP with dynamic public URL links (`getAppUrl()`). Admins manage approval/rejection at `/settings/access`.
 - **Plex Owner Token Auto-Save & Friend Sync:** Logging in as the Plex server owner automatically saves the owner's encrypted token into `prisma.settings` and triggers a background sync. The scheduler in `src/lib/prisma.ts` scans `/api/v2/friends`, auto-provisions `APPROVED` accounts for new friends, updates changed emails/usernames, and revokes access (`status = "REJECTED"`) for removed friends.
 - **Session Desync & Loop Prevention:** `getCurrentUser()` detects changes between the database status/role and the active JWT payload. If an admin approves a pending user, `getCurrentUser()` automatically re-issues a fresh session cookie with `status = "APPROVED"`, preventing redirect loops between `proxy.ts` and `/pending`.
 - **Persistent Login:** Session cookies persist for 30 days with sliding renewal so active users stay logged in across browser restarts and reboots.
@@ -102,7 +105,9 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Windows File Locks:** SQLite database and Prisma engine files lock during `npm run dev`. Stop the dev server before running `npx prisma migrate dev`.
 - **Case-Insensitive SQLite Queries:** Perform lowercased string matching in JS when querying `prisma.user` to avoid Prisma SQLite `mode: "insensitive"` type errors and `P2002` unique constraint crashes.
 - **Registry Autocomplete:** Use `onMouseDown` instead of `onClick` for dropdown suggestion list items to prevent input `onBlur` from unmounting items prematurely.
-- **Open Library & iTunes Queries:** Combine title queries with author name and clean out scene release noise (`(Rob Inglis)-PoF`, `Disc 01`, `03 - `) to get crisp 600x600 cover artwork.
+- **Open Library, iTunes & Chapter Track Normalization:** Combine title queries with author name, clean out scene release noise (`(Rob Inglis)-PoF`, `Disc 01`), and normalize chapter titles (`dudley demented`, `peck of owls`) to official book titles (`Harry Potter and the Order of the Phoenix` by `J. K. Rowling`) to fetch crisp 600x600 cover artwork.
+- **Multi-Track Audiobook Consolidation:** In `getEffectiveBookBaseName()`, detect track number patterns (`01 `, `02 `, `1-01 `) and use parent release folder names to consolidate chapter audio files into a single master audiobook card.
+- **Download Client Matching & Ingestion:** Track torrents across both `books` and `audiobooks` categories in qBittorrent, and fall back to title substring matching in SABnzbd when `nzo_id` is missing. Provide `importCompletedDownload()` for 1-click manual download directory ingestion.
 - **Library Access Defaults:** Public libraries use `allowedUsers = "*"` or empty string to allow all approved users access.
 - **Server Action Error Handling:** Server actions invoked from Client Components should return a serializable `{ success: boolean, error?: string }` object instead of throwing raw `Error`s. In production Next.js builds, raw errors are masked with a generic *"An error occurred in the Server Components render"* message, preventing detailed user-facing error reporting.
 - **Kindle & Library Scan Renaming Loops:** Keep on-disk file paths pretty (e.g. `Author - Title.ext`) and avoid cleaning or lowercase-renaming them on disk during library scans. This prevents infinite scan-rename cycles and race conditions where download/Kindle delivery checks fail because the path keeps changing. For Kindle email delivery, sanitize the attachment filename *in the email options* instead of renaming the file on disk.
@@ -112,14 +117,14 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 ## Key Files
 - `prisma/schema.prisma`: The source of truth for the database schema.
 - `src/proxy.ts`: Global edge authentication, role-based, static file, and user status access control.
-- `src/app/actions.ts`: Main repository for system logic, Plex friend sync, active download parsing, cover resolution, connection testers, and database mutations.
+- `src/app/actions.ts`: Main repository for system logic, Plex friend sync, active download parsing, cover resolution, connection testers, download ingestion, and database mutations.
 - `src/app/auth-actions.ts`: Logic for login, 30-day session creation, account requests, Plex authentication, and session cookie resync.
 - `src/app/pending/page.tsx`: Pending account approval status screen for non-approved users.
 - `src/app/settings/page.tsx`: System settings page embedding tab views for General, Access Control, Monitoring, and Beta.
 - `src/app/settings/access/page.tsx`: Admin management screen for users, role toggling, Kindle emails, admin password resets, and Plex sync.
 - `src/app/settings/profile/page.tsx`: Self-service account profile and password change screen for all users.
 - `src/app/admin/tickets/page.tsx`: Admin management screen for user support tickets.
-- `src/app/library/page.tsx`: Book & Audiobook library page with Send-to-Kindle gate, Kindle settings header, live request auto-polling, and cover artwork fetchers.
+- `src/app/library/page.tsx`: Book & Audiobook library page with Send-to-Kindle gate, Kindle settings header, live request auto-polling, interactive release chooser, and cover artwork fetchers.
 - `src/components/active-downloads.tsx`: Client component for deduplicated active downloads queue rendering.
 - `src/components/sidebar.tsx`: Main navigation component.
 - `src/lib/encryption.ts`: AES-256-GCM encryption utilities.

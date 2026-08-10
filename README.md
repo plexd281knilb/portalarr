@@ -8,8 +8,9 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 
 - **Unified Dashboard:** Aggregate status from Plex, Tautulli, Glances, and your "Arr" stack.
 - **Deduplicated Active Downloads:** Real-time progress and queue tracking for SABnzbd, NZBGet, and qBittorrent.
-- **Audiobook & Ebook Library:** Dedicated tabs for Ebooks and Audiobooks, built-in HTML5 audio player, multi-disc folder copy (`Disc 01/`, `Disc 02/`), Send-to-Kindle integration, and Prowlarr category routing.
+- **Audiobook & Ebook Library:** Dedicated tabs for Ebooks and Audiobooks, built-in HTML5 audio player, multi-track/multi-disc folder consolidation (`Disc 01/`, `Disc 02/`), Send-to-Kindle integration, and Prowlarr category routing.
 - **3-Tier Cover Artwork Engine:** Automated 600x600 HD cover resolution (iTunes → Open Library → Google Books) with instant 1-click artwork fetch buttons (`🖼️`).
+- **Interactive Release Selection & 1-Click Ingestion:** Interactive release chooser modal for indexers, manual release selection, retry search, and **`📥 Import Download`** action button for instant manual download folder ingestion.
 - **Live Auto-Refreshing Requests:** Real-time 5-second polling updates request statuses (`Pending` → `Searching` → `Downloading` → `Downloaded`) and automatically syncs completed downloads to your library shelf.
 - **Robust Settings & Diagnostic Tools:**
   - **Live App Connection Testing:** Test connectivity to Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Bazarr, etc., directly from settings.
