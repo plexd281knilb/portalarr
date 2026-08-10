@@ -1177,8 +1177,10 @@ function normalizeBookCardMetadata(book: any) {
         setChaptersList([]);
         try {
             const res = await getAudiobookChapters(book.id);
-            if (res && res.chapters) {
+            if (res && res.success && res.chapters) {
                 setChaptersList(res.chapters);
+            } else if (res && !res.success) {
+                alert(res.error || "Failed to load audiobook chapters.");
             }
         } catch (e: any) {
             alert(e.message || "Failed to load audiobook chapters.");

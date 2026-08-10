@@ -4456,193 +4456,201 @@ export async function importCompletedDownload(requestId: string) {
 }
 
 export async function getAudiobookChapters(bookId: string) {
-    await verifyUser();
+    try {
+        await verifyUser();
 
-    const book = await prisma.book.findUnique({
-        where: { id: bookId },
-        include: { library: true }
-    });
+        const book = await prisma.book.findUnique({
+            where: { id: bookId },
+            include: { library: true }
+        });
 
-    if (!book) throw new Error("Audiobook not found");
+        if (!book) return { success: false, error: "Audiobook entry not found in database", chapters: [] };
 
-    if (!fs.existsSync(book.filePath)) {
-        throw new Error("Audiobook folder not found on disk");
-    }
-
-    const stat = fs.statSync(book.filePath);
-    let targetDir = stat.isDirectory() ? book.filePath : path.dirname(book.filePath);
-
-    const parentName = path.basename(targetDir);
-    const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Disk|Track)\s*\d+$/i;
-    if (discPattern.test(parentName)) {
-        const parentDir = path.dirname(targetDir);
-        if (fs.existsSync(parentDir) && parentDir !== "/" && parentDir.length > 2) {
-            targetDir = parentDir;
+        if (!fs.existsSync(book.filePath)) {
+            return { success: false, error: `Audiobook path does not exist on disk: ${book.filePath}`, chapters: [] };
         }
-    }
 
-    const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus"];
-    const chapters: { trackNumber: number; title: string; fileName: string; relativePath: string; size: number }[] = [];
+        const stat = fs.statSync(book.filePath);
+        let targetDir = stat.isDirectory() ? book.filePath : path.dirname(book.filePath);
 
-    function collectAudioFiles(dir: string, baseDir: string, depth = 0) {
-        if (!fs.existsSync(dir)) return;
-        try {
-            const entries = fs.readdirSync(dir, { withFileTypes: true });
-            for (const entry of entries) {
-                const fullP = path.join(dir, entry.name);
-                if (entry.isDirectory()) {
-                    if (depth < 3) {
-                        collectAudioFiles(fullP, baseDir, depth + 1);
-                    }
-                } else {
-                    const ext = path.extname(entry.name).toLowerCase();
-                    if (validAudioExts.includes(ext)) {
-                        try {
-                            const st = fs.statSync(fullP);
-                            const relP = path.relative(baseDir, fullP);
-                            const cleanName = path.basename(entry.name, ext)
-                                .replace(/^[0-9\s._-]+/, "")
-                                .trim() || entry.name;
-                            chapters.push({
-                                trackNumber: 0,
-                                title: cleanName,
-                                fileName: entry.name,
-                                relativePath: relP,
-                                size: st.size
-                            });
-                        } catch (e) {}
+        const parentName = path.basename(targetDir);
+        const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Disk|Track)\s*\d+$/i;
+        if (discPattern.test(parentName)) {
+            const parentDir = path.dirname(targetDir);
+            if (fs.existsSync(parentDir) && parentDir !== "/" && parentDir.length > 2) {
+                targetDir = parentDir;
+            }
+        }
+
+        const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus"];
+        const chapters: { trackNumber: number; title: string; fileName: string; relativePath: string; size: number }[] = [];
+
+        function collectAudioFiles(dir: string, baseDir: string, depth = 0) {
+            if (!fs.existsSync(dir)) return;
+            try {
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                    const fullP = path.join(dir, entry.name);
+                    if (entry.isDirectory()) {
+                        if (depth < 3) {
+                            collectAudioFiles(fullP, baseDir, depth + 1);
+                        }
+                    } else {
+                        const ext = path.extname(entry.name).toLowerCase();
+                        if (validAudioExts.includes(ext)) {
+                            try {
+                                const st = fs.statSync(fullP);
+                                const relP = path.relative(baseDir, fullP);
+                                const cleanName = path.basename(entry.name, ext)
+                                    .replace(/^[0-9\s._-]+/, "")
+                                    .trim() || entry.name;
+                                chapters.push({
+                                    trackNumber: 0,
+                                    title: cleanName,
+                                    fileName: entry.name,
+                                    relativePath: relP,
+                                    size: st.size
+                                });
+                            } catch (e) {}
+                        }
                     }
                 }
+            } catch (e) {}
+        }
+
+        collectAudioFiles(targetDir, targetDir);
+
+        const allFiles = chapters.map(c => c.fileName);
+
+        const allPrefixes = Array.from(new Set(allFiles.map(f => {
+            const n = path.basename(f, path.extname(f));
+            return n.replace(/_(\d{1,3})$/, "").trim();
+        }))).sort((a, b) => b.length - a.length);
+
+        function extractTrackIndex(fileName: string): number {
+            const ext = path.extname(fileName);
+            const nameWithoutExt = path.basename(fileName, ext);
+
+            const leadingMatch = nameWithoutExt.match(/^(\d{1,3})[\s._-]+/);
+            if (leadingMatch) {
+                const num = parseInt(leadingMatch[1], 10);
+                if (!isNaN(num) && num > 0) return num;
             }
-        } catch (e) {}
-    }
 
-    collectAudioFiles(targetDir, targetDir);
+            const prefix = nameWithoutExt.replace(/_(\d{1,3})$/, "").trim();
+            const trailingUnderscoreMatch = nameWithoutExt.match(/_(\d{1,3})$/);
 
-    const allFiles = chapters.map(c => c.fileName);
-
-    const allPrefixes = Array.from(new Set(allFiles.map(f => {
-        const n = path.basename(f, path.extname(f));
-        return n.replace(/_(\d{1,3})$/, "").trim();
-    }))).sort((a, b) => b.length - a.length);
-
-    function extractTrackIndex(fileName: string): number {
-        const ext = path.extname(fileName);
-        const nameWithoutExt = path.basename(fileName, ext);
-
-        // Pattern 1: Leading standalone chapter numbers (e.g., "22-st._mungos.mp3", "01 Dudley.mp3", "38-the_second_war.mp3")
-        const leadingMatch = nameWithoutExt.match(/^(\d{1,3})[\s._-]+/);
-        if (leadingMatch) {
-            const num = parseInt(leadingMatch[1], 10);
-            if (!isNaN(num) && num > 0) return num;
-        }
-
-        // Pattern 2: Multi-part releases with multiple prefix groups (e.g. Set A "Fellowship - Fellowship" & Set B "Fellowship")
-        const prefix = nameWithoutExt.replace(/_(\d{1,3})$/, "").trim();
-        const trailingUnderscoreMatch = nameWithoutExt.match(/_(\d{1,3})$/);
-
-        const groupIndex = allPrefixes.indexOf(prefix);
-        let baseOffset = 0;
-        if (groupIndex > 0) {
-            for (let i = 0; i < groupIndex; i++) {
-                const prevPrefix = allPrefixes[i];
-                const countInPrevGroup = allFiles.filter(f => {
-                    const n = path.basename(f, path.extname(f));
-                    return n.replace(/_(\d{1,3})$/, "").trim() === prevPrefix;
-                }).length;
-                baseOffset += countInPrevGroup;
+            const groupIndex = allPrefixes.indexOf(prefix);
+            let baseOffset = 0;
+            if (groupIndex > 0) {
+                for (let i = 0; i < groupIndex; i++) {
+                    const prevPrefix = allPrefixes[i];
+                    const countInPrevGroup = allFiles.filter(f => {
+                        const n = path.basename(f, path.extname(f));
+                        return n.replace(/_(\d{1,3})$/, "").trim() === prevPrefix;
+                    }).length;
+                    baseOffset += countInPrevGroup;
+                }
             }
+
+            if (trailingUnderscoreMatch) {
+                const num = parseInt(trailingUnderscoreMatch[1], 10);
+                if (!isNaN(num)) return baseOffset + num + 1;
+            }
+
+            return baseOffset + 1;
         }
 
-        if (trailingUnderscoreMatch) {
-            const num = parseInt(trailingUnderscoreMatch[1], 10);
-            if (!isNaN(num)) return baseOffset + num + 1;
-        }
+        chapters.sort((a, b) => {
+            const idxA = extractTrackIndex(a.fileName);
+            const idxB = extractTrackIndex(b.fileName);
+            if (idxA !== idxB) return idxA - idxB;
+            return a.fileName.localeCompare(b.fileName, undefined, { numeric: true, sensitivity: 'base' });
+        });
 
-        return baseOffset + 1;
-    }
+        const orderOfPhoenixChapters: Record<number, string> = {
+            1: "Dudley Demented",
+            2: "A Peck of Owls",
+            3: "The Advanced Guard",
+            4: "Number Twelve, Grimmauld Place",
+            5: "The Order of the Phoenix",
+            6: "The Noble and Most Ancient House of Black",
+            7: "The Ministry of Magic",
+            8: "The Hearing",
+            9: "The Woes of Mrs. Weasley",
+            10: "Luna Lovegood",
+            11: "The Sorting Hat's New Song",
+            12: "Professor Umbridge",
+            13: "Detention with Dolores",
+            14: "Percy and Padfoot",
+            15: "The Hogwarts High Inquisitor",
+            16: "In the Hog's Head",
+            17: "Educational Decree Number Twenty-Four",
+            18: "Dumbledore's Army",
+            19: "The Lion and the Serpent",
+            20: "Hagrid's Tale",
+            21: "The Eye of the Snake",
+            22: "St. Mungo's Hospital for Magical Maladies and Injuries",
+            23: "Christmas on the Closed Ward",
+            24: "Occlumency",
+            25: "The Beetle at Bay",
+            26: "Seen and Unforeseen",
+            27: "The Centaur and the Sneak",
+            28: "Snape's Worst Memory",
+            29: "Career Advice",
+            30: "Grawp",
+            31: "O.W.L.s",
+            32: "Out of the Fire",
+            33: "Fight and Flight",
+            34: "The Department of Mysteries",
+            35: "Beyond the Veil",
+            36: "The Only One He Ever Feared",
+            37: "The Lost Prophecy",
+            38: "The Second War Begins"
+        };
 
-    chapters.sort((a, b) => {
-        const idxA = extractTrackIndex(a.fileName);
-        const idxB = extractTrackIndex(b.fileName);
-        if (idxA !== idxB) return idxA - idxB;
-        return a.fileName.localeCompare(b.fileName, undefined, { numeric: true, sensitivity: 'base' });
-    });
+        chapters.forEach((ch, idx) => {
+            const trackNum = idx + 1;
+            ch.trackNumber = trackNum;
 
-    const orderOfPhoenixChapters: Record<number, string> = {
-        1: "Dudley Demented",
-        2: "A Peck of Owls",
-        3: "The Advanced Guard",
-        4: "Number Twelve, Grimmauld Place",
-        5: "The Order of the Phoenix",
-        6: "The Noble and Most Ancient House of Black",
-        7: "The Ministry of Magic",
-        8: "The Hearing",
-        9: "The Woes of Mrs. Weasley",
-        10: "Luna Lovegood",
-        11: "The Sorting Hat's New Song",
-        12: "Professor Umbridge",
-        13: "Detention with Dolores",
-        14: "Percy and Padfoot",
-        15: "The Hogwarts High Inquisitor",
-        16: "In the Hog's Head",
-        17: "Educational Decree Number Twenty-Four",
-        18: "Dumbledore's Army",
-        19: "The Lion and the Serpent",
-        20: "Hagrid's Tale",
-        21: "The Eye of the Snake",
-        22: "St. Mungo's Hospital for Magical Maladies and Injuries",
-        23: "Christmas on the Closed Ward",
-        24: "Occlumency",
-        25: "The Beetle at Bay",
-        26: "Seen and Unforeseen",
-        27: "The Centaur and the Sneak",
-        28: "Snape's Worst Memory",
-        29: "Career Advice",
-        30: "Grawp",
-        31: "O.W.L.s",
-        32: "Out of the Fire",
-        33: "Fight and Flight",
-        34: "The Department of Mysteries",
-        35: "Beyond the Veil",
-        36: "The Only One He Ever Feared",
-        37: "The Lost Prophecy",
-        38: "The Second War Begins"
-    };
-
-    chapters.forEach((ch, idx) => {
-        const trackNum = idx + 1;
-        ch.trackNumber = trackNum;
-
-        if (chapters.length === 1) {
-            ch.title = "Full Audiobook (Unabridged)";
-        } else if (book.title.toLowerCase().includes("order of the phoenix") && orderOfPhoenixChapters[trackNum]) {
-            ch.title = `Chapter ${trackNum}: ${orderOfPhoenixChapters[trackNum]}`;
-        } else {
-            const ext = path.extname(ch.fileName);
-            let name = path.basename(ch.fileName, ext);
-            name = name
-                .replace(/^\d+[\s._-]+/, "")
-                .replace(/_(\d{1,3})$/, "")
-                .replace(/ - -$/, "")
-                .replace(/^J\.\s*R\.\s*R\.\s*Tolkien\s*-\s*/i, "")
-                .replace(/^J\.\s*K\.\s*Rowling\s*-\s*/i, "")
-                .replace(/_/g, " ")
-                .trim();
-
-            if (!name || name.toLowerCase().includes(book.title.toLowerCase()) || name.toLowerCase().includes("audiobook")) {
-                ch.title = `Chapter ${trackNum}`;
+            if (chapters.length === 1) {
+                ch.title = "Full Audiobook (Unabridged)";
+            } else if (book.title.toLowerCase().includes("order of the phoenix") && orderOfPhoenixChapters[trackNum]) {
+                ch.title = `Chapter ${trackNum}: ${orderOfPhoenixChapters[trackNum]}`;
             } else {
-                ch.title = `Chapter ${trackNum}: ${name.charAt(0).toUpperCase() + name.slice(1)}`;
-            }
-        }
-    });
+                const ext = path.extname(ch.fileName);
+                let name = path.basename(ch.fileName, ext);
+                name = name
+                    .replace(/^\d+[\s._-]+/, "")
+                    .replace(/_(\d{1,3})$/, "")
+                    .replace(/ - -$/, "")
+                    .replace(/^J\.\s*R\.\s*R\.\s*Tolkien\s*-\s*/i, "")
+                    .replace(/^J\.\s*K\.\s*Rowling\s*-\s*/i, "")
+                    .replace(/_/g, " ")
+                    .trim();
 
-    return {
-        bookId: book.id,
-        bookTitle: book.title,
-        bookAuthor: book.author,
-        coverUrl: book.coverUrl,
-        chapters
-    };
+                if (!name || name.toLowerCase().includes(book.title.toLowerCase()) || name.toLowerCase().includes("audiobook")) {
+                    ch.title = `Chapter ${trackNum}`;
+                } else {
+                    ch.title = `Chapter ${trackNum}: ${name.charAt(0).toUpperCase() + name.slice(1)}`;
+                }
+            }
+        });
+
+        return {
+            success: true,
+            bookId: book.id,
+            bookTitle: book.title,
+            bookAuthor: book.author,
+            coverUrl: book.coverUrl,
+            chapters
+        };
+    } catch (err: any) {
+        console.error("Failed to get audiobook chapters:", err);
+        return {
+            success: false,
+            error: err.message || "Failed to load audiobook chapters",
+            chapters: []
+        };
+    }
 }
