@@ -905,21 +905,17 @@ function normalizeBookCardMetadata(book: any) {
 
             if (selectedLibrary?.id) {
                 try {
-                    const freshBooks = await getLibraryBooks(selectedLibrary.id);
-                    if (freshBooks) {
-                        setBooks(freshBooks);
+                    const res = await fetch(`/api/books?libraryId=${encodeURIComponent(selectedLibrary.id)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.success && data.books) {
+                            setBooks(data.books);
+                        }
                     }
-                } catch (actionErr: any) {
-                    if (actionErr?.message?.includes("Failed to find Server Action") || String(actionErr).includes("older or newer deployment")) {
-                        console.warn("[DESYNC-RECOVERY] Deployment updated. Auto-reloading stale browser tab...");
-                        window.location.reload();
-                    }
-                }
+                } catch (e) {}
             }
         } catch (e: any) {
-            if (e?.message?.includes("Failed to find Server Action") || String(e).includes("older or newer deployment")) {
-                window.location.reload();
-            }
+            console.error("Auto-refresh requests failed:", e);
         }
     }, [selectedLibrary?.id]);
 
@@ -971,10 +967,22 @@ function normalizeBookCardMetadata(book: any) {
     async function loadBooks(libId: string) {
         setBooksLoading(true);
         try {
+            const res = await fetch(`/api/books?libraryId=${encodeURIComponent(libId)}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.books) {
+                    setBooks(data.books);
+                    return;
+                }
+            }
             const bList = await getLibraryBooks(libId);
             setBooks(bList || []);
-        } catch (e) {
-            console.error("Failed to load books:", e);
+        } catch (e: any) {
+            if (e?.message?.includes("Failed to find Server Action") || String(e).includes("older or newer deployment")) {
+                window.location.reload();
+            } else {
+                console.error("Failed to load books:", e);
+            }
         } finally {
             setBooksLoading(false);
         }
