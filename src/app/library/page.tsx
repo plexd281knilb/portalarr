@@ -3452,7 +3452,10 @@ function normalizeBookCardMetadata(book: any) {
                             </Button>
                         </CardFooter>
                     </Card>
-                   {chaptersModalBook && (
+                </div>
+            )}
+
+            {chaptersModalBook && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <Card className="w-full max-w-2xl max-h-[88vh] flex flex-col border-amber-500/30 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden">
                         <CardHeader className="border-b border-slate-800 pb-4 bg-slate-900/60">
@@ -3643,7 +3646,6 @@ function normalizeBookCardMetadata(book: any) {
                         )}
                     </Card>
                 </div>
-            )}               </div>
             )}
 
             {activePlayingTrack && (
