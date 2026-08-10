@@ -44,7 +44,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, Edit2, Save, ArrowUp, ArrowDown,
-  UploadCloud, Check, X, FileText, Download, 
+  UploadCloud, Check, X, FileText, Download, Copy,
   LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX
 } from "lucide-react";
 
@@ -257,6 +257,27 @@ function BookLibraryPageContent() {
     const [activeRequestForSearch, setActiveRequestForSearch] = useState<any>(null);
     const [searchProwlarrError, setSearchProwlarrError] = useState("");
     const [pushingReleaseId, setPushingReleaseId] = useState<string | null>(null);
+
+    // Copyable Error Modal State
+    const [errorModal, setErrorModal] = useState<{ open: boolean; title: string; message: string; copied?: boolean }>({
+        open: false,
+        title: "",
+        message: ""
+    });
+
+    const showErrorModal = (message: string, title = "System Error Notice") => {
+        setErrorModal({ open: true, title, message, copied: false });
+    };
+
+    const handleCopyErrorToClipboard = (text: string) => {
+        try {
+            navigator.clipboard.writeText(text);
+            setErrorModal(prev => ({ ...prev, copied: true }));
+            setTimeout(() => {
+                setErrorModal(prev => ({ ...prev, copied: false }));
+            }, 2000);
+        } catch (e) {}
+    };
 
     // Kindle states
     const [userEmail, setUserEmail] = useState("");
@@ -1359,7 +1380,7 @@ function normalizeBookCardMetadata(book: any) {
             setActiveRequestForSearch(null);
             alert("Release successfully pushed to download client!");
         } catch (e: any) {
-            alert(e.message || "Failed to send release to client.");
+            showErrorModal(e.message || "Failed to send release to client.", "Download Client Error");
         } finally {
             setPushingReleaseId(null);
         }
@@ -2568,6 +2589,17 @@ function normalizeBookCardMetadata(book: any) {
                                                         }`}>
                                                             {req.status}
                                                         </Badge>
+                                                        {req.status.startsWith("Failed") && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-7 text-xs border-red-500/40 text-red-400 hover:bg-red-950/60 font-semibold gap-1"
+                                                                title="Copy Full Error Message"
+                                                                onClick={() => showErrorModal(req.status, "Request Error Details")}
+                                                            >
+                                                                <Copy className="h-3 w-3" /> Copy Error
+                                                            </Button>
+                                                        )}
                                                         {(isAdmin || req.requestedBy === user?.username) && (
                                                             <div className="flex gap-1 items-center">
                                                                 <Button
@@ -2645,12 +2677,12 @@ function normalizeBookCardMetadata(book: any) {
                                                                          if (res.success) {
                                                                              alert(res.message || "Imported completed download to library!");
                                                                          } else {
-                                                                             alert(res.error || "Failed to locate completed download.");
+                                                                             showErrorModal(res.error || "Failed to locate completed download.", "Import Download Error");
                                                                          }
                                                                          const reqs = await getBookRequests();
                                                                          setRequests(reqs || []);
                                                                      } catch (err: any) {
-                                                                         alert(err.message || "Failed to import download.");
+                                                                         showErrorModal(err.message || "Failed to import download.", "Import Download Error");
                                                                      }
                                                                  }}
                                                              >
@@ -3225,8 +3257,18 @@ function normalizeBookCardMetadata(book: any) {
                                     <p className="text-sm text-muted-foreground">Searching Usenet and Torrent indexers via Prowlarr...</p>
                                 </div>
                             ) : searchProwlarrError ? (
-                                <div className="p-8 text-center text-sm text-red-500 font-medium">
-                                    {searchProwlarrError}
+                                <div className="p-6 text-center space-y-3">
+                                    <p className="text-xs text-red-400 font-mono select-all bg-red-950/20 border border-red-500/30 p-3 rounded-lg break-all">
+                                        {searchProwlarrError}
+                                    </p>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs border-red-500/30 text-red-400 hover:bg-red-950/40 gap-1 mx-auto"
+                                        onClick={() => showErrorModal(searchProwlarrError, "Indexer Search Error")}
+                                    >
+                                        <Copy className="h-3 w-3" /> 📋 Copy Error Message
+                                    </Button>
                                 </div>
                             ) : prowlarrResults.length === 0 ? (
                                 <div className="p-12 text-center text-sm text-muted-foreground italic">
@@ -3715,6 +3757,62 @@ function normalizeBookCardMetadata(book: any) {
                             </div>
                         )}
                     </div>
+                </div>
+            )}
+
+            {errorModal.open && (
+                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-lg border-red-500/40 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden relative">
+                        <CardHeader className="border-b border-red-900/40 bg-red-950/30 pb-3">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-base font-bold text-red-400 flex items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
+                                    {errorModal.title}
+                                </CardTitle>
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-slate-400 hover:text-white"
+                                    onClick={() => setErrorModal({ open: false, title: "", message: "" })}
+                                >
+                                    <X className="h-5 w-5" />
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-3">
+                            <p className="text-xs text-slate-300">An issue occurred. You can highlight or click the button below to copy the error:</p>
+                            <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 relative group">
+                                <pre className="text-xs font-mono text-red-300 whitespace-pre-wrap break-all max-h-48 overflow-y-auto select-all p-1">
+                                    {errorModal.message}
+                                </pre>
+                            </div>
+                        </CardContent>
+                        <CardFooter className="border-t border-slate-900 p-3 bg-slate-950/60 flex items-center justify-between gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5"
+                                onClick={() => setErrorModal({ open: false, title: "", message: "" })}
+                            >
+                                Close
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-8 text-xs font-bold bg-red-600 text-white hover:bg-red-500 gap-1.5 shadow"
+                                onClick={() => handleCopyErrorToClipboard(errorModal.message)}
+                            >
+                                {errorModal.copied ? (
+                                    <>
+                                        <Check className="h-3.5 w-3.5 text-emerald-300" /> Copied to Clipboard!
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="h-3.5 w-3.5" /> 📋 Copy Error
+                                    </>
+                                )}
+                            </Button>
+                        </CardFooter>
+                    </Card>
                 </div>
             )}
         </div>
