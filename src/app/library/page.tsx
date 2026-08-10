@@ -48,6 +48,16 @@ import {
   LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX
 } from "lucide-react";
 
+function getAccessBadge(lib: any) {
+    if (lib.allowedUsers === "*") {
+        if (lib.restrictedUsers && lib.restrictedUsers.trim().length > 0) {
+            return { label: "Restricted", color: "bg-amber-500/10 text-amber-400 border-amber-500/30" };
+        }
+        return { label: "Public", color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" };
+    }
+    return { label: "Private", color: "bg-purple-500/10 text-purple-400 border-purple-500/30" };
+}
+
 function matchesSeriesFuzzy(titleLower: string, seriesNameLower: string): boolean {
     const seriesWords = seriesNameLower.split(/\s+/).filter(w => w.length > 2); // match words > 2 chars
     if (seriesWords.length === 0) return false;
@@ -1806,22 +1816,35 @@ function normalizeBookCardMetadata(book: any) {
                                             No ebook libraries available.
                                         </div>
                                     ) : (
-                                        ebookLibraries.map(lib => (
-                                            <button
-                                                key={lib.id}
-                                                onClick={() => setSelectedLibrary(lib)}
-                                                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-all duration-200 flex items-center justify-between ${
-                                                    selectedLibrary?.id === lib.id
-                                                        ? "bg-primary text-black font-semibold shadow-md"
-                                                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                                                }`}
-                                            >
-                                                <span>{lib.name}</span>
-                                                <Badge className={selectedLibrary?.id === lib.id ? "bg-black text-primary hover:bg-black" : "bg-muted"}>
-                                                    {lib.allowedUsers === "*" ? (lib.restrictedUsers ? "Public (Restricted)" : "Public") : "Private"}
-                                                </Badge>
-                                            </button>
-                                        ))
+                                        ebookLibraries.map(lib => {
+                                            const isSelected = selectedLibrary?.id === lib.id;
+                                            const accessInfo = getAccessBadge(lib);
+                                            return (
+                                                <button
+                                                    key={lib.id}
+                                                    onClick={() => setSelectedLibrary(lib)}
+                                                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex flex-col gap-1 border ${
+                                                        isSelected
+                                                            ? "bg-slate-900 border-primary/80 shadow-md ring-1 ring-primary/30 text-primary"
+                                                            : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/60 hover:text-white"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2 w-full">
+                                                        <span className="font-bold text-sm truncate">{lib.name}</span>
+                                                        <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-bold shrink-0 ${
+                                                            isSelected
+                                                                ? "bg-primary text-black border-primary font-extrabold"
+                                                                : accessInfo.color
+                                                        }`}>
+                                                            {accessInfo.label}
+                                                        </Badge>
+                                                    </div>
+                                                    {lib.description && (
+                                                        <p className="text-[11px] text-slate-400 truncate">{lib.description}</p>
+                                                    )}
+                                                </button>
+                                            );
+                                        })
                                     )}
                                 </CardContent>
                             </Card>
@@ -2060,22 +2083,35 @@ function normalizeBookCardMetadata(book: any) {
                                             )}
                                         </div>
                                     ) : (
-                                        audiobookLibraries.map(lib => (
-                                            <button
-                                                key={lib.id}
-                                                onClick={() => setSelectedLibrary(lib)}
-                                                className={`w-full text-left px-3.5 py-2.5 rounded-lg text-sm transition-all duration-200 flex items-center justify-between border ${
-                                                    selectedLibrary?.id === lib.id
-                                                        ? "bg-amber-500 text-black font-bold border-amber-400 shadow-md"
-                                                        : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:text-white"
-                                                }`}
-                                            >
-                                                <span className="truncate mr-2">{lib.name}</span>
-                                                <Badge className={selectedLibrary?.id === lib.id ? "bg-black text-amber-400 hover:bg-black shrink-0 text-[10px]" : "bg-slate-800 text-slate-400 shrink-0 text-[10px]"}>
-                                                    {lib.allowedUsers === "*" ? (lib.restrictedUsers ? "Public (Restricted)" : "Public") : "Private"}
-                                                </Badge>
-                                            </button>
-                                        ))
+                                        audiobookLibraries.map(lib => {
+                                            const isSelected = selectedLibrary?.id === lib.id;
+                                            const accessInfo = getAccessBadge(lib);
+                                            return (
+                                                <button
+                                                    key={lib.id}
+                                                    onClick={() => setSelectedLibrary(lib)}
+                                                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex flex-col gap-1 border ${
+                                                        isSelected
+                                                            ? "bg-slate-900 border-amber-400/80 shadow-md ring-1 ring-amber-400/30 text-amber-300"
+                                                            : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/60 hover:text-white"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2 w-full">
+                                                        <span className="font-bold text-sm truncate">{lib.name}</span>
+                                                        <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-bold shrink-0 ${
+                                                            isSelected
+                                                                ? "bg-amber-400 text-black border-amber-400 font-extrabold"
+                                                                : accessInfo.color
+                                                        }`}>
+                                                            {accessInfo.label}
+                                                        </Badge>
+                                                    </div>
+                                                    {lib.description && (
+                                                        <p className="text-[11px] text-slate-400 truncate">{lib.description}</p>
+                                                    )}
+                                                </button>
+                                            );
+                                        })
                                     )}
                                 </CardContent>
                             </Card>
