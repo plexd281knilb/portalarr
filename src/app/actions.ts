@@ -9,7 +9,7 @@ import { encryptData, decryptData } from "@/lib/encryption";
 import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
-import { getJwtSecret } from "@/lib/auth-secret";
+import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -1582,6 +1582,7 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
                 `;
             }
 
+            const appUrl = await getAppUrl();
             const mailOptions = {
                 from: senderEmail,
                 to: admin.email,
@@ -1591,7 +1592,7 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
                         <h2 style="color: ${isAudiobook ? "#d97706" : "#4f46e5"}; margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">${isAudiobook ? "New Audiobook Request 🎧" : "New Ebook Request 📖"}</h2>
                         ${detailsHtml}
                         <div style="margin-top: 25px; text-align: center;">
-                            <a href="${process.env.APP_URL || 'http://localhost:3000'}/library" style="background-color: ${isAudiobook ? "#d97706" : "#4f46e5"}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Manage Requests</a>
+                            <a href="${appUrl}/library?tab=requests" style="background-color: ${isAudiobook ? "#d97706" : "#4f46e5"}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Manage Requests</a>
                         </div>
                     </div>
                 `

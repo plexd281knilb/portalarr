@@ -9,7 +9,7 @@ import { decryptData, encryptData } from "@/lib/encryption";
 import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
-import { getJwtSecret } from "@/lib/auth-secret";
+import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 
 // --- 1. SETUP CHECK ---
 export async function checkSystemInitialized() {
@@ -416,6 +416,7 @@ export async function sendUserApprovalEmail(userEmail: string, username: string)
       }
     });
 
+    const appUrl = await getAppUrl();
     await transporter.sendMail({
       from: senderEmail,
       to: userEmail,
@@ -426,6 +427,9 @@ export async function sendUserApprovalEmail(userEmail: string, username: string)
           <p>Hi <strong>${username}</strong>,</p>
           <p>Great news! Your account request for Portalarr has been approved by the administrator.</p>
           <p>You can now sign in and access media requests and services.</p>
+          <div style="margin-top: 20px; text-align: center;">
+            <a href="${appUrl}/login" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Log in to Portalarr</a>
+          </div>
         </div>
       `
     });
