@@ -2207,22 +2207,45 @@ export async function scanLibraryInternal(libraryId: string) {
         let finalMediaItems = foundMediaItems;
         if (isAudiobookLib) {
             const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: fs.Stats }>();
+            const libPathResolved = path.resolve(library.path).toLowerCase();
+
             for (const item of foundMediaItems) {
                 const effBase = getEffectiveBookBaseName(item.fullPath, item.file, item.ext);
                 const parsedMeta = parseFilenameMetadata(effBase);
                 const normKey = (parsedMeta.title || effBase).toLowerCase().replace(/[^a-z0-9]/g, "").trim();
-                
+
+                let masterPath = item.fullPath;
+                const parentDir = path.dirname(item.fullPath);
+                const parentResolved = path.resolve(parentDir).toLowerCase();
+
+                if (parentResolved !== libPathResolved) {
+                    const parentName = path.basename(parentDir);
+                    const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Disk|Track)\s*\d+$/i;
+                    if (discPattern.test(parentName)) {
+                        const grandParentDir = path.dirname(parentDir);
+                        if (path.resolve(grandParentDir).toLowerCase() !== libPathResolved) {
+                            masterPath = grandParentDir;
+                        } else {
+                            masterPath = parentDir;
+                        }
+                    } else {
+                        masterPath = parentDir;
+                    }
+                }
+
                 if (consolidatedMap.has(normKey)) {
                     const existingItem = consolidatedMap.get(normKey)!;
                     const accumulatedSize = (existingItem.stats.size || 0) + item.stats.size;
-                    if (item.stats.size > existingItem.stats.size) {
-                        existingItem.fullPath = item.fullPath;
-                        existingItem.file = item.file;
-                        existingItem.ext = item.ext;
-                    }
                     existingItem.stats = { ...existingItem.stats, size: accumulatedSize } as any;
+                    if (fs.existsSync(masterPath) && fs.statSync(masterPath).isDirectory()) {
+                        existingItem.fullPath = masterPath;
+                    }
                 } else {
-                    consolidatedMap.set(normKey, { ...item });
+                    consolidatedMap.set(normKey, {
+                        ...item,
+                        fullPath: masterPath,
+                        stats: { ...item.stats } as any
+                    });
                 }
             }
             finalMediaItems = Array.from(consolidatedMap.values());
@@ -4695,14 +4718,25 @@ export async function getAudiobookChapters(bookId: string) {
         let isSingleFileBook = false;
         let targetDir = "";
 
+        const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus"];
+
         if (stat.isDirectory()) {
             targetDir = book.filePath;
         } else {
             const parentDir = path.dirname(book.filePath);
             const parentResolved = path.resolve(parentDir).toLowerCase();
             
-            // If the file is stored directly in the root library folder, treat as single-file audiobook
-            if (libraryPath && (parentResolved === libraryPath || parentResolved === libraryPath + "/" || parentResolved === libraryPath + "\\" || parentResolved.endsWith(path.sep + path.basename(libraryPath)))) {
+            let parentAudioCount = 0;
+            try {
+                if (fs.existsSync(parentDir)) {
+                    const pEntries = fs.readdirSync(parentDir);
+                    parentAudioCount = pEntries.filter(f => validAudioExts.includes(path.extname(f).toLowerCase())).length;
+                }
+            } catch (e) {}
+
+            if (parentAudioCount > 1 && parentResolved !== libraryPath) {
+                targetDir = parentDir;
+            } else if (libraryPath && (parentResolved === libraryPath || parentResolved === libraryPath + "/" || parentResolved === libraryPath + "\\" || parentResolved.endsWith(path.sep + path.basename(libraryPath)))) {
                 isSingleFileBook = true;
             } else if (parentDir === "/" || parentDir.length <= 3) {
                 isSingleFileBook = true;
@@ -4722,8 +4756,6 @@ export async function getAudiobookChapters(bookId: string) {
                 }
             }
         }
-
-        const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus"];
         const chapters: { trackNumber: number; title: string; fileName: string; relativePath: string; size: number }[] = [];
 
         function collectAudioFiles(dir: string, baseDir: string, depth = 0) {
