@@ -3270,6 +3270,26 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
     }
 }
 
+function findFirstMediaFileInDir(dir: string, validExtensions: string[], depth = 0): string | null {
+    if (!fs.existsSync(dir) || depth > 3) return null;
+    try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullP = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                const sub = findFirstMediaFileInDir(fullP, validExtensions, depth + 1);
+                if (sub) return sub;
+            } else {
+                const ext = path.extname(entry.name).toLowerCase();
+                if (validExtensions.includes(ext)) {
+                    return fullP;
+                }
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+
 function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = "ebook"): string | null {
     console.log(`[DOWNLOAD-FINDER] Scanning directory: ${dir} for ${mediaType}: "${bookTitle}"`);
     if (!fs.existsSync(dir)) {
@@ -3302,6 +3322,34 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
             const stat = fs.statSync(fullPath);
             
             if (stat.isDirectory()) {
+                const cleanDirName = file.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const cleanFullPath = fullPath.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+                let isDirectoryTitleMatch = false;
+                if (cleanDirName.includes(cleanBookTitle) || cleanFullPath.includes(cleanBookTitle)) {
+                    isDirectoryTitleMatch = true;
+                } else if (finalTitleWords.length > 0) {
+                    const combinedStr = `${file} ${fullPath}`.toLowerCase();
+                    let matchCount = 0;
+                    for (const word of finalTitleWords) {
+                        if (combinedStr.includes(word)) {
+                            matchCount++;
+                        }
+                    }
+                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
+                    if (matchCount >= requiredMatches) {
+                        isDirectoryTitleMatch = true;
+                    }
+                }
+
+                if (isDirectoryTitleMatch) {
+                    const firstMediaFile = findFirstMediaFileInDir(fullPath, validExtensions);
+                    if (firstMediaFile) {
+                        console.log(`[DOWNLOAD-FINDER] DIRECTORY MATCH FOUND: ${fullPath} (via matching release folder "${file}")`);
+                        return firstMediaFile;
+                    }
+                }
+
                 const found = findDownloadedFile(fullPath, bookTitle, mediaType);
                 if (found) return found;
             } else {
