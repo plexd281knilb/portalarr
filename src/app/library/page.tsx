@@ -1831,7 +1831,7 @@ function normalizeBookCardMetadata(book: any) {
                             <Card className="border-muted/60 bg-muted/10">
                                 <CardHeader className="py-4">
                                     <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                        <BookOpen className="h-4 w-4 text-primary" /> Select Ebook Library
+                                        <BookOpen className="h-4 w-4 text-primary" /> Ebook Libraries
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-2 space-y-1">
@@ -1847,25 +1847,20 @@ function normalizeBookCardMetadata(book: any) {
                                                 <button
                                                     key={lib.id}
                                                     onClick={() => setSelectedLibrary(lib)}
-                                                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex flex-col gap-1 border ${
+                                                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border ${
                                                         isSelected
                                                             ? "bg-slate-900 border-primary/80 shadow-md ring-1 ring-primary/30 text-primary"
                                                             : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/60 hover:text-white"
                                                     }`}
                                                 >
-                                                    <div className="flex items-center justify-between gap-2 w-full">
-                                                        <span className="font-bold text-sm truncate">{lib.name}</span>
-                                                        <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-bold shrink-0 ${
-                                                            isSelected
-                                                                ? "bg-primary text-black border-primary font-extrabold"
-                                                                : accessInfo.color
-                                                        }`}>
-                                                            {accessInfo.label}
-                                                        </Badge>
-                                                    </div>
-                                                    {lib.description && (
-                                                        <p className="text-[11px] text-slate-400 truncate">{lib.description}</p>
-                                                    )}
+                                                    <span className="font-bold text-sm truncate">{lib.name}</span>
+                                                    <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-bold shrink-0 ${
+                                                        isSelected
+                                                            ? "bg-primary text-black border-primary font-extrabold"
+                                                            : accessInfo.color
+                                                    }`}>
+                                                        {accessInfo.label}
+                                                    </Badge>
                                                 </button>
                                             );
                                         })
@@ -2106,25 +2101,20 @@ function normalizeBookCardMetadata(book: any) {
                                                 <button
                                                     key={lib.id}
                                                     onClick={() => setSelectedLibrary(lib)}
-                                                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex flex-col gap-1 border ${
+                                                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border ${
                                                         isSelected
                                                             ? "bg-slate-900 border-amber-400/80 shadow-md ring-1 ring-amber-400/30 text-amber-300"
                                                             : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/60 hover:text-white"
                                                     }`}
                                                 >
-                                                    <div className="flex items-center justify-between gap-2 w-full">
-                                                        <span className="font-bold text-sm truncate">{lib.name}</span>
-                                                        <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-bold shrink-0 ${
-                                                            isSelected
-                                                                ? "bg-amber-400 text-black border-amber-400 font-extrabold"
-                                                                : accessInfo.color
-                                                        }`}>
-                                                            {accessInfo.label}
-                                                        </Badge>
-                                                    </div>
-                                                    {lib.description && (
-                                                        <p className="text-[11px] text-slate-400 truncate">{lib.description}</p>
-                                                    )}
+                                                    <span className="font-bold text-sm truncate">{lib.name}</span>
+                                                    <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-bold shrink-0 ${
+                                                        isSelected
+                                                            ? "bg-amber-400 text-black border-amber-400 font-extrabold"
+                                                            : accessInfo.color
+                                                    }`}>
+                                                        {accessInfo.label}
+                                                    </Badge>
                                                 </button>
                                             );
                                         })
