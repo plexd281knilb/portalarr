@@ -1868,9 +1868,7 @@ function cleanSearchQuery(searchQuery: string): string {
     return searchQuery
         .replace(/'s\b/gi, "s") // Convert magician's -> magicians
         .replace(/\b([a-zA-Z]+)\s+s\b/gi, "$1s") // Merge isolated s (magician s -> magicians)
-        .replace(/\b\d{4}\b/g, "") // Strip 4-digit years
-        .replace(/\b(?:0[1-9]|[1-9]\d|\d)\b/g, "") // Strip separate single/double digits (01, 1)
-        .replace(/\b(?:v|vol|bk|book|part|no|#)\.?\s*\d+\b/gi, "") // Strip vol numbers
+        .replace(/\b(?:v|vol|bk|book|part|no|#)\.?\s*\d+\b/gi, "") // Strip vol numbers like vol 1
         .replace(/-/g, " ") // Replace hyphens with spaces to prevent Solr exclude (-) behavior
         .replace(/[()\[\]]/g, "") // Strip brackets
         // Strip release tags and ebook metadata garbage
@@ -2753,30 +2751,44 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
         const queryText = author ? `${title} ${author}` : title;
         const cleanedQuery = cleanSearchQuery(queryText);
+        const cleanTitleOnly = cleanSearchQuery(title);
 
         const catQuery = reqMediaType === "audiobook"
             ? "&categories=3030&categories=3000"
             : "&categories=7000&categories=7010&categories=7020&categories=3040";
 
-        const searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
-        const res = await fetch(searchUrl, { cache: "no-store" });
-        if (!res.ok) throw new Error(`Prowlarr error: status ${res.status}`);
-        
-        const results = await res.json();
-        if (!results || results.length === 0) {
-            await prisma.bookRequest.update({
-                where: { id: requestId },
-                data: { status: "Failed - No results found on indexers" }
-            });
-            return;
+        // Tier 1: Title + Author in category
+        let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
+        let res = await fetch(searchUrl, { cache: "no-store" });
+        let results = res.ok ? await res.json() : [];
+        let candidates = await filterReleasesForMediaType(results, reqMediaType);
+
+        // Tier 2: Title Only in category if Title + Author returned 0 candidates
+        if (candidates.length === 0 && cleanTitleOnly && cleanTitleOnly !== cleanedQuery) {
+            console.log(`[AUTO-DOWNLOAD] Tier 1 search yielded 0 candidates. Retrying with Title-only query: "${cleanTitleOnly}"`);
+            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanTitleOnly)}${catQuery}&apikey=${prowlarrKey}`;
+            res = await fetch(searchUrl, { cache: "no-store" });
+            if (res.ok) {
+                results = await res.json();
+                candidates = await filterReleasesForMediaType(results, reqMediaType);
+            }
         }
 
-        const candidates = await filterReleasesForMediaType(results, reqMediaType);
+        // Tier 3: Title Only without category filters if initial categories returned 0 candidates
+        if (candidates.length === 0 && cleanTitleOnly) {
+            console.log(`[AUTO-DOWNLOAD] Tier 2 search yielded 0 candidates. Retrying without category filter for: "${cleanTitleOnly}"`);
+            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanTitleOnly)}&apikey=${prowlarrKey}`;
+            res = await fetch(searchUrl, { cache: "no-store" });
+            if (res.ok) {
+                results = await res.json();
+                candidates = await filterReleasesForMediaType(results, reqMediaType);
+            }
+        }
 
         if (candidates.length === 0) {
             await prisma.bookRequest.update({
                 where: { id: requestId },
-                data: { status: `Failed - No suitable ${reqMediaType} releases found` }
+                data: { status: `Failed - No suitable ${reqMediaType} releases found on indexers` }
             });
             return;
         }
