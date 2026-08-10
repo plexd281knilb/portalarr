@@ -1393,7 +1393,7 @@ export async function deleteBook(id: string) {
         console.error(`Failed to delete book file: ${book.filePath}`, e);
     }
     
-    await prisma.book.delete({ where: { id } });
+    await prisma.book.deleteMany({ where: { id } });
     revalidatePath("/library");
 }
 
@@ -2510,7 +2510,7 @@ export async function scanLibraryInternal(libraryId: string) {
         for (const dbBook of dbBooks) {
             if (!matchedDbBookIds.has(dbBook.id)) {
                 try {
-                    await prisma.book.delete({
+                    await prisma.book.deleteMany({
                         where: { id: dbBook.id }
                     });
                 } catch (delErr) {
