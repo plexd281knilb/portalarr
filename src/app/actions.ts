@@ -4635,6 +4635,41 @@ export async function getAudiobookChapters(bookId: string) {
         if (!book) return { success: false, error: "Audiobook entry not found in database", chapters: [] };
 
         if (!fs.existsSync(book.filePath)) {
+            if (book.library?.path && fs.existsSync(book.library.path)) {
+                const normTitle = (book.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                let resolvedPath: string | null = null;
+
+                function findInDir(dir: string, depth = 0) {
+                    if (resolvedPath || depth > 3) return;
+                    try {
+                        const entries = fs.readdirSync(dir, { withFileTypes: true });
+                        for (const entry of entries) {
+                            const fullP = path.join(dir, entry.name);
+                            const cleanE = entry.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            if (cleanE.includes(normTitle) || (normTitle.length > 5 && cleanE.length > 5 && normTitle.includes(cleanE))) {
+                                resolvedPath = fullP;
+                                return;
+                            }
+                            if (entry.isDirectory()) {
+                                findInDir(fullP, depth + 1);
+                            }
+                        }
+                    } catch (e) {}
+                }
+
+                findInDir(book.library.path);
+
+                if (resolvedPath) {
+                    book.filePath = resolvedPath;
+                    await prisma.book.update({
+                        where: { id: bookId },
+                        data: { filePath: resolvedPath }
+                    }).catch(() => {});
+                }
+            }
+        }
+
+        if (!fs.existsSync(book.filePath)) {
             return { success: false, error: `Audiobook path does not exist on disk: ${book.filePath}`, chapters: [] };
         }
 
