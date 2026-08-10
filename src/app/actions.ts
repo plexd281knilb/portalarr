@@ -1182,20 +1182,37 @@ export async function getLibraries() {
 }
 
 export async function createLibrary(formData: FormData) {
-    await verifyAdmin();
-    const name = formData.get("name") as string;
-    const description = formData.get("description") as string;
-    const path = formData.get("path") as string || "";
-    const allowedUsers = formData.get("allowedUsers") as string || "";
-    const restrictedUsers = formData.get("restrictedUsers") as string || "";
-    const mediaType = formData.get("mediaType") as string || "ebook";
-    const defaultCategory = mediaType === "audiobook" ? "audiobooks" : "books";
-    const downloadCategory = formData.get("downloadCategory") as string || defaultCategory;
-    
-    await prisma.library.create({
-        data: { name, description, path, allowedUsers, restrictedUsers, downloadCategory, mediaType }
-    });
-    revalidatePath("/library");
+    try {
+        await verifyAdmin();
+        const name = (formData.get("name") as string)?.trim();
+        const description = (formData.get("description") as string)?.trim() || "";
+        const path = (formData.get("path") as string)?.trim() || "";
+        const allowedUsers = (formData.get("allowedUsers") as string)?.trim() || "";
+        const restrictedUsers = (formData.get("restrictedUsers") as string)?.trim() || "";
+        const mediaType = (formData.get("mediaType") as string) || "ebook";
+        const defaultCategory = mediaType === "audiobook" ? "audiobooks" : "books";
+        const downloadCategory = (formData.get("downloadCategory") as string)?.trim() || defaultCategory;
+        
+        if (!name) {
+            return { success: false, error: "Library name is required." };
+        }
+
+        const existing = await prisma.library.findFirst({
+            where: { name: { equals: name } }
+        });
+        if (existing) {
+            return { success: false, error: `A library named "${name}" already exists.` };
+        }
+
+        await prisma.library.create({
+            data: { name, description, path, allowedUsers, restrictedUsers, downloadCategory, mediaType }
+        });
+        revalidatePath("/library");
+        return { success: true };
+    } catch (e: any) {
+        console.error("createLibrary Error:", e);
+        return { success: false, error: e.message || "Failed to create library." };
+    }
 }
 
 export async function seedDefaultLibraries() {
@@ -1231,40 +1248,57 @@ export async function seedDefaultLibraries() {
 }
 
 export async function updateLibrary(formData: FormData) {
-    await verifyAdmin();
-    const id = formData.get("id") as string;
-    const name = formData.get("name") as string;
-    const description = formData.get("description") as string;
-    const path = formData.get("path") as string || "";
-    const allowedUsers = formData.get("allowedUsers") as string || "";
-    const restrictedUsers = formData.get("restrictedUsers") as string || "";
-    const mediaType = formData.get("mediaType") as string || "ebook";
-    const defaultCategory = mediaType === "audiobook" ? "audiobooks" : "books";
-    const downloadCategory = formData.get("downloadCategory") as string || defaultCategory;
-    
-    await prisma.library.update({
-        where: { id },
-        data: { name, description, path, allowedUsers, restrictedUsers, downloadCategory, mediaType }
-    });
-    revalidatePath("/library");
+    try {
+        await verifyAdmin();
+        const id = formData.get("id") as string;
+        const name = (formData.get("name") as string)?.trim();
+        const description = (formData.get("description") as string)?.trim() || "";
+        const path = (formData.get("path") as string)?.trim() || "";
+        const allowedUsers = (formData.get("allowedUsers") as string)?.trim() || "";
+        const restrictedUsers = (formData.get("restrictedUsers") as string)?.trim() || "";
+        const mediaType = (formData.get("mediaType") as string) || "ebook";
+        const defaultCategory = mediaType === "audiobook" ? "audiobooks" : "books";
+        const downloadCategory = (formData.get("downloadCategory") as string)?.trim() || defaultCategory;
+        
+        if (!id || !name) {
+            return { success: false, error: "Library ID and name are required." };
+        }
+
+        await prisma.library.update({
+            where: { id },
+            data: { name, description, path, allowedUsers, restrictedUsers, downloadCategory, mediaType }
+        });
+        revalidatePath("/library");
+        return { success: true };
+    } catch (e: any) {
+        console.error("updateLibrary Error:", e);
+        return { success: false, error: e.message || "Failed to update library." };
+    }
 }
 
 export async function deleteLibrary(id: string) {
-    await verifyAdmin();
-    
-    const books = await prisma.book.findMany({ where: { libraryId: id } });
-    for (const book of books) {
-        try {
-            if (fs.existsSync(book.filePath)) {
-                fs.unlinkSync(book.filePath);
+    try {
+        await verifyAdmin();
+        if (!id) return { success: false, error: "Library ID is required." };
+        
+        const books = await prisma.book.findMany({ where: { libraryId: id } });
+        for (const book of books) {
+            try {
+                if (book.filePath && fs.existsSync(book.filePath)) {
+                    fs.unlinkSync(book.filePath);
+                }
+            } catch (e) {
+                console.error(`Failed to delete book file: ${book.filePath}`, e);
             }
-        } catch (e) {
-            console.error(`Failed to delete book file: ${book.filePath}`, e);
         }
+        
+        await prisma.library.delete({ where: { id } });
+        revalidatePath("/library");
+        return { success: true };
+    } catch (e: any) {
+        console.error("deleteLibrary Error:", e);
+        return { success: false, error: e.message || "Failed to delete library." };
     }
-    
-    await prisma.library.delete({ where: { id } });
-    revalidatePath("/library");
 }
 
 export async function getLibraryBooks(libraryId: string) {

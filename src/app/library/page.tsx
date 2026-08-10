@@ -175,16 +175,18 @@ function BookLibraryPageContent() {
     const activeTabParam = searchParams.get("tab");
     const [activeTab, setActiveTab] = useState("libs");
 
+    const [user, setUser] = useState<any>(null);
+    const [fullUser, setFullUser] = useState<any>(null);
+    const isAdmin = user?.role === "ADMIN" || fullUser?.role === "ADMIN";
+
     useEffect(() => {
         const savedTab = typeof window !== "undefined" ? localStorage.getItem("book-library-active-tab") : null;
-        if (activeTabParam) {
-            setActiveTab(activeTabParam);
-        } else if (savedTab) {
-            setActiveTab(savedTab);
-        } else {
-            setActiveTab("libs");
+        let targetTab = activeTabParam || savedTab || "libs";
+        if (targetTab === "manage" && user && !isAdmin) {
+            targetTab = "libs";
         }
-    }, [activeTabParam]);
+        setActiveTab(targetTab);
+    }, [activeTabParam, isAdmin, user]);
 
     const handleTabChange = (val: string) => {
         setActiveTab(val);
@@ -204,7 +206,6 @@ function BookLibraryPageContent() {
         }
     };
 
-    const [user, setUser] = useState<any>(null);
     const [libraries, setLibraries] = useState<any[]>([]);
     const [selectedLibrary, setSelectedLibrary] = useState<any>(null);
     const [books, setBooks] = useState<any[]>([]);
@@ -235,7 +236,6 @@ function BookLibraryPageContent() {
     const [pushingReleaseId, setPushingReleaseId] = useState<string | null>(null);
 
     // Kindle states
-    const [fullUser, setFullUser] = useState<any>(null);
     const [userEmail, setUserEmail] = useState("");
     const [userKindleEmail, setUserKindleEmail] = useState("");
     const [skippedKindleGate, setSkippedKindleGate] = useState(false);
@@ -760,7 +760,8 @@ function normalizeBookCardMetadata(book: any) {
                 const reqs = await getBookRequests();
                 setRequests(reqs || []);
 
-                if (session && session.role === "ADMIN") {
+                const userIsAdmin = session?.role === "ADMIN" || profile?.role === "ADMIN";
+                if (userIsAdmin) {
                     const ulist = await getAppUsers().catch(() => []);
                     setAllUsers(ulist || []);
                 }
@@ -875,12 +876,19 @@ function normalizeBookCardMetadata(book: any) {
         formData.append("mediaType", libMediaType);
 
         try {
+            let res: any;
             if (editingLibId) {
                 formData.append("id", editingLibId);
-                await updateLibrary(formData);
+                res = await updateLibrary(formData);
             } else {
-                await createLibrary(formData);
+                res = await createLibrary(formData);
             }
+
+            if (res && res.error) {
+                alert(res.error);
+                return;
+            }
+
             setLibName("");
             setLibDesc("");
             setLibPath("");
@@ -892,22 +900,28 @@ function normalizeBookCardMetadata(book: any) {
             
             const libs = await getLibraries();
             setLibraries(libs || []);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to save library:", e);
+            alert(e.message || "Failed to save library.");
         }
     }
 
     async function handleDeleteLibrary(id: string) {
         if (!confirm("Are you sure you want to delete this library and all its books? This cannot be undone.")) return;
         try {
-            await deleteLibrary(id);
+            const res = await deleteLibrary(id);
+            if (res && res.error) {
+                alert(res.error);
+                return;
+            }
             const libs = await getLibraries();
             setLibraries(libs || []);
             if (selectedLibrary?.id === id) {
                 setSelectedLibrary(libs && libs.length > 0 ? libs[0] : null);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to delete library:", e);
+            alert(e.message || "Failed to delete library.");
         }
     }
 
@@ -1362,8 +1376,6 @@ function normalizeBookCardMetadata(book: any) {
         
         return hasLibraryAccess;
     });
-
-    const isAdmin = user?.role === "ADMIN";
 
     if (loading) {
         return (
