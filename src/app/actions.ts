@@ -1152,18 +1152,17 @@ async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: s
 
     // Explicit denial check: If user is listed in restrictedUsers, block access immediately
     if (restrictedUsersStr && restrictedUsersStr.trim() !== "") {
-        const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase());
+        const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
         if ((safeUsername && restricted.includes(safeUsername)) || (safeEmail && restricted.includes(safeEmail))) {
             return false;
         }
     }
 
     if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
-    const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
+    const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
     if (allowed.includes("*")) return true;
     if (safeUsername && allowed.includes(safeUsername)) return true;
     if (safeEmail && allowed.includes(safeEmail)) return true;
-    if ((safeUsername || safeEmail) && allowed.includes("admin")) return true;
 
     return false;
 }
@@ -1213,11 +1212,6 @@ export async function getLibraries() {
         if (await checkLibraryAccess(lib.allowedUsers, lib.restrictedUsers || "", username, email, role)) {
             accessible.push(lib);
         }
-    }
-
-    // Safety net: If filtering resulted in 0 libraries, but libraries exist in database and user has a session, return all libraries
-    if (accessible.length === 0 && libraries.length > 0 && session) {
-        return libraries;
     }
 
     return accessible;

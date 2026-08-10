@@ -6,21 +6,21 @@ import path from "path";
 import { getJwtSecret } from "@/lib/auth-secret";
 
 async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string = "", email: string = "", role: string = "") {
-    if (role === "ADMIN") return true;
+    if ((role || "").toUpperCase() === "ADMIN") return true;
 
     const safeUsername = (username || "").toLowerCase();
     const safeEmail = (email || "").toLowerCase();
 
     // Explicit denial check: If user is listed in restrictedUsers, block access immediately
     if (restrictedUsersStr && restrictedUsersStr.trim() !== "") {
-        const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase());
+        const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
         if ((safeUsername && restricted.includes(safeUsername)) || (safeEmail && restricted.includes(safeEmail))) {
             return false;
         }
     }
 
     if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
-    const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase());
+    const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
     return allowed.includes("*") || (safeUsername && allowed.includes(safeUsername)) || (safeEmail && allowed.includes(safeEmail));
 }
 
