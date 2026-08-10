@@ -2387,7 +2387,6 @@ export async function scanLibraryInternal(libraryId: string) {
                             createdAt: fileAddedDate
                         }
                     });
-                    await renameBookFileOnDisk(newBook.id);
                     matchedDbBookIds.add(newBook.id);
                 } else {
                     if (existing.fileSize !== stats.size) {
@@ -2481,7 +2480,7 @@ export async function scanLibraryInternal(libraryId: string) {
                             } catch (e) {}
                         }
 
-                        const updatedBook = await prisma.book.update({
+                        await prisma.book.update({
                             where: { id: existing.id },
                             data: {
                                 title,
@@ -2489,9 +2488,6 @@ export async function scanLibraryInternal(libraryId: string) {
                                 coverUrl
                             }
                         });
-                        await renameBookFileOnDisk(updatedBook.id);
-                    } else {
-                        await renameBookFileOnDisk(existing.id);
                     }
                     matchedDbBookIds.add(existing.id);
                 }
@@ -2499,9 +2495,13 @@ export async function scanLibraryInternal(libraryId: string) {
 
         for (const dbBook of dbBooks) {
             if (!matchedDbBookIds.has(dbBook.id)) {
-                await prisma.book.delete({
-                    where: { id: dbBook.id }
-                });
+                try {
+                    await prisma.book.delete({
+                        where: { id: dbBook.id }
+                    });
+                } catch (delErr) {
+                    // Ignore record if already deleted
+                }
             }
         }
 
