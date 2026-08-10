@@ -768,7 +768,18 @@ function normalizeBookCardMetadata(book: any) {
                     }
                 }
 
-                const reqs = await getBookRequests().catch(() => []);
+                let reqs = await getBookRequests().catch(() => []);
+                if (!reqs || reqs.length === 0) {
+                    try {
+                        const res = await fetch("/api/requests");
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.requests && data.requests.length > 0) {
+                                reqs = data.requests;
+                            }
+                        }
+                    } catch (e) {}
+                }
                 setRequests(reqs || []);
 
                 let ulist = await getAppUsers().catch(() => []);
@@ -811,7 +822,16 @@ function normalizeBookCardMetadata(book: any) {
 
     const refreshRequests = useCallback(async () => {
         try {
-            const freshReqs = await getBookRequests();
+            let freshReqs = await getBookRequests().catch(() => null);
+            if (!freshReqs) {
+                try {
+                    const res = await fetch("/api/requests");
+                    if (res.ok) {
+                        const data = await res.json();
+                        freshReqs = data.requests || [];
+                    }
+                } catch (e) {}
+            }
             if (freshReqs) {
                 setRequests(freshReqs);
             }

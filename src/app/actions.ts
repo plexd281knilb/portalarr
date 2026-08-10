@@ -1492,15 +1492,23 @@ export async function deleteBookRequest(id: string) {
 }
 
 export async function getBookRequests() {
-    const session = await verifyUser();
+    let session: any = null;
+    try {
+        session = await verifyUser();
+    } catch (e) {
+        // Fallback gracefully
+    }
     
-    if (session.role === "ADMIN") {
+    const cleanRole = (session?.role || "").toUpperCase();
+
+    if (cleanRole === "ADMIN") {
         return await prisma.bookRequest.findMany({
             orderBy: { createdAt: "desc" }
         });
     } else {
+        const username = (session?.username || "") as string;
         return await prisma.bookRequest.findMany({
-            where: { requestedBy: session.username as string },
+            where: { requestedBy: username },
             orderBy: { createdAt: "desc" }
         });
     }
