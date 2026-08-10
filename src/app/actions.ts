@@ -2293,7 +2293,21 @@ export async function scanLibraryInternal(libraryId: string) {
                     }
                 }
 
-                const existing = dbBooksByPathLower.get(fullPath.toLowerCase());
+                let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
+
+                if (!existing) {
+                    const cleanBaseCheck = getEffectiveBookBaseName(fullPath, file, ext);
+                    const parsedMetaCheck = parseFilenameMetadata(cleanBaseCheck);
+                    const targetTitleNorm = (parsedMetaCheck.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+
+                    if (targetTitleNorm.length > 3) {
+                        existing = dbBooks.find(b => {
+                            if (matchedDbBookIds.has(b.id)) return false;
+                            const dbTitleNorm = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+                            return dbTitleNorm === targetTitleNorm || dbTitleNorm.includes(targetTitleNorm) || targetTitleNorm.includes(dbTitleNorm);
+                        });
+                    }
+                }
 
                 if (!existing) {
                     const cleanBase = getEffectiveBookBaseName(fullPath, file, ext);

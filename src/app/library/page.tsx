@@ -670,20 +670,37 @@ function normalizeBookCardMetadata(book: any) {
                     </div>
                 </div>
 
-                <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
+                <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2 relative z-20">
                     <div className="flex gap-2 w-full">
                         <Button 
                             variant="default" 
                             size="sm" 
-                            className="flex-1 text-xs font-extrabold text-black bg-amber-400 hover:bg-amber-300 gap-1 shadow"
-                            onClick={() => handleOpenChaptersModal(book)}
+                            className="flex-1 text-xs font-extrabold text-black bg-amber-400 hover:bg-amber-300 gap-1.5 shadow cursor-pointer relative z-30"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenChaptersModal(book);
+                            }}
                         >
                             <Play className="h-3.5 w-3.5 fill-black" /> Listen &amp; Chapters
                         </Button>
                         <Button 
                             variant="outline" 
                             size="sm" 
-                            className="text-xs h-8 px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1" 
+                            className="flex-1 text-xs font-bold border-amber-500/40 text-amber-400 hover:bg-amber-500/10 gap-1.5 cursor-pointer relative z-30" 
+                            asChild
+                            title="Download Audiobook file directly to device"
+                        >
+                            <a href={`/api/books/${book.id}`} download>
+                                <Download className="h-3.5 w-3.5" /> Download
+                            </a>
+                        </Button>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1.5 justify-center w-full border-t border-muted/40 pt-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs h-7 px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1" 
                             title="Email Audio File to Personal Inbox"
                             disabled={sendingToPersonalEmailId === book.id}
                             onClick={() => handleSendToPersonalEmail(book.id)}
@@ -697,25 +714,11 @@ function normalizeBookCardMetadata(book: any) {
                         <Button 
                             variant="outline" 
                             size="sm" 
-                            className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground" 
-                            asChild
-                            title="Download Audio File"
-                        >
-                            <a href={`/api/books/${book.id}`} download>
-                                <Download className="h-3.5 w-3.5" />
-                            </a>
-                        </Button>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
                             className="text-xs h-7 px-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 font-semibold"
                             title="Search & Re-Grab Complete Audiobook Release (All Chapters)"
                             onClick={() => handleSearchAndReplaceRelease(book)}
                         >
-                            <Search className="h-3.5 w-3.5 mr-1" /> Re-Grab Release
+                            <Search className="h-3.5 w-3.5 mr-1" /> Re-Grab
                         </Button>
                         <Button 
                             variant="outline" 
