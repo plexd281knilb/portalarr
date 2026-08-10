@@ -1384,7 +1384,13 @@ export async function getLibraryBooks(libraryId: string) {
     const deleteIds: string[] = [];
 
     for (const b of books) {
-        let normTitle = (b.title || "").toLowerCase();
+        const rawTitle = (b.title || "").trim().toLowerCase();
+        if (rawTitle === "userbooks" || rawTitle === "user books" || rawTitle === "books" || rawTitle === "audiobooks" || rawTitle === "downloads" || rawTitle.includes("userbooks")) {
+            deleteIds.push(b.id);
+            continue;
+        }
+
+        let normTitle = rawTitle;
         if (normTitle.includes("fellowship of the ring")) normTitle = "fellowship of the ring";
         else if (normTitle.includes("two towers")) normTitle = "two towers";
         else if (normTitle.includes("return of the king")) normTitle = "return of the king";
