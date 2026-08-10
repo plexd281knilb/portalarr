@@ -46,7 +46,10 @@ Portalarr organizes your media into dedicated tabs:
 
 ### 🎧 Audiobooks Tab
 * **Listen Online**: Click **Play (`▶️`)** on any audiobook to start streaming immediately in the built-in web audio player.
+* **Interactive Chapter Selector**: Click **Listen & Chapters** on any audiobook card to open the Chapter Selector Modal, jump to any specific chapter, or view file details.
+* **Reorder & Edit Chapters**: Click **✏️ Reorder & Edit Chapters** in the Chapter Selector Modal to change chapter numbers or click **⬆️ / ⬇️** buttons. Click **Save** to rename track files on disk so your custom order is permanent for all users!
 * **Multi-Track & Multi-Disc Support**: All chapter tracks and multi-disc folders (`Disc 01`, `Disc 02`) are consolidated into a single audiobook card.
+* **Continuous Autoplay**: The built-in player automatically proceeds to the next chapter track seamlessly when the current chapter finishes.
 * **Floating Player**: The web audio player stays pinned at the bottom of your screen as you browse.
 
 ---
