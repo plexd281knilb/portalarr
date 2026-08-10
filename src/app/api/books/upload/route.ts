@@ -3,9 +3,7 @@ import { jwtVerify } from "jose";
 import prisma from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
-
-const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
-const SECRET_KEY = new TextEncoder().encode(JWT_SECRET_RAW || "build-time-fallback-key");
+import { getJwtSecret } from "@/lib/auth-secret";
 
 export async function POST(req: NextRequest) {
     const session = req.cookies.get("session")?.value;
@@ -15,7 +13,7 @@ export async function POST(req: NextRequest) {
 
     let payload;
     try {
-        const decoded = await jwtVerify(session, SECRET_KEY);
+        const decoded = await jwtVerify(session, getJwtSecret());
         payload = decoded.payload;
     } catch (e) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -3,9 +3,7 @@ import { jwtVerify } from "jose";
 import prisma from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
-
-const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
-const SECRET_KEY = new TextEncoder().encode(JWT_SECRET_RAW || "build-time-fallback-key");
+import { getJwtSecret } from "@/lib/auth-secret";
 
 async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string = "", email: string = "", role: string = "") {
     if (role === "ADMIN") return true;
@@ -39,7 +37,7 @@ export async function GET(
 
     let payload;
     try {
-        const decoded = await jwtVerify(session, SECRET_KEY);
+        const decoded = await jwtVerify(session, getJwtSecret());
         payload = decoded.payload;
     } catch (e) {
         return new NextResponse("Unauthorized", { status: 401 });

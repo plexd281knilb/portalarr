@@ -9,11 +9,7 @@ import { decryptData, encryptData } from "@/lib/encryption";
 import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
-const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
-if (!JWT_SECRET_RAW && process.env.NODE_ENV === "production") {
-    console.warn("⚠️ WARNING: JWT_SECRET environment variable is missing. Authentication will fail.");
-}
-const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_RAW || "build-time-fallback-key");
+import { getJwtSecret } from "@/lib/auth-secret";
 
 // --- 1. SETUP CHECK ---
 export async function checkSystemInitialized() {
@@ -140,7 +136,7 @@ export async function createSession(userId: string, username: string, role: stri
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30d")
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 
   (await cookies()).set("session", token, {
     httpOnly: true,
@@ -158,7 +154,7 @@ export async function getSession() {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return payload;
   } catch (e) {
     return null;

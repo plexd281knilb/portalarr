@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
-
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "build-time-fallback-key");
+import { getJwtSecret } from "@/lib/auth-secret";
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -22,7 +21,7 @@ export async function proxy(req: NextRequest) {
   if (pathname === "/login") {
     if (session) {
       try {
-        const { payload } = await jwtVerify(session, JWT_SECRET);
+        const { payload } = await jwtVerify(session, getJwtSecret());
         const status = (payload.status as string) || "APPROVED";
         if (status === "PENDING" || status === "REJECTED") {
           return NextResponse.redirect(new URL("/pending", req.url));
@@ -44,7 +43,7 @@ export async function proxy(req: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(session, JWT_SECRET);
+    const { payload } = await jwtVerify(session, getJwtSecret());
     const userStatus = (payload.status as string) || "APPROVED";
 
     // 4. Pending or Rejected user protection

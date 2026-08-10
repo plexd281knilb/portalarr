@@ -9,11 +9,7 @@ import { encryptData, decryptData } from "@/lib/encryption";
 import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
-const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
-if (!JWT_SECRET_RAW && process.env.NODE_ENV === "production") {
-    console.warn("⚠️ WARNING: JWT_SECRET environment variable is missing. Authentication will fail.");
-}
-const SECRET_KEY = new TextEncoder().encode(JWT_SECRET_RAW || "build-time-fallback-key");
+import { getJwtSecret } from "@/lib/auth-secret";
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -1095,7 +1091,7 @@ async function verifyUser() {
     const session = cookieStore.get("session")?.value;
     if (!session) throw new Error("Unauthorized");
     try {
-        const { payload } = await jwtVerify(session, SECRET_KEY);
+        const { payload } = await jwtVerify(session, getJwtSecret());
         const userId = (payload.userId || payload.id) as string;
         const username = (payload.username || "") as string;
         const email = (payload.email || "") as string;
@@ -1216,35 +1212,40 @@ export async function createLibrary(formData: FormData) {
 }
 
 export async function seedDefaultLibraries() {
-    await verifyAdmin();
-    const existing = await prisma.library.findMany();
-    if (existing.length > 0) {
-        return { success: false, error: "Libraries are already configured." };
+    try {
+        await verifyAdmin();
+        const existing = await prisma.library.findMany();
+        if (existing.length > 0) {
+            return { success: false, error: "Libraries are already configured." };
+        }
+        await prisma.library.createMany({
+            data: [
+                {
+                    name: "Ebooks Library",
+                    description: "Main Ebook library for EPUBs, PDFs, and MOBI files",
+                    path: "",
+                    allowedUsers: "*",
+                    restrictedUsers: "",
+                    mediaType: "ebook",
+                    downloadCategory: "books"
+                },
+                {
+                    name: "Audiobooks Library",
+                    description: "Main Audiobook library for M4B, MP3, and FLAC files",
+                    path: "",
+                    allowedUsers: "*",
+                    restrictedUsers: "",
+                    mediaType: "audiobook",
+                    downloadCategory: "audiobooks"
+                }
+            ]
+        });
+        revalidatePath("/library");
+        return { success: true };
+    } catch (e: any) {
+        console.error("seedDefaultLibraries Error:", e);
+        return { success: false, error: e.message || "Failed to seed default libraries." };
     }
-    await prisma.library.createMany({
-        data: [
-            {
-                name: "Ebooks Library",
-                description: "Main Ebook library for EPUBs, PDFs, and MOBI files",
-                path: "",
-                allowedUsers: "*",
-                restrictedUsers: "",
-                mediaType: "ebook",
-                downloadCategory: "books"
-            },
-            {
-                name: "Audiobooks Library",
-                description: "Main Audiobook library for M4B, MP3, and FLAC files",
-                path: "",
-                allowedUsers: "*",
-                restrictedUsers: "",
-                mediaType: "audiobook",
-                downloadCategory: "audiobooks"
-            }
-        ]
-    });
-    revalidatePath("/library");
-    return { success: true };
 }
 
 export async function updateLibrary(formData: FormData) {
