@@ -1945,13 +1945,13 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     }
 
     // Harry Potter & Rowling Master Rules
-    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone") || lowerTitle.includes("dudley demented")) {
         author = "J. K. Rowling";
         if (lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) title = "Harry Potter and the Sorcerer's Stone";
         else if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
         else if (lowerTitle.includes("prisoner of azkaban")) title = "Harry Potter and the Prisoner of Azkaban";
         else if (lowerTitle.includes("goblet of fire")) title = "Harry Potter and the Goblet of Fire";
-        else if (lowerTitle.includes("order of the phoenix")) title = "Harry Potter and the Order of the Phoenix";
+        else if (lowerTitle.includes("order of the phoenix") || lowerTitle.includes("dudley demented")) title = "Harry Potter and the Order of the Phoenix";
         else if (lowerTitle.includes("half-blood prince")) title = "Harry Potter and the Half-Blood Prince";
         else if (lowerTitle.includes("deathly hallows")) title = "Harry Potter and the Deathly Hallows";
     }
@@ -2017,6 +2017,30 @@ export async function scanLibraryInternal(libraryId: string) {
         for (const b of dbBooks) {
             dbBooksByPathLower.set(b.filePath.toLowerCase(), b);
         }
+
+        // Auto-correct any legacy track titles like "dudley demented" to official book title
+        try {
+            const badBooks = await prisma.book.findMany({
+                where: {
+                    libraryId,
+                    OR: [
+                        { title: { contains: "dudley demented" } },
+                        { title: { contains: "Dudley Demented" } }
+                    ]
+                }
+            });
+            for (const bb of badBooks) {
+                const hdCover = await fetchBookCover("Harry Potter and the Order of the Phoenix", "J. K. Rowling", "audiobook");
+                await prisma.book.update({
+                    where: { id: bb.id },
+                    data: {
+                        title: "Harry Potter and the Order of the Phoenix",
+                        author: "J. K. Rowling",
+                        ...(hdCover ? { coverUrl: hdCover } : {})
+                    }
+                });
+            }
+        } catch (e) {}
 
         const files = fs.readdirSync(library.path);
         const isAudiobookLib = library.mediaType === "audiobook";
