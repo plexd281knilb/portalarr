@@ -1328,6 +1328,20 @@ export async function updateLibrary(formData: FormData) {
     }
 }
 
+export function removePathSafely(pathStr: string) {
+    if (!pathStr || !fs.existsSync(pathStr)) return;
+    try {
+        const stat = fs.statSync(pathStr);
+        if (stat.isDirectory()) {
+            fs.rmSync(pathStr, { recursive: true, force: true });
+        } else {
+            fs.unlinkSync(pathStr);
+        }
+    } catch (e: any) {
+        console.error(`[REMOVE-PATH-ERROR] Failed to remove path "${pathStr}":`, e.message);
+    }
+}
+
 export async function deleteLibrary(id: string) {
     try {
         await verifyAdmin();
@@ -1335,12 +1349,8 @@ export async function deleteLibrary(id: string) {
         
         const books = await prisma.book.findMany({ where: { libraryId: id } });
         for (const book of books) {
-            try {
-                if (book.filePath && fs.existsSync(book.filePath)) {
-                    fs.unlinkSync(book.filePath);
-                }
-            } catch (e) {
-                console.error(`Failed to delete book file: ${book.filePath}`, e);
+            if (book.filePath) {
+                removePathSafely(book.filePath);
             }
         }
         
@@ -1358,15 +1368,13 @@ export async function getLibraryBooks(libraryId: string) {
     try {
         session = await verifyUser();
     } catch (e) {}
-
-    const library = await prisma.library.findUnique({
-        where: { id: libraryId }
-    });
+    if (!session) throw new Error("Unauthorized");
     
+    const library = await prisma.library.findUnique({ where: { id: libraryId } });
     if (!library) throw new Error("Library not found");
-    
+
     const hasAccess = await checkLibraryAccess(
-        library.allowedUsers, 
+        library.allowedUsers || "",
         library.restrictedUsers || "",
         (session?.username || "") as string, 
         (session?.email || "") as string,
@@ -1431,12 +1439,8 @@ export async function deleteBook(id: string) {
     const book = await prisma.book.findUnique({ where: { id } });
     if (!book) throw new Error("Book not found");
     
-    try {
-        if (fs.existsSync(book.filePath)) {
-            fs.unlinkSync(book.filePath);
-        }
-    } catch (e) {
-        console.error(`Failed to delete book file: ${book.filePath}`, e);
+    if (book.filePath) {
+        removePathSafely(book.filePath);
     }
     
     await prisma.book.deleteMany({ where: { id } });
@@ -3617,7 +3621,7 @@ export async function monitorAndRetryDownload(
                                 } catch (e) {}
 
                                 if (fs.existsSync(foundFilePath)) {
-                                    try { fs.unlinkSync(foundFilePath); } catch (e) {}
+                                    removePathSafely(foundFilePath);
                                     console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
                                 }
                                     if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
@@ -4742,10 +4746,10 @@ export async function importCompletedDownload(requestId: string) {
     } catch (e) {}
 
     if (fs.existsSync(foundFilePath)) {
-        try { fs.unlinkSync(foundFilePath); } catch (e) {}
+        removePathSafely(foundFilePath);
     }
     if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
-        try { fs.rmSync(rootBookFolder, { recursive: true, force: true }); } catch (e) {}
+        removePathSafely(rootBookFolder);
     }
 
     // Auto-scan target library shelf so newly imported media is immediately available
