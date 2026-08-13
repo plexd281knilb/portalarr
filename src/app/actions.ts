@@ -4012,7 +4012,9 @@ export async function testAiAgentConnection(sampleText?: string) {
         await verifyAdmin();
         const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
         const targetSample = sampleText || "J.R.R.Tolkien-Lord.of.the.Rings.01-The.Hobbit.Rob.Inglis-PoF";
+        console.log(`[AI-AGENT-TEST] 🤖 Testing AI Metadata Agent with query: "${targetSample}"...`);
         const result = await resolveMetadataWithAI(targetSample, "audiobook");
+        console.log(`[AI-AGENT-TEST] ✨ Test Result: "${result.title}" by "${result.author}" [Series: ${result.series || "N/A"}] via ${result.providerUsed}`);
         return { success: true, result };
     } catch (e: any) {
         console.error("[TEST-AI-AGENT-ERROR]:", e);
@@ -4028,7 +4030,9 @@ export async function resolveBookWithAI(bookId: string) {
 
         const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
         const rawTarget = book.filePath ? path.basename(book.filePath) : book.title;
+        console.log(`[AI-SINGLE-RESOLVE] 🤖 Resolving AI metadata for book ID ${bookId} ("${book.title}")...`);
         const aiResult = await resolveMetadataWithAI(rawTarget, book.mediaType || "ebook");
+        console.log(`[AI-SINGLE-RESOLVE] ✨ Resolved: "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"}] via ${aiResult.providerUsed}`);
 
         let coverUrl = book.coverUrl;
         if (aiResult.coverQuery || aiResult.title) {
@@ -4043,6 +4047,8 @@ export async function resolveBookWithAI(bookId: string) {
             data: {
                 title: aiResult.title,
                 author: aiResult.author,
+                series: aiResult.series || book.series,
+                volumeNumber: aiResult.volumeNumber ? String(aiResult.volumeNumber) : book.volumeNumber,
                 ...(coverUrl ? { coverUrl } : {})
             }
         });
@@ -4052,6 +4058,56 @@ export async function resolveBookWithAI(bookId: string) {
     } catch (e: any) {
         console.error("[RESOLVE-BOOK-AI-ERROR]:", e);
         return { success: false, error: e.message || "Failed to resolve book with AI" };
+    }
+}
+
+export async function runAiBatchMetadataScanner() {
+    try {
+        await verifyAdmin();
+        const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
+        const books = await prisma.book.findMany();
+        console.log(`[AI-BATCH-SCAN] 🚀 Starting AI Metadata Resolution Batch Job across all ${books.length} items in database...`);
+
+        let updatedCount = 0;
+        for (let i = 0; i < books.length; i++) {
+            const b = books[i];
+            const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
+            console.log(`[AI-BATCH-SCAN] 🤖 [${i + 1}/${books.length}] Analyzing "${b.title}" (Raw: ${rawTarget})...`);
+            
+            try {
+                const aiResult = await resolveMetadataWithAI(rawTarget, b.mediaType || "ebook");
+                console.log(`[AI-BATCH-SCAN] ✨ Resolved "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"} #${aiResult.volumeNumber || "N/A"}] (Provider: ${aiResult.providerUsed})`);
+
+                let coverUrl = b.coverUrl;
+                if (!coverUrl || aiResult.title !== b.title) {
+                    try {
+                        const hdCover = await fetchBookCover(aiResult.title, aiResult.author, b.mediaType || "ebook");
+                        if (hdCover) coverUrl = hdCover;
+                    } catch (e) {}
+                }
+
+                await prisma.book.update({
+                    where: { id: b.id },
+                    data: {
+                        title: aiResult.title || b.title,
+                        author: (aiResult.author && aiResult.author !== "Unknown Author") ? aiResult.author : b.author,
+                        series: aiResult.series || b.series,
+                        volumeNumber: aiResult.volumeNumber ? String(aiResult.volumeNumber) : b.volumeNumber,
+                        ...(coverUrl ? { coverUrl } : {})
+                    }
+                }).catch(() => {});
+                updatedCount++;
+            } catch (err: any) {
+                console.warn(`[AI-BATCH-SCAN] ⚠️ Failed for "${b.title}":`, err.message || err);
+            }
+        }
+
+        console.log(`[AI-BATCH-SCAN] ✅ Completed AI Metadata Batch Job! ${updatedCount}/${books.length} books updated.`);
+        revalidatePath("/library");
+        return { success: true, message: `Successfully batch processed ${updatedCount} books across all libraries with AI Agent!` };
+    } catch (e: any) {
+        console.error("[AI-BATCH-SCAN-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to run AI Batch Scanner" };
     }
 }
 

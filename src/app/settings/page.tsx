@@ -13,7 +13,7 @@ import {
     getRoadmapText, updateRoadmapText,
     getAlertBanner, updateAlertBanner,
     testAppConnectionAction, testTautulliConnectionAction, testGlancesConnectionAction, validateDownloadsPathAction,
-    getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI, testFolderPermissions
+    getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI, runAiBatchMetadataScanner, testFolderPermissions
 } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -209,6 +209,24 @@ function SettingsPageContent() {
             setTestAiErr(e.message || "Failed to test AI Agent");
         } finally {
             setTestAiLoading(false);
+        }
+    };
+
+    const [batchScanning, setBatchScanning] = useState(false);
+
+    const handleRunAiBatchScan = async () => {
+        setBatchScanning(true);
+        try {
+            const res = await runAiBatchMetadataScanner();
+            if (res.success) {
+                alert(`✨ AI Batch Scanner Complete: ${res.message}`);
+            } else {
+                alert(`❌ AI Batch Scanner Failed: ${res.error}`);
+            }
+        } catch (e: any) {
+            alert(`❌ AI Batch Scanner Failed: ${e.message}`);
+        } finally {
+            setBatchScanning(false);
         }
     };
 
@@ -779,7 +797,7 @@ function SettingsPageContent() {
                                             </div>
                                         )}
 
-                                        <div className="flex gap-2 pt-2">
+                                        <div className="flex flex-wrap gap-2 pt-2">
                                             <Button type="submit" className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold text-white">
                                                 Save AI Agent Settings
                                             </Button>
@@ -791,7 +809,17 @@ function SettingsPageContent() {
                                                 disabled={testAiLoading}
                                             >
                                                 {testAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
-                                                Test AI Agent
+                                                Test Single Query
+                                            </Button>
+                                            <Button 
+                                                type="button" 
+                                                variant="secondary" 
+                                                className="bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 font-bold gap-1.5 w-full sm:w-auto"
+                                                onClick={handleRunAiBatchScan}
+                                                disabled={batchScanning}
+                                            >
+                                                {batchScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-300" /> : <Sparkles className="h-3.5 w-3.5 text-purple-300" />}
+                                                🪄 Run AI Batch Resolution on All Libraries
                                             </Button>
                                         </div>
                                     </form>
