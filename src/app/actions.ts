@@ -8,7 +8,7 @@ import { jwtVerify } from "jose";
 import { encryptData, decryptData } from "@/lib/encryption";
 import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
-import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver } from "@/lib/ai-agent";
+import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 
@@ -5371,6 +5371,87 @@ export async function reorderAudiobookChapters(bookId: string, updatedChapters: 
     } catch (e: any) {
         console.error("reorderAudiobookChapters Error:", e);
         return { success: false, error: e.message || "Failed to reorder audiobook chapters." };
+    }
+}
+
+export async function analyzeAudiobookChaptersAction(bookId: string) {
+    try {
+        await verifyUser();
+        const book = await prisma.book.findUnique({
+            where: { id: bookId }
+        });
+        if (!book) return { success: false, error: "Audiobook entry not found in database" };
+
+        if (!fs.existsSync(book.filePath)) {
+            return { success: false, error: "Audiobook folder not found on disk" };
+        }
+
+        const stat = fs.statSync(book.filePath);
+        const targetDir = stat.isDirectory() ? book.filePath : path.dirname(book.filePath);
+        const isSingleFile = !stat.isDirectory();
+
+        const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus"];
+        const fileList: { fileName: string; fileSize?: number; fullPath: string }[] = [];
+
+        if (isSingleFile) {
+            fileList.push({
+                fileName: path.basename(book.filePath),
+                fileSize: stat.size,
+                fullPath: book.filePath
+            });
+        } else {
+            const entries = fs.readdirSync(targetDir);
+            for (const f of entries) {
+                const ext = path.extname(f).toLowerCase();
+                if (validAudioExts.includes(ext)) {
+                    const fp = path.join(targetDir, f);
+                    try {
+                        const st = fs.statSync(fp);
+                        fileList.push({
+                            fileName: f,
+                            fileSize: st.size,
+                            fullPath: fp
+                        });
+                    } catch (e) {}
+                }
+            }
+        }
+
+        if (fileList.length === 0) {
+            return { success: false, error: "No audio track files found in audiobook directory" };
+        }
+
+        const aiResults = await analyzeAudiobookChaptersWithAI(
+            book.title,
+            book.author || "Unknown Author",
+            fileList
+        );
+
+        // Auto-rename disk track files if multi-track audiobook
+        if (!isSingleFile && aiResults.length === fileList.length) {
+            for (let i = 0; i < aiResults.length; i++) {
+                const res = aiResults[i];
+                const originalPath = fileList[i]?.fullPath;
+                if (originalPath && fs.existsSync(originalPath) && res.suggestedFileName) {
+                    const newPath = path.join(targetDir, res.suggestedFileName);
+                    if (originalPath !== newPath && !fs.existsSync(newPath)) {
+                        try {
+                            fs.renameSync(originalPath, newPath);
+                        } catch (e) {}
+                    }
+                }
+            }
+        }
+
+        revalidatePath("/library");
+        return {
+            success: true,
+            bookTitle: book.title,
+            chapters: aiResults
+        };
+    } catch (e: any) {
+        console.error("[AI-CHAPTERS-ACTION] Error:", e);
+        return { success: false, error: e.message || "Failed to analyze audiobook chapters with AI" };
     }
 }
 

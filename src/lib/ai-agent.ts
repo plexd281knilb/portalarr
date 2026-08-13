@@ -176,6 +176,204 @@ Extract official book metadata into JSON format with keys: title, author, series
     return null;
 }
 
+export interface AIChapterResult {
+    trackNumber: number;
+    fileName: string;
+    chapterTitle: string;
+    suggestedFileName: string;
+}
+
+export async function analyzeAudiobookChaptersWithAI(
+    bookTitle: string,
+    bookAuthor: string,
+    fileList: { fileName: string; fileSize?: number }[]
+): Promise<AIChapterResult[]> {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+    const provider = settings?.aiProvider || "default";
+    const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
+    const modelName = settings?.aiModel || "gemini-1.5-flash";
+
+    if ((provider === "gemini" || provider === "google") && rawKey) {
+        try {
+            const aiRes = await callGeminiAIForChapters(bookTitle, bookAuthor, fileList, rawKey, modelName);
+            if (aiRes && aiRes.length > 0) return aiRes;
+        } catch (e: any) {
+            console.warn(`[AI-AGENT-CHAPTERS] Gemini API failed: ${e.message}. Using fallback chapter resolver.`);
+        }
+    }
+
+    if (provider === "openai" && rawKey) {
+        try {
+            const aiRes = await callOpenAIForChapters(bookTitle, bookAuthor, fileList, rawKey, modelName || "gpt-4o-mini");
+            if (aiRes && aiRes.length > 0) return aiRes;
+        } catch (e: any) {
+            console.warn(`[AI-AGENT-CHAPTERS] OpenAI API failed: ${e.message}. Using fallback chapter resolver.`);
+        }
+    }
+
+    return fallbackChapterResolver(bookTitle, bookAuthor, fileList);
+}
+
+async function callGeminiAIForChapters(
+    bookTitle: string,
+    bookAuthor: string,
+    fileList: { fileName: string; fileSize?: number }[],
+    apiKey: string,
+    model: string
+): Promise<AIChapterResult[] | null> {
+    const candidateModels = Array.from(new Set([
+        model || "gemini-1.5-flash",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro"
+    ]));
+
+    const systemPrompt = `You are an expert audiobook librarian AI agent specializing in audiobook track and chapter resolution.
+Book Title: "${bookTitle}"
+Author: "${bookAuthor}"
+
+Audio Tracks List:
+${fileList.map((f, i) => `Track ${i + 1}: "${f.fileName}" (${f.fileSize ? (f.fileSize / (1024 * 1024)).toFixed(1) + ' MB' : 'unknown size'})`).join("\n")}
+
+Analyze the track names, track numbers, and official book chapter list for "${bookTitle}" by "${bookAuthor}".
+Map each audio track to its exact official chapter title and generate a clean disk filename.
+
+Return ONLY a raw, unformatted JSON array where each item matches this exact schema:
+[
+  {
+    "trackNumber": 1,
+    "fileName": "original_filename.mp3",
+    "chapterTitle": "Chapter 1: Official Chapter Title",
+    "suggestedFileName": "01 Official Chapter Title.mp3"
+  }
+]`;
+
+    for (const activeModel of candidateModels) {
+        try {
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: systemPrompt }]
+                    }]
+                })
+            });
+
+            if (!res.ok) continue;
+
+            const data = await res.json();
+            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            const cleanJsonText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+            const parsed = JSON.parse(cleanJsonText);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed.map((item: any, idx: number) => ({
+                    trackNumber: item.trackNumber || idx + 1,
+                    fileName: item.fileName || fileList[idx]?.fileName || `Track_${idx + 1}`,
+                    chapterTitle: item.chapterTitle || `Chapter ${idx + 1}`,
+                    suggestedFileName: item.suggestedFileName || `${String(idx + 1).padStart(2, "0")} ${item.chapterTitle || ""}.mp3`
+                }));
+            }
+        } catch (e) {}
+    }
+    return null;
+}
+
+async function callOpenAIForChapters(
+    bookTitle: string,
+    bookAuthor: string,
+    fileList: { fileName: string; fileSize?: number }[],
+    apiKey: string,
+    model: string
+): Promise<AIChapterResult[] | null> {
+    const activeModel = model || "gpt-4o-mini";
+    const endpoint = "https://api.openai.com/v1/chat/completions";
+
+    const prompt = `Audiobook Title: "${bookTitle}" by "${bookAuthor}"
+Tracks: ${JSON.stringify(fileList)}
+Return JSON array of chapters with keys: trackNumber, fileName, chapterTitle, suggestedFileName.`;
+
+    const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: activeModel,
+            response_format: { type: "json_object" },
+            messages: [
+                { role: "system", content: "You are an audiobook chapter resolution AI agent." },
+                { role: "user", content: prompt }
+            ]
+        })
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content || "";
+    const parsed = JSON.parse(content);
+    const arr = Array.isArray(parsed) ? parsed : (parsed.chapters || parsed.tracks || []);
+    if (Array.isArray(arr) && arr.length > 0) {
+        return arr.map((item: any, idx: number) => ({
+            trackNumber: item.trackNumber || idx + 1,
+            fileName: item.fileName || fileList[idx]?.fileName || `Track_${idx + 1}`,
+            chapterTitle: item.chapterTitle || `Chapter ${idx + 1}`,
+            suggestedFileName: item.suggestedFileName || `${String(idx + 1).padStart(2, "0")} ${item.chapterTitle || ""}.mp3`
+        }));
+    }
+    return null;
+}
+
+function fallbackChapterResolver(
+    bookTitle: string,
+    bookAuthor: string,
+    fileList: { fileName: string; fileSize?: number }[]
+): AIChapterResult[] {
+    const hobbitChapters = [
+        "An Unexpected Party", "Roast Mutton", "A Short Rest", "Over Hill and Under Hill",
+        "Riddles in the Dark", "Out of the Frying-Pan into the Fire", "Queer Lodgings",
+        "Flies and Spiders", "Barrels Out of Bond", "A Warm Welcome", "On the Doorstep",
+        "Inside Information", "Not at Home", "Fire and Water", "The Gathering of the Clouds",
+        "A Thief in the Night", "The Clouds Burst", "The Return Journey", "The Last Stage"
+    ];
+
+    const lowTitle = bookTitle.toLowerCase();
+    const isHobbit = lowTitle.includes("hobbit");
+
+    return fileList.map((f, idx) => {
+        const trackNum = idx + 1;
+        const ext = f.fileName.includes(".") ? f.fileName.split(".").pop() : "mp3";
+        let cleanName = f.fileName
+            .replace(/^\d+[\s._-]+/, "")
+            .replace(/\.[^/.]+$/, "")
+            .replace(/_/g, " ")
+            .trim();
+
+        let chapterTitle = `Chapter ${trackNum}`;
+        if (isHobbit && hobbitChapters[idx]) {
+            chapterTitle = `Chapter ${trackNum}: ${hobbitChapters[idx]}`;
+            cleanName = hobbitChapters[idx];
+        } else if (cleanName && !cleanName.toLowerCase().includes(bookTitle.toLowerCase())) {
+            chapterTitle = `Chapter ${trackNum}: ${cleanName.charAt(0).toUpperCase() + cleanName.slice(1)}`;
+        }
+
+        const padNum = String(trackNum).padStart(2, "0");
+        const safeTitle = cleanName.replace(/[^a-zA-Z0-9\s\-\.,']/g, "").trim();
+        const suggestedFileName = `${padNum} ${safeTitle}.${ext}`;
+
+        return {
+            trackNumber: trackNum,
+            fileName: f.fileName,
+            chapterTitle,
+            suggestedFileName
+        };
+    });
+}
+
 export function callDefaultResolver(rawFilename: string, mediaType: string): AIResolvedMetadata {
     let clean = rawFilename.replace(/[\r\n]+/g, " ").trim();
 

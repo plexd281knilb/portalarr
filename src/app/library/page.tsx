@@ -33,6 +33,7 @@ import {
   importCompletedDownload,
   getAudiobookChapters,
   reorderAudiobookChapters,
+  analyzeAudiobookChaptersAction,
   resolveBookWithAI
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
@@ -265,6 +266,7 @@ function BookLibraryPageContent() {
     const [loadingChapters, setLoadingChapters] = useState(false);
     const [isEditingChapters, setIsEditingChapters] = useState(false);
     const [savingChapters, setSavingChapters] = useState(false);
+    const [analyzingAiChapters, setAnalyzingAiChapters] = useState(false);
     const [activePlayingTrack, setActivePlayingTrack] = useState<{
         bookId: string;
         bookTitle: string;
@@ -1345,6 +1347,27 @@ function normalizeBookCardMetadata(book: any) {
             alert(e.message || "Failed to save chapter order");
         } finally {
             setSavingChapters(false);
+        }
+    }
+
+    async function handleAnalyzeChaptersWithAI() {
+        if (!chaptersModalBook) return;
+        setAnalyzingAiChapters(true);
+        try {
+            const res = await analyzeAudiobookChaptersAction(chaptersModalBook.id);
+            if (res && res.success) {
+                const refreshed = await getAudiobookChapters(chaptersModalBook.id);
+                if (refreshed && refreshed.success && refreshed.chapters) {
+                    setChaptersList(refreshed.chapters);
+                }
+                alert(`✨ AI Agent successfully analyzed audio tracks and resolved official chapters for "${chaptersModalBook.title}"!`);
+            } else if (res && !res.success) {
+                alert(res.error || "Failed to analyze audiobook chapters with AI.");
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed to analyze audiobook chapters with AI.");
+        } finally {
+            setAnalyzingAiChapters(false);
         }
     }
 
@@ -3593,6 +3616,18 @@ function normalizeBookCardMetadata(book: any) {
                                                 >
                                                     <Edit2 className="h-3.5 w-3.5" />
                                                     {isEditingChapters ? "Cancel Editing" : "✏️ Reorder & Edit Chapters"}
+                                                </Button>
+                                            )}
+                                            {chaptersList.length > 0 && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    className="h-7 text-xs font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 gap-1.5"
+                                                    disabled={analyzingAiChapters}
+                                                    onClick={handleAnalyzeChaptersWithAI}
+                                                >
+                                                    {analyzingAiChapters ? <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-300" /> : <Sparkles className="h-3.5 w-3.5 text-purple-300" />}
+                                                    🪄 AI Auto-Detect & Name Chapters
                                                 </Button>
                                             )}
                                         </div>
