@@ -3466,8 +3466,10 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                         return firstMediaFile;
                     }
                 }
-                // Skip inspecting internal files of non-matching release directories to keep log clean & search fast
-                continue;
+                
+                // Recurse into subdirectories to find files inside nested release folders
+                const subFound = findDownloadedFile(fullPath, bookTitle, mediaType);
+                if (subFound) return subFound;
 
                 const found = findDownloadedFile(fullPath, bookTitle, mediaType);
                 if (found) return found;
@@ -4876,6 +4878,11 @@ export async function importCompletedDownload(requestId: string) {
         "/downloads/complete",
         "/downloads/audiobooks",
         "/downloads/books",
+        "/user/downloads",
+        "/user/Books",
+        "/Userbooks",
+        "/mnt/user/downloads",
+        "/mnt/user/Books",
         "/app/downloads",
         "./downloads"
     ];
