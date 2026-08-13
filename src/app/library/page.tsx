@@ -1218,6 +1218,10 @@ function normalizeBookCardMetadata(book: any) {
             }
             await loadBooks(libId);
         } catch (e: any) {
+            if (isServerActionMismatch(e)) {
+                window.location.reload();
+                return;
+            }
             alert(e.message || "Failed to scan library folder");
         } finally {
             setScanning(false);
