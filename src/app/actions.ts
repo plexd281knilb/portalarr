@@ -1328,7 +1328,7 @@ export async function updateLibrary(formData: FormData) {
     }
 }
 
-export function removePathSafely(pathStr: string) {
+function removePathSafely(pathStr: string) {
     if (!pathStr || !fs.existsSync(pathStr)) return;
     try {
         const stat = fs.statSync(pathStr);
