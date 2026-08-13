@@ -5322,6 +5322,9 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
             canDelete: false,
             canMoveToTarget: false,
             targetPath: targetLibraryPath || "",
+            itemCount: 0,
+            totalSizeBytes: 0,
+            subfolders: [] as { name: string, count: number }[],
             error: ""
         };
 
@@ -5337,10 +5340,30 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
         }
         results.exists = true;
 
-        // 2. Check Read Access
+        // 2. Check Read Access & Item Statistics
         try {
-            const files = fs.readdirSync(folderPath);
-            results.canRead = Array.isArray(files);
+            const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+            results.canRead = true;
+            results.itemCount = entries.length;
+
+            const subfoldersList: { name: string, count: number }[] = [];
+            for (const entry of entries) {
+                const fullP = path.join(folderPath, entry.name);
+                if (entry.isDirectory()) {
+                    try {
+                        const childEntries = fs.readdirSync(fullP);
+                        subfoldersList.push({ name: entry.name, count: childEntries.length });
+                    } catch (e) {
+                        subfoldersList.push({ name: entry.name, count: 0 });
+                    }
+                } else if (entry.isFile()) {
+                    try {
+                        const st = fs.statSync(fullP);
+                        results.totalSizeBytes += st.size;
+                    } catch (e) {}
+                }
+            }
+            results.subfolders = subfoldersList.slice(0, 8); // Top 8 subfolders
         } catch (readErr: any) {
             results.error = `Read permission denied: ${readErr.message}`;
             return { success: false, results };
@@ -5390,7 +5413,7 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
                 } catch (e) {}
             }
         } else {
-            results.canMoveToTarget = true; // Not tested if target not specified
+            results.canMoveToTarget = true; // Default true if target path not provided
         }
 
         return {
@@ -5409,6 +5432,9 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
                 canDelete: false,
                 canMoveToTarget: false,
                 targetPath: targetLibraryPath || "",
+                itemCount: 0,
+                totalSizeBytes: 0,
+                subfolders: [],
                 error: e.message
             }
         };

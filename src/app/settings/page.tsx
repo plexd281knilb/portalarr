@@ -517,8 +517,27 @@ function SettingsPageContent() {
                                             <Label>Library Auto-Scan Interval (Minutes)</Label>
                                             <Input name="autoSyncInterval" type="number" defaultValue={systemSettings.autoSyncInterval || 5} />
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label>Completed Downloads Folder</Label>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <Label>Completed Downloads Folder Path</Label>
+                                                <div className="flex gap-1.5 flex-wrap">
+                                                    {["/downloads", "/user/downloads", "/user/Books", "/Userbooks", "/mnt/user/Books"].map((preset) => (
+                                                        <Button
+                                                            key={preset}
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-6 px-2 text-[10px] font-mono border-muted/50 text-muted-foreground hover:text-primary hover:border-primary/50"
+                                                            onClick={() => {
+                                                                setInputDownloadsPath(preset);
+                                                                handleTestPermissions(preset);
+                                                            }}
+                                                        >
+                                                            {preset}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
                                             <div className="flex flex-wrap gap-2">
                                                 <Input 
                                                     name="downloadsPath" 
@@ -546,7 +565,7 @@ function SettingsPageContent() {
                                                     onClick={() => handleTestPermissions(inputDownloadsPath)}
                                                 >
                                                     {permTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Shield className="h-3.5 w-3.5 text-amber-400" />}
-                                                    Test Permissions
+                                                    Run Diagnostic Suite
                                                 </Button>
                                             </div>
                                             {pathResult && (
@@ -558,37 +577,37 @@ function SettingsPageContent() {
 
                                             {/* FULL FOLDER PERMISSIONS DIAGNOSTIC RESULTS */}
                                             {permResult && (
-                                                <div className={`text-xs p-3.5 rounded-xl border mt-3 space-y-2.5 ${permResult.success ? "bg-emerald-950/30 border-emerald-800/40 text-emerald-300" : "bg-red-950/30 border-red-800/40 text-slate-200"}`}>
-                                                    <div className="flex items-center justify-between font-bold text-sm">
+                                                <div className={`text-xs p-4 rounded-xl border mt-3 space-y-3 ${permResult.success ? "bg-emerald-950/30 border-emerald-800/40 text-emerald-300" : "bg-red-950/30 border-red-800/40 text-slate-200"}`}>
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 font-bold text-sm border-b border-muted/30 pb-2">
                                                         <span className="flex items-center gap-2">
-                                                            {permResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />}
-                                                            Folder Permissions Verification
+                                                            {permResult.success ? <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400 shrink-0" /> : <AlertTriangle className="h-4.5 w-4.5 text-red-400 shrink-0" />}
+                                                            Container Folder Diagnostic: <code className="text-amber-400 text-xs">{permResult.results?.folderPath}</code>
                                                         </span>
                                                         <Badge className={permResult.success ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-red-500/20 text-red-300 border-red-500/30"}>
-                                                            {permResult.success ? "ALL PERMISSIONS PASS" : "PERMISSIONS ISSUES DETECTED"}
+                                                            {permResult.success ? "✓ ALL PERMISSIONS PASS" : "✗ PERMISSIONS DEFICIENT"}
                                                         </Badge>
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
-                                                        <div className="flex items-center justify-between p-2 rounded bg-background/50 border border-muted/30">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 font-mono text-[11px]">
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
                                                             <span>📁 Path Exists:</span>
                                                             <span className={permResult.results?.exists ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                                                                 {permResult.results?.exists ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
-                                                        <div className="flex items-center justify-between p-2 rounded bg-background/50 border border-muted/30">
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
                                                             <span>📖 Read Access:</span>
                                                             <span className={permResult.results?.canRead ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                                                                 {permResult.results?.canRead ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
-                                                        <div className="flex items-center justify-between p-2 rounded bg-background/50 border border-muted/30">
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
                                                             <span>✏️ Write Access:</span>
                                                             <span className={permResult.results?.canWrite ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                                                                 {permResult.results?.canWrite ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
-                                                        <div className="flex items-center justify-between p-2 rounded bg-background/50 border border-muted/30">
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
                                                             <span>🗑️ Delete Access:</span>
                                                             <span className={permResult.results?.canDelete ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                                                                 {permResult.results?.canDelete ? "✓ PASS" : "✗ FAIL"}
@@ -596,8 +615,32 @@ function SettingsPageContent() {
                                                         </div>
                                                     </div>
 
+                                                    {permResult.results?.exists && (
+                                                        <div className="text-[11px] bg-background/40 p-2.5 rounded-lg border border-muted/30 flex flex-wrap justify-between items-center gap-2 font-mono">
+                                                            <span>
+                                                                Total Items: <strong className="text-primary">{permResult.results?.itemCount || 0}</strong>
+                                                            </span>
+                                                            <span>
+                                                                Total File Size: <strong className="text-amber-400">{((permResult.results?.totalSizeBytes || 0) / (1024 * 1024)).toFixed(1)} MB</strong>
+                                                            </span>
+                                                        </div>
+                                                    )}
+
+                                                    {permResult.results?.subfolders && permResult.results.subfolders.length > 0 && (
+                                                        <div className="space-y-1.5 pt-1">
+                                                            <div className="text-[11px] font-bold text-slate-400">Detected Subdirectories:</div>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {permResult.results.subfolders.map((sub: any) => (
+                                                                    <Badge key={sub.name} variant="outline" className="bg-muted/40 text-[10px] font-mono">
+                                                                        📂 {sub.name} ({sub.count} items)
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     {permResult.results?.error && (
-                                                        <div className="text-[11px] text-red-400 bg-red-950/50 p-2 rounded border border-red-800/40">
+                                                        <div className="text-[11px] text-red-400 bg-red-950/50 p-2.5 rounded-lg border border-red-800/40">
                                                             <strong>Error Details:</strong> {permResult.results.error}
                                                         </div>
                                                     )}
