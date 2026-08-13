@@ -1452,10 +1452,20 @@ export async function getLibraryBooks(libraryId?: string) {
              .replace(/\s+/g, " ")
              .trim();
 
+        if (a === "Unknown Author" || t.includes("[") || t.includes("]") || t.toLowerCase().includes("alex 011") || t.toLowerCase().includes("prince of the nile")) {
+            const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
+            const parsed = parseFilenameMetadata(rawTarget);
+            if (parsed.title) t = parsed.title;
+            if (parsed.author && parsed.author !== "Unknown Author") a = parsed.author;
+        }
+
         const lowerT = t.toLowerCase();
         const lowerA = a.toLowerCase();
 
-        if (lowerT.includes("if cats disappeared from the world")) {
+        if (lowerT.includes("prince of the nile") || lowerT.includes("alex 011")) {
+            t = "Alix: The Prince of the Nile";
+            a = "Jacques Martin";
+        } else if (lowerT.includes("if cats disappeared from the world")) {
             t = "If Cats Disappeared from the World";
             a = "Genki Kawamura";
         } else if (lowerT.includes("foundryside") || lowerA.includes("foundryside")) {
@@ -2652,83 +2662,24 @@ export async function scanLibraryInternal(libraryId: string) {
                     let parsedAuthor = parsedMeta.author;
                     let parsedTitle = parsedMeta.title;
 
-                    // Check if title and author are swapped in DB
-                    const isSwapped = (existing.title.toLowerCase() === parsedAuthor.toLowerCase()) && 
-                                      (existing.author.toLowerCase() === parsedTitle.toLowerCase());
+                    let title = parsedTitle;
+                    let author = parsedAuthor;
+                    let coverUrl = existing.coverUrl || "";
 
-                    const isTagAuthor = /^(?:PB\d*|BKS|CTO|RETAIL|EPUB|PDF|MOBI|AZW3|v\d+)\b/i.test(existing.author.trim());
-                    const hasTitleHyphen = existing.title.includes(" - ");
-                    const hasSceneNoise = existing.title.toLowerCase().includes("retail") ||
-                                         existing.title.toLowerCase().includes("epub") ||
-                                         existing.title.toLowerCase().includes("cto") ||
-                                         (existing.title.includes(".") && existing.title.toLowerCase().includes("the."));
-                    
-                    const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(existing.title.trim());
+                    const needsCleaning = existing.title !== title || 
+                                          existing.author !== author || 
+                                          existing.author === "Unknown Author" || 
+                                          existing.title.includes("[") || 
+                                          existing.title.includes("]") ||
+                                          existing.title.includes("(");
 
-                    if (isSwapped || existing.author === "Unknown Author" || isTagAuthor || hasSceneNoise || isDiscTitle || hasTitleHyphen || !existing.coverUrl) {
-                        let title = (isSwapped || hasSceneNoise || isDiscTitle || hasTitleHyphen || isTagAuthor) ? parsedTitle : existing.title;
-                        let author = (isSwapped || existing.author === "Unknown Author" || isTagAuthor || hasTitleHyphen) ? parsedAuthor : existing.author;
-                        let coverUrl = existing.coverUrl || "";
-
-                        let tempTitle = parsedTitle;
-                        let tempAuthor = parsedAuthor;
-
-                        // Dynamic Author Heuristic for backfilling
+                    if (needsCleaning || !coverUrl) {
                         try {
-                            const dbAuthors = await prisma.book.findMany({
-                                where: { author: { not: "Unknown Author" } },
-                                select: { author: true },
-                                distinct: ['author']
-                            });
-                            const reqAuthors = await prisma.bookRequest.findMany({
-                                where: { author: { not: "Unknown Author" } },
-                                select: { author: true },
-                                distinct: ['author']
-                            });
-
-                            const allAuthorsSet = new Set<string>();
-                            for (const row of dbAuthors) {
-                                if (row.author) allAuthorsSet.add(row.author.trim());
-                            }
-                            for (const row of reqAuthors) {
-                                if (row.author) allAuthorsSet.add(row.author.trim());
-                            }
-
-                            const titleLower = tempTitle.toLowerCase();
-                            for (const auth of allAuthorsSet) {
-                                const authLower = auth.toLowerCase();
-                                if (titleLower.startsWith(authLower)) {
-                                    tempAuthor = auth;
-                                    tempTitle = tempTitle.substring(auth.length).trim();
-                                    tempTitle = tempTitle.replace(/^[:\-\s]+/, "").trim();
-                                    break;
-                                } else if (titleLower.endsWith(authLower)) {
-                                    tempAuthor = auth;
-                                    tempTitle = tempTitle.substring(0, tempTitle.length - auth.length).trim();
-                                    tempTitle = tempTitle.replace(/[:\-\s]+$/, "").trim();
-                                    break;
-                                }
+                            const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
+                            if (fetchedCover) {
+                                coverUrl = fetchedCover;
                             }
                         } catch (e) {}
-
-                        if (tempTitle && tempTitle !== title) title = tempTitle;
-                        if (tempAuthor && tempAuthor !== author) author = tempAuthor;
-
-                        if (isDiscTitle && (!title || /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(title.trim()))) {
-                            if (author && author !== "Unknown Author" && !/^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(author.trim())) {
-                                title = author;
-                                author = "Unknown Author";
-                            }
-                        }
-
-                        if (!coverUrl || isDiscTitle) {
-                            try {
-                                const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
-                                if (fetchedCover) {
-                                    coverUrl = fetchedCover;
-                                }
-                            } catch (e) {}
-                        }
 
                         await prisma.book.update({
                             where: { id: existing.id },
