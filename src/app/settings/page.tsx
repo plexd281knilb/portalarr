@@ -12,7 +12,8 @@ import {
     getBetaCards, createBetaCard, updateBetaCard, deleteBetaCard,
     getRoadmapText, updateRoadmapText,
     getAlertBanner, updateAlertBanner,
-    testAppConnectionAction, testTautulliConnectionAction, testGlancesConnectionAction, validateDownloadsPathAction
+    testAppConnectionAction, testTautulliConnectionAction, testGlancesConnectionAction, validateDownloadsPathAction,
+    getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI
 } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ import {
     Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, 
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
-    Radio, ExternalLink, FileCode, Check
+    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -161,6 +162,40 @@ function SettingsPageContent() {
         setPathResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
     };
 
+    // AI Agent States
+    const [aiSettings, setAiSettings] = useState<any>({
+        aiProvider: "default",
+        aiApiKey: "",
+        aiModel: "gemini-2.5-flash",
+        aiAutoResolve: true
+    });
+    const [aiProviderSelect, setAiProviderSelect] = useState("default");
+    const [aiModelInput, setAiModelInput] = useState("gemini-2.5-flash");
+    const [aiAutoResolveSwitch, setAiAutoResolveSwitch] = useState(true);
+    const [showAiKey, setShowAiKey] = useState(false);
+    const [testAiLoading, setTestAiLoading] = useState(false);
+    const [testAiResult, setTestAiResult] = useState<any>(null);
+    const [testAiErr, setTestAiErr] = useState("");
+    const [saveAiMsg, setSaveAiMsg] = useState("");
+
+    const handleTestAiAgent = async () => {
+        setTestAiLoading(true);
+        setTestAiResult(null);
+        setTestAiErr("");
+        try {
+            const res = await testAiAgentConnection();
+            if (res.success && res.result) {
+                setTestAiResult(res.result);
+            } else {
+                setTestAiErr(res.error || "AI Agent test failed");
+            }
+        } catch (e: any) {
+            setTestAiErr(e.message || "Failed to test AI Agent");
+        } finally {
+            setTestAiLoading(false);
+        }
+    };
+
     const loadAllData = async () => {
         setLoading(true);
 
@@ -169,7 +204,7 @@ function SettingsPageContent() {
         }, 2500);
 
         try {
-            const [u, s, t, g, m, bt, bc, rt, ab] = await Promise.all([
+            const [u, s, t, g, m, bt, bc, rt, ab, ai] = await Promise.all([
                 getAppUsers(),
                 getSettings(),
                 getTautulliInstances(),
@@ -178,7 +213,8 @@ function SettingsPageContent() {
                 getBetaDashboardText(), 
                 getBetaCards(),
                 getRoadmapText(),
-                getAlertBanner()          
+                getAlertBanner(),
+                getAiAgentSettings().catch(() => null)
             ]);
             setUsers(u || []);
             setSystemSettings(s || {});
@@ -192,6 +228,13 @@ function SettingsPageContent() {
             
             setAlertBanner(ab || {enabled: false, text: ""});
             setBannerEnabled(ab?.enabled || false);
+
+            if (ai) {
+                setAiSettings(ai);
+                setAiProviderSelect(ai.aiProvider || "default");
+                setAiModelInput(ai.aiModel || "gemini-2.5-flash");
+                setAiAutoResolveSwitch(ai.aiAutoResolve ?? true);
+            }
         } catch (error) {
             console.error("Failed to load settings data:", error);
         } finally {
@@ -489,6 +532,150 @@ function SettingsPageContent() {
                                         <Button type="submit" variant="secondary" className="w-full font-semibold">
                                             Save Automation Settings
                                         </Button>
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                            {/* AI METADATA AGENT CARD */}
+                            <Card className="border-purple-500/40 bg-purple-500/5">
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2 text-purple-400">
+                                                <Bot className="h-5 w-5 text-purple-400"/> AI Metadata Agent
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Automated AI agent to analyze messy release folder names and extract official book titles, authors, and cover art queries.
+                                            </CardDescription>
+                                        </div>
+                                        <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">
+                                            {aiProviderSelect === "default" ? "Built-In Heuristic" : aiProviderSelect === "gemini" ? "Google Gemini" : "OpenAI"}
+                                        </Badge>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <form onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        const formData = new FormData(e.currentTarget);
+                                        formData.append("aiProvider", aiProviderSelect);
+                                        formData.append("aiModel", aiModelInput);
+                                        formData.append("aiAutoResolve", aiAutoResolveSwitch ? "true" : "false");
+                                        const res = await saveAiAgentSettings(formData);
+                                        if (res.success) {
+                                            setSaveAiMsg("AI Agent settings saved successfully!");
+                                            setTimeout(() => setSaveAiMsg(""), 4000);
+                                        }
+                                    }} className="space-y-4">
+                                        {saveAiMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveAiMsg}</span>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-2">
+                                            <Label>AI Provider Engine</Label>
+                                            <Select value={aiProviderSelect} onValueChange={(val) => {
+                                                setAiProviderSelect(val);
+                                                if (val === "gemini" && !aiModelInput.includes("gemini")) setAiModelInput("gemini-2.5-flash");
+                                                else if (val === "openai" && !aiModelInput.includes("gpt")) setAiModelInput("gpt-4o-mini");
+                                            }}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select AI Provider" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="default">Default Built-In (Free Heuristic & Search)</SelectItem>
+                                                    <SelectItem value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</SelectItem>
+                                                    <SelectItem value="openai">OpenAI (GPT-4o / GPT-4o-mini)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {aiProviderSelect !== "default" && (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <Label>API Key</Label>
+                                                        <Button 
+                                                            type="button" 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                                            onClick={() => setShowAiKey(!showAiKey)}
+                                                        >
+                                                            {showAiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                        </Button>
+                                                    </div>
+                                                    <Input 
+                                                        name="aiApiKey" 
+                                                        type={showAiKey ? "text" : "password"}
+                                                        defaultValue={aiSettings.aiApiKey || ""}
+                                                        placeholder={aiProviderSelect === "gemini" ? "AIzaSy..." : "sk-..."}
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label>Model Name</Label>
+                                                    <Input 
+                                                        value={aiModelInput}
+                                                        onChange={(e) => setAiModelInput(e.target.value)}
+                                                        placeholder="gemini-2.5-flash"
+                                                    />
+                                                    <div className="text-[10px] text-muted-foreground">
+                                                        {aiProviderSelect === "gemini" ? "Recommended: gemini-2.5-flash, gemini-2.5-pro, gemini-1.5-flash" : "Recommended: gpt-4o-mini, gpt-4o"}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        <div className="flex items-center space-x-2 pt-1">
+                                            <Switch 
+                                                id="ai-auto-resolve" 
+                                                checked={aiAutoResolveSwitch} 
+                                                onCheckedChange={setAiAutoResolveSwitch} 
+                                            />
+                                            <Label htmlFor="ai-auto-resolve" className="cursor-pointer text-xs font-medium">
+                                                Auto-run AI Resolution during library scans
+                                            </Label>
+                                        </div>
+
+                                        {testAiResult && (
+                                            <div className="text-xs bg-purple-950/40 border border-purple-800/40 p-3 rounded-lg space-y-1.5 font-mono text-purple-200">
+                                                <div className="font-bold flex items-center justify-between text-purple-300">
+                                                    <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> AI Resolution Result:</span>
+                                                    <Badge variant="outline" className="text-[10px] bg-purple-500/20 border-purple-500/30 text-purple-300">
+                                                        {testAiResult.providerUsed}
+                                                    </Badge>
+                                                </div>
+                                                <div><strong>Title:</strong> {testAiResult.title}</div>
+                                                <div><strong>Author:</strong> {testAiResult.author}</div>
+                                                {testAiResult.series && <div><strong>Series:</strong> {testAiResult.series}</div>}
+                                                <div><strong>Confidence:</strong> {(testAiResult.confidence * 100).toFixed(0)}%</div>
+                                            </div>
+                                        )}
+
+                                        {testAiErr && (
+                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <XCircle className="h-4 w-4 shrink-0" />
+                                                <span>{testAiErr}</span>
+                                            </div>
+                                        )}
+
+                                        <div className="flex gap-2 pt-2">
+                                            <Button type="submit" className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold text-white">
+                                                Save AI Agent Settings
+                                            </Button>
+                                            <Button 
+                                                type="button" 
+                                                variant="outline" 
+                                                className="border-purple-500/40 text-purple-300 hover:bg-purple-500/10 font-semibold gap-1"
+                                                onClick={handleTestAiAgent}
+                                                disabled={testAiLoading}
+                                            >
+                                                {testAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
+                                                Test AI Agent
+                                            </Button>
+                                        </div>
                                     </form>
                                 </CardContent>
                             </Card>

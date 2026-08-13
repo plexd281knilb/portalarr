@@ -32,7 +32,8 @@ import {
   seedDefaultLibraries,
   importCompletedDownload,
   getAudiobookChapters,
-  reorderAudiobookChapters
+  reorderAudiobookChapters,
+  resolveBookWithAI
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -45,7 +46,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, Edit2, Save, ArrowUp, ArrowDown,
   UploadCloud, Check, X, FileText, Download, Copy,
-  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX
+  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX, Bot
 } from "lucide-react";
 
 function isServerActionMismatch(err: any): boolean {
@@ -257,6 +258,7 @@ function BookLibraryPageContent() {
     const [libMediaType, setLibMediaType] = useState("ebook"); // "ebook" or "audiobook"
     const [editingLibId, setEditingLibId] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
+    const [resolvingAiId, setResolvingAiId] = useState<string | null>(null);
     const [activeAudiobook, setActiveAudiobook] = useState<any>(null);
     const [chaptersModalBook, setChaptersModalBook] = useState<any>(null);
     const [chaptersList, setChaptersList] = useState<any[]>([]);
@@ -651,6 +653,31 @@ function normalizeBookCardMetadata(book: any) {
                                  <ImageIcon className="h-3.5 w-3.5" />
                              )}
                          </Button>
+                         {isAdmin && (
+                             <Button 
+                                 variant="outline" 
+                                 size="sm" 
+                                 className="text-xs h-7 px-2 border-purple-500/40 text-purple-300 hover:bg-purple-500/20"
+                                 title="Run AI Metadata Agent (Extract Official Title, Author & HD Cover)"
+                                 disabled={resolvingAiId === book.id}
+                                 onClick={async () => {
+                                     setResolvingAiId(book.id);
+                                     const res = await resolveBookWithAI(book.id);
+                                     setResolvingAiId(null);
+                                     if (res.success) {
+                                         handleScanLibrary(book.libraryId || selectedLibrary?.id);
+                                     } else {
+                                         alert(res.error || "Failed to resolve with AI Agent");
+                                     }
+                                 }}
+                             >
+                                 {resolvingAiId === book.id ? (
+                                     <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                                 ) : (
+                                     <Bot className="h-3.5 w-3.5 text-purple-400" />
+                                 )}
+                             </Button>
+                         )}
                          {isAdmin && (
                              <Button 
                                  variant="outline" 

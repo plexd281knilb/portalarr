@@ -26,6 +26,10 @@ model Settings {
   alertBannerEnabled Boolean   @default(false)
   alertBannerText    String?
   downloadsPath      String?   @default("/downloads")
+  aiProvider         String?   @default("default")
+  aiApiKey           String?
+  aiModel            String?   @default("gemini-2.5-flash")
+  aiAutoResolve      Boolean   @default(true)
 }
 
 model TautulliInstance {

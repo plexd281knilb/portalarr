@@ -3882,6 +3882,101 @@ export async function saveUserKindleSettings(formData: FormData) {
     revalidatePath("/library");
 }
 
+export async function getAiAgentSettings() {
+    await verifyAdmin();
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    return {
+        aiProvider: settings?.aiProvider || "default",
+        aiApiKey: settings?.aiApiKey ? decryptData(settings.aiApiKey) : "",
+        aiModel: settings?.aiModel || "gemini-2.5-flash",
+        aiAutoResolve: settings?.aiAutoResolve ?? true
+    };
+}
+
+export async function saveAiAgentSettings(formData: FormData) {
+    try {
+        await verifyAdmin();
+        const aiProvider = (formData.get("aiProvider") as string) || "default";
+        const aiApiKeyRaw = (formData.get("aiApiKey") as string) || "";
+        const aiModel = (formData.get("aiModel") as string) || "gemini-2.5-flash";
+        const aiAutoResolve = formData.get("aiAutoResolve") === "true";
+
+        const encryptedKey = aiApiKeyRaw ? encryptData(aiApiKeyRaw) : null;
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            create: {
+                id: "global",
+                aiProvider,
+                aiApiKey: encryptedKey,
+                aiModel,
+                aiAutoResolve
+            },
+            update: {
+                aiProvider,
+                aiApiKey: encryptedKey,
+                aiModel,
+                aiAutoResolve
+            }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/library");
+        return { success: true, message: "AI Agent settings updated successfully!" };
+    } catch (e: any) {
+        console.error("[SAVE-AI-SETTINGS-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to save AI Agent settings" };
+    }
+}
+
+export async function testAiAgentConnection(sampleText?: string) {
+    try {
+        await verifyAdmin();
+        const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
+        const targetSample = sampleText || "J.R.R.Tolkien-Lord.of.the.Rings.01-The.Hobbit.Rob.Inglis-PoF";
+        const result = await resolveMetadataWithAI(targetSample, "audiobook");
+        return { success: true, result };
+    } catch (e: any) {
+        console.error("[TEST-AI-AGENT-ERROR]:", e);
+        return { success: false, error: e.message || "AI Agent test failed" };
+    }
+}
+
+export async function resolveBookWithAI(bookId: string) {
+    try {
+        await verifyAdmin();
+        const book = await prisma.book.findUnique({ where: { id: bookId } });
+        if (!book) return { success: false, error: "Book not found" };
+
+        const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
+        const rawTarget = book.filePath ? path.basename(book.filePath) : book.title;
+        const aiResult = await resolveMetadataWithAI(rawTarget, book.mediaType || "ebook");
+
+        let coverUrl = book.coverUrl;
+        if (aiResult.coverQuery || aiResult.title) {
+            try {
+                const hdCover = await fetchBookCover(aiResult.title, aiResult.author, book.mediaType || "ebook");
+                if (hdCover) coverUrl = hdCover;
+            } catch (e) {}
+        }
+
+        await prisma.book.update({
+            where: { id: bookId },
+            data: {
+                title: aiResult.title,
+                author: aiResult.author,
+                ...(coverUrl ? { coverUrl } : {})
+            }
+        });
+
+        revalidatePath("/library");
+        return { success: true, message: `Successfully resolved metadata via ${aiResult.providerUsed}!`, result: aiResult };
+    } catch (e: any) {
+        console.error("[RESOLVE-BOOK-AI-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to resolve book with AI" };
+    }
+}
+
 export async function sendBookToKindle(bookId: string, targetUsername?: string) {
     try {
         const session = await verifyUser();
