@@ -2024,8 +2024,12 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     clean = clean.replace(/Thank\s*you/gi, "");
 
     // Strip empty parentheses and brackets left behind
+    clean = clean.replace(/\[[^\]]+\]/g, " ");
     clean = clean.replace(/\(\s*\)/g, "");
     clean = clean.replace(/\[\s*\]/g, "");
+
+    // Match comic series + volume number: "Alex 011-The Prince of the Nile" or "Alix 011-The Prince of the Nile"
+    const seriesVolMatch = clean.match(/^(Alex|Alix)\s+(\d{1,3})\s*[-:]\s*(.+)$/i);
 
     // Only strip 4-digit numbers if they look like scene release years (2000-2029) and NOT book title years like 1984
     clean = clean.replace(/\b(20[0-2]\d)\b/g, " ");
@@ -2042,36 +2046,44 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     let title = clean;
     let author = "Unknown Author";
 
-    // 2. Handle Inverted Author Names like "Bennett, Robert Jackson - The Founders Trilogy 01 - Foundryside"
-    const invertedAuthorMatch = clean.match(/^([A-Z][a-zA-Z'\-]+),\s*([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+)?)\s*-\s*(.+)$/);
-    if (invertedAuthorMatch) {
-        author = `${invertedAuthorMatch[2]} ${invertedAuthorMatch[1]}`;
-        let rest = invertedAuthorMatch[3].trim();
-        rest = rest.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
-        title = rest;
-    } else if (clean.includes(" - ")) {
-        const parts = clean.split(" - ").map(p => p.trim());
-        if (parts.length >= 2) {
-            let partA = parts[0];
-            let partB = parts.slice(1).join(" - ");
-            partB = partB.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
+    if (seriesVolMatch) {
+        title = `Alix: ${seriesVolMatch[3].trim()}`;
+        author = "Jacques Martin";
+    } else {
+        // 2. Handle Inverted Author Names like "Bennett, Robert Jackson - The Founders Trilogy 01 - Foundryside"
+        const invertedAuthorMatch = clean.match(/^([A-Z][a-zA-Z'\-]+),\s*([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+)?)\s*-\s*(.+)$/);
+        if (invertedAuthorMatch) {
+            author = `${invertedAuthorMatch[2]} ${invertedAuthorMatch[1]}`;
+            let rest = invertedAuthorMatch[3].trim();
+            rest = rest.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
+            title = rest;
+        } else if (clean.includes(" - ")) {
+            const parts = clean.split(" - ").map(p => p.trim());
+            if (parts.length >= 2) {
+                let partA = parts[0];
+                let partB = parts.slice(1).join(" - ");
+                partB = partB.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
 
-            const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura)\b/i.test(partB) || /^[A-Z]\.?\s*[A-Z]?[a-z]+$/i.test(partB);
-            const isPartAAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura)\b/i.test(partA) || /^[A-Z][a-z]+\s+[A-Z][a-z]+$/i.test(partA);
+                const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partB) || /^[A-Z]\.?\s*[A-Z]?[a-z]+$/i.test(partB);
+                const isPartAAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partA) || /^[A-Z][a-z]+\s+[A-Z][a-z]+$/i.test(partA);
 
-            if (isPartBAuthor && !isPartAAuthor) {
-                title = partA;
-                author = partB;
-            } else {
-                author = partA;
-                title = partB;
+                if (isPartBAuthor && !isPartAAuthor) {
+                    title = partA;
+                    author = partB;
+                } else {
+                    author = partA;
+                    title = partB;
+                }
             }
         }
     }
 
     // Master book overrides
     const lowerTitle = title.toLowerCase();
-    if (lowerTitle.includes("if cats disappeared from the world")) {
+    if (lowerTitle.includes("prince of the nile") || lowerTitle.includes("alex 011")) {
+        title = "Alix: The Prince of the Nile";
+        author = "Jacques Martin";
+    } else if (lowerTitle.includes("if cats disappeared from the world")) {
         title = "If Cats Disappeared from the World";
         author = "Genki Kawamura";
     } else if (lowerTitle.includes("foundryside")) {
