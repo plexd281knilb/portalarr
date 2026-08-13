@@ -1542,6 +1542,31 @@ export async function getBookRequests() {
     } catch (e) {
         // Fallback gracefully
     }
+
+    // Auto-sync pending/searching requests against existing library books
+    try {
+        const pendingReqs = await prisma.bookRequest.findMany({
+            where: { status: { in: ["Pending", "Searching", "Approved"] } }
+        });
+        if (pendingReqs.length > 0) {
+            const allBooks = await prisma.book.findMany();
+            for (const req of pendingReqs) {
+                const normReq = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const reqMedia = req.mediaType || "ebook";
+                const isFound = allBooks.some(b => {
+                    const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const bMedia = b.mediaType || "ebook";
+                    return bMedia === reqMedia && (normB === normReq || (normReq.length > 5 && normB.includes(normReq)));
+                });
+                if (isFound) {
+                    await prisma.bookRequest.update({
+                        where: { id: req.id },
+                        data: { status: "Downloaded" }
+                    });
+                }
+            }
+        }
+    } catch (e) {}
     
     const cleanRole = (session?.role || "").toUpperCase();
 
@@ -2799,6 +2824,27 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         });
         const requester = req?.requestedBy || "";
         const reqMediaType = req?.mediaType || "ebook";
+        
+        // Instant Fulfill: Check if book is already downloaded in library
+        const normTitleReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (normTitleReq.length > 2) {
+            const allBooks = await prisma.book.findMany({
+                where: { mediaType: reqMediaType }
+            });
+            const existingBook = allBooks.find(b => {
+                const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                return normB === normTitleReq || (normTitleReq.length > 5 && normB.includes(normTitleReq));
+            });
+
+            if (existingBook) {
+                console.log(`[AUTO-DOWNLOAD] Book "${title}" already exists in library! Fulfilling request ${requestId} immediately.`);
+                await prisma.bookRequest.update({
+                    where: { id: requestId },
+                    data: { status: "Downloaded" }
+                });
+                return;
+            }
+        }
         
         const targetLib = await getTargetLibraryForUser(requester, reqMediaType);
         const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
