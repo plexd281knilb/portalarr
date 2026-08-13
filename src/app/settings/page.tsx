@@ -182,11 +182,11 @@ function SettingsPageContent() {
     const [aiSettings, setAiSettings] = useState<any>({
         aiProvider: "default",
         aiApiKey: "",
-        aiModel: "gemini-2.5-flash",
+        aiModel: "gemini-1.5-flash",
         aiAutoResolve: true
     });
     const [aiProviderSelect, setAiProviderSelect] = useState("default");
-    const [aiModelInput, setAiModelInput] = useState("gemini-2.5-flash");
+    const [aiModelInput, setAiModelInput] = useState("gemini-1.5-flash");
     const [aiAutoResolveSwitch, setAiAutoResolveSwitch] = useState(true);
     const [showAiKey, setShowAiKey] = useState(false);
     const [testAiLoading, setTestAiLoading] = useState(false);
@@ -695,7 +695,7 @@ function SettingsPageContent() {
                                             <Label>AI Provider Engine</Label>
                                             <Select value={aiProviderSelect} onValueChange={(val) => {
                                                 setAiProviderSelect(val);
-                                                if (val === "gemini" && !aiModelInput.includes("gemini")) setAiModelInput("gemini-2.5-flash");
+                                                if (val === "gemini" && !aiModelInput.includes("gemini")) setAiModelInput("gemini-1.5-flash");
                                                 else if (val === "openai" && !aiModelInput.includes("gpt")) setAiModelInput("gpt-4o-mini");
                                             }}>
                                                 <SelectTrigger className="w-full">
@@ -703,7 +703,7 @@ function SettingsPageContent() {
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="default">Default Built-In (Free Heuristic & Search)</SelectItem>
-                                                    <SelectItem value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</SelectItem>
+                                                    <SelectItem value="gemini">Google Gemini (Gemini 1.5 Flash / 2.0 Flash / Pro)</SelectItem>
                                                     <SelectItem value="openai">OpenAI (GPT-4o / GPT-4o-mini)</SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -737,10 +737,10 @@ function SettingsPageContent() {
                                                     <Input 
                                                         value={aiModelInput}
                                                         onChange={(e) => setAiModelInput(e.target.value)}
-                                                        placeholder="gemini-2.5-flash"
+                                                        placeholder="gemini-1.5-flash"
                                                     />
                                                     <div className="text-[10px] text-muted-foreground">
-                                                        {aiProviderSelect === "gemini" ? "Recommended: gemini-2.5-flash, gemini-2.5-pro, gemini-1.5-flash" : "Recommended: gpt-4o-mini, gpt-4o"}
+                                                        {aiProviderSelect === "gemini" ? "Recommended: gemini-1.5-flash, gemini-2.0-flash, gemini-1.5-pro" : "Recommended: gpt-4o-mini, gpt-4o"}
                                                     </div>
                                                 </div>
                                             </>
