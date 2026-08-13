@@ -1408,10 +1408,10 @@ export async function getLibraryBooks(libraryId?: string) {
         }
 
         let normTitle = rawTitle;
-        if (normTitle.includes("fellowship of the ring") || (normTitle.includes("lord of the rings") && (normTitle.includes("01") || normTitle.includes("book 1") || normTitle.includes("vol 1")))) normTitle = "fellowship of the ring";
-        else if (normTitle.includes("two towers") || (normTitle.includes("lord of the rings") && (normTitle.includes("02") || normTitle.includes("book 2") || normTitle.includes("vol 2")))) normTitle = "two towers";
-        else if (normTitle.includes("return of the king") || (normTitle.includes("lord of the rings") && (normTitle.includes("03") || normTitle.includes("book 3") || normTitle.includes("vol 3")))) normTitle = "return of the king";
-        else if (normTitle.includes("hobbit")) normTitle = "hobbit";
+        if (normTitle.includes("hobbit")) normTitle = "hobbit";
+        else if (normTitle.includes("two towers") || (normTitle.includes("lord of the rings") && (normTitle.includes("02") || normTitle.includes("bk 2") || normTitle.includes("book 2") || normTitle.includes("vol 2")))) normTitle = "two towers";
+        else if (normTitle.includes("return of the king") || (normTitle.includes("lord of the rings") && (normTitle.includes("03") || normTitle.includes("bk 3") || normTitle.includes("book 3") || normTitle.includes("vol 3")))) normTitle = "return of the king";
+        else if (normTitle.includes("fellowship of the ring") || (normTitle.includes("lord of the rings") && (normTitle.includes("01") || normTitle.includes("bk 1") || normTitle.includes("book 1") || normTitle.includes("vol 1")))) normTitle = "fellowship of the ring";
         else if (normTitle.includes("project hail mary") || normTitle.includes("hail mary")) normTitle = "project hail mary";
         else normTitle = normTitle.replace(/[^a-z0-9]/g, "");
 
@@ -2157,10 +2157,10 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
 
     if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("lord of the rings") || lowerTitle.includes("hobbit")) {
         author = "J. R. R. Tolkien";
-        if (lowerTitle.includes("two towers") || (lowerTitle.includes("lord of the rings") && (lowerTitle.includes("02") || lowerTitle.includes("2") || lowerTitle.includes("bk2") || lowerTitle.includes("book2") || lowerTitle.includes("book 2") || lowerTitle.includes("vol 2")))) title = "The Two Towers";
-        else if (lowerTitle.includes("return of the king") || (lowerTitle.includes("lord of the rings") && (lowerTitle.includes("03") || lowerTitle.includes("3") || lowerTitle.includes("bk3") || lowerTitle.includes("book3") || lowerTitle.includes("book 3") || lowerTitle.includes("vol 3")))) title = "The Return of the King";
-        else if (lowerTitle.includes("fellowship of the ring") || (lowerTitle.includes("lord of the rings") && (lowerTitle.includes("01") || lowerTitle.includes("1") || lowerTitle.includes("bk1") || lowerTitle.includes("book1") || lowerTitle.includes("book 1") || lowerTitle.includes("vol 1")))) title = "The Fellowship of the Ring";
-        else if (lowerTitle.includes("hobbit")) title = "The Hobbit";
+        if (lowerTitle.includes("hobbit")) title = "The Hobbit";
+        else if (lowerTitle.includes("two towers") || (lowerTitle.includes("lord of the rings") && (lowerTitle.includes("02") || lowerTitle.includes("bk2") || lowerTitle.includes("book2") || lowerTitle.includes("book 2") || lowerTitle.includes("vol 2")))) title = "The Two Towers";
+        else if (lowerTitle.includes("return of the king") || (lowerTitle.includes("lord of the rings") && (lowerTitle.includes("03") || lowerTitle.includes("bk3") || lowerTitle.includes("book3") || lowerTitle.includes("book 3") || lowerTitle.includes("vol 3")))) title = "The Return of the King";
+        else if (lowerTitle.includes("fellowship of the ring") || (lowerTitle.includes("lord of the rings") && (lowerTitle.includes("01") || lowerTitle.includes("bk1") || lowerTitle.includes("book1") || lowerTitle.includes("book 1") || lowerTitle.includes("vol 1")))) title = "The Fellowship of the Ring";
         else title = "The Lord of the Rings";
     }
 
