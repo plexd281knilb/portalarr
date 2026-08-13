@@ -711,17 +711,23 @@ function SettingsPageContent() {
 
                                         <div className="space-y-2">
                                             <Label>AI Provider Engine</Label>
-                                            <Select value={aiProviderSelect} onValueChange={(val) => {
-                                                setAiProviderSelect(val);
-                                                if (val === "gemini" && !aiModelInput.includes("gemini")) setAiModelInput("gemini-1.5-flash");
-                                                else if (val === "openai" && !aiModelInput.includes("gpt")) setAiModelInput("gpt-4o-mini");
-                                            }}>
+                                            <Select 
+                                                value={aiProviderSelect} 
+                                                onValueChange={(val) => {
+                                                    setAiProviderSelect(val);
+                                                    if (val === "gemini" && (!aiModelInput || aiModelInput.startsWith("gpt"))) {
+                                                        setAiModelInput("gemini-2.5-flash");
+                                                    } else if (val === "openai" && (!aiModelInput || aiModelInput.startsWith("gemini"))) {
+                                                        setAiModelInput("gpt-4o-mini");
+                                                    }
+                                                }}
+                                            >
                                                 <SelectTrigger className="w-full">
                                                     <SelectValue placeholder="Select AI Provider" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="default">Default Built-In (Free Heuristic & Search)</SelectItem>
-                                                    <SelectItem value="gemini">Google Gemini (Gemini 1.5 Flash / 2.0 Flash / Pro)</SelectItem>
+                                                    <SelectItem value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</SelectItem>
                                                     <SelectItem value="openai">OpenAI (GPT-4o / GPT-4o-mini)</SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -752,14 +758,58 @@ function SettingsPageContent() {
 
                                                 <div className="space-y-2">
                                                     <Label>Model Name</Label>
-                                                    <Input 
-                                                        value={aiModelInput}
-                                                        onChange={(e) => setAiModelInput(e.target.value)}
-                                                        placeholder="gemini-1.5-flash"
-                                                    />
-                                                    <div className="text-[10px] text-muted-foreground">
-                                                        {aiProviderSelect === "gemini" ? "Recommended: gemini-1.5-flash, gemini-2.0-flash, gemini-1.5-pro" : "Recommended: gpt-4o-mini, gpt-4o"}
-                                                    </div>
+                                                    <Select 
+                                                        value={
+                                                            (aiProviderSelect === "gemini" && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
+                                                            (aiProviderSelect === "openai" && ["gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"].includes(aiModelInput))
+                                                                ? aiModelInput
+                                                                : "custom"
+                                                        }
+                                                        onValueChange={(val) => {
+                                                            if (val !== "custom") {
+                                                                setAiModelInput(val);
+                                                            } else {
+                                                                setAiModelInput("");
+                                                            }
+                                                        }}
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select AI Model..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {aiProviderSelect === "gemini" ? (
+                                                                <>
+                                                                    <SelectItem value="gemini-2.5-flash">gemini-2.5-flash (Recommended)</SelectItem>
+                                                                    <SelectItem value="gemini-2.5-pro">gemini-2.5-pro (High Performance)</SelectItem>
+                                                                    <SelectItem value="gemini-2.0-flash">gemini-2.0-flash</SelectItem>
+                                                                    <SelectItem value="gemini-1.5-flash">gemini-1.5-flash</SelectItem>
+                                                                    <SelectItem value="gemini-1.5-pro">gemini-1.5-pro</SelectItem>
+                                                                    <SelectItem value="gemini-1.5-flash-8b">gemini-1.5-flash-8b</SelectItem>
+                                                                    <SelectItem value="custom">✏️ Custom Model Name...</SelectItem>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <SelectItem value="gpt-4o-mini">gpt-4o-mini (Recommended)</SelectItem>
+                                                                    <SelectItem value="gpt-4o">gpt-4o (High Performance)</SelectItem>
+                                                                    <SelectItem value="gpt-4.5-preview">gpt-4.5-preview</SelectItem>
+                                                                    <SelectItem value="gpt-3.5-turbo">gpt-3.5-turbo</SelectItem>
+                                                                    <SelectItem value="custom">✏️ Custom Model Name...</SelectItem>
+                                                                </>
+                                                            )}
+                                                        </SelectContent>
+                                                    </Select>
+
+                                                    {(![
+                                                        "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b",
+                                                        "gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"
+                                                    ].includes(aiModelInput)) && (
+                                                        <Input 
+                                                            value={aiModelInput}
+                                                            onChange={(e) => setAiModelInput(e.target.value)}
+                                                            placeholder="Enter custom model identifier..."
+                                                            className="mt-2"
+                                                        />
+                                                    )}
                                                 </div>
                                             </>
                                         )}
