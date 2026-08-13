@@ -2157,10 +2157,11 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
 
     if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("lord of the rings") || lowerTitle.includes("hobbit")) {
         author = "J. R. R. Tolkien";
-        if (lowerTitle.includes("fellowship of the ring")) title = "The Fellowship of the Ring";
-        else if (lowerTitle.includes("two towers")) title = "The Two Towers";
-        else if (lowerTitle.includes("return of the king")) title = "The Return of the King";
+        if (lowerTitle.includes("two towers") || (lowerTitle.includes("lord of the rings") && (lowerTitle.includes("02") || lowerTitle.includes("2") || lowerTitle.includes("bk2") || lowerTitle.includes("book2") || lowerTitle.includes("book 2") || lowerTitle.includes("vol 2")))) title = "The Two Towers";
+        else if (lowerTitle.includes("return of the king") || (lowerTitle.includes("lord of the rings") && (lowerTitle.includes("03") || lowerTitle.includes("3") || lowerTitle.includes("bk3") || lowerTitle.includes("book3") || lowerTitle.includes("book 3") || lowerTitle.includes("vol 3")))) title = "The Return of the King";
+        else if (lowerTitle.includes("fellowship of the ring") || (lowerTitle.includes("lord of the rings") && (lowerTitle.includes("01") || lowerTitle.includes("1") || lowerTitle.includes("bk1") || lowerTitle.includes("book1") || lowerTitle.includes("book 1") || lowerTitle.includes("vol 1")))) title = "The Fellowship of the Ring";
         else if (lowerTitle.includes("hobbit")) title = "The Hobbit";
+        else title = "The Lord of the Rings";
     }
 
     if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
@@ -2708,7 +2709,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         await prisma.book.update({
                             where: { id: existing.id },
                             data: { fileSize: stats.size }
-                        });
+                        }).catch(() => {});
                         existing.fileSize = stats.size;
                     }
                     let finalPath = fullPath;
@@ -2743,7 +2744,7 @@ export async function scanLibraryInternal(libraryId: string) {
                                 author,
                                 coverUrl
                             }
-                        });
+                        }).catch(() => {});
                     }
                     matchedDbBookIds.add(existing.id);
                 }
