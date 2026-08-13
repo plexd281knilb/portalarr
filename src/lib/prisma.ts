@@ -126,8 +126,25 @@ if (!globalForScheduler.schedulerInitialized) {
     const intervalMinutes = settings?.autoSyncInterval || 5;
     console.log(`[BACKGROUND-JOB] Initializing library auto-scan job (Interval: ${intervalMinutes}m)...`);
     console.log(`[PORTALARR] Server is fully booted, ready, and listening on http://0.0.0.0:3000`);
+
+    // Trigger instant initial library scan on boot
+    try {
+      const { scanLibraryInternal } = await import("../app/actions");
+      console.log(`[BACKGROUND-JOB] Triggering instant initial boot scan for all libraries...`);
+      const libraries = await prisma.library.findMany();
+      for (const lib of libraries) {
+        try {
+          console.log(`[BACKGROUND-JOB] Initial boot scan for "${lib.name}"...`);
+          await scanLibraryInternal(lib.id);
+        } catch (libErr: any) {
+          console.error(`[BACKGROUND-JOB] Boot scan error for "${lib.name}":`, libErr.message || libErr);
+        }
+      }
+    } catch (bootErr: any) {
+      console.error(`[BACKGROUND-JOB] Boot scan failed:`, bootErr.message || bootErr);
+    }
     
-    // Check every minute if a scan is due
+    // Check every minute if periodic scan is due
     setInterval(async () => {
       try {
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
