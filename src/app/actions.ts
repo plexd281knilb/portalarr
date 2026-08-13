@@ -2592,7 +2592,6 @@ export async function scanLibraryInternal(libraryId: string) {
                                 title = title.replace(/^[:\-\s]+/, "").trim();
                                 break;
                             } else if (titleLower.endsWith(authLower)) {
-                        } else if (titleLower.endsWith(authLower)) {
                                 author = auth;
                                 title = title.substring(0, title.length - auth.length).trim();
                                 title = title.replace(/[:\-\s]+$/, "").trim();
@@ -2600,35 +2599,6 @@ export async function scanLibraryInternal(libraryId: string) {
                             }
                         }
                     } catch (e) {}
-
-                    try {
-                        const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
-                        if (fetchedCover) {
-                            coverUrl = fetchedCover;
-                        }
-                    } catch (e) {}
-
-                    if (!coverUrl) {
-                        try {
-                            const controller = new AbortController();
-                            const timeoutId = setTimeout(() => controller.abort(), 5000);
-                            const searchQuery = author !== "Unknown Author" ? `${title} ${author}` : parsedMeta.cleanQuery;
-                            const cleanedQuery = cleanSearchQuery(searchQuery);
-                            const olData = await fetchOpenLibraryWithFallback(cleanedQuery, controller.signal);
-                            clearTimeout(timeoutId);
-
-                            if (olData) {
-                                const doc = olData?.docs?.[0];
-                                if (doc) {
-                                    title = doc.title || title;
-                                    author = doc.author_name?.[0] || author;
-                                    if (doc.cover_i) {
-                                        coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
-                                    }
-                                }
-                            }
-                        } catch (olErr) { }
-                    }
 
                     const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
                         ? stats.birthtime
@@ -2638,7 +2608,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         data: {
                             title,
                             author,
-                            coverUrl,
+                            coverUrl: "",
                             filePath: fullPath,
                             fileSize: stats.size,
                             fileType: ext.replace(".", ""),
@@ -2648,6 +2618,19 @@ export async function scanLibraryInternal(libraryId: string) {
                         }
                     });
                     matchedDbBookIds.add(newBook.id);
+
+                    // Fetch cover artwork asynchronously in background
+                    (async () => {
+                        try {
+                            const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
+                            if (fetchedCover) {
+                                await prisma.book.update({
+                                    where: { id: newBook.id },
+                                    data: { coverUrl: fetchedCover }
+                                }).catch(() => {});
+                            }
+                        } catch (e) {}
+                    })();
                 } else {
                     if (existing.fileSize !== stats.size) {
                         await prisma.book.update({
