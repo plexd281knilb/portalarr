@@ -2146,9 +2146,24 @@ export async function scanLibraryInternal(libraryId: string) {
         where: { id: libraryId }
     });
     if (!library) return { success: false, error: "Library entry not found in database" };
-    if (!library.path) return { success: false, error: "No folder path configured for this library in Settings -> Access Control." };
-    if (!fs.existsSync(library.path)) {
-        return { success: false, error: `Directory does not exist on disk: ${library.path}` };
+    
+    let scanPath = library.path || "";
+    if (!scanPath || !fs.existsSync(scanPath)) {
+        const candidates = ["/Userbooks", "/user/Books", "/books", "/audiobooks", "/downloads", "./Userbooks", "./books"];
+        for (const cand of candidates) {
+            if (fs.existsSync(cand)) {
+                scanPath = cand;
+                await prisma.library.update({
+                    where: { id: libraryId },
+                    data: { path: scanPath }
+                }).catch(() => {});
+                break;
+            }
+        }
+    }
+
+    if (!scanPath || !fs.existsSync(scanPath)) {
+        return { success: false, error: `No valid folder path configured for "${library.name}" in Settings -> Access Control, and no media folders found on disk.` };
     }
 
     try {
@@ -2260,7 +2275,7 @@ export async function scanLibraryInternal(libraryId: string) {
             } catch (e) {}
         }
 
-        const files = fs.readdirSync(library.path);
+        const files = fs.readdirSync(scanPath);
         const isAudiobookLib = library.mediaType === "audiobook";
         const validExtensions = isAudiobookLib
             ? [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".zip", ".rar"]
@@ -2296,12 +2311,12 @@ export async function scanLibraryInternal(libraryId: string) {
             } catch (e) {}
         }
 
-        collectFiles(library.path);
+        collectFiles(scanPath);
 
         let finalMediaItems = foundMediaItems;
         if (isAudiobookLib) {
             const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: fs.Stats }>();
-            const libPathResolved = path.resolve(library.path).toLowerCase();
+            const libPathResolved = path.resolve(scanPath).toLowerCase();
 
             for (const item of foundMediaItems) {
                 const effBase = getEffectiveBookBaseName(item.fullPath, item.file, item.ext);
