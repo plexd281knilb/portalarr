@@ -2339,6 +2339,8 @@ export async function scanLibraryInternal(libraryId: string) {
             } catch (e) {}
         }
 
+        console.log(`[SCANNER] 📁 Scanning library "${library.name}" (Type: ${library.mediaType || "ebook"}) at path: "${scanPath}"...`);
+
         const files = fs.readdirSync(scanPath);
         const isAudiobookLib = library.mediaType === "audiobook";
         const validExtensions = isAudiobookLib
@@ -2354,7 +2356,7 @@ export async function scanLibraryInternal(libraryId: string) {
                 for (const entry of entries) {
                     const fullP = path.join(dir, entry.name);
                     if (entry.isDirectory()) {
-                        if (depth < 3) {
+                        if (depth < 6) {
                             collectFiles(fullP, depth + 1);
                         }
                     } else {
@@ -2424,9 +2426,11 @@ export async function scanLibraryInternal(libraryId: string) {
             finalMediaItems = Array.from(consolidatedMap.values());
         }
 
+        console.log(`[SCANNER] 🔍 Located ${foundMediaItems.length} media files on disk for "${library.name}". (Consolidated into ${finalMediaItems.length} entries)`);
+
         // Safety check to prevent database wipeout due to unmounted remote shares
         if (finalMediaItems.length === 0 && dbBooks.length > 0) {
-            console.warn(`[SCANNER] Library directory "${library.path}" contains 0 ${isAudiobookLib ? "audiobook" : "ebook"} files, but the database contains ${dbBooks.length} items. Skipping scan to prevent accidental database wiping (likely due to an unmounted remote share or transient network issue).`);
+            console.warn(`[SCANNER] ⚠️ Library directory "${library.path}" contains 0 ${isAudiobookLib ? "audiobook" : "ebook"} files, but database contains ${dbBooks.length} items. Skipping scan to prevent database wipe.`);
             return { success: true };
         }
 
@@ -2618,12 +2622,14 @@ export async function scanLibraryInternal(libraryId: string) {
                         }
                     });
                     matchedDbBookIds.add(newBook.id);
+                    console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" (ID: ${newBook.id})`);
 
                     // Fetch cover artwork asynchronously in background
                     (async () => {
                         try {
                             const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
                             if (fetchedCover) {
+                                console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${title}": ${fetchedCover}`);
                                 await prisma.book.update({
                                     where: { id: newBook.id },
                                     data: { coverUrl: fetchedCover }

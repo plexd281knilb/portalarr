@@ -51,8 +51,12 @@ async function callGeminiAI(
     apiKey: string,
     model: string
 ): Promise<AIResolvedMetadata | null> {
-    const activeModel = model || "gemini-2.5-flash";
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const candidateModels = Array.from(new Set([
+        model || "gemini-1.5-flash",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro"
+    ]));
 
     const systemPrompt = `You are an expert media server librarian AI agent specializing in book and audiobook release metadata normalization.
 Analyze this messy release filename or directory path and extract the exact official book metadata.
@@ -70,38 +74,49 @@ Return ONLY a raw, unformatted JSON object with this exact schema (do not wrap i
   "confidence": 0.95
 }`;
 
-    const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{
-                parts: [{ text: systemPrompt }]
-            }]
-        })
-    });
+    let lastError = "";
+    for (const activeModel of candidateModels) {
+        try {
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: systemPrompt }]
+                    }]
+                })
+            });
 
-    if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini API error (${res.status}): ${errText}`);
+            if (!res.ok) {
+                const errText = await res.text();
+                lastError = `Gemini API error (${res.status}): ${errText}`;
+                console.warn(`[AI-AGENT-GEMINI] Model "${activeModel}" returned ${res.status}. Retrying next model...`);
+                continue;
+            }
+
+            const data = await res.json();
+            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            const cleanJsonText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+            const parsed = JSON.parse(cleanJsonText);
+            if (parsed && parsed.title) {
+                return {
+                    title: parsed.title,
+                    author: parsed.author || "Unknown Author",
+                    series: parsed.series || null,
+                    volumeNumber: parsed.volumeNumber || null,
+                    coverQuery: parsed.coverQuery || `${parsed.title} ${parsed.author || ""}`.trim(),
+                    confidence: parsed.confidence || 0.95,
+                    providerUsed: `Gemini (${activeModel})`
+                };
+            }
+        } catch (e: any) {
+            lastError = e.message;
+        }
     }
 
-    const data = await res.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const cleanJsonText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
-
-    const parsed = JSON.parse(cleanJsonText);
-    if (parsed && parsed.title) {
-        return {
-            title: parsed.title,
-            author: parsed.author || "Unknown Author",
-            series: parsed.series || null,
-            volumeNumber: parsed.volumeNumber || null,
-            coverQuery: parsed.coverQuery || `${parsed.title} ${parsed.author || ""}`.trim(),
-            confidence: parsed.confidence || 0.95,
-            providerUsed: `Gemini (${activeModel})`
-        };
-    }
-    return null;
+    throw new Error(lastError || "All Gemini model attempts failed.");
 }
 
 async function callOpenAI(
