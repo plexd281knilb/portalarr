@@ -2169,9 +2169,25 @@ export async function scanLibraryInternal(libraryId: string) {
     
     let scanPath = library.path || "";
     if (!scanPath || !fs.existsSync(scanPath)) {
-        const candidates = ["/Userbooks", "/user/Books", "/books", "/audiobooks", "/downloads", "./Userbooks", "./books"];
+        const candidates = [
+            scanPath,
+            "/user/Books",
+            "/Userbooks",
+            "/user/books",
+            "/Kidsbooks",
+            "/kidsbooks",
+            "/Kyrabooks",
+            "/kyrabooks",
+            "/books",
+            "/audiobooks",
+            "/downloads",
+            "/mnt/user/Books",
+            "/mnt/user/books",
+            "./Userbooks",
+            "./books"
+        ];
         for (const cand of candidates) {
-            if (fs.existsSync(cand)) {
+            if (cand && fs.existsSync(cand)) {
                 scanPath = cand;
                 await prisma.library.update({
                     where: { id: libraryId },
