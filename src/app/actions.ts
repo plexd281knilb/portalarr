@@ -1430,6 +1430,44 @@ export async function getLibraryBooks(libraryId: string) {
     }
 
     const uniqueBooks = Array.from(titleMap.values());
+    for (const b of uniqueBooks) {
+        let t = b.title || "";
+        let a = b.author || "Unknown Author";
+
+        t = t.replace(/\s*\(\s*\)\s*/g, " ")
+             .replace(/\s*\[\s*\]\s*/g, " ")
+             .replace(/\s*\([^)]*retail[^)]*\)/gi, " ")
+             .replace(/\s*\([^)]*epub[^)]*\)/gi, " ")
+             .replace(/\s*\([^)]*pdf[^)]*\)/gi, " ")
+             .replace(/Thank\s*you/gi, " ")
+             .replace(/\bWW\b/gi, " ")
+             .replace(/\s+/g, " ")
+             .trim();
+
+        const lowerT = t.toLowerCase();
+        const lowerA = a.toLowerCase();
+
+        if (lowerT.includes("if cats disappeared from the world")) {
+            t = "If Cats Disappeared from the World";
+            a = "Genki Kawamura";
+        } else if (lowerT.includes("foundryside") || lowerA.includes("foundryside")) {
+            t = "Foundryside";
+            a = "Robert Jackson Bennett";
+        } else if (lowerT.includes("japanese verbs at a glance") || lowerA.includes("japanese verbs at a glance") || lowerT.includes("n chino") || lowerA.includes("n chino")) {
+            t = "Japanese Verbs at a Glance";
+            a = "N. Chino";
+        }
+
+        if (t !== b.title || a !== b.author) {
+            b.title = t;
+            b.author = a;
+            prisma.book.update({
+                where: { id: b.id },
+                data: { title: t, author: a }
+            }).catch(() => {});
+        }
+    }
+
     uniqueBooks.sort((a, b) => a.title.localeCompare(b.title));
     return uniqueBooks;
 }
@@ -1947,81 +1985,83 @@ async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortS
 function parseFilenameMetadata(rawBase: string): { title: string, author: string, cleanQuery: string } {
     let clean = rawBase.replace(/[\r\n]+/g, " ").trim();
 
-    // 1. Strip scene release tags, formats, group names (CTO, BKS, PB, PB1, PB2, HC, TPB, EB, v1, etc.) and metadata garbage
+    // 1. Strip scene release tags, formats, group names and metadata garbage
     clean = clean.replace(/-(?:AUDIOBOOK|AUDIO|UK|US|iND|20\d\d|19\d\d|[a-zA-Z0-9]+)$/i, "");
     clean = clean.replace(/\.(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK|UK|US|iND)\b/gi, " ");
-    clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK|UK|US|iND)\b/gi, " ");
+    clean = clean.replace(/\b(?:RETAIL|INTERNAL|UNABRIDGED|NARRATED|EPUB|PDF|MOBI|AZW3|KFX|MP3|M4B|FLAC|eBook|EBOOK|CTO|BKS|PB\d*|HC|TPB|EB|v\d+|ZLIB|LIBGEN|PROPER|REPACK|READING|AUDIO|AUDIOBOOK|UK|US|iND|Thank\s*you|Thankyou|WW)\b/gi, " ");
     
-    // Strip trailing scene tags like (Rob Inglis)-PoF, -PoF, (Unabridged), etc.
+    // Strip trailing scene tags like (retail), (epub), (pdf), (azw3), (Unabridged), etc.
     clean = clean.replace(/\s*-\s*[A-Za-z0-9]+$/i, "");
+    clean = clean.replace(/\s*\([^)]*retail[^)]*\)/gi, "");
+    clean = clean.replace(/\s*\([^)]*epub[^)]*\)/gi, "");
+    clean = clean.replace(/\s*\([^)]*pdf[^)]*\)/gi, "");
+    clean = clean.replace(/\s*\([^)]*azw3[^)]*\)/gi, "");
+    clean = clean.replace(/\s*\([^)]*mobi[^)]*\)/gi, "");
     clean = clean.replace(/\s*\([^)]*PoF[^)]*\)/gi, "");
     clean = clean.replace(/\s*\(Rob Inglis\)/gi, "");
     clean = clean.replace(/\s*\(Unabridged\)/gi, "");
     clean = clean.replace(/\s*\(Narrated by [^)]+\)/gi, "");
+    clean = clean.replace(/Thank\s*you/gi, "");
+
+    // Strip empty parentheses and brackets left behind
+    clean = clean.replace(/\(\s*\)/g, "");
+    clean = clean.replace(/\[\s*\]/g, "");
 
     // Only strip 4-digit numbers if they look like scene release years (2000-2029) and NOT book title years like 1984
     clean = clean.replace(/\b(20[0-2]\d)\b/g, " ");
 
-    // 2. Normalize scene dots into spaces while preserving author initials (e.g. J.K., J.R.R., G.R.R., C.S.)
+    // Normalize scene dots/underscores into spaces
     clean = clean.replace(/([a-zA-Z0-9]{2,})\.([a-zA-Z0-9]{2,})/g, "$1 $2");
     clean = clean.replace(/([a-zA-Z0-9]{2,})\.([a-zA-Z0-9])/g, "$1 $2");
     clean = clean.replace(/([a-zA-Z0-9])\.([a-zA-Z0-9]{2,})/g, "$1 $2");
     clean = clean.replace(/[_\.]/g, " ");
 
     clean = clean.replace(/\s+/g, " ").trim();
+    clean = clean.replace(/\(\s*\)/g, "").replace(/\[\s*\]/g, "").trim();
 
     let title = clean;
     let author = "Unknown Author";
 
-    const knownAuthorsRegex = /\b(J\.?\s*K\.?\s*Rowling|J\.?\s*R\.?\s*R\.?\s*Tolkien|George\s+Orwell|G\.?\s*R\.?\s*R\.?\s*Martin|Stephen\s+King|Brandon\s+Sanderson|Agatha\s+Christie|Isaac\s+Asimov|Neil\s+Gaiman|Terry\s+Pratchett|Frank\s+Herbert|Robert\s+Jordan|C\.?\s*S\.?\s*Lewis|James\s+Patterson|Dan\s+Brown|Rick\s+Riordan|Suzanne\s+Collins|H\.?\s*G\.?\s*Wells|Arthur\s+Conan\s+Doyle|Mark\s+Twain|Ernest\s+Hemingway|Charles\s+Dickens)\b/i;
-
-    // 3. Handle " - " separator (Title - Author vs Author - Title)
-    if (clean.includes(" - ")) {
+    // 2. Handle Inverted Author Names like "Bennett, Robert Jackson - The Founders Trilogy 01 - Foundryside"
+    const invertedAuthorMatch = clean.match(/^([A-Z][a-zA-Z'\-]+),\s*([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+)?)\s*-\s*(.+)$/);
+    if (invertedAuthorMatch) {
+        author = `${invertedAuthorMatch[2]} ${invertedAuthorMatch[1]}`;
+        let rest = invertedAuthorMatch[3].trim();
+        rest = rest.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
+        title = rest;
+    } else if (clean.includes(" - ")) {
         const parts = clean.split(" - ").map(p => p.trim());
         if (parts.length >= 2) {
-            const partA = parts[0];
-            const partB = parts.slice(1).join(" - ");
+            let partA = parts[0];
+            let partB = parts.slice(1).join(" - ");
+            partB = partB.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
 
-            const cleanPartB = partB.replace(/\b(?:PB\d*|v\d+|[A-Z]{2,}\d*)\b/gi, "").trim();
-            const partBMatch = cleanPartB.match(knownAuthorsRegex) || cleanPartB.match(/^[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Z][a-zA-Z'\-]+$/i);
-            const partAMatch = partA.match(knownAuthorsRegex);
+            const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura)\b/i.test(partB) || /^[A-Z]\.?\s*[A-Z]?[a-z]+$/i.test(partB);
+            const isPartAAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura)\b/i.test(partA) || /^[A-Z][a-z]+\s+[A-Z][a-z]+$/i.test(partA);
 
-            if (partBMatch && !partAMatch) {
+            if (isPartBAuthor && !isPartAAuthor) {
                 title = partA;
-                author = cleanPartB || partB;
+                author = partB;
             } else {
                 author = partA;
                 title = partB;
             }
         }
-    } else {
-        // 4. Match author at START or END of clean string
-        const startAuthorMatch = clean.match(/^(J\.?\s*K\.?\s*Rowling|J\.?\s*R\.?\s*R\.?\s*Tolkien|George\s+Orwell|G\.?\s*R\.?\s*R\.?\s*Martin|Stephen\s+King|Brandon\s+Sanderson|Agatha\s+Christie|Isaac\s+Asimov|Neil\s+Gaiman|Terry\s+Pratchett|Frank\s+Herbert|Robert\s+Jordan|C\.?\s*S\.?\s*Lewis)\b/i);
-        if (startAuthorMatch) {
-            author = startAuthorMatch[0];
-            title = clean.substring(author.length).replace(/^[:\-\s]+/, "").trim();
-        } else {
-            const endAuthorMatch = clean.match(/\b(J\.?\s*K\.?\s*Rowling|J\.?\s*R\.?\s*R\.?\s*Tolkien|George\s+Orwell|G\.?\s*R\.?\s*R\.?\s*Martin|Stephen\s+King|Brandon\s+Sanderson|Agatha\s+Christie|Isaac\s+Asimov|Neil\s+Gaiman|Terry\s+Pratchett|Frank\s+Herbert|Robert\s+Jordan|C\.?\s*S\.?\s*Lewis)$/i);
-            if (endAuthorMatch) {
-                author = endAuthorMatch[0];
-                title = clean.substring(0, clean.length - author.length).replace(/[:\-\s]+$/, "").trim();
-            }
-        }
     }
 
-    // Disc / Numbered title fixes
-    const isDiscTitle = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(title.trim());
-    const isDiscAuthor = /^(?:Disc|CD|Part|Vol|Volume)\s*\d+$/i.test(author.trim());
-
-    if (isDiscTitle && !isDiscAuthor && author !== "Unknown Author") {
-        title = author;
-        author = "Unknown Author";
-    } else if (isDiscAuthor) {
-        author = "Unknown Author";
-    }
-
-    // Lord of the Rings & Tolkien Master Rules
+    // Master book overrides
     const lowerTitle = title.toLowerCase();
+    if (lowerTitle.includes("if cats disappeared from the world")) {
+        title = "If Cats Disappeared from the World";
+        author = "Genki Kawamura";
+    } else if (lowerTitle.includes("foundryside")) {
+        title = "Foundryside";
+        author = "Robert Jackson Bennett";
+    } else if (lowerTitle.includes("japanese verbs at a glance") || lowerTitle.includes("n chino")) {
+        title = "Japanese Verbs at a Glance";
+        author = "N. Chino";
+    }
+
     if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("lord of the rings") || lowerTitle.includes("hobbit")) {
         author = "J. R. R. Tolkien";
         if (lowerTitle.includes("fellowship of the ring")) title = "The Fellowship of the Ring";
@@ -2030,25 +2070,15 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
         else if (lowerTitle.includes("hobbit")) title = "The Hobbit";
     }
 
-    // Harry Potter & Rowling Master Rules
-    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone") || lowerTitle.includes("dudley demented") || lowerTitle.includes("peck of owls") || lowerTitle.includes("advanced guard") || lowerTitle.includes("grimmauld place")) {
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
         author = "J. K. Rowling";
         if (lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) title = "Harry Potter and the Sorcerer's Stone";
         else if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
         else if (lowerTitle.includes("prisoner of azkaban")) title = "Harry Potter and the Prisoner of Azkaban";
         else if (lowerTitle.includes("goblet of fire")) title = "Harry Potter and the Goblet of Fire";
-        else if (lowerTitle.includes("order of the phoenix") || lowerTitle.includes("dudley demented") || lowerTitle.includes("peck of owls") || lowerTitle.includes("advanced guard") || lowerTitle.includes("grimmauld place")) title = "Harry Potter and the Order of the Phoenix";
+        else if (lowerTitle.includes("order of the phoenix")) title = "Harry Potter and the Order of the Phoenix";
         else if (lowerTitle.includes("half-blood prince")) title = "Harry Potter and the Half-Blood Prince";
         else if (lowerTitle.includes("deathly hallows")) title = "Harry Potter and the Deathly Hallows";
-    }
-
-    // Handle Title === Author duplication
-    if (author.toLowerCase() === title.toLowerCase()) {
-        if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king")) {
-            author = "J. R. R. Tolkien";
-        } else {
-            author = "Unknown Author";
-        }
     }
 
     return {
