@@ -94,6 +94,14 @@ async function ensureSchemaColumns() {
             console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'mediaType' column to Book table...");
             await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
         }
+        if (!columns.includes("series")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'series' column to Book table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "series" TEXT;`);
+        }
+        if (!columns.includes("volumeNumber")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'volumeNumber' column to Book table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "volumeNumber" TEXT;`);
+        }
     } catch (e: any) {}
 
     try {
@@ -107,12 +115,18 @@ async function ensureSchemaColumns() {
             console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'type' column to BookRequest table...");
             await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "type" TEXT DEFAULT "book";`);
         }
+        if (!columns.includes("series")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'series' column to BookRequest table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "series" TEXT;`);
+        }
+        if (!columns.includes("volumeNumber")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'volumeNumber' column to BookRequest table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "volumeNumber" TEXT;`);
+        }
     } catch (e: any) {}
 }
 
-setTimeout(() => {
-    ensureSchemaColumns();
-}, 2000);
+ensureSchemaColumns();
 
 // --- BACKGROUND SCHEDULER ---
 const globalForScheduler = global as unknown as { schedulerInitialized?: boolean };
@@ -122,6 +136,7 @@ if (!globalForScheduler.schedulerInitialized) {
 
   // Let Next.js boot finish before running the first check
   setTimeout(async () => {
+    await ensureSchemaColumns();
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
     const intervalMinutes = settings?.autoSyncInterval || 5;
     console.log(`[BACKGROUND-JOB] Initializing library auto-scan job (Interval: ${intervalMinutes}m)...`);
