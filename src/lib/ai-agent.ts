@@ -22,13 +22,18 @@ export async function resolveMetadataWithAI(
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
     const modelName = settings?.aiModel || "gemini-1.5-flash";
 
+    console.log(`[AI-AGENT] 🤖 Querying AI Metadata Engine for "${rawFilename}" (Type: ${mediaType}, Engine: ${provider})...`);
+
     // 1. Google Gemini Provider
     if ((provider === "gemini" || provider === "google") && rawKey) {
         try {
             const aiRes = await callGeminiAI(rawFilename, mediaType, rawKey, modelName);
-            if (aiRes) return aiRes;
+            if (aiRes) {
+                console.log(`[AI-AGENT] ✨ Gemini AI Resolved "${aiRes.title}" by "${aiRes.author}" [Series: ${aiRes.series || "N/A"} #${aiRes.volumeNumber || "N/A"}] (Model: ${aiRes.providerUsed})`);
+                return aiRes;
+            }
         } catch (err: any) {
-            console.warn(`[AI-AGENT-GEMINI] Error resolving "${rawFilename}": ${err.message}. Falling back to default resolver.`);
+            console.warn(`[AI-AGENT-GEMINI] ⚠️ Error resolving "${rawFilename}": ${err.message}. Falling back to default resolver.`);
         }
     }
 
@@ -36,14 +41,19 @@ export async function resolveMetadataWithAI(
     if (provider === "openai" && rawKey) {
         try {
             const aiRes = await callOpenAI(rawFilename, mediaType, rawKey, modelName || "gpt-4o-mini");
-            if (aiRes) return aiRes;
+            if (aiRes) {
+                console.log(`[AI-AGENT] ✨ OpenAI Resolved "${aiRes.title}" by "${aiRes.author}" [Series: ${aiRes.series || "N/A"} #${aiRes.volumeNumber || "N/A"}] (Model: ${aiRes.providerUsed})`);
+                return aiRes;
+            }
         } catch (err: any) {
-            console.warn(`[AI-AGENT-OPENAI] Error resolving "${rawFilename}": ${err.message}. Falling back to default resolver.`);
+            console.warn(`[AI-AGENT-OPENAI] ⚠️ Error resolving "${rawFilename}": ${err.message}. Falling back to default resolver.`);
         }
     }
 
     // 3. Default Built-in Resolver (Free Fallback)
-    return callDefaultResolver(rawFilename, mediaType);
+    const heurRes = callDefaultResolver(rawFilename, mediaType);
+    console.log(`[AI-AGENT] ⚙️ Heuristic Resolved "${heurRes.title}" by "${heurRes.author}" [Series: ${heurRes.series || "N/A"} #${heurRes.volumeNumber || "N/A"}]`);
+    return heurRes;
 }
 
 export async function resolveRequestMetadataWithAI(
