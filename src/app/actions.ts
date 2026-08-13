@@ -1408,9 +1408,9 @@ export async function getLibraryBooks(libraryId?: string) {
         }
 
         let normTitle = rawTitle;
-        if (normTitle.includes("fellowship of the ring")) normTitle = "fellowship of the ring";
-        else if (normTitle.includes("two towers")) normTitle = "two towers";
-        else if (normTitle.includes("return of the king")) normTitle = "return of the king";
+        if (normTitle.includes("fellowship of the ring") || (normTitle.includes("lord of the rings") && (normTitle.includes("01") || normTitle.includes("book 1") || normTitle.includes("vol 1")))) normTitle = "fellowship of the ring";
+        else if (normTitle.includes("two towers") || (normTitle.includes("lord of the rings") && (normTitle.includes("02") || normTitle.includes("book 2") || normTitle.includes("vol 2")))) normTitle = "two towers";
+        else if (normTitle.includes("return of the king") || (normTitle.includes("lord of the rings") && (normTitle.includes("03") || normTitle.includes("book 3") || normTitle.includes("vol 3")))) normTitle = "return of the king";
         else if (normTitle.includes("hobbit")) normTitle = "hobbit";
         else if (normTitle.includes("project hail mary") || normTitle.includes("hail mary")) normTitle = "project hail mary";
         else normTitle = normTitle.replace(/[^a-z0-9]/g, "");
@@ -1453,7 +1453,7 @@ export async function getLibraryBooks(libraryId?: string) {
              .replace(/\s+/g, " ")
              .trim();
 
-        if (a === "Unknown Author" || t.includes("[") || t.includes("]") || t.toLowerCase().includes("alex 011") || t.toLowerCase().includes("prince of the nile")) {
+        if (a === "Unknown Author" || t.includes("[") || t.includes("]") || t.toLowerCase().includes("alex 011") || t.toLowerCase().includes("prince of the nile") || t.toLowerCase().includes("lord of the rings")) {
             const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
             const parsed = parseFilenameMetadata(rawTarget);
             if (parsed.title) t = parsed.title;
@@ -1463,7 +1463,16 @@ export async function getLibraryBooks(libraryId?: string) {
         const lowerT = t.toLowerCase();
         const lowerA = a.toLowerCase();
 
-        if (lowerT.includes("prince of the nile") || lowerT.includes("alex 011")) {
+        if (lowerT.includes("two towers") || (lowerT.includes("lord of the rings") && (lowerT.includes("02") || lowerT.includes("book 2") || lowerT.includes("vol 2")))) {
+            t = "The Two Towers";
+            a = "J. R. R. Tolkien";
+        } else if (lowerT.includes("return of the king") || (lowerT.includes("lord of the rings") && (lowerT.includes("03") || lowerT.includes("book 3") || lowerT.includes("vol 3")))) {
+            t = "The Return of the King";
+            a = "J. R. R. Tolkien";
+        } else if (lowerT.includes("fellowship of the ring") || (lowerT.includes("lord of the rings") && (lowerT.includes("01") || lowerT.includes("book 1") || lowerT.includes("vol 1")))) {
+            t = "The Fellowship of the Ring";
+            a = "J. R. R. Tolkien";
+        } else if (lowerT.includes("prince of the nile") || lowerT.includes("alex 011")) {
             t = "Alix: The Prince of the Nile";
             a = "Jacques Martin";
         } else if (lowerT.includes("if cats disappeared from the world")) {
