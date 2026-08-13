@@ -281,6 +281,7 @@ function BookLibraryPageContent() {
     // Prowlarr Search states
     const [prowlarrResults, setProwlarrResults] = useState<any[]>([]);
     const [searchingProwlarr, setSearchingProwlarr] = useState(false);
+    const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
     const [activeRequestForSearch, setActiveRequestForSearch] = useState<any>(null);
     const [searchProwlarrError, setSearchProwlarrError] = useState("");
     const [pushingReleaseId, setPushingReleaseId] = useState<string | null>(null);
@@ -1508,21 +1509,26 @@ function normalizeBookCardMetadata(book: any) {
 
     async function handleCreateRequest(e: React.FormEvent) {
         e.preventDefault();
-        if (!reqTitle) return;
+        if (!reqTitle || !reqTitle.trim()) {
+            showErrorModal("Please enter a title for your book or audiobook request.", "Form Validation Error");
+            return;
+        }
 
+        setIsSubmittingRequest(true);
         try {
             let res: any;
             if (reqType === "series" && seriesBooksChecklist.length > 0) {
                 const checkedBooks = seriesBooksChecklist.filter(b => b.checked);
                 if (checkedBooks.length === 0) {
                     showErrorModal("Please select at least one book in the series to request.", "Form Validation Error");
+                    setIsSubmittingRequest(false);
                     return;
                 }
                 res = await createMultipleBookRequests(checkedBooks, requestedFor, reqMediaType);
             } else {
                 const formData = new FormData();
-                formData.append("title", reqTitle);
-                formData.append("author", reqAuthor);
+                formData.append("title", reqTitle.trim());
+                formData.append("author", reqAuthor.trim());
                 formData.append("type", reqType);
                 formData.append("mediaType", reqMediaType);
                 formData.append("coverUrl", reqCoverUrl);
@@ -1534,7 +1540,7 @@ function normalizeBookCardMetadata(book: any) {
             }
 
             if (res && res.error) {
-                showErrorModal(res.error, "Request Error");
+                showErrorModal(res.error, "Request Submission Error");
                 return;
             }
 
@@ -1551,6 +1557,8 @@ function normalizeBookCardMetadata(book: any) {
         } catch (e: any) {
             console.error("Failed to submit request:", e);
             showErrorModal(e.message || "Failed to submit request.", "Request Error");
+        } finally {
+            setIsSubmittingRequest(false);
         }
     }
 
@@ -2534,8 +2542,19 @@ function normalizeBookCardMetadata(book: any) {
                                             </div>
                                         )}
 
-                                        <Button type="submit" className={`w-full font-semibold text-black ${reqMediaType === "audiobook" ? "bg-amber-400 hover:bg-amber-300" : "bg-primary hover:bg-primary/90"}`}>
-                                            {reqMediaType === "audiobook" ? "Submit Audiobook Request" : "Submit Ebook Request"}
+                                        <Button 
+                                            type="submit" 
+                                            disabled={isSubmittingRequest || !reqTitle.trim()} 
+                                            className={`w-full font-semibold text-black gap-2 ${reqMediaType === "audiobook" ? "bg-amber-400 hover:bg-amber-300" : "bg-primary hover:bg-primary/90"}`}
+                                        >
+                                            {isSubmittingRequest ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 animate-spin text-black" />
+                                                    Submitting Request...
+                                                </>
+                                            ) : (
+                                                reqMediaType === "audiobook" ? "Submit Audiobook Request" : "Submit Ebook Request"
+                                            )}
                                         </Button>
                                     </form>
                                 </CardContent>
