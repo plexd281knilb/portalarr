@@ -2,6 +2,45 @@ import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
 
+if (typeof window === "undefined" && !(global as any).__loggerPatched) {
+    (global as any).__loggerPatched = true;
+
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    function formatWithTimestamp(args: any[]) {
+        const now = new Date();
+        const YYYY = now.getFullYear();
+        const MM = String(now.getMonth() + 1).padStart(2, "0");
+        const DD = String(now.getDate()).padStart(2, "0");
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mm = String(now.getMinutes()).padStart(2, "0");
+        const ss = String(now.getSeconds()).padStart(2, "0");
+        const ts = `[${YYYY}-${MM}-${DD} ${hh}:${mm}:${ss}]`;
+
+        if (args.length > 0 && typeof args[0] === "string") {
+            if (/^\[\d{4}-\d{2}-\d{2}/.test(args[0])) {
+                return args;
+            }
+            return [`${ts} ${args[0]}`, ...args.slice(1)];
+        }
+        return [ts, ...args];
+    }
+
+    console.log = function (...args: any[]) {
+        originalLog.apply(console, formatWithTimestamp(args) as any);
+    };
+
+    console.warn = function (...args: any[]) {
+        originalWarn.apply(console, formatWithTimestamp(args) as any);
+    };
+
+    console.error = function (...args: any[]) {
+        originalError.apply(console, formatWithTimestamp(args) as any);
+    };
+}
+
 function ensureDatabaseFile() {
     try {
         const dbUrl = process.env.DATABASE_URL || "";
