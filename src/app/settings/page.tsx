@@ -13,7 +13,7 @@ import {
     getRoadmapText, updateRoadmapText,
     getAlertBanner, updateAlertBanner,
     testAppConnectionAction, testTautulliConnectionAction, testGlancesConnectionAction, validateDownloadsPathAction,
-    getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI
+    getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI, testFolderPermissions
 } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -160,6 +160,22 @@ function SettingsPageContent() {
         const res = await validateDownloadsPathAction(pathStr);
         setValidatingPath(false);
         setPathResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
+    };
+
+    const [permTesting, setPermTesting] = useState(false);
+    const [permResult, setPermResult] = useState<any>(null);
+
+    const handleTestPermissions = async (folderPath: string, targetLibPath?: string) => {
+        setPermTesting(true);
+        setPermResult(null);
+        try {
+            const res = await testFolderPermissions(folderPath, targetLibPath);
+            setPermResult(res);
+        } catch (e: any) {
+            setPermResult({ success: false, error: e.message });
+        } finally {
+            setPermTesting(false);
+        }
     };
 
     // AI Agent States
@@ -503,13 +519,14 @@ function SettingsPageContent() {
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Completed Downloads Folder</Label>
-                                            <div className="flex gap-2">
+                                            <div className="flex flex-wrap gap-2">
                                                 <Input 
                                                     name="downloadsPath" 
                                                     type="text" 
                                                     value={inputDownloadsPath}
                                                     onChange={(e) => setInputDownloadsPath(e.target.value)}
                                                     placeholder="/downloads"
+                                                    className="flex-1 min-w-[200px]"
                                                 />
                                                 <Button 
                                                     type="button" 
@@ -521,11 +538,69 @@ function SettingsPageContent() {
                                                     {validatingPath ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderCheck className="h-3.5 w-3.5" />}
                                                     Check Path
                                                 </Button>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="secondary" 
+                                                    className="text-xs shrink-0 font-extrabold gap-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20"
+                                                    disabled={permTesting}
+                                                    onClick={() => handleTestPermissions(inputDownloadsPath)}
+                                                >
+                                                    {permTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Shield className="h-3.5 w-3.5 text-amber-400" />}
+                                                    Test Permissions
+                                                </Button>
                                             </div>
                                             {pathResult && (
                                                 <div className={`text-xs p-2.5 rounded-lg border mt-2 flex items-center gap-2 ${pathResult.success ? "text-emerald-400 bg-emerald-950/40 border-emerald-800/40" : "text-red-400 bg-red-950/40 border-red-800/40"}`}>
                                                     {pathResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
                                                     <span>{pathResult.msg || pathResult.err}</span>
+                                                </div>
+                                            )}
+
+                                            {/* FULL FOLDER PERMISSIONS DIAGNOSTIC RESULTS */}
+                                            {permResult && (
+                                                <div className={`text-xs p-3.5 rounded-xl border mt-3 space-y-2.5 ${permResult.success ? "bg-emerald-950/30 border-emerald-800/40 text-emerald-300" : "bg-red-950/30 border-red-800/40 text-slate-200"}`}>
+                                                    <div className="flex items-center justify-between font-bold text-sm">
+                                                        <span className="flex items-center gap-2">
+                                                            {permResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />}
+                                                            Folder Permissions Verification
+                                                        </span>
+                                                        <Badge className={permResult.success ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-red-500/20 text-red-300 border-red-500/30"}>
+                                                            {permResult.success ? "ALL PERMISSIONS PASS" : "PERMISSIONS ISSUES DETECTED"}
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/50 border border-muted/30">
+                                                            <span>📁 Path Exists:</span>
+                                                            <span className={permResult.results?.exists ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                                {permResult.results?.exists ? "✓ PASS" : "✗ FAIL"}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/50 border border-muted/30">
+                                                            <span>📖 Read Access:</span>
+                                                            <span className={permResult.results?.canRead ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                                {permResult.results?.canRead ? "✓ PASS" : "✗ FAIL"}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/50 border border-muted/30">
+                                                            <span>✏️ Write Access:</span>
+                                                            <span className={permResult.results?.canWrite ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                                {permResult.results?.canWrite ? "✓ PASS" : "✗ FAIL"}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/50 border border-muted/30">
+                                                            <span>🗑️ Delete Access:</span>
+                                                            <span className={permResult.results?.canDelete ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                                {permResult.results?.canDelete ? "✓ PASS" : "✗ FAIL"}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {permResult.results?.error && (
+                                                        <div className="text-[11px] text-red-400 bg-red-950/50 p-2 rounded border border-red-800/40">
+                                                            <strong>Error Details:</strong> {permResult.results.error}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

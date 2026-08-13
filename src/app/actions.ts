@@ -5303,8 +5303,114 @@ export async function reorderAudiobookChapters(bookId: string, updatedChapters: 
             }
         } catch (e) {}
 
-        return { success: true, message: "Chapters reordered and renamed successfully!" };
+        revalidatePath("/library");
+        return { success: true, message: "Chapters reordered and disk files renamed successfully!" };
     } catch (e: any) {
-        return { success: false, error: e.message || "Failed to reorder chapters" };
+        console.error("reorderAudiobookChapters Error:", e);
+        return { success: false, error: e.message || "Failed to reorder audiobook chapters." };
+    }
+}
+
+export async function testFolderPermissions(folderPath: string, targetLibraryPath?: string) {
+    try {
+        await verifyAdmin();
+        const results = {
+            folderPath: folderPath || "Not Specified",
+            exists: false,
+            canRead: false,
+            canWrite: false,
+            canDelete: false,
+            canMoveToTarget: false,
+            targetPath: targetLibraryPath || "",
+            error: ""
+        };
+
+        if (!folderPath) {
+            results.error = "Folder path is empty.";
+            return { success: false, results };
+        }
+
+        // 1. Check folder existence
+        if (!fs.existsSync(folderPath)) {
+            results.error = `Folder "${folderPath}" does not exist on disk inside the container.`;
+            return { success: false, results };
+        }
+        results.exists = true;
+
+        // 2. Check Read Access
+        try {
+            const files = fs.readdirSync(folderPath);
+            results.canRead = Array.isArray(files);
+        } catch (readErr: any) {
+            results.error = `Read permission denied: ${readErr.message}`;
+            return { success: false, results };
+        }
+
+        // 3. Check Write & Delete Access
+        const testFileName = `.portalarr_perm_test_${Date.now()}.tmp`;
+        const testFilePath = path.join(folderPath, testFileName);
+        try {
+            fs.writeFileSync(testFilePath, "Portalarr Permission Verification Test File", "utf8");
+            results.canWrite = true;
+        } catch (writeErr: any) {
+            results.error = `Write permission denied inside "${folderPath}": ${writeErr.message}`;
+            return { success: false, results };
+        }
+
+        try {
+            if (fs.existsSync(testFilePath)) {
+                fs.unlinkSync(testFilePath);
+                results.canDelete = true;
+            }
+        } catch (delErr: any) {
+            results.error = `Delete permission denied inside "${folderPath}": ${delErr.message}`;
+            return { success: false, results };
+        }
+
+        // 4. Check Move/Copy to Target Library Path
+        if (targetLibraryPath && fs.existsSync(targetLibraryPath)) {
+            const tempSrc = path.join(folderPath, `.portalarr_move_src_${Date.now()}.tmp`);
+            const tempDest = path.join(targetLibraryPath, `.portalarr_move_dest_${Date.now()}.tmp`);
+
+            try {
+                fs.writeFileSync(tempSrc, "Portalarr Move Test", "utf8");
+                fs.copyFileSync(tempSrc, tempDest);
+                if (fs.existsSync(tempDest)) {
+                    fs.unlinkSync(tempDest);
+                }
+                if (fs.existsSync(tempSrc)) {
+                    fs.unlinkSync(tempSrc);
+                }
+                results.canMoveToTarget = true;
+            } catch (moveErr: any) {
+                console.warn(`[PERM-TEST] Move test failed:`, moveErr.message);
+                try {
+                    if (fs.existsSync(tempSrc)) fs.unlinkSync(tempSrc);
+                    if (fs.existsSync(tempDest)) fs.unlinkSync(tempDest);
+                } catch (e) {}
+            }
+        } else {
+            results.canMoveToTarget = true; // Not tested if target not specified
+        }
+
+        return {
+            success: results.canRead && results.canWrite && results.canDelete && results.canMoveToTarget,
+            results
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            error: e.message || "Failed to test folder permissions",
+            results: {
+                folderPath,
+                exists: false,
+                canRead: false,
+                canWrite: false,
+                canDelete: false,
+                canMoveToTarget: false,
+                targetPath: targetLibraryPath || "",
+                error: e.message
+            }
+        };
     }
 }
