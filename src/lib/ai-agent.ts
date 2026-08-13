@@ -53,6 +53,39 @@ export async function resolveRequestMetadataWithAI(
     return resolveMetadataWithAI(userQuery, mediaType);
 }
 
+async function fetchGeminiContent(apiKey: string, modelName: string, systemPrompt: string): Promise<string> {
+    const versions = ["v1beta", "v1"];
+    let lastError = "";
+
+    for (const ver of versions) {
+        try {
+            const endpoint = `https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: systemPrompt }]
+                    }]
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (rawText) return rawText;
+            } else {
+                const errText = await res.text();
+                lastError = `Gemini (${ver}/${modelName}) HTTP ${res.status}: ${errText}`;
+            }
+        } catch (e: any) {
+            lastError = e.message;
+        }
+    }
+
+    throw new Error(lastError || `Model ${modelName} failed on all API versions`);
+}
+
 async function callGeminiAI(
     rawFilename: string,
     mediaType: string,
@@ -63,6 +96,9 @@ async function callGeminiAI(
         model || "gemini-1.5-flash",
         "gemini-1.5-flash",
         "gemini-2.0-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-2.0-flash-exp",
+        "gemini-1.5-pro-latest",
         "gemini-1.5-pro"
     ]));
 
@@ -83,25 +119,7 @@ Return ONLY a raw, unformatted JSON object with this exact schema (do not wrap i
     let lastError = "";
     for (const activeModel of candidateModels) {
         try {
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-            const res = await fetch(endpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{ text: systemPrompt }]
-                    }]
-                })
-            });
-
-            if (!res.ok) {
-                const errText = await res.text();
-                lastError = `Gemini API error (${res.status}): ${errText}`;
-                continue;
-            }
-
-            const data = await res.json();
-            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            const rawText = await fetchGeminiContent(apiKey, activeModel, systemPrompt);
             const cleanJsonText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
             const parsed = JSON.parse(cleanJsonText);
@@ -225,6 +243,9 @@ async function callGeminiAIForChapters(
         model || "gemini-1.5-flash",
         "gemini-1.5-flash",
         "gemini-2.0-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-2.0-flash-exp",
+        "gemini-1.5-pro-latest",
         "gemini-1.5-pro"
     ]));
 
@@ -250,21 +271,7 @@ Return ONLY a raw, unformatted JSON array where each item matches this exact sch
 
     for (const activeModel of candidateModels) {
         try {
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-            const res = await fetch(endpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{ text: systemPrompt }]
-                    }]
-                })
-            });
-
-            if (!res.ok) continue;
-
-            const data = await res.json();
-            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            const rawText = await fetchGeminiContent(apiKey, activeModel, systemPrompt);
             const cleanJsonText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
             const parsed = JSON.parse(cleanJsonText);
