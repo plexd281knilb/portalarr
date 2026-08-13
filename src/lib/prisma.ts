@@ -121,8 +121,11 @@ if (!globalForScheduler.schedulerInitialized) {
   globalForScheduler.schedulerInitialized = true;
 
   // Let Next.js boot finish before running the first check
-  setTimeout(() => {
-    console.log("[BACKGROUND-JOB] Initializing library auto-scan job...");
+  setTimeout(async () => {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+    const intervalMinutes = settings?.autoSyncInterval || 5;
+    console.log(`[BACKGROUND-JOB] Initializing library auto-scan job (Interval: ${intervalMinutes}m)...`);
+    console.log(`[PORTALARR] Server is fully booted, ready, and listening on http://0.0.0.0:3000`);
     
     // Check every minute if a scan is due
     setInterval(async () => {
