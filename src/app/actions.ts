@@ -8,6 +8,7 @@ import { jwtVerify } from "jose";
 import { encryptData, decryptData } from "@/lib/encryption";
 import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
+import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver } from "@/lib/ai-agent";
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 
@@ -1476,6 +1477,19 @@ export async function getLibraryBooks(libraryId?: string) {
             a = "N. Chino";
         }
 
+        if (!b.series) {
+            const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
+            const heur = callDefaultResolver(rawTarget, b.mediaType || "ebook");
+            if (heur.series) {
+                b.series = heur.series;
+                b.volumeNumber = heur.volumeNumber ? String(heur.volumeNumber) : null;
+                prisma.book.update({
+                    where: { id: b.id },
+                    data: { series: heur.series, volumeNumber: heur.volumeNumber ? String(heur.volumeNumber) : null }
+                }).catch(() => {});
+            }
+        }
+
         if (t !== b.title || a !== b.author) {
             b.title = t;
             b.author = a;
@@ -1758,16 +1772,42 @@ export async function createBookRequest(formData: FormData) {
         
         if (!title) return { success: false, error: "Title is required" };
         
+        let finalTitle = title;
+        let finalAuthor = author;
+        let finalSeries: string | null = null;
+        let finalVolNum: string | null = null;
+        let finalCover = coverUrl;
+        let finalYear = publishYear;
+
+        try {
+            const aiMeta = await resolveRequestMetadataWithAI(`${title} ${author}`, mediaType);
+            if (aiMeta) {
+                if (aiMeta.title) finalTitle = aiMeta.title;
+                if (aiMeta.author && aiMeta.author !== "Unknown Author") finalAuthor = aiMeta.author;
+                if (aiMeta.series) finalSeries = aiMeta.series;
+                if (aiMeta.volumeNumber) finalVolNum = String(aiMeta.volumeNumber);
+                if (aiMeta.publishYear && !finalYear) finalYear = aiMeta.publishYear;
+            }
+        } catch (e) {}
+
+        if (!finalCover) {
+            try {
+                finalCover = await fetchBookCover(finalTitle, finalAuthor, mediaType) || "";
+            } catch (e) {}
+        }
+
         if (type === "series") {
-            const expanded = await expandSeriesRequest(title, author, targetUser, mediaType);
+            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType);
             if (expanded) {
                 // Save the parent series request record itself in the DB
                 await prisma.bookRequest.create({
                     data: {
-                        title,
-                        author,
-                        coverUrl,
-                        publishYear,
+                        title: finalTitle,
+                        author: finalAuthor,
+                        series: finalSeries || finalTitle,
+                        volumeNumber: finalVolNum,
+                        coverUrl: finalCover,
+                        publishYear: finalYear,
                         requestedBy: targetUser,
                         type: "series",
                         mediaType,
@@ -1776,12 +1816,12 @@ export async function createBookRequest(formData: FormData) {
                 });
 
                 sendRequestNotificationToAdmins({
-                    title: `${title} (${mediaType === "audiobook" ? "Audiobook" : "Book"} Series)`,
-                    author,
+                    title: `${finalTitle} (${mediaType === "audiobook" ? "Audiobook" : "Book"} Series)`,
+                    author: finalAuthor,
                     requestedBy: targetUser,
                     type: "series",
                     mediaType,
-                    publishYear: null
+                    publishYear: finalYear || null
                 }).catch(err => {
                     console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
                 });
@@ -1792,10 +1832,12 @@ export async function createBookRequest(formData: FormData) {
         
         const request = await prisma.bookRequest.create({
             data: {
-                title,
-                author,
-                coverUrl,
-                publishYear,
+                title: finalTitle,
+                author: finalAuthor,
+                series: finalSeries,
+                volumeNumber: finalVolNum,
+                coverUrl: finalCover,
+                publishYear: finalYear,
                 requestedBy: targetUser,
                 type,
                 mediaType,
@@ -1804,8 +1846,8 @@ export async function createBookRequest(formData: FormData) {
         });
         
         if (type === "book") {
-            autoDownloadBookRequest(request.id, title, author).catch(err => {
-                console.error(`[AUTO-DOWNLOAD-BG] Failed for request "${title}":`, err);
+            autoDownloadBookRequest(request.id, finalTitle, finalAuthor).catch(err => {
+                console.error(`[AUTO-DOWNLOAD-BG] Failed for request "${finalTitle}":`, err);
             });
         }
 
@@ -2604,6 +2646,19 @@ export async function scanLibraryInternal(libraryId: string) {
                         }
                     } catch (e) {}
 
+                    let series: string | null = null;
+                    let volumeNumber: string | null = null;
+
+                    try {
+                        const aiMeta = await resolveMetadataWithAI(cleanBase, library.mediaType || "ebook");
+                        if (aiMeta) {
+                            if (aiMeta.title) title = aiMeta.title;
+                            if (aiMeta.author && aiMeta.author !== "Unknown Author") author = aiMeta.author;
+                            if (aiMeta.series) series = aiMeta.series;
+                            if (aiMeta.volumeNumber) volumeNumber = String(aiMeta.volumeNumber);
+                        }
+                    } catch (e) {}
+
                     const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
                         ? stats.birthtime
                         : (stats.mtime || new Date());
@@ -2612,6 +2667,8 @@ export async function scanLibraryInternal(libraryId: string) {
                         data: {
                             title,
                             author,
+                            series,
+                            volumeNumber,
                             coverUrl: "",
                             filePath: fullPath,
                             fileSize: stats.size,
@@ -2622,7 +2679,7 @@ export async function scanLibraryInternal(libraryId: string) {
                         }
                     });
                     matchedDbBookIds.add(newBook.id);
-                    console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" (ID: ${newBook.id})`);
+                    console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
 
                     // Fetch cover artwork asynchronously in background
                     (async () => {

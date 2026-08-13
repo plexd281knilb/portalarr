@@ -473,9 +473,9 @@ function normalizeBookCardMetadata(book: any) {
             displayTitle = book.cleanSeriesTitle;
         }
 
-        const volumeBadge = groupBySeries && book.seriesVolume ? (
-            <Badge className="bg-primary text-black border border-primary/25 text-[9px] font-extrabold uppercase shadow-sm">
-                Vol. {book.seriesVolume}
+        const volumeBadge = (book.series || book.volumeNumber || (groupBySeries && book.seriesVolume)) ? (
+            <Badge className="bg-primary/90 text-black border border-primary/40 text-[9px] font-extrabold uppercase shadow-sm">
+                {book.series ? `${book.series}${book.volumeNumber ? ` #${book.volumeNumber}` : ""}` : `Vol. ${book.seriesVolume || book.volumeNumber}`}
             </Badge>
         ) : null;
 
@@ -1699,9 +1699,13 @@ function normalizeBookCardMetadata(book: any) {
 
     const dynamicSeriesSet = new Set<string>();
     for (const book of sortedBooks) {
-        const info = extractSeriesInfo(book.title, book.filePath, []);
-        if (info.seriesName) {
-            dynamicSeriesSet.add(info.seriesName.toLowerCase().trim());
+        if (book.series) {
+            dynamicSeriesSet.add(book.series.toLowerCase().trim());
+        } else {
+            const info = extractSeriesInfo(book.title, book.filePath, []);
+            if (info.seriesName) {
+                dynamicSeriesSet.add(info.seriesName.toLowerCase().trim());
+            }
         }
     }
 
@@ -1710,22 +1714,23 @@ function normalizeBookCardMetadata(book: any) {
     if (groupBySeries) {
         for (const book of sortedBooks) {
             const info = extractSeriesInfo(book.title, book.filePath, combinedSeries);
-            if (info.seriesName) {
-                let sName = info.seriesName;
+            const seriesNameCandidate = book.series || info.seriesName;
+            if (seriesNameCandidate) {
+                let sName = seriesNameCandidate;
                 if (book.author && book.author !== "Unknown Author") {
                     sName = sName.replace(new RegExp('^' + book.author + '[:\\-\\s]+', 'i'), '').trim();
                 }
                 const formattedSeriesName = sName
                     .split(" ")
-                    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                    .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
                     .join(" ");
                 
                 if (!seriesGroups[formattedSeriesName]) {
                     seriesGroups[formattedSeriesName] = [];
                 }
-                const volumeNum = parseFloat(info.volume || "0") || 0;
+                const volumeNum = parseFloat(book.volumeNumber || info.volume || "0") || 0;
                 (book as any).seriesVolume = volumeNum;
-                (book as any).cleanSeriesTitle = info.bookTitle;
+                (book as any).cleanSeriesTitle = info.bookTitle || book.title;
                 seriesGroups[formattedSeriesName].push(book);
             } else {
                 standaloneBooks.push(book);

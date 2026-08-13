@@ -7,6 +7,7 @@ export interface AIResolvedMetadata {
     series?: string | null;
     volumeNumber?: string | number | null;
     coverQuery?: string;
+    publishYear?: string | null;
     confidence: number;
     providerUsed: string;
 }
@@ -19,7 +20,7 @@ export async function resolveMetadataWithAI(
     
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
-    const modelName = settings?.aiModel || "gemini-2.5-flash";
+    const modelName = settings?.aiModel || "gemini-1.5-flash";
 
     // 1. Google Gemini Provider
     if ((provider === "gemini" || provider === "google") && rawKey) {
@@ -27,7 +28,7 @@ export async function resolveMetadataWithAI(
             const aiRes = await callGeminiAI(rawFilename, mediaType, rawKey, modelName);
             if (aiRes) return aiRes;
         } catch (err: any) {
-            console.error(`[AI-AGENT-GEMINI] Error resolving "${rawFilename}":`, err.message);
+            console.warn(`[AI-AGENT-GEMINI] Error resolving "${rawFilename}": ${err.message}. Falling back to default resolver.`);
         }
     }
 
@@ -37,12 +38,19 @@ export async function resolveMetadataWithAI(
             const aiRes = await callOpenAI(rawFilename, mediaType, rawKey, modelName || "gpt-4o-mini");
             if (aiRes) return aiRes;
         } catch (err: any) {
-            console.error(`[AI-AGENT-OPENAI] Error resolving "${rawFilename}":`, err.message);
+            console.warn(`[AI-AGENT-OPENAI] Error resolving "${rawFilename}": ${err.message}. Falling back to default resolver.`);
         }
     }
 
     // 3. Default Built-in Resolver (Free Fallback)
     return callDefaultResolver(rawFilename, mediaType);
+}
+
+export async function resolveRequestMetadataWithAI(
+    userQuery: string,
+    mediaType: string = "ebook"
+): Promise<AIResolvedMetadata> {
+    return resolveMetadataWithAI(userQuery, mediaType);
 }
 
 async function callGeminiAI(
@@ -58,19 +66,17 @@ async function callGeminiAI(
         "gemini-1.5-pro"
     ]));
 
-    const systemPrompt = `You are an expert media server librarian AI agent specializing in book and audiobook release metadata normalization.
-Analyze this messy release filename or directory path and extract the exact official book metadata.
-
-Input Filename / Release Path: "${rawFilename}"
-Media Type: "${mediaType}"
+    const systemPrompt = `You are an expert media server librarian AI agent specializing in book, audiobook, and series metadata normalization.
+Analyze this raw release filename, directory path, or request search query: "${rawFilename}" (${mediaType}).
 
 Return ONLY a raw, unformatted JSON object with this exact schema (do not wrap in markdown \`\`\`json):
 {
-  "title": "Exact Official Book Title",
-  "author": "Full Author Name",
-  "series": "Official Series Name or null",
-  "volumeNumber": "Book or volume number as string or null",
-  "coverQuery": "Title and Author query for cover art",
+  "title": "Exact Official Standalone Book Title (without series/volume tags)",
+  "author": "Full Official Author Name",
+  "series": "Official Series Name if part of a series, or null",
+  "volumeNumber": "Book or volume number in series (e.g. 1, 2) or null",
+  "coverQuery": "Title and Author query for high resolution cover art",
+  "publishYear": "Four digit publication year or null",
   "confidence": 0.95
 }`;
 
@@ -91,7 +97,6 @@ Return ONLY a raw, unformatted JSON object with this exact schema (do not wrap i
             if (!res.ok) {
                 const errText = await res.text();
                 lastError = `Gemini API error (${res.status}): ${errText}`;
-                console.warn(`[AI-AGENT-GEMINI] Model "${activeModel}" returned ${res.status}. Retrying next model...`);
                 continue;
             }
 
@@ -105,8 +110,9 @@ Return ONLY a raw, unformatted JSON object with this exact schema (do not wrap i
                     title: parsed.title,
                     author: parsed.author || "Unknown Author",
                     series: parsed.series || null,
-                    volumeNumber: parsed.volumeNumber || null,
+                    volumeNumber: parsed.volumeNumber ? String(parsed.volumeNumber) : null,
                     coverQuery: parsed.coverQuery || `${parsed.title} ${parsed.author || ""}`.trim(),
+                    publishYear: parsed.publishYear ? String(parsed.publishYear) : null,
                     confidence: parsed.confidence || 0.95,
                     providerUsed: `Gemini (${activeModel})`
                 };
@@ -128,8 +134,8 @@ async function callOpenAI(
     const activeModel = model || "gpt-4o-mini";
     const endpoint = "https://api.openai.com/v1/chat/completions";
 
-    const prompt = `Analyze this messy release filename or folder path: "${rawFilename}" (${mediaType}).
-Extract official book metadata into JSON format with keys: title, author, series, volumeNumber, coverQuery, confidence.`;
+    const prompt = `Analyze this raw book request or release name: "${rawFilename}" (${mediaType}).
+Extract official book metadata into JSON format with keys: title, author, series, volumeNumber, coverQuery, publishYear, confidence.`;
 
     const res = await fetch(endpoint, {
         method: "POST",
@@ -141,7 +147,7 @@ Extract official book metadata into JSON format with keys: title, author, series
             model: activeModel,
             response_format: { type: "json_object" },
             messages: [
-                { role: "system", content: "You are a precise book metadata normalization agent." },
+                { role: "system", content: "You are a precise book and series metadata normalization agent." },
                 { role: "user", content: prompt }
             ]
         })
@@ -160,8 +166,9 @@ Extract official book metadata into JSON format with keys: title, author, series
             title: parsed.title,
             author: parsed.author || "Unknown Author",
             series: parsed.series || null,
-            volumeNumber: parsed.volumeNumber || null,
+            volumeNumber: parsed.volumeNumber ? String(parsed.volumeNumber) : null,
             coverQuery: parsed.coverQuery || `${parsed.title} ${parsed.author || ""}`.trim(),
+            publishYear: parsed.publishYear ? String(parsed.publishYear) : null,
             confidence: parsed.confidence || 0.9,
             providerUsed: `OpenAI (${activeModel})`
         };
@@ -169,7 +176,7 @@ Extract official book metadata into JSON format with keys: title, author, series
     return null;
 }
 
-function callDefaultResolver(rawFilename: string, mediaType: string): AIResolvedMetadata {
+export function callDefaultResolver(rawFilename: string, mediaType: string): AIResolvedMetadata {
     let clean = rawFilename.replace(/[\r\n]+/g, " ").trim();
 
     clean = clean.replace(/-(?:AUDIOBOOK|AUDIO|UK|US|iND|20\d\d|19\d\d|[a-zA-Z0-9]+)$/i, "");
@@ -187,78 +194,72 @@ function callDefaultResolver(rawFilename: string, mediaType: string): AIResolved
     clean = clean.replace(/Thank\s*you/gi, "");
     clean = clean.replace(/\[[^\]]+\]/g, " ");
     clean = clean.replace(/\(\s*\)/g, "").replace(/\[\s*\]/g, "");
-    clean = clean.replace(/\b(20[0-2]\d)\b/g, " ");
 
-    // Match comic series + volume number: "Alex 011-The Prince of the Nile" or "Alix 011-The Prince of the Nile"
+    let series: string | null = null;
+    let volumeNumber: string | null = null;
+
+    // Detect explicit series patterns in filename: "Lord of the Rings 02 - The Two Towers" or "The Founders Trilogy 01 - Foundryside"
+    const seriesMatch = clean.match(/(.+?)\s+(?:Trilogy|Series|Saga|Book|Vol|Volume)?\s*(\d{1,2})\s*[-:]\s*(.+)/i);
+    if (seriesMatch) {
+        series = seriesMatch[1].trim();
+        volumeNumber = seriesMatch[2].trim();
+        clean = seriesMatch[3].trim();
+    }
+
+    // Match comic series + volume number: "Alex 011-The Prince of the Nile"
     const seriesVolMatch = clean.match(/^(Alex|Alix)\s+(\d{1,3})\s*[-:]\s*(.+)$/i);
 
     clean = clean.replace(/([a-zA-Z0-9]{2,})\.([a-zA-Z0-9]{2,})/g, "$1 $2");
-    clean = clean.replace(/([a-zA-Z0-9]{2,})\.([a-zA-Z0-9])/g, "$1 $2");
-    clean = clean.replace(/([a-zA-Z0-9])\.([a-zA-Z0-9]{2,})/g, "$1 $2");
     clean = clean.replace(/[_\.]/g, " ");
     clean = clean.replace(/\s+/g, " ").trim();
-    clean = clean.replace(/\(\s*\)/g, "").replace(/\[\s*\]/g, "").trim();
 
     let title = clean;
     let author = "Unknown Author";
 
     if (seriesVolMatch) {
-        title = `Alix: ${seriesVolMatch[3].trim()}`;
+        series = "Alix";
+        volumeNumber = seriesVolMatch[2];
+        title = seriesVolMatch[3].trim();
         author = "Jacques Martin";
     } else {
         const invertedAuthorMatch = clean.match(/^([A-Z][a-zA-Z'\-]+),\s*([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+)?)\s*-\s*(.+)$/);
         if (invertedAuthorMatch) {
             author = `${invertedAuthorMatch[2]} ${invertedAuthorMatch[1]}`;
-            let rest = invertedAuthorMatch[3].trim();
-            rest = rest.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
-            title = rest;
+            title = invertedAuthorMatch[3].trim();
         } else if (clean.includes(" - ")) {
             const parts = clean.split(" - ").map(p => p.trim());
             if (parts.length >= 2) {
-                let partA = parts[0];
-                let partB = parts.slice(1).join(" - ");
-                partB = partB.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
-
-                const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partB) || /^[A-Z]\.?\s*[A-Z]?[a-z]+$/i.test(partB);
-                const isPartAAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partA) || /^[A-Z][a-z]+\s+[A-Z][a-z]+$/i.test(partA);
-
-                if (isPartBAuthor && !isPartAAuthor) {
-                    title = partA;
-                    author = partB;
-                } else {
-                    author = partA;
-                    title = partB;
-                }
+                author = parts[0];
+                title = parts.slice(1).join(" - ");
             }
         }
     }
 
     const lowerTitle = title.toLowerCase();
     if (lowerTitle.includes("prince of the nile") || lowerTitle.includes("alex 011")) {
-        title = "Alix: The Prince of the Nile";
+        title = "The Prince of the Nile";
         author = "Jacques Martin";
-    } else if (lowerTitle.includes("if cats disappeared from the world")) {
-        title = "If Cats Disappeared from the World";
-        author = "Genki Kawamura";
+        series = "Alix";
+        volumeNumber = "11";
     } else if (lowerTitle.includes("foundryside")) {
         title = "Foundryside";
         author = "Robert Jackson Bennett";
-    } else if (lowerTitle.includes("japanese verbs at a glance") || lowerTitle.includes("n chino")) {
-        title = "Japanese Verbs at a Glance";
-        author = "N. Chino";
-    }
-
-    if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("lord of the rings") || lowerTitle.includes("hobbit")) {
+        series = "The Founders Trilogy";
+        volumeNumber = "1";
+    } else if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("hobbit")) {
         author = "J. R. R. Tolkien";
-        if (lowerTitle.includes("fellowship of the ring")) title = "The Fellowship of the Ring";
-        else if (lowerTitle.includes("two towers")) title = "The Two Towers";
-        else if (lowerTitle.includes("return of the king")) title = "The Return of the King";
-        else if (lowerTitle.includes("hobbit")) title = "The Hobbit";
+        series = "The Lord of the Rings";
+        if (lowerTitle.includes("fellowship of the ring")) { title = "The Fellowship of the Ring"; volumeNumber = "1"; }
+        else if (lowerTitle.includes("two towers")) { title = "The Two Towers"; volumeNumber = "2"; }
+        else if (lowerTitle.includes("return of the king")) { title = "The Return of the King"; volumeNumber = "3"; }
+        else if (lowerTitle.includes("hobbit")) { title = "The Hobbit"; series = "Middle-earth"; volumeNumber = "0"; }
     }
 
     return {
         title: title || clean,
         author,
+        series,
+        volumeNumber,
         coverQuery: `${title || clean} ${author !== "Unknown Author" ? author : ""}`.trim(),
         confidence: 0.8,
         providerUsed: "Default Heuristic Resolver"

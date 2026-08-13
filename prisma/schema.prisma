@@ -116,6 +116,8 @@ model Book {
   id          String   @id @default(cuid())
   title       String
   author      String?
+  series      String?  // Series name (e.g. "The Founders Trilogy", "Harry Potter")
+  volumeNumber String? // Volume or book number (e.g. "1", "01")
   coverUrl    String?  // Optional cover image
   filePath    String   // Local path on disk to the PDF/EPUB/M4B/MP3/etc.
   fileSize    Float?   // Size in bytes (Float supports >2GB files up to 9 Petabytes)
@@ -131,6 +133,8 @@ model BookRequest {
   id          String   @id @default(cuid())
   title       String
   author      String?
+  series      String?  // Series name if requested as part of a series
+  volumeNumber String? // Volume or book number
   coverUrl    String?
   publishYear String?
   requestedBy String   // Username
