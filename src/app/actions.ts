@@ -2149,10 +2149,13 @@ function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): 
         const isGenericRoot = parentLower === "books" || 
                               parentLower === "audiobooks" || 
                               parentLower === "userbooks" || 
+                              parentLower === "kidsbooks" || 
+                              parentLower === "kyrabooks" || 
                               parentLower === "downloads" || 
                               parentLower === "public library" || 
                               parentLower === "public audiobooks" || 
-                              parentLower.includes("library");
+                              parentLower.includes("library") ||
+                              parentLower.includes("bookshelf");
         if (!isGenericRoot) {
             return cleanedParent;
         }
@@ -2207,10 +2210,13 @@ export async function scanLibraryInternal(libraryId: string) {
         try {
             await prisma.book.deleteMany({
                 where: {
-                    libraryId,
                     OR: [
                         { title: { equals: "Userbooks" } },
                         { title: { equals: "User Books" } },
+                        { title: { equals: "Kidsbooks" } },
+                        { title: { equals: "Kids Books" } },
+                        { title: { equals: "Kyrabooks" } },
+                        { title: { equals: "Kyra Books" } },
                         { title: { equals: "Books" } },
                         { title: { equals: "Audiobooks" } },
                         { title: { equals: "Downloads" } }
