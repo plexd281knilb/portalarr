@@ -1363,27 +1363,35 @@ export async function deleteLibrary(id: string) {
     }
 }
 
-export async function getLibraryBooks(libraryId: string) {
+export async function getLibraryBooks(libraryId?: string) {
     let session: any = null;
     try {
         session = await verifyUser();
     } catch (e) {}
     if (!session) throw new Error("Unauthorized");
     
-    const library = await prisma.library.findUnique({ where: { id: libraryId } });
-    if (!library) throw new Error("Library not found");
+    let targetLibraryIds: string[] = [];
 
-    const hasAccess = await checkLibraryAccess(
-        library.allowedUsers || "",
-        library.restrictedUsers || "",
-        (session?.username || "") as string, 
-        (session?.email || "") as string,
-        (session?.role || "") as string
-    );
-    if (!hasAccess) throw new Error("Unauthorized access to this library");
+    if (!libraryId || libraryId === "all") {
+        const userLibs = await getLibraries();
+        targetLibraryIds = userLibs.map(l => l.id);
+    } else {
+        const library = await prisma.library.findUnique({ where: { id: libraryId } });
+        if (!library) throw new Error("Library not found");
+
+        const hasAccess = await checkLibraryAccess(
+            library.allowedUsers || "",
+            library.restrictedUsers || "",
+            (session?.username || "") as string, 
+            (session?.email || "") as string,
+            (session?.role || "") as string
+        );
+        if (!hasAccess) throw new Error("Unauthorized access to this library");
+        targetLibraryIds = [libraryId];
+    }
     
     const books = await prisma.book.findMany({
-        where: { libraryId },
+        where: { libraryId: { in: targetLibraryIds } },
         orderBy: { createdAt: "desc" }
     });
     
@@ -1933,13 +1941,25 @@ export async function processEpubForKindle(filePath: string): Promise<string> {
     return filePath;
 }
 
-export async function scanLibrary(libraryId: string) {
+export async function scanLibrary(libraryId?: string): Promise<{ success: boolean, error?: string, message?: string, count?: number }> {
     try {
         await verifyUser();
-        return await scanLibraryInternal(libraryId);
+        if (!libraryId || libraryId === "all") {
+            const libraries = await prisma.library.findMany();
+            let totalAdded = 0;
+            for (const lib of libraries) {
+                const res: any = await scanLibraryInternal(lib.id);
+                if (res && res.count) {
+                    totalAdded += res.count;
+                }
+            }
+            return { success: true, message: `Scanned all ${libraries.length} libraries. Synced ${totalAdded} media files.`, count: totalAdded };
+        }
+        const res: any = await scanLibraryInternal(libraryId);
+        return { success: res.success, error: res.error, count: res.count || 0 };
     } catch (err: any) {
         console.error("Failed to scan library:", err);
-        return { success: false, error: err.message || "Failed to scan library folder" };
+        return { success: false, error: err.message || "Failed to scan library folder", count: 0 };
     }
 }
 
