@@ -3433,6 +3433,8 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                         return firstMediaFile;
                     }
                 }
+                // Skip inspecting internal files of non-matching release directories to keep log clean & search fast
+                continue;
 
                 const found = findDownloadedFile(fullPath, bookTitle, mediaType);
                 if (found) return found;
