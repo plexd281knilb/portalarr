@@ -53,6 +53,27 @@ export async function resolveRequestMetadataWithAI(
     return resolveMetadataWithAI(userQuery, mediaType);
 }
 
+async function getAvailableGeminiModels(apiKey: string): Promise<string[]> {
+    const versions = ["v1beta", "v1"];
+    for (const ver of versions) {
+        try {
+            const url = `https://generativelanguage.googleapis.com/${ver}/models?key=${encodeURIComponent(apiKey)}`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && Array.isArray(data.models)) {
+                    const valid = data.models
+                        .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+                        .map((m: any) => String(m.name || "").replace(/^models\//, ""))
+                        .filter(Boolean);
+                    if (valid.length > 0) return valid;
+                }
+            }
+        } catch (e) {}
+    }
+    return [];
+}
+
 async function fetchGeminiContent(apiKey: string, modelName: string, systemPrompt: string): Promise<string> {
     const versions = ["v1beta", "v1"];
     let lastError = "";
@@ -92,13 +113,13 @@ async function callGeminiAI(
     apiKey: string,
     model: string
 ): Promise<AIResolvedMetadata | null> {
+    const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
-        model || "gemini-1.5-flash",
+        ...(model ? [model] : []),
+        ...dynamicModels,
         "gemini-1.5-flash",
         "gemini-2.0-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-2.0-flash-exp",
-        "gemini-1.5-pro-latest",
+        "gemini-1.5-flash-8b",
         "gemini-1.5-pro"
     ]));
 
@@ -239,13 +260,13 @@ async function callGeminiAIForChapters(
     apiKey: string,
     model: string
 ): Promise<AIChapterResult[] | null> {
+    const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
-        model || "gemini-1.5-flash",
+        ...(model ? [model] : []),
+        ...dynamicModels,
         "gemini-1.5-flash",
         "gemini-2.0-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-2.0-flash-exp",
-        "gemini-1.5-pro-latest",
+        "gemini-1.5-flash-8b",
         "gemini-1.5-pro"
     ]));
 
