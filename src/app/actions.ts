@@ -1526,6 +1526,7 @@ export async function getLibraryBooks(libraryId?: string) {
     }
 
     uniqueBooks.sort((a, b) => a.title.localeCompare(b.title));
+    console.log(`[GET-LIBRARY-BOOKS] 📚 Returning ${uniqueBooks.length} books for library "${libraryId || 'all'}": [${uniqueBooks.map(b => b.title).join(", ")}]`);
     return uniqueBooks;
 }
 
