@@ -2412,9 +2412,10 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
     }
     
     let scanPath = library.path || "";
-    if (!scanPath || !fs.existsSync(scanPath)) {
+    
+    // Auto-discover path only if completely unset
+    if (!scanPath) {
         const candidates = [
-            scanPath,
             "/user/Books",
             "/Userbooks",
             "/user/books",
@@ -2443,7 +2444,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
     }
 
     if (!scanPath || !fs.existsSync(scanPath)) {
-        return { success: false, error: `No valid folder path configured for "${library.name}" in Settings -> Access Control, and no media folders found on disk.` };
+        return { success: false, error: `Library path "${scanPath || 'Unknown'}" does not exist on disk for "${library.name}". Please check your Docker volume mappings or Settings -> Access Control.` };
     }
 
     try {
@@ -2460,7 +2461,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         { title: { equals: "Kyra Books" } },
                         { title: { equals: "Books" } },
                         { title: { equals: "Audiobooks" } },
-                        { title: { equals: "Downloads" } }
+                        { title: { equals: "Downloads" } },
+                        { title: { equals: "Info" } }
                     ]
                 }
             });
@@ -2605,7 +2607,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                                 const st = fs.statSync(subP);
                                                 totalSize += st.size;
                                                 const ext = path.extname(sub.name).toLowerCase();
-                                                if (!sampleFile) {
+                                                const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".wav"];
+                                                if (!sampleFile || (!validAudioExts.includes(sampleExt) && validAudioExts.includes(ext))) {
                                                     sampleFile = sub.name;
                                                     sampleExt = ext || ".mp3";
                                                 }
@@ -2623,14 +2626,26 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 } catch (e) {}
                             }
 
-                            const folderKey = fullP.toLowerCase();
-                            if (!consolidatedMap.has(folderKey)) {
-                                consolidatedMap.set(folderKey, {
-                                    fullPath: fullP,
-                                    file: sampleFile || entry.name,
-                                    ext: sampleExt || ".mp3",
-                                    stats: { size: totalSize } as any
-                                });
+                            const folderLower = entry.name.toLowerCase();
+                            const isGenericRootFolder = folderLower === "books" || 
+                                                        folderLower === "audiobooks" || 
+                                                        folderLower === "userbooks" || 
+                                                        folderLower === "kidsbooks" || 
+                                                        folderLower === "kyrabooks" || 
+                                                        folderLower === "downloads" ||
+                                                        folderLower.includes("library") ||
+                                                        folderLower.includes("bookshelf");
+
+                            if (!isGenericRootFolder) {
+                                const folderKey = fullP.toLowerCase();
+                                if (!consolidatedMap.has(folderKey)) {
+                                    consolidatedMap.set(folderKey, {
+                                        fullPath: fullP,
+                                        file: sampleFile || entry.name,
+                                        ext: sampleExt || ".mp3",
+                                        stats: { size: totalSize } as any
+                                    });
+                                }
                             }
                         } else {
                             const ext = path.extname(entry.name).toLowerCase();
@@ -2786,7 +2801,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                     if (targetTitleNorm.length > 3) {
                         const targetMediaType = library.mediaType || "ebook";
-                        existing = allDbBooks.find(b => {
+                        existing = dbBooks.find(b => {
                             if (matchedDbBookIds.has(b.id)) return false;
                             const dbMediaType = b.mediaType || "ebook";
                             if (dbMediaType !== targetMediaType) return false;
