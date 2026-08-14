@@ -1430,7 +1430,7 @@ export async function getLibraryBooks(libraryId?: string) {
             const existing = titleMap.get(dedupKey)!;
             const existingSize = existing.fileSize || 0;
             const currentSize = b.fileSize || 0;
-            if (currentSize > existingSize) {
+            if (currentSize >= existingSize) {
                 deleteIds.push(existing.id);
                 titleMap.set(dedupKey, b);
             } else {
@@ -2835,7 +2835,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
             const titleMap = new Map<string, typeof currentDbBooks>();
             for (const b of currentDbBooks) {
-                const cleanKey = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+                let cleanKey = (b.title || "").toLowerCase();
+                if (cleanKey.includes("hobbit")) cleanKey = "hobbit";
+                else if (cleanKey.includes("two towers") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("02") || cleanKey.includes("bk 2") || cleanKey.includes("book 2") || cleanKey.includes("vol 2")))) cleanKey = "two towers";
+                else if (cleanKey.includes("return of the king") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("03") || cleanKey.includes("bk 3") || cleanKey.includes("book 3") || cleanKey.includes("vol 3")))) cleanKey = "return of the king";
+                else if (cleanKey.includes("fellowship of the ring") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("01") || cleanKey.includes("bk 1") || cleanKey.includes("book 1") || cleanKey.includes("vol 1")))) cleanKey = "fellowship of the ring";
+                else if (cleanKey.includes("philosopher") || cleanKey.includes("sorcerer") || (cleanKey.includes("harry potter") && (cleanKey.includes("01") || cleanKey.includes("1") || cleanKey.includes("philosopher")))) cleanKey = "harry potter 1";
+                else cleanKey = cleanKey.replace(/[^a-z0-9]/g, "").trim();
+
                 if (!cleanKey) continue;
                 if (!titleMap.has(cleanKey)) titleMap.set(cleanKey, []);
                 titleMap.get(cleanKey)!.push(b);
