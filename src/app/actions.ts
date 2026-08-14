@@ -1412,13 +1412,13 @@ export async function getLibraryBooks(libraryId?: string) {
         else if (normTitle.includes("two towers") || (normTitle.includes("lord of the rings") && (normTitle.includes("02") || normTitle.includes("bk 2") || normTitle.includes("book 2") || normTitle.includes("vol 2")))) normTitle = "two towers";
         else if (normTitle.includes("return of the king") || (normTitle.includes("lord of the rings") && (normTitle.includes("03") || normTitle.includes("bk 3") || normTitle.includes("book 3") || normTitle.includes("vol 3")))) normTitle = "return of the king";
         else if (normTitle.includes("fellowship of the ring") || (normTitle.includes("lord of the rings") && (normTitle.includes("01") || normTitle.includes("bk 1") || normTitle.includes("book 1") || normTitle.includes("vol 1")))) normTitle = "fellowship of the ring";
-        else if (normTitle.includes("philosopher") || normTitle.includes("sorcerer") || (normTitle.includes("harry potter") && (normTitle.includes("01") || normTitle.includes("1") || normTitle.includes("philosopher")))) normTitle = "harry potter 1";
         else if (normTitle.includes("chamber of secrets")) normTitle = "harry potter 2";
         else if (normTitle.includes("prisoner of azkaban")) normTitle = "harry potter 3";
         else if (normTitle.includes("goblet of fire")) normTitle = "harry potter 4";
         else if (normTitle.includes("order of the phoenix")) normTitle = "harry potter 5";
-        else if (normTitle.includes("half-blood prince")) normTitle = "harry potter 6";
+        else if (normTitle.includes("half-blood prince") || normTitle.includes("half blood prince")) normTitle = "harry potter 6";
         else if (normTitle.includes("deathly hallows")) normTitle = "harry potter 7";
+        else if (normTitle.includes("philosopher") || normTitle.includes("sorcerer") || (normTitle.includes("harry potter") && (normTitle.includes("01") || normTitle.includes("bk 1") || normTitle.includes("book 1")))) normTitle = "harry potter 1";
         else if (normTitle.includes("project hail mary") || normTitle.includes("hail mary")) normTitle = "project hail mary";
         else normTitle = normTitle.replace(/[^a-z0-9]/g, "");
 
@@ -1472,7 +1472,25 @@ export async function getLibraryBooks(libraryId?: string) {
         const lowerT = t.toLowerCase();
         const lowerA = a.toLowerCase();
 
-        if (lowerT.includes("philosopher") || lowerT.includes("sorcerer") || (lowerT.includes("harry potter") && (lowerT.includes("01") || lowerT.includes("1") || lowerT.includes("philosopher")))) {
+        if (lowerT.includes("chamber of secrets")) {
+            t = "Harry Potter and the Chamber of Secrets";
+            a = "J. K. Rowling";
+        } else if (lowerT.includes("prisoner of azkaban")) {
+            t = "Harry Potter and the Prisoner of Azkaban";
+            a = "J. K. Rowling";
+        } else if (lowerT.includes("goblet of fire")) {
+            t = "Harry Potter and the Goblet of Fire";
+            a = "J. K. Rowling";
+        } else if (lowerT.includes("order of the phoenix")) {
+            t = "Harry Potter and the Order of the Phoenix";
+            a = "J. K. Rowling";
+        } else if (lowerT.includes("half-blood prince") || lowerT.includes("half blood prince")) {
+            t = "Harry Potter and the Half-Blood Prince";
+            a = "J. K. Rowling";
+        } else if (lowerT.includes("deathly hallows")) {
+            t = "Harry Potter and the Deathly Hallows";
+            a = "J. K. Rowling";
+        } else if (lowerT.includes("philosopher") || lowerT.includes("sorcerer") || (lowerT.includes("harry potter") && (lowerT.includes("01") || lowerT.includes("bk 1") || lowerT.includes("book 1")))) {
             t = "Harry Potter and the Sorcerer's Stone";
             a = "J. K. Rowling";
         } else if (lowerT.includes("two towers") || (lowerT.includes("lord of the rings") && (lowerT.includes("02") || lowerT.includes("book 2") || lowerT.includes("vol 2")))) {
@@ -2229,13 +2247,13 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
 
     if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer")) {
         author = "J. K. Rowling";
-        if (lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer") || (lowerTitle.includes("harry potter") && (lowerTitle.includes("01") || lowerTitle.includes("1")))) title = "Harry Potter and the Sorcerer's Stone";
-        else if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
+        if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
         else if (lowerTitle.includes("prisoner of azkaban")) title = "Harry Potter and the Prisoner of Azkaban";
         else if (lowerTitle.includes("goblet of fire")) title = "Harry Potter and the Goblet of Fire";
         else if (lowerTitle.includes("order of the phoenix")) title = "Harry Potter and the Order of the Phoenix";
-        else if (lowerTitle.includes("half-blood prince")) title = "Harry Potter and the Half-Blood Prince";
+        else if (lowerTitle.includes("half-blood prince") || lowerTitle.includes("half blood prince")) title = "Harry Potter and the Half-Blood Prince";
         else if (lowerTitle.includes("deathly hallows")) title = "Harry Potter and the Deathly Hallows";
+        else if (lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer") || (lowerTitle.includes("harry potter") && (lowerTitle.includes("01") || lowerTitle.includes("bk 1") || lowerTitle.includes("book 1")))) title = "Harry Potter and the Sorcerer's Stone";
     }
 
     return {
@@ -2503,7 +2521,13 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 const effBase = getEffectiveBookBaseName(item.fullPath, item.file, item.ext);
                 const parsedMeta = parseFilenameMetadata(effBase);
                 let normKey = (parsedMeta.title || effBase).toLowerCase();
-                if (normKey.includes("philosopher") || normKey.includes("sorcerer") || (normKey.includes("harry potter") && (normKey.includes("01") || normKey.includes("1") || normKey.includes("philosopher")))) normKey = "harry potter 1";
+                if (normKey.includes("chamber of secrets")) normKey = "harry potter 2";
+                else if (normKey.includes("prisoner of azkaban")) normKey = "harry potter 3";
+                else if (normKey.includes("goblet of fire")) normKey = "harry potter 4";
+                else if (normKey.includes("order of the phoenix")) normKey = "harry potter 5";
+                else if (normKey.includes("half-blood prince") || normKey.includes("half blood prince")) normKey = "harry potter 6";
+                else if (normKey.includes("deathly hallows")) normKey = "harry potter 7";
+                else if (normKey.includes("philosopher") || normKey.includes("sorcerer") || (normKey.includes("harry potter") && (normKey.includes("01") || normKey.includes("bk 1") || normKey.includes("book 1")))) normKey = "harry potter 1";
                 else normKey = normKey.replace(/[^a-z0-9]/g, "").trim();
 
                 let masterPath = item.fullPath;
