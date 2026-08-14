@@ -48,6 +48,17 @@ function isForeignLanguage(title: string): boolean {
     return foreignPatterns.some(pattern => pattern.test(titleLower));
 }
 
+function getNormTitle(rawTitle: string): string {
+    let norm = (rawTitle || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+    if (norm.includes("harrypotter")) {
+        norm = norm.replace("philosophersstone", "sorcerersstone");
+        norm = norm.replace("philosopherstone", "sorcerersstone");
+        norm = norm.replace("philosophers", "sorcerers");
+        norm = norm.replace("philosopher", "sorcerer");
+    }
+    return norm;
+}
+
 async function mobiBounceEpub(filePath: string): Promise<boolean> {
     try {
         const fs = require("fs");
@@ -2767,7 +2778,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 if (!existing) {
                     const cleanBaseCheck = getEffectiveBookBaseName(fullPath, file, ext);
                     const parsedMetaCheck = parseFilenameMetadata(cleanBaseCheck);
-                    const targetTitleNorm = (parsedMetaCheck.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+                    const targetTitleNorm = getNormTitle(parsedMetaCheck.title || cleanBaseCheck);
 
                     if (targetTitleNorm.length > 3) {
                         const targetMediaType = library.mediaType || "ebook";
@@ -2775,7 +2786,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             if (matchedDbBookIds.has(b.id)) return false;
                             const dbMediaType = b.mediaType || "ebook";
                             if (dbMediaType !== targetMediaType) return false;
-                            const dbTitleNorm = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+                            const dbTitleNorm = getNormTitle(b.title || "");
                             return dbTitleNorm === targetTitleNorm;
                         });
                     }
