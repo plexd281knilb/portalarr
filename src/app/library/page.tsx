@@ -34,7 +34,8 @@ import {
   getAudiobookChapters,
   reorderAudiobookChapters,
   analyzeAudiobookChaptersAction,
-  resolveBookWithAI
+  resolveBookWithAI,
+  runAiLibraryScanAction
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -47,7 +48,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, Edit2, Save, ArrowUp, ArrowDown,
   UploadCloud, Check, X, FileText, Download, Copy,
-  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX, Bot
+  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX, Bot, Wand2
 } from "lucide-react";
 
 function isServerActionMismatch(err: any): boolean {
@@ -1239,6 +1240,8 @@ function normalizeBookCardMetadata(book: any) {
         }
     }
 
+    const [aiScanning, setAiScanning] = useState(false);
+
     async function handleScanLibrary(libId: string) {
         setScanning(true);
         try {
@@ -1255,6 +1258,27 @@ function normalizeBookCardMetadata(book: any) {
             alert(e.message || "Failed to scan library folder");
         } finally {
             setScanning(false);
+        }
+    }
+
+    async function handleAiScanLibrary(libId: string) {
+        setAiScanning(true);
+        try {
+            const res = await runAiLibraryScanAction(libId);
+            if (res && res.error) {
+                alert(res.error);
+            } else if (res && res.message) {
+                alert(res.message);
+            }
+            await loadBooks(libId);
+        } catch (e: any) {
+            if (isServerActionMismatch(e)) {
+                window.location.reload();
+                return;
+            }
+            alert(e.message || "Failed AI library scan");
+        } finally {
+            setAiScanning(false);
         }
     }
 
@@ -2025,22 +2049,41 @@ function normalizeBookCardMetadata(book: any) {
                                             </div>
                                         </div>
                                         {selectedLibrary.path && (
-                                            <Button 
-                                                variant="outline" 
-                                                onClick={() => handleScanLibrary(selectedLibrary.id)}
-                                                disabled={scanning}
-                                                className="w-full lg:w-auto font-semibold border-primary/20 text-primary hover:bg-primary/5 shrink-0"
-                                            >
-                                                {scanning ? (
-                                                    <>
-                                                        <Loader2 className="mr-2 h-4.5 w-4.5 animate-spin" /> Scanning...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <UploadCloud className="mr-2 h-4.5 w-4.5" /> Scan Share Folder
-                                                    </>
-                                                )}
-                                            </Button>
+                                            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                                                <Button 
+                                                    variant="outline" 
+                                                    onClick={() => handleScanLibrary(selectedLibrary.id)}
+                                                    disabled={scanning || aiScanning}
+                                                    className="w-full sm:w-auto font-semibold border-primary/20 text-primary hover:bg-primary/5 shrink-0"
+                                                >
+                                                    {scanning ? (
+                                                        <>
+                                                            <Loader2 className="mr-2 h-4.5 w-4.5 animate-spin" /> Scanning...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <UploadCloud className="mr-2 h-4.5 w-4.5" /> Scan Share Folder
+                                                        </>
+                                                    )}
+                                                </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    onClick={() => handleAiScanLibrary(selectedLibrary.id)}
+                                                    disabled={scanning || aiScanning}
+                                                    className="w-full sm:w-auto font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 shrink-0 gap-1.5"
+                                                    title="Run AI Metadata Resolution & HD Cover Art Fetching on this library"
+                                                >
+                                                    {aiScanning ? (
+                                                        <>
+                                                            <Loader2 className="h-4 w-4 animate-spin text-amber-400" /> Resolving AI...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Wand2 className="h-4 w-4 text-amber-400" /> AI Resolve Library
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </div>
                                         )}
                                     </div>
 
@@ -2270,22 +2313,41 @@ function normalizeBookCardMetadata(book: any) {
                                             </div>
                                         </div>
                                         {selectedLibrary.path && (
-                                            <Button 
-                                                variant="outline" 
-                                                onClick={() => handleScanLibrary(selectedLibrary.id)}
-                                                disabled={scanning}
-                                                className="w-full lg:w-auto font-semibold border-muted/60 text-foreground hover:bg-muted/30 shrink-0"
-                                            >
-                                                {scanning ? (
-                                                    <>
-                                                        <Loader2 className="mr-2 h-4.5 w-4.5 animate-spin" /> Scanning...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <UploadCloud className="mr-2 h-4.5 w-4.5" /> Scan Audio Folder
-                                                    </>
-                                                )}
-                                            </Button>
+                                            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                                                <Button 
+                                                    variant="outline" 
+                                                    onClick={() => handleScanLibrary(selectedLibrary.id)}
+                                                    disabled={scanning || aiScanning}
+                                                    className="w-full sm:w-auto font-semibold border-muted/60 text-foreground hover:bg-muted/30 shrink-0"
+                                                >
+                                                    {scanning ? (
+                                                        <>
+                                                            <Loader2 className="mr-2 h-4.5 w-4.5 animate-spin" /> Scanning...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <UploadCloud className="mr-2 h-4.5 w-4.5" /> Scan Audio Folder
+                                                        </>
+                                                    )}
+                                                </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    onClick={() => handleAiScanLibrary(selectedLibrary.id)}
+                                                    disabled={scanning || aiScanning}
+                                                    className="w-full sm:w-auto font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 shrink-0 gap-1.5"
+                                                    title="Run AI Metadata Resolution & HD Cover Art Fetching on this library"
+                                                >
+                                                    {aiScanning ? (
+                                                        <>
+                                                            <Loader2 className="h-4 w-4 animate-spin text-amber-400" /> Resolving AI...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Wand2 className="h-4 w-4 text-amber-400" /> AI Resolve Library
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </div>
                                         )}
                                     </div>
 

@@ -2039,6 +2039,55 @@ export async function scanLibrary(libraryId?: string): Promise<{ success: boolea
     }
 }
 
+export async function runAiLibraryScanAction(libraryId: string): Promise<{ success: boolean, error?: string, message?: string }> {
+    try {
+        await verifyUser();
+        const lib = await prisma.library.findUnique({ where: { id: libraryId } });
+        if (!lib) return { success: false, error: "Library not found" };
+
+        console.log(`[AI-LIBRARY-SCAN] 🪄 Triggering full AI metadata scan for library "${lib.name}" (${lib.id})...`);
+        
+        await scanLibraryInternal(libraryId, { enableAi: true });
+
+        const books = await prisma.book.findMany({ where: { libraryId } });
+        let resolvedCount = 0;
+
+        for (const b of books) {
+            try {
+                const cleanBase = b.filePath ? path.basename(b.filePath) : b.title;
+                const aiMeta = await resolveMetadataWithAI(cleanBase, lib.mediaType || "ebook");
+                if (aiMeta) {
+                    const updateData: any = {};
+                    if (aiMeta.title) updateData.title = aiMeta.title;
+                    if (aiMeta.author && aiMeta.author !== "Unknown Author") updateData.author = aiMeta.author;
+                    if (aiMeta.series) updateData.series = aiMeta.series;
+                    if (aiMeta.volumeNumber) updateData.volumeNumber = String(aiMeta.volumeNumber);
+
+                    const hdCover = await fetchBookCover(updateData.title || b.title, updateData.author || b.author, lib.mediaType || "ebook");
+                    if (hdCover) updateData.coverUrl = hdCover;
+
+                    await prisma.book.update({
+                        where: { id: b.id },
+                        data: updateData
+                    });
+                    resolvedCount++;
+                }
+            } catch (err: any) {
+                console.warn(`[AI-LIBRARY-SCAN] Error processing book "${b.title}":`, err.message);
+            }
+        }
+
+        revalidatePath("/library");
+        return { 
+            success: true, 
+            message: `✨ AI Metadata Resolution complete for "${lib.name}"! Enhanced ${resolvedCount} of ${books.length} items.` 
+        };
+    } catch (err: any) {
+        console.error("Failed AI library scan:", err);
+        return { success: false, error: err.message || "Failed AI library scan" };
+    }
+}
+
 function cleanSearchQuery(searchQuery: string): string {
     return searchQuery
         .replace(/'s\b/gi, "s") // Convert magician's -> magicians
@@ -3829,7 +3878,7 @@ export async function monitorAndRetryDownload(
 
                 if (targetLib) {
                     try {
-                        await scanLibraryInternal(targetLib.id);
+                        await scanLibraryInternal(targetLib.id, { enableAi: true });
                     } catch (err) {
                         console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${targetLib.name}":`, err);
                     }
@@ -3837,7 +3886,7 @@ export async function monitorAndRetryDownload(
                     const libraries = await prisma.library.findMany();
                     for (const lib of libraries) {
                         try {
-                            await scanLibraryInternal(lib.id);
+                            await scanLibraryInternal(lib.id, { enableAi: true });
                         } catch (err) {
                             console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${lib.name}":`, err);
                         }
@@ -5081,8 +5130,8 @@ export async function importCompletedDownload(requestId: string) {
         removePathSafely(rootBookFolder);
     }
 
-    // Auto-scan target library shelf so newly imported media is immediately available
-    await scanLibraryInternal(targetLib.id);
+    // Auto-scan target library shelf so newly imported media is immediately available with AI resolution
+    await scanLibraryInternal(targetLib.id, { enableAi: true });
 
     await prisma.bookRequest.update({
         where: { id: requestId },
