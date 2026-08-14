@@ -2217,8 +2217,8 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
             let rest = invertedAuthorMatch[3].trim();
             rest = rest.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
             title = rest;
-        } else if (clean.includes(" - ")) {
-            const parts = clean.split(" - ").map(p => p.trim());
+        } else if (clean.includes("-")) {
+            const parts = clean.split(/\s*-\s*/).map(p => p.trim()).filter(Boolean);
             if (parts.length >= 2) {
                 let partA = parts[0];
                 let partB = parts.slice(1).join(" - ");
@@ -2510,13 +2510,13 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 else if (rawLower.includes("two towers")) normKey = "two towers";
                 else if (rawLower.includes("return of the king")) normKey = "return of the king";
                 else if (rawLower.includes("fellowship of the ring")) normKey = "fellowship of the ring";
-                else if (rawLower.includes("philosopher") || rawLower.includes("sorcerer")) normKey = "harry potter 1";
-                else if (rawLower.includes("chamber of secrets")) normKey = "harry potter 2";
-                else if (rawLower.includes("prisoner of azkaban")) normKey = "harry potter 3";
-                else if (rawLower.includes("goblet of fire")) normKey = "harry potter 4";
-                else if (rawLower.includes("order of the phoenix")) normKey = "harry potter 5";
-                else if (rawLower.includes("half-blood prince") || rawLower.includes("half blood prince")) normKey = "harry potter 6";
-                else if (rawLower.includes("deathly hallows")) normKey = "harry potter 7";
+                else if (rawLower.includes("philosopher") || rawLower.includes("sorcerer") || (rawLower.includes("harry potter") && (rawLower.includes("01") || rawLower.includes("bk 1") || rawLower.includes("book 1") || rawLower.includes(" 1")))) normKey = "harry potter 1";
+                else if (rawLower.includes("chamber of secrets") || (rawLower.includes("harry potter") && (rawLower.includes("02") || rawLower.includes("bk 2") || rawLower.includes("book 2") || rawLower.includes(" 2")))) normKey = "harry potter 2";
+                else if (rawLower.includes("prisoner of azkaban") || (rawLower.includes("harry potter") && (rawLower.includes("03") || rawLower.includes("bk 3") || rawLower.includes("book 3") || rawLower.includes(" 3")))) normKey = "harry potter 3";
+                else if (rawLower.includes("goblet of fire") || (rawLower.includes("harry potter") && (rawLower.includes("04") || rawLower.includes("bk 4") || rawLower.includes("book 4") || rawLower.includes(" 4")))) normKey = "harry potter 4";
+                else if (rawLower.includes("order of the phoenix") || (rawLower.includes("harry potter") && (rawLower.includes("05") || rawLower.includes("bk 5") || rawLower.includes("book 5") || rawLower.includes(" 5")))) normKey = "harry potter 5";
+                else if (rawLower.includes("half-blood prince") || rawLower.includes("half blood prince") || (rawLower.includes("harry potter") && (rawLower.includes("06") || rawLower.includes("bk 6") || rawLower.includes("book 6") || rawLower.includes(" 6")))) normKey = "harry potter 6";
+                else if (rawLower.includes("deathly hallows") || (rawLower.includes("harry potter") && (rawLower.includes("07") || rawLower.includes("bk 7") || rawLower.includes("book 7") || rawLower.includes(" 7")))) normKey = "harry potter 7";
                 else {
                     let cleanStr = rawLower
                         .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
@@ -2869,13 +2869,13 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 else if (rawLower.includes("two towers")) cleanKey = "two towers";
                 else if (rawLower.includes("return of the king")) cleanKey = "return of the king";
                 else if (rawLower.includes("fellowship of the ring")) cleanKey = "fellowship of the ring";
-                else if (rawLower.includes("philosopher") || rawLower.includes("sorcerer")) cleanKey = "harry potter 1";
-                else if (rawLower.includes("chamber of secrets")) cleanKey = "harry potter 2";
-                else if (rawLower.includes("prisoner of azkaban")) cleanKey = "harry potter 3";
-                else if (rawLower.includes("goblet of fire")) cleanKey = "harry potter 4";
-                else if (rawLower.includes("order of the phoenix")) cleanKey = "harry potter 5";
-                else if (rawLower.includes("half-blood prince") || rawLower.includes("half blood prince")) cleanKey = "harry potter 6";
-                else if (rawLower.includes("deathly hallows")) cleanKey = "harry potter 7";
+                else if (rawLower.includes("philosopher") || rawLower.includes("sorcerer") || (rawLower.includes("harry potter") && (rawLower.includes("01") || rawLower.includes("bk 1") || rawLower.includes("book 1") || rawLower.includes(" 1")))) cleanKey = "harry potter 1";
+                else if (rawLower.includes("chamber of secrets") || (rawLower.includes("harry potter") && (rawLower.includes("02") || rawLower.includes("bk 2") || rawLower.includes("book 2") || rawLower.includes(" 2")))) cleanKey = "harry potter 2";
+                else if (rawLower.includes("prisoner of azkaban") || (rawLower.includes("harry potter") && (rawLower.includes("03") || rawLower.includes("bk 3") || rawLower.includes("book 3") || rawLower.includes(" 3")))) cleanKey = "harry potter 3";
+                else if (rawLower.includes("goblet of fire") || (rawLower.includes("harry potter") && (rawLower.includes("04") || rawLower.includes("bk 4") || rawLower.includes("book 4") || rawLower.includes(" 4")))) cleanKey = "harry potter 4";
+                else if (rawLower.includes("order of the phoenix") || (rawLower.includes("harry potter") && (rawLower.includes("05") || rawLower.includes("bk 5") || rawLower.includes("book 5") || rawLower.includes(" 5")))) cleanKey = "harry potter 5";
+                else if (rawLower.includes("half-blood prince") || rawLower.includes("half blood prince") || (rawLower.includes("harry potter") && (rawLower.includes("06") || rawLower.includes("bk 6") || rawLower.includes("book 6") || rawLower.includes(" 6")))) cleanKey = "harry potter 6";
+                else if (rawLower.includes("deathly hallows") || (rawLower.includes("harry potter") && (rawLower.includes("07") || rawLower.includes("bk 7") || rawLower.includes("book 7") || rawLower.includes(" 7")))) cleanKey = "harry potter 7";
                 else {
                     let cleanStr = rawLower
                         .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
