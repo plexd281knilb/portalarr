@@ -185,11 +185,20 @@ async function fetchITunesCover(title: string, author: string, mediaType: string
 }
 
 async function fetchBookCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
+    console.log(`[COVER-ENGINE] 🖼️ Resolving cover artwork for "${title}" by "${author}" (MediaType: ${mediaType})...`);
+
+    // Tier 1: iTunes HD API (600x600)
     try {
         const iTunesCover = await fetchITunesCover(title, author, mediaType);
-        if (iTunesCover) return iTunesCover;
-    } catch (e) {}
+        if (iTunesCover) {
+            console.log(`[COVER-ENGINE] ✅ TIER 1 SUCCESS (iTunes HD): ${iTunesCover}`);
+            return iTunesCover;
+        }
+    } catch (e: any) {
+        console.warn(`[COVER-ENGINE] ⚠️ Tier 1 (iTunes) failed: ${e.message || e}`);
+    }
 
+    // Tier 2: Open Library API (Title + Author)
     try {
         const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
         const cleanedQuery = cleanSearchQuery(query);
@@ -200,18 +209,47 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
             const data = await res.json();
             const docWithCover = data?.docs?.find((d: any) => d.cover_i);
             if (docWithCover?.cover_i) {
-                return `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
+                const olCover = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
+                console.log(`[COVER-ENGINE] ✅ TIER 2 SUCCESS (Open Library): ${olCover}`);
+                return olCover;
             }
         }
-    } catch (e) {}
+    } catch (e: any) {
+        console.warn(`[COVER-ENGINE] ⚠️ Tier 2 (Open Library) failed: ${e.message || e}`);
+    }
 
+    // Tier 3: Google Books API
     try {
         const googleCover = await fetchGoogleBooksCover(title, author);
         if (googleCover) {
-            return googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
+            const finalGoogleCover = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
+            console.log(`[COVER-ENGINE] ✅ TIER 3 SUCCESS (Google Books): ${finalGoogleCover}`);
+            return finalGoogleCover;
         }
-    } catch (e) {}
+    } catch (e: any) {
+        console.warn(`[COVER-ENGINE] ⚠️ Tier 3 (Google Books) failed: ${e.message || e}`);
+    }
 
+    // Tier 4: Open Library Title-Only Fallback
+    try {
+        const cleanTitleOnly = cleanSearchQuery(title);
+        const resTitleOnly = await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
+            headers: { "Accept": "application/json" }
+        });
+        if (resTitleOnly.ok) {
+            const dataTitle = await resTitleOnly.json();
+            const doc = dataTitle?.docs?.find((d: any) => d.cover_i);
+            if (doc?.cover_i) {
+                const titleOnlyCover = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
+                console.log(`[COVER-ENGINE] ✅ TIER 4 FALLBACK SUCCESS (Open Library Title Search): ${titleOnlyCover}`);
+                return titleOnlyCover;
+            }
+        }
+    } catch (e: any) {
+        console.warn(`[COVER-ENGINE] ⚠️ Tier 4 (Title Fallback) failed: ${e.message || e}`);
+    }
+
+    console.log(`[COVER-ENGINE] ℹ️ All cover artwork tiers exhausted for "${title}". Returning default placeholder.`);
     return null;
 }
 
