@@ -4013,27 +4013,24 @@ export async function monitorAndRetryDownload(
                                     console.error(`[AUTO-DOWNLOAD-MONITOR] Failed to delete completed download from client:`, delErr.message);
                                 }
 
-                                try {
-                                    fs.chmodSync(foundFilePath, 0o666);
-                                } catch (e) {}
-
-                                if (fs.existsSync(foundFilePath)) {
-                                    removePathSafely(foundFilePath);
-                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
-                                }
-                                    if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
-                                    try {
-                                        fs.rmSync(rootBookFolder, { recursive: true, force: true });
-                                        console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully removed completed download folder on disk: ${rootBookFolder}`);
-                                    } catch (e) {}
-                                }
-                            } catch (unlinkErr: any) {
                                 if (!clientDeleted) {
-                                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Copied file successfully but failed to delete the source file/folder from downloads directory:`, unlinkErr.message);
-                                    console.warn(`[AUTO-DOWNLOAD-MONITOR] TIP: Ensure your Docker volume mounts and PUID/PGID permissions allow the app to write/delete inside the downloads folder.`);
-                                } else {
-                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Cleanup: Manual deletion skipped or failed (likely handled by download client):`, unlinkErr.message);
+                                    try {
+                                        fs.chmodSync(foundFilePath, 0o666);
+                                    } catch (e) {}
+
+                                    if (fs.existsSync(foundFilePath)) {
+                                        removePathSafely(foundFilePath);
+                                        console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully deleted original file from downloads.`);
+                                    }
+                                    if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+                                        try {
+                                            fs.rmSync(rootBookFolder, { recursive: true, force: true });
+                                            console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully removed completed download folder on disk: ${rootBookFolder}`);
+                                        } catch (e) {}
+                                    }
                                 }
+                            } catch (err: any) {
+                                console.error(`[AUTO-DOWNLOAD-MONITOR] Unexpected error during cleanup:`, err.message);
                             }
                             console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully moved file to library path.`);
                         }
