@@ -1402,7 +1402,7 @@ export async function getLibraryBooks(libraryId?: string) {
 
     for (const b of books) {
         const rawTitle = (b.title || "").trim().toLowerCase();
-        if (rawTitle === "userbooks" || rawTitle === "user books" || rawTitle === "books" || rawTitle === "audiobooks" || rawTitle === "downloads" || rawTitle.includes("userbooks")) {
+        if (rawTitle === "userbooks" || rawTitle === "user books" || rawTitle === "books" || rawTitle === "audiobooks" || rawTitle === "downloads") {
             deleteIds.push(b.id);
             continue;
         }
