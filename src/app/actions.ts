@@ -2799,6 +2799,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         } catch (e) {}
                     })();
                 } else {
+                    matchedDbBookIds.add(existing.id);
                     if (existing.fileSize !== stats.size) {
                         await prisma.book.update({
                             where: { id: existing.id },
@@ -2806,7 +2807,6 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         }).catch(() => {});
                         existing.fileSize = stats.size;
                     }
-                    let finalPath = fullPath;
                     const cleanBase = getEffectiveBookBaseName(fullPath, path.basename(fullPath), ext);
                     const parsedMeta = parseFilenameMetadata(cleanBase);
                     let parsedAuthor = parsedMeta.author;
@@ -2840,9 +2840,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             }
                         }).catch(() => {});
                     }
-                    matchedDbBookIds.add(existing.id);
                 }
-        }
+            }
 
         for (const dbBook of dbBooks) {
             if (!matchedDbBookIds.has(dbBook.id)) {
