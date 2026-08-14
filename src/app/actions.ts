@@ -2601,17 +2601,15 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                         if (sub.isDirectory()) {
                                             calcFolderSize(subP, depth + 1);
                                         } else {
-                                            const ext = path.extname(sub.name).toLowerCase();
-                                            if (validExtensions.includes(ext)) {
-                                                try {
-                                                    const st = fs.statSync(subP);
-                                                    totalSize += st.size;
-                                                    if (!sampleFile) {
-                                                        sampleFile = sub.name;
-                                                        sampleExt = ext;
-                                                    }
-                                                } catch (e) {}
-                                            }
+                                            try {
+                                                const st = fs.statSync(subP);
+                                                totalSize += st.size;
+                                                const ext = path.extname(sub.name).toLowerCase();
+                                                if (!sampleFile) {
+                                                    sampleFile = sub.name;
+                                                    sampleExt = ext || ".mp3";
+                                                }
+                                            } catch (e) {}
                                         }
                                     }
                                 } catch (e) {}
@@ -2619,16 +2617,20 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                             calcFolderSize(fullP);
 
-                            if (totalSize > 0) {
-                                const folderKey = fullP.toLowerCase();
-                                if (!consolidatedMap.has(folderKey)) {
-                                    consolidatedMap.set(folderKey, {
-                                        fullPath: fullP,
-                                        file: sampleFile || entry.name,
-                                        ext: sampleExt,
-                                        stats: { size: totalSize } as any
-                                    });
-                                }
+                            if (totalSize === 0) {
+                                try {
+                                    totalSize = fs.statSync(fullP).size || 1;
+                                } catch (e) {}
+                            }
+
+                            const folderKey = fullP.toLowerCase();
+                            if (!consolidatedMap.has(folderKey)) {
+                                consolidatedMap.set(folderKey, {
+                                    fullPath: fullP,
+                                    file: sampleFile || entry.name,
+                                    ext: sampleExt || ".mp3",
+                                    stats: { size: totalSize } as any
+                                });
                             }
                         } else {
                             const ext = path.extname(entry.name).toLowerCase();
