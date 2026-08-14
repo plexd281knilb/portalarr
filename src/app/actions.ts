@@ -4554,7 +4554,7 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
                                     <br/>
                                     <span style="color: #64748b; font-size: 12px;">Amazon.com &rarr; Preferences &rarr; Personal Document Settings &rarr; Approved Personal Document E-mail List</span>
                                 </li>
-                                <li><strong>Check File Size:</strong> Kindle has a 50MB email file size limit. Your book size is <code>${(fs.statSync(book.filePath).size / (1024 * 1024)).toFixed(1)} MB</code>.</li>
+                                <li><strong>Check File Size:</strong> Kindle has a 50MB email file size limit. Your book size is <code>${fs.existsSync(book.filePath) ? (fs.statSync(book.filePath).size / (1024 * 1024)).toFixed(1) : "0.0"} MB</code>.</li>
                                 <li><strong>Verify Kindle Email:</strong> Double-check that your Kindle address (currently configured as <code>${user.kindleEmail}</code>) is exactly correct in your library settings.</li>
                             </ol>
                         </div>

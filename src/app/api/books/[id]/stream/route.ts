@@ -66,8 +66,20 @@ export async function GET(
 
         if (range && !isDownload) {
             const parts = range.replace(/bytes=/, "").split("-");
-            const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            let start = parseInt(parts[0], 10);
+            let end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+            if (isNaN(start)) {
+                start = Math.max(0, fileSize - (isNaN(end) ? 0 : end));
+                end = fileSize - 1;
+            }
+            if (isNaN(end) || end >= fileSize) {
+                end = fileSize - 1;
+            }
+            if (start < 0 || start > end) {
+                start = 0;
+            }
+
             const chunksize = (end - start) + 1;
             const fileStream = fs.createReadStream(targetFilePath, { start, end });
 
