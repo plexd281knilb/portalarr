@@ -2797,41 +2797,39 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                     // Dynamic Author Heuristic based on existing DB authors & requested authors
                     try {
-                        const dbAuthors = await prisma.book.findMany({
-                            where: { author: { not: "Unknown Author" } },
-                            select: { author: true },
-                            distinct: ['author']
-                        });
-                        const reqAuthors = await prisma.bookRequest.findMany({
-                            where: { author: { not: "Unknown Author" } },
-                            select: { author: true },
-                            distinct: ['author']
-                        });
+                        const titleLower = (title || "").toLowerCase();
+                        const isProtectedTitle = titleLower.startsWith("harry potter") ||
+                                                titleLower.startsWith("the lord of the rings") ||
+                                                titleLower.startsWith("the hobbit") ||
+                                                titleLower.startsWith("alix") ||
+                                                titleLower.startsWith("percy jackson");
 
-                        const allAuthorsSet = new Set<string>();
-                        for (const row of dbAuthors) {
-                            if (row.author) allAuthorsSet.add(row.author.trim());
-                        }
-                        for (const row of reqAuthors) {
-                            if (row.author) allAuthorsSet.add(row.author.trim());
-                        }
+                        if (!isProtectedTitle && author === "Unknown Author") {
+                            const dbAuthors = await prisma.book.findMany({
+                                where: { author: { not: "Unknown Author" } },
+                                select: { author: true },
+                                distinct: ['author']
+                            });
 
-                        const titleLower = title.toLowerCase();
-                        for (const auth of allAuthorsSet) {
-                            const authLower = auth.toLowerCase();
-                            if (titleLower.startsWith(authLower)) {
-                                author = auth;
-                                title = title.substring(auth.length).trim();
-                                title = title.replace(/^[:\-\s]+/, "").trim();
-                                break;
-                            } else if (titleLower.endsWith(authLower)) {
-                                author = auth;
-                                title = title.substring(0, title.length - auth.length).trim();
-                                title = title.replace(/[:\-\s]+$/, "").trim();
-                                break;
+                            for (const row of dbAuthors) {
+                                if (!row.author) continue;
+                                const auth = row.author.trim();
+                                const authLower = auth.toLowerCase();
+                                if (authLower.length > 3 && !authLower.startsWith("harry potter") && !authLower.startsWith("the lord")) {
+                                    if (titleLower.startsWith(authLower) && title.length > auth.length + 3) {
+                                        author = auth;
+                                        const newT = title.substring(auth.length).replace(/^[:\-\s]+/, "").trim();
+                                        if (newT.length >= 3) title = newT;
+                                        break;
+                                    }
+                                }
                             }
                         }
                     } catch (e) {}
+
+                    if (!title || !title.trim()) {
+                        title = parsedMeta.title || cleanBase;
+                    }
 
                     let series: string | null = null;
                     let volumeNumber: string | null = null;
