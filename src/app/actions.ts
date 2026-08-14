@@ -2878,7 +2878,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 else if (cleanKey.includes("two towers") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("02") || cleanKey.includes("bk 2") || cleanKey.includes("book 2") || cleanKey.includes("vol 2")))) cleanKey = "two towers";
                 else if (cleanKey.includes("return of the king") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("03") || cleanKey.includes("bk 3") || cleanKey.includes("book 3") || cleanKey.includes("vol 3")))) cleanKey = "return of the king";
                 else if (cleanKey.includes("fellowship of the ring") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("01") || cleanKey.includes("bk 1") || cleanKey.includes("book 1") || cleanKey.includes("vol 1")))) cleanKey = "fellowship of the ring";
-                else if (cleanKey.includes("philosopher") || cleanKey.includes("sorcerer") || (cleanKey.includes("harry potter") && (cleanKey.includes("01") || cleanKey.includes("1") || cleanKey.includes("philosopher")))) cleanKey = "harry potter 1";
+                else if (cleanKey.includes("philosopher") || cleanKey.includes("sorcerer") || (cleanKey.includes("harry potter") && (cleanKey.includes("01") || cleanKey.includes("bk 1") || cleanKey.includes("book 1") || cleanKey.includes("vol 1")))) cleanKey = "harry potter 1";
+                else if (cleanKey.includes("chamber of secrets") || (cleanKey.includes("harry potter") && (cleanKey.includes("02") || cleanKey.includes("bk 2") || cleanKey.includes("book 2") || cleanKey.includes("vol 2")))) cleanKey = "harry potter 2";
                 else cleanKey = cleanKey.replace(/[^a-z0-9]/g, "").trim();
 
                 if (!cleanKey) continue;
