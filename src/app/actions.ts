@@ -1417,18 +1417,20 @@ export async function getLibraryBooks(libraryId?: string) {
 
         if (!normTitle) continue;
 
-        if (titleMap.has(normTitle)) {
-            const existing = titleMap.get(normTitle)!;
+        const dedupKey = `${b.libraryId}_${b.mediaType || "ebook"}_${normTitle}`;
+
+        if (titleMap.has(dedupKey)) {
+            const existing = titleMap.get(dedupKey)!;
             const existingSize = existing.fileSize || 0;
             const currentSize = b.fileSize || 0;
             if (currentSize > existingSize) {
                 deleteIds.push(existing.id);
-                titleMap.set(normTitle, b);
+                titleMap.set(dedupKey, b);
             } else {
                 deleteIds.push(b.id);
             }
         } else {
-            titleMap.set(normTitle, b);
+            titleMap.set(dedupKey, b);
         }
     }
 
