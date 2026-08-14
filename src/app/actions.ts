@@ -2232,8 +2232,8 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     // Match comic series + volume number: "Alex 011-The Prince of the Nile" or "Alix 011-The Prince of the Nile"
     const seriesVolMatch = clean.match(/^(Alex|Alix)\s+(\d{1,3})\s*[-:]\s*(.+)$/i);
 
-    // Only strip 4-digit numbers if they look like scene release years (2000-2029) and NOT book title years like 1984
-    clean = clean.replace(/\b(20[0-2]\d)\b/g, " ");
+    // Only strip 4-digit numbers if they look like scene release years (1950-2029) and NOT book title years like 1984
+    clean = clean.replace(/\b(19[5-9]\d|20[0-2]\d)\b/g, " ");
 
     // Normalize scene dots/underscores into spaces
     clean = clean.replace(/([a-zA-Z0-9]{2,})\.([a-zA-Z0-9]{2,})/g, "$1 $2");
@@ -2820,38 +2820,43 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         ? stats.birthtime
                         : (stats.mtime || new Date());
 
-                    const newBook = await prisma.book.create({
-                        data: {
-                            title,
-                            author,
-                            series,
-                            volumeNumber,
-                            coverUrl: "",
-                            filePath: fullPath,
-                            fileSize: stats.size,
-                            fileType: ext.replace(".", ""),
-                            mediaType: library.mediaType || "ebook",
-                            libraryId: libraryId,
-                            createdAt: fileAddedDate
-                        }
-                    });
-                    matchedDbBookIds.add(newBook.id);
-                    logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                    console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
-
-                    // Fetch cover artwork asynchronously in background
-                    (async () => {
-                        try {
-                            const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
-                            if (fetchedCover) {
-                                console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${title}": ${fetchedCover}`);
-                                await prisma.book.update({
-                                    where: { id: newBook.id },
-                                    data: { coverUrl: fetchedCover }
-                                }).catch(() => {});
+                    try {
+                        const newBook = await prisma.book.create({
+                            data: {
+                                title,
+                                author,
+                                series,
+                                volumeNumber,
+                                coverUrl: "",
+                                filePath: fullPath,
+                                fileSize: stats.size,
+                                fileType: ext.replace(".", ""),
+                                mediaType: library.mediaType || "ebook",
+                                libraryId: libraryId,
+                                createdAt: fileAddedDate
                             }
-                        } catch (e) {}
-                    })();
+                        });
+                        matchedDbBookIds.add(newBook.id);
+                        logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                        console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
+
+                        // Fetch cover artwork asynchronously in background
+                        (async () => {
+                            try {
+                                const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
+                                if (fetchedCover) {
+                                    console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${title}": ${fetchedCover}`);
+                                    await prisma.book.update({
+                                        where: { id: newBook.id },
+                                        data: { coverUrl: fetchedCover }
+                                    }).catch(() => {});
+                                }
+                            } catch (e) {}
+                        })();
+                    } catch (createErr: any) {
+                        logger.addLog("ERROR", "DATABASE", `❌ DB-WRITE FAILED for "${title}" by "${author}": ${createErr.message}`);
+                        console.error(`[SCANNER-ERROR] Failed to save book "${title}" to DB:`, createErr.message);
+                    }
                 } else {
                     matchedDbBookIds.add(existing.id);
                     if (existing.fileSize !== stats.size) {
