@@ -2512,20 +2512,23 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
         console.log(`[SCANNER] 📁 Scanning library "${library.name}" (Type: ${library.mediaType || "ebook"}) at path: "${scanPath}"...`);
 
-        const files = fs.readdirSync(scanPath);
         const isAudiobookLib = library.mediaType === "audiobook";
         const validExtensions = isAudiobookLib
             ? [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".zip", ".rar"]
             : [".pdf", ".epub", ".mobi", ".cbz", ".cbr", ".azw3"];
 
         const foundMediaItems: { fullPath: string, file: string, ext: string, stats: fs.Stats }[] = [];
+        const seenPaths = new Set<string>();
 
         function collectFiles(dir: string, depth = 0) {
-            if (!fs.existsSync(dir)) return;
+            if (!dir || !fs.existsSync(dir)) return;
             try {
                 const entries = fs.readdirSync(dir, { withFileTypes: true });
                 for (const entry of entries) {
                     const fullP = path.join(dir, entry.name);
+                    if (seenPaths.has(fullP.toLowerCase())) continue;
+                    seenPaths.add(fullP.toLowerCase());
+
                     if (entry.isDirectory()) {
                         if (depth < 6) {
                             collectFiles(fullP, depth + 1);
@@ -2546,6 +2549,39 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }
                 }
             } catch (e) {}
+        }
+
+        // Build list of candidate paths to scan for this library
+        const pathsToScan = [scanPath];
+        const parentP = path.dirname(scanPath);
+        if (parentP && parentP !== "/" && parentP !== "." && fs.existsSync(parentP) && !pathsToScan.includes(parentP)) {
+            pathsToScan.push(parentP);
+        }
+        if (isAudiobookLib) {
+            const audioSub = path.join(scanPath, "audiobooks");
+            if (fs.existsSync(audioSub) && !pathsToScan.includes(audioSub)) {
+                pathsToScan.push(audioSub);
+            }
+        }
+        
+        const candidatePool = [
+            "/Userbooks",
+            "/Userbooks/audiobooks",
+            "/Kidsbooks",
+            "/Kyrabooks",
+            "/user/Books",
+            "/user/books",
+            "/audiobooks",
+            "/books"
+        ];
+        for (const cand of candidatePool) {
+            if (cand && fs.existsSync(cand) && !pathsToScan.includes(cand)) {
+                pathsToScan.push(cand);
+            }
+        }
+
+        for (const targetDir of pathsToScan) {
+            collectFiles(targetDir);
         }
 
         collectFiles(scanPath);
