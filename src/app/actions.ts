@@ -2228,9 +2228,9 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
         else title = "The Lord of the Rings";
     }
 
-    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer")) {
         author = "J. K. Rowling";
-        if (lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) title = "Harry Potter and the Sorcerer's Stone";
+        if (lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer") || (lowerTitle.includes("harry potter") && (lowerTitle.includes("01") || lowerTitle.includes("1")))) title = "Harry Potter and the Sorcerer's Stone";
         else if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
         else if (lowerTitle.includes("prisoner of azkaban")) title = "Harry Potter and the Prisoner of Azkaban";
         else if (lowerTitle.includes("goblet of fire")) title = "Harry Potter and the Goblet of Fire";
@@ -2503,7 +2503,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             for (const item of foundMediaItems) {
                 const effBase = getEffectiveBookBaseName(item.fullPath, item.file, item.ext);
                 const parsedMeta = parseFilenameMetadata(effBase);
-                const normKey = (parsedMeta.title || effBase).toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+                let normKey = (parsedMeta.title || effBase).toLowerCase();
+                if (normKey.includes("philosopher") || normKey.includes("sorcerer") || (normKey.includes("harry potter") && (normKey.includes("01") || normKey.includes("1") || normKey.includes("philosopher")))) normKey = "harry potter 1";
+                else normKey = normKey.replace(/[^a-z0-9]/g, "").trim();
 
                 let masterPath = item.fullPath;
                 const parentDir = path.dirname(item.fullPath);
