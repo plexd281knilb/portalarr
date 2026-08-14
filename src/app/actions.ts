@@ -2755,7 +2755,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }
                 }
 
-                let existing = dbBooksByPathLower.get(fullPath.toLowerCase()) || allDbBooksByPathLower.get(fullPath.toLowerCase());
+                const targetMediaType = library.mediaType || "ebook";
+                let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
+                if (!existing) {
+                    const crossMatch = allDbBooksByPathLower.get(fullPath.toLowerCase());
+                    if (crossMatch && (crossMatch.mediaType || "ebook") === targetMediaType) {
+                        existing = crossMatch;
+                    }
+                }
 
                 if (!existing) {
                     const cleanBaseCheck = getEffectiveBookBaseName(fullPath, file, ext);
@@ -2763,8 +2770,11 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     const targetTitleNorm = (parsedMetaCheck.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
 
                     if (targetTitleNorm.length > 3) {
+                        const targetMediaType = library.mediaType || "ebook";
                         existing = allDbBooks.find(b => {
                             if (matchedDbBookIds.has(b.id)) return false;
+                            const dbMediaType = b.mediaType || "ebook";
+                            if (dbMediaType !== targetMediaType) return false;
                             const dbTitleNorm = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
                             return dbTitleNorm === targetTitleNorm;
                         });
