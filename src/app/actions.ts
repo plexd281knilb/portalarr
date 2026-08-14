@@ -2405,44 +2405,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             dbBooksByPathLower.set(b.filePath.toLowerCase(), b);
         }
 
-        // Auto-correct & consolidate any legacy track titles (e.g. "dudley demented", "a peck of owls") into official book title
-        try {
-            const badBooks = await prisma.book.findMany({
-                where: {
-                    libraryId,
-                    OR: [
-                        { title: { contains: "dudley demented" } },
-                        { title: { contains: "Dudley Demented" } },
-                        { title: { contains: "peck of owls" } },
-                        { title: { contains: "Peck of Owls" } },
-                        { title: { contains: "advanced guard" } },
-                        { title: { contains: "grimmauld place" } },
-                        { title: { contains: "AUDIOBOOK" } },
-                        { title: { contains: "UK-2003" } }
-                    ]
-                }
-            });
 
-            if (badBooks.length > 0) {
-                const hdCover = await fetchBookCover("Harry Potter and the Order of the Phoenix", "J. K. Rowling", "audiobook");
-                const primaryBook = badBooks[0];
-                await prisma.book.update({
-                    where: { id: primaryBook.id },
-                    data: {
-                        title: "Harry Potter and the Order of the Phoenix",
-                        author: "J. K. Rowling",
-                        ...(hdCover ? { coverUrl: hdCover } : {})
-                    }
-                });
-
-                if (badBooks.length > 1) {
-                    const extraIds = badBooks.slice(1).map(b => b.id);
-                    await prisma.book.deleteMany({
-                        where: { id: { in: extraIds } }
-                    });
-                }
-            }
-        } catch (e) {}
 
         // Auto-consolidate any duplicate database entries for multi-disc/multi-part audiobooks
         if (library.mediaType === "audiobook") {
@@ -2468,8 +2431,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             totalBytes += (item.fileSize || 0);
                         }
 
-                        const targetTitle = group[0].title.toLowerCase().includes("order of the phoenix") ? "Harry Potter and the Order of the Phoenix" : primary.title;
-                        const targetAuthor = group[0].title.toLowerCase().includes("order of the phoenix") ? "J. K. Rowling" : primary.author;
+                        const targetTitle = primary.title;
+                        const targetAuthor = primary.author;
 
                         await prisma.book.update({
                             where: { id: primary.id },
