@@ -1200,6 +1200,20 @@ export async function getLibraries() {
         }
     }
     
+    for (const lib of libraries) {
+        if (lib.name.toLowerCase().includes("audio") || lib.downloadCategory === "audiobooks") {
+            if (lib.mediaType !== "audiobook") {
+                lib.mediaType = "audiobook";
+                prisma.library.update({
+                    where: { id: lib.id },
+                    data: { mediaType: "audiobook" }
+                }).catch(() => {});
+            }
+        } else if (!lib.mediaType) {
+            lib.mediaType = "ebook";
+        }
+    }
+
     const username = (session?.username || "") as string;
     const email = (session?.email || "") as string;
     const role = (session?.role || "").toUpperCase();

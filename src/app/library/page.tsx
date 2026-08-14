@@ -1924,8 +1924,12 @@ function normalizeBookCardMetadata(book: any) {
         );
     }
 
-    const ebookLibraries = libraries.filter(l => (l.mediaType || "ebook") === "ebook");
-    const audiobookLibraries = libraries.filter(l => l.mediaType === "audiobook");
+    const audiobookLibraries = libraries.filter(l => 
+        l.mediaType === "audiobook" || 
+        l.name.toLowerCase().includes("audio") || 
+        l.downloadCategory === "audiobooks"
+    );
+    const ebookLibraries = libraries.filter(l => !audiobookLibraries.some(a => a.id === l.id));
 
     return (
         <div className="min-h-screen bg-background flex flex-col p-4 sm:p-6 animate-in fade-in duration-500 max-w-7xl mx-auto w-full space-y-6">
