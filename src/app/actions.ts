@@ -1395,6 +1395,9 @@ export async function getLibraryBooks(libraryId?: string) {
         where: { libraryId: { in: targetLibraryIds } },
         orderBy: { createdAt: "desc" }
     });
+
+    console.log(`[GET-LIBRARY-BOOKS] 🚀 Query requested for libraryId="${libraryId || 'all'}" (Resolved Target Libs: [${targetLibraryIds.join(", ")}])`);
+    console.log(`[GET-LIBRARY-BOOKS] 📦 Raw DB records fetched from SQLite: ${books.length}`);
     
     // Instant Deduplication by Title Key
     const titleMap = new Map<string, typeof books[number]>();
