@@ -1412,6 +1412,13 @@ export async function getLibraryBooks(libraryId?: string) {
         else if (normTitle.includes("two towers") || (normTitle.includes("lord of the rings") && (normTitle.includes("02") || normTitle.includes("bk 2") || normTitle.includes("book 2") || normTitle.includes("vol 2")))) normTitle = "two towers";
         else if (normTitle.includes("return of the king") || (normTitle.includes("lord of the rings") && (normTitle.includes("03") || normTitle.includes("bk 3") || normTitle.includes("book 3") || normTitle.includes("vol 3")))) normTitle = "return of the king";
         else if (normTitle.includes("fellowship of the ring") || (normTitle.includes("lord of the rings") && (normTitle.includes("01") || normTitle.includes("bk 1") || normTitle.includes("book 1") || normTitle.includes("vol 1")))) normTitle = "fellowship of the ring";
+        else if (normTitle.includes("philosopher") || normTitle.includes("sorcerer") || (normTitle.includes("harry potter") && (normTitle.includes("01") || normTitle.includes("1") || normTitle.includes("philosopher")))) normTitle = "harry potter 1";
+        else if (normTitle.includes("chamber of secrets")) normTitle = "harry potter 2";
+        else if (normTitle.includes("prisoner of azkaban")) normTitle = "harry potter 3";
+        else if (normTitle.includes("goblet of fire")) normTitle = "harry potter 4";
+        else if (normTitle.includes("order of the phoenix")) normTitle = "harry potter 5";
+        else if (normTitle.includes("half-blood prince")) normTitle = "harry potter 6";
+        else if (normTitle.includes("deathly hallows")) normTitle = "harry potter 7";
         else if (normTitle.includes("project hail mary") || normTitle.includes("hail mary")) normTitle = "project hail mary";
         else normTitle = normTitle.replace(/[^a-z0-9]/g, "");
 
@@ -1455,7 +1462,7 @@ export async function getLibraryBooks(libraryId?: string) {
              .replace(/\s+/g, " ")
              .trim();
 
-        if (a === "Unknown Author" || t.includes("[") || t.includes("]") || t.toLowerCase().includes("alex 011") || t.toLowerCase().includes("prince of the nile") || t.toLowerCase().includes("lord of the rings")) {
+        if (a === "Unknown Author" || t.includes("[") || t.includes("]") || t.toLowerCase().includes("alex 011") || t.toLowerCase().includes("prince of the nile") || t.toLowerCase().includes("lord of the rings") || t.toLowerCase().includes("harry potter") || t.toLowerCase().includes("philosopher")) {
             const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
             const parsed = parseFilenameMetadata(rawTarget);
             if (parsed.title) t = parsed.title;
@@ -1465,7 +1472,10 @@ export async function getLibraryBooks(libraryId?: string) {
         const lowerT = t.toLowerCase();
         const lowerA = a.toLowerCase();
 
-        if (lowerT.includes("two towers") || (lowerT.includes("lord of the rings") && (lowerT.includes("02") || lowerT.includes("book 2") || lowerT.includes("vol 2")))) {
+        if (lowerT.includes("philosopher") || lowerT.includes("sorcerer") || (lowerT.includes("harry potter") && (lowerT.includes("01") || lowerT.includes("1") || lowerT.includes("philosopher")))) {
+            t = "Harry Potter and the Sorcerer's Stone";
+            a = "J. K. Rowling";
+        } else if (lowerT.includes("two towers") || (lowerT.includes("lord of the rings") && (lowerT.includes("02") || lowerT.includes("book 2") || lowerT.includes("vol 2")))) {
             t = "The Two Towers";
             a = "J. R. R. Tolkien";
         } else if (lowerT.includes("return of the king") || (lowerT.includes("lord of the rings") && (lowerT.includes("03") || lowerT.includes("book 3") || lowerT.includes("vol 3")))) {
@@ -2007,18 +2017,21 @@ export async function processEpubForKindle(filePath: string): Promise<string> {
 export async function scanLibrary(libraryId?: string): Promise<{ success: boolean, error?: string, message?: string, count?: number }> {
     try {
         await verifyUser();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const enableAi = !!settings?.aiAutoResolve;
+
         if (!libraryId || libraryId === "all") {
             const libraries = await prisma.library.findMany();
             let totalAdded = 0;
             for (const lib of libraries) {
-                const res: any = await scanLibraryInternal(lib.id);
+                const res: any = await scanLibraryInternal(lib.id, { enableAi });
                 if (res && res.count) {
                     totalAdded += res.count;
                 }
             }
             return { success: true, message: `Scanned all ${libraries.length} libraries. Synced ${totalAdded} media files.`, count: totalAdded };
         }
-        const res: any = await scanLibraryInternal(libraryId);
+        const res: any = await scanLibraryInternal(libraryId, { enableAi });
         return { success: res.success, error: res.error, count: res.count || 0 };
     } catch (err: any) {
         console.error("Failed to scan library:", err);
@@ -2240,7 +2253,7 @@ function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): 
     return rawBase;
 }
 
-export async function scanLibraryInternal(libraryId: string) {
+export async function scanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
     });
@@ -2661,15 +2674,17 @@ export async function scanLibraryInternal(libraryId: string) {
                     let series: string | null = null;
                     let volumeNumber: string | null = null;
 
-                    try {
-                        const aiMeta = await resolveMetadataWithAI(cleanBase, library.mediaType || "ebook");
-                        if (aiMeta) {
-                            if (aiMeta.title) title = aiMeta.title;
-                            if (aiMeta.author && aiMeta.author !== "Unknown Author") author = aiMeta.author;
-                            if (aiMeta.series) series = aiMeta.series;
-                            if (aiMeta.volumeNumber) volumeNumber = String(aiMeta.volumeNumber);
-                        }
-                    } catch (e) {}
+                    if (options?.enableAi) {
+                        try {
+                            const aiMeta = await resolveMetadataWithAI(cleanBase, library.mediaType || "ebook");
+                            if (aiMeta) {
+                                if (aiMeta.title) title = aiMeta.title;
+                                if (aiMeta.author && aiMeta.author !== "Unknown Author") author = aiMeta.author;
+                                if (aiMeta.series) series = aiMeta.series;
+                                if (aiMeta.volumeNumber) volumeNumber = String(aiMeta.volumeNumber);
+                            }
+                        } catch (e) {}
+                    }
 
                     const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
                         ? stats.birthtime
