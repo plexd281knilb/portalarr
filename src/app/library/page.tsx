@@ -236,7 +236,11 @@ function BookLibraryPageContent() {
             if (topEbook) setSelectedLibrary(topEbook);
             setReqMediaType("ebook");
         } else if (val === "audiobooks") {
-            const topAudio = libraries.find((l: any) => l.mediaType === "audiobook");
+            const topAudio = libraries.find((l: any) => 
+                l.mediaType === "audiobook" || 
+                l.name.toLowerCase().includes("audio") || 
+                l.downloadCategory === "audiobooks"
+            );
             if (topAudio) setSelectedLibrary(topAudio);
             setReqMediaType("audiobook");
         }
@@ -903,7 +907,11 @@ function normalizeBookCardMetadata(book: any) {
                     const savedTab = typeof window !== "undefined" ? localStorage.getItem("book-library-active-tab") : null;
                     const initialTab = activeTabParam || savedTab || "libs";
                     if (initialTab === "audiobooks") {
-                        const topAudio = libs.find((l: any) => l.mediaType === "audiobook") || libs[0];
+                        const topAudio = libs.find((l: any) => 
+                            l.mediaType === "audiobook" || 
+                            l.name.toLowerCase().includes("audio") || 
+                            l.downloadCategory === "audiobooks"
+                        ) || libs[0];
                         setSelectedLibrary(topAudio);
                     } else {
                         const topEbook = libs.find((l: any) => (l.mediaType || "ebook") === "ebook") || libs[0];
@@ -957,7 +965,11 @@ function normalizeBookCardMetadata(book: any) {
             }
         } else if (activeTab === "audiobooks") {
             if (!selectedLibrary || (selectedLibrary.mediaType || "ebook") === "ebook") {
-                const topAudio = libraries.find((l: any) => l.mediaType === "audiobook");
+                const topAudio = libraries.find((l: any) => 
+                    l.mediaType === "audiobook" || 
+                    l.name.toLowerCase().includes("audio") || 
+                    l.downloadCategory === "audiobooks"
+                );
                 if (topAudio) setSelectedLibrary(topAudio);
             }
         }
