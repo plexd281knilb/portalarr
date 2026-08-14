@@ -2537,7 +2537,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             for (const item of foundMediaItems) {
                 const effBase = getEffectiveBookBaseName(item.fullPath, item.file, item.ext);
                 const parsedMeta = parseFilenameMetadata(effBase);
-                let normKey = (parsedMeta.title || effBase).toLowerCase();
+                let normKey = (parsedMeta.title || effBase).replace(/\b(?:19|20)\d\d\b/g, "").toLowerCase();
                 if (normKey.includes("chamber of secrets")) normKey = "harry potter 2";
                 else if (normKey.includes("prisoner of azkaban")) normKey = "harry potter 3";
                 else if (normKey.includes("goblet of fire")) normKey = "harry potter 4";
@@ -2875,7 +2875,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
             const titleMap = new Map<string, typeof currentDbBooks>();
             for (const b of currentDbBooks) {
-                let cleanKey = (b.title || "").toLowerCase();
+                let cleanKey = (b.title || "").replace(/\b(?:19|20)\d\d\b/g, "").toLowerCase();
                 if (cleanKey.includes("hobbit")) cleanKey = "hobbit";
                 else if (cleanKey.includes("two towers") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("02") || cleanKey.includes("bk 2") || cleanKey.includes("book 2") || cleanKey.includes("vol 2")))) cleanKey = "two towers";
                 else if (cleanKey.includes("return of the king") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("03") || cleanKey.includes("bk 3") || cleanKey.includes("book 3") || cleanKey.includes("vol 3")))) cleanKey = "return of the king";
