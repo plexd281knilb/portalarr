@@ -2386,6 +2386,15 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         where: { id: libraryId }
     });
     if (!library) return { success: false, error: "Library entry not found in database" };
+
+    if (library.name.toLowerCase().includes("audio") && library.mediaType !== "audiobook") {
+        console.log(`[SCANNER-REPAIR] 🔧 Auto-repairing library "${library.name}" mediaType to "audiobook"...`);
+        await prisma.library.update({
+            where: { id: libraryId },
+            data: { mediaType: "audiobook", downloadCategory: "audiobooks" }
+        }).catch(() => {});
+        library.mediaType = "audiobook";
+    }
     
     let scanPath = library.path || "";
     if (!scanPath || !fs.existsSync(scanPath)) {
