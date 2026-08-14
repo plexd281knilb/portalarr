@@ -1407,21 +1407,7 @@ export async function getLibraryBooks(libraryId?: string) {
             continue;
         }
 
-        let normTitle = rawTitle;
-        if (normTitle.includes("hobbit")) normTitle = "hobbit";
-        else if (normTitle.includes("two towers") || (normTitle.includes("lord of the rings") && (normTitle.includes("02") || normTitle.includes("bk 2") || normTitle.includes("book 2") || normTitle.includes("vol 2")))) normTitle = "two towers";
-        else if (normTitle.includes("return of the king") || (normTitle.includes("lord of the rings") && (normTitle.includes("03") || normTitle.includes("bk 3") || normTitle.includes("book 3") || normTitle.includes("vol 3")))) normTitle = "return of the king";
-        else if (normTitle.includes("fellowship of the ring") || (normTitle.includes("lord of the rings") && (normTitle.includes("01") || normTitle.includes("bk 1") || normTitle.includes("book 1") || normTitle.includes("vol 1")))) normTitle = "fellowship of the ring";
-        else if (normTitle.includes("chamber of secrets")) normTitle = "harry potter 2";
-        else if (normTitle.includes("prisoner of azkaban")) normTitle = "harry potter 3";
-        else if (normTitle.includes("goblet of fire")) normTitle = "harry potter 4";
-        else if (normTitle.includes("order of the phoenix")) normTitle = "harry potter 5";
-        else if (normTitle.includes("half-blood prince") || normTitle.includes("half blood prince")) normTitle = "harry potter 6";
-        else if (normTitle.includes("deathly hallows")) normTitle = "harry potter 7";
-        else if (normTitle.includes("philosopher") || normTitle.includes("sorcerer") || (normTitle.includes("harry potter") && (normTitle.includes("01") || normTitle.includes("bk 1") || normTitle.includes("book 1")))) normTitle = "harry potter 1";
-        else if (normTitle.includes("project hail mary") || normTitle.includes("hail mary")) normTitle = "project hail mary";
-        else normTitle = normTitle.replace(/[^a-z0-9]/g, "");
-
+        let normTitle = rawTitle.replace(/[^a-z0-9]/g, "");
         if (!normTitle) continue;
 
         const dedupKey = `${b.libraryId}_${b.mediaType || "ebook"}_${normTitle}`;
@@ -2690,7 +2676,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         existing = dbBooks.find(b => {
                             if (matchedDbBookIds.has(b.id)) return false;
                             const dbTitleNorm = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
-                            return dbTitleNorm === targetTitleNorm || dbTitleNorm.includes(targetTitleNorm) || targetTitleNorm.includes(dbTitleNorm);
+                            return dbTitleNorm === targetTitleNorm;
                         });
                     }
                 }
