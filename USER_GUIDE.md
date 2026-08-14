@@ -65,9 +65,8 @@ Click the **`+ Request Ebook / Audiobook`** button on the Library page.
 1. Start typing the **Title** or **Author**. Instant autocomplete suggestions from the central book registry will appear.
 2. Select the matching book to auto-fill title, author, publish year, and cover artwork.
 
-### Step 3: Choose Format & Type
+### Step 3: Choose Format
 * **Format**: Select **📖 Ebook** or **🎧 Audiobook**.
-* **Request Type**: Select **Single Book** or **Entire Series**.
 
 ### Step 4: Submit & Track Progress
 Click **Submit Request**. You can track its live progress under the **Requests** tab:
