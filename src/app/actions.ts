@@ -2557,26 +2557,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             } catch (e) {}
         }
 
-        // Build list of paths to scan strictly scoped to this library's path
+        // Build list of paths to scan strictly scoped to this library's configured path
         const pathsToScan = [scanPath];
-        const parentP = path.dirname(scanPath);
-        
-        // If scanPath is a subfolder like /Userbooks/audiobooks, also scan parent /Userbooks
-        if (parentP && parentP !== "/" && parentP !== "." && fs.existsSync(parentP)) {
-            const parentName = path.basename(parentP).toLowerCase();
-            const scanName = path.basename(scanPath).toLowerCase();
-            if ((scanName === "audiobooks" || scanName === "audio") && (parentName.includes("userbooks") || parentName.includes("books"))) {
-                if (!pathsToScan.includes(parentP)) pathsToScan.push(parentP);
-            }
-        }
-        
-        // If scanning root /Userbooks, also check subfolder /Userbooks/audiobooks
-        if (isAudiobookLib) {
-            const audioSub = path.join(scanPath, "audiobooks");
-            if (fs.existsSync(audioSub) && !pathsToScan.includes(audioSub)) {
-                pathsToScan.push(audioSub);
-            }
-        }
 
         for (const targetDir of pathsToScan) {
             collectFiles(targetDir);
