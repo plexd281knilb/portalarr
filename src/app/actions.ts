@@ -2222,6 +2222,7 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     clean = clean.replace(/\s*\(Unabridged\)/gi, "");
     clean = clean.replace(/\s*\(Narrated by [^)]+\)/gi, "");
     clean = clean.replace(/Thank\s*you/gi, "");
+    clean = clean.replace(/^(?:Kidsbooks|Userbooks|Kyrabooks|Books|Downloads|Audiobooks|Audio)\s*[-_]\s*/i, "");
 
     // Strip empty parentheses and brackets left behind
     clean = clean.replace(/\[[^\]]+\]/g, " ");
