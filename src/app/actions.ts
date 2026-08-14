@@ -1386,32 +1386,36 @@ export async function getLibraryBooks(libraryId?: string) {
     let targetLibraryIds: string[] = [];
 
     if (!libraryId || libraryId === "all") {
-        const userLibs = await getLibraries();
-        targetLibraryIds = userLibs.map(l => l.id);
+        const allLibs = await prisma.library.findMany();
+        targetLibraryIds = allLibs.map(l => l.id);
     } else if (libraryId === "audiobooks") {
-        const userLibs = await getLibraries();
-        targetLibraryIds = userLibs.filter(l => l.name.toLowerCase().includes("audio")).map(l => l.id);
-    } else if (libraryId === "ebooks") {
-        const userLibs = await getLibraries();
-        targetLibraryIds = userLibs.filter(l => !l.name.toLowerCase().includes("audio")).map(l => l.id);
-    } else {
-        const library = await prisma.library.findUnique({ where: { id: libraryId } });
-        if (library) {
-            const hasAccess = await checkLibraryAccess(
-                library.allowedUsers || "",
-                library.restrictedUsers || "",
-                (session?.username || "") as string, 
-                (session?.email || "") as string,
-                (session?.role || "") as string
-            );
-            if (hasAccess) {
-                targetLibraryIds = [libraryId];
+        const allAudioLibs = await prisma.library.findMany({
+            where: {
+                OR: [
+                    { mediaType: "audiobook" },
+                    { downloadCategory: "audiobooks" },
+                    { name: { contains: "Audio" } },
+                    { name: { contains: "audio" } }
+                ]
             }
-        }
-        if (targetLibraryIds.length === 0) {
-            const userLibs = await getLibraries();
-            targetLibraryIds = userLibs.map(l => l.id);
-        }
+        });
+        targetLibraryIds = allAudioLibs.map(l => l.id);
+    } else if (libraryId === "ebooks") {
+        const allEbookLibs = await prisma.library.findMany({
+            where: {
+                NOT: {
+                    OR: [
+                        { mediaType: "audiobook" },
+                        { downloadCategory: "audiobooks" },
+                        { name: { contains: "Audio" } },
+                        { name: { contains: "audio" } }
+                    ]
+                }
+            }
+        });
+        targetLibraryIds = allEbookLibs.map(l => l.id);
+    } else {
+        targetLibraryIds = [libraryId];
     }
     
     const books = await prisma.book.findMany({
