@@ -2223,15 +2223,18 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
                 let partB = parts.slice(1).join(" - ");
                 partB = partB.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
 
-                const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partB) || /^[A-Z]\.?\s*[A-Z]?[a-z]+$/i.test(partB);
-                const isPartAAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partA) || /^[A-Z][a-z]+\s+[A-Z][a-z]+$/i.test(partA);
+                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/i;
+                const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partB);
+                const isPartAAuthor = authorPattern.test(partA);
 
                 if (isPartBAuthor && !isPartAAuthor) {
                     title = partA;
                     author = partB;
-                } else {
+                } else if (isPartAAuthor) {
                     author = partA;
                     title = partB;
+                } else {
+                    title = clean;
                 }
             }
         }
@@ -2516,8 +2519,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 else {
                     let cleanStr = rawLower
                         .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
-                        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ")
-                        .replace(/\b(?:18|19|20)\d\d\b/g, " ");
+                        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|abridged|audible|narrated|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ");
 
                     if (cleanStr.includes("harry potter")) {
                         if (cleanStr.includes("01") || cleanStr.includes("bk 1") || cleanStr.includes("book 1") || cleanStr.includes("vol 1")) normKey = "harry potter 1";
@@ -2876,8 +2878,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 else {
                     let cleanStr = rawLower
                         .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
-                        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ")
-                        .replace(/\b(?:18|19|20)\d\d\b/g, " ");
+                        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|abridged|audible|narrated|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ");
 
                     if (cleanStr.includes("harry potter")) {
                         if (cleanStr.includes("01") || cleanStr.includes("bk 1") || cleanStr.includes("book 1") || cleanStr.includes("vol 1")) cleanKey = "harry potter 1";
