@@ -2907,6 +2907,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     if (existing.fileSize !== stats.size) updateData.fileSize = stats.size;
                     if (existing.filePath !== fullPath) updateData.filePath = fullPath;
                     if (existing.mediaType !== (library.mediaType || "ebook")) updateData.mediaType = library.mediaType || "ebook";
+                    
+                    const newFileType = ext.replace(".", "") || "folder";
+                    if (existing.fileType !== newFileType) updateData.fileType = newFileType;
 
                     if (Object.keys(updateData).length > 0) {
                         logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Reassigned/Updated book "${existing.title}" (ID: ${existing.id}, Target Lib: "${library.name}", New Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
