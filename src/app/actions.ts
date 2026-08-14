@@ -1390,19 +1390,30 @@ export async function getLibraryBooks(libraryId?: string) {
     if (!libraryId || libraryId === "all") {
         const userLibs = await getLibraries();
         targetLibraryIds = userLibs.map(l => l.id);
+    } else if (libraryId === "audiobooks") {
+        const userLibs = await getLibraries();
+        targetLibraryIds = userLibs.filter(l => l.mediaType === "audiobook" || l.name.toLowerCase().includes("audio")).map(l => l.id);
+    } else if (libraryId === "ebooks") {
+        const userLibs = await getLibraries();
+        targetLibraryIds = userLibs.filter(l => (l.mediaType || "ebook") === "ebook" && !l.name.toLowerCase().includes("audio")).map(l => l.id);
     } else {
         const library = await prisma.library.findUnique({ where: { id: libraryId } });
-        if (!library) throw new Error("Library not found");
-
-        const hasAccess = await checkLibraryAccess(
-            library.allowedUsers || "",
-            library.restrictedUsers || "",
-            (session?.username || "") as string, 
-            (session?.email || "") as string,
-            (session?.role || "") as string
-        );
-        if (!hasAccess) throw new Error("Unauthorized access to this library");
-        targetLibraryIds = [libraryId];
+        if (library) {
+            const hasAccess = await checkLibraryAccess(
+                library.allowedUsers || "",
+                library.restrictedUsers || "",
+                (session?.username || "") as string, 
+                (session?.email || "") as string,
+                (session?.role || "") as string
+            );
+            if (hasAccess) {
+                targetLibraryIds = [libraryId];
+            }
+        }
+        if (targetLibraryIds.length === 0) {
+            const userLibs = await getLibraries();
+            targetLibraryIds = userLibs.map(l => l.id);
+        }
     }
     
     const books = await prisma.book.findMany({

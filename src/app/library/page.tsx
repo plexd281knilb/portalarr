@@ -1046,10 +1046,14 @@ function normalizeBookCardMetadata(book: any) {
     useEffect(() => {
         if (selectedLibrary) {
             loadBooks(selectedLibrary.id);
+        } else if (activeTab === "audiobooks") {
+            loadBooks("audiobooks");
+        } else if (activeTab === "libs") {
+            loadBooks("ebooks");
         } else {
             setBooks([]);
         }
-    }, [selectedLibrary]);
+    }, [selectedLibrary, activeTab]);
 
     async function loadBooks(libId: string) {
         setBooksLoading(true);
