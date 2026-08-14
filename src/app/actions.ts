@@ -2318,6 +2318,10 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
         else if (lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer") || (lowerTitle.includes("harry potter") && (lowerTitle.includes("01") || lowerTitle.includes("bk 1") || lowerTitle.includes("book 1")))) title = "Harry Potter and the Sorcerer's Stone";
     }
 
+    if (!title || !title.trim()) {
+        title = clean || rawBase.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
+    }
+
     return {
         title: title || clean,
         author,
