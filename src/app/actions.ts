@@ -2537,19 +2537,38 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             for (const item of foundMediaItems) {
                 const effBase = getEffectiveBookBaseName(item.fullPath, item.file, item.ext);
                 const parsedMeta = parseFilenameMetadata(effBase);
-                let normKey = (parsedMeta.title || effBase)
-                    .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
-                    .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b)[-_](?:18|19|20)\d\d\b/gi, " ")
-                    .replace(/[-_](?:18|19|20)\d\d[-_](?:ind|retail|web|decipher|repack|mp3|flac|m4b)\b/gi, " ")
-                    .toLowerCase();
-                if (normKey.includes("chamber of secrets")) normKey = "harry potter 2";
-                else if (normKey.includes("prisoner of azkaban")) normKey = "harry potter 3";
-                else if (normKey.includes("goblet of fire")) normKey = "harry potter 4";
-                else if (normKey.includes("order of the phoenix")) normKey = "harry potter 5";
-                else if (normKey.includes("half-blood prince") || normKey.includes("half blood prince")) normKey = "harry potter 6";
-                else if (normKey.includes("deathly hallows")) normKey = "harry potter 7";
-                else if (normKey.includes("philosopher") || normKey.includes("sorcerer") || (normKey.includes("harry potter") && (normKey.includes("01") || normKey.includes("bk 1") || normKey.includes("book 1")))) normKey = "harry potter 1";
-                else normKey = normKey.replace(/[^a-z0-9]/g, "").trim();
+                let rawLower = (parsedMeta.title || effBase).toLowerCase();
+                let normKey = "";
+                if (rawLower.includes("hobbit")) normKey = "hobbit";
+                else if (rawLower.includes("two towers")) normKey = "two towers";
+                else if (rawLower.includes("return of the king")) normKey = "return of the king";
+                else if (rawLower.includes("fellowship of the ring")) normKey = "fellowship of the ring";
+                else if (rawLower.includes("philosopher") || rawLower.includes("sorcerer")) normKey = "harry potter 1";
+                else if (rawLower.includes("chamber of secrets")) normKey = "harry potter 2";
+                else if (rawLower.includes("prisoner of azkaban")) normKey = "harry potter 3";
+                else if (rawLower.includes("goblet of fire")) normKey = "harry potter 4";
+                else if (rawLower.includes("order of the phoenix")) normKey = "harry potter 5";
+                else if (rawLower.includes("half-blood prince") || rawLower.includes("half blood prince")) normKey = "harry potter 6";
+                else if (rawLower.includes("deathly hallows")) normKey = "harry potter 7";
+                else {
+                    let cleanStr = rawLower
+                        .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
+                        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ")
+                        .replace(/\b(?:18|19|20)\d\d\b/g, " ");
+
+                    if (cleanStr.includes("harry potter")) {
+                        if (cleanStr.includes("01") || cleanStr.includes("bk 1") || cleanStr.includes("book 1") || cleanStr.includes("vol 1")) normKey = "harry potter 1";
+                        else if (cleanStr.includes("02") || cleanStr.includes("bk 2") || cleanStr.includes("book 2") || cleanStr.includes("vol 2")) normKey = "harry potter 2";
+                        else if (cleanStr.includes("03") || cleanStr.includes("bk 3") || cleanStr.includes("book 3") || cleanStr.includes("vol 3")) normKey = "harry potter 3";
+                        else if (cleanStr.includes("04") || cleanStr.includes("bk 4") || cleanStr.includes("book 4") || cleanStr.includes("vol 4")) normKey = "harry potter 4";
+                        else if (cleanStr.includes("05") || cleanStr.includes("bk 5") || cleanStr.includes("book 5") || cleanStr.includes("vol 5")) normKey = "harry potter 5";
+                        else if (cleanStr.includes("06") || cleanStr.includes("bk 6") || cleanStr.includes("book 6") || cleanStr.includes("vol 6")) normKey = "harry potter 6";
+                        else if (cleanStr.includes("07") || cleanStr.includes("bk 7") || cleanStr.includes("book 7") || cleanStr.includes("vol 7")) normKey = "harry potter 7";
+                        else normKey = cleanStr.replace(/[^a-z0-9]/g, "").trim();
+                    } else {
+                        normKey = cleanStr.replace(/[^a-z0-9]/g, "").trim();
+                    }
+                }
 
                 let masterPath = item.fullPath;
                 const parentDir = path.dirname(item.fullPath);
@@ -2879,18 +2898,38 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
             const titleMap = new Map<string, typeof currentDbBooks>();
             for (const b of currentDbBooks) {
-                let cleanKey = (b.title || "")
-                    .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
-                    .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b)[-_](?:18|19|20)\d\d\b/gi, " ")
-                    .replace(/[-_](?:18|19|20)\d\d[-_](?:ind|retail|web|decipher|repack|mp3|flac|m4b)\b/gi, " ")
-                    .toLowerCase();
-                if (cleanKey.includes("hobbit")) cleanKey = "hobbit";
-                else if (cleanKey.includes("two towers") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("02") || cleanKey.includes("bk 2") || cleanKey.includes("book 2") || cleanKey.includes("vol 2")))) cleanKey = "two towers";
-                else if (cleanKey.includes("return of the king") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("03") || cleanKey.includes("bk 3") || cleanKey.includes("book 3") || cleanKey.includes("vol 3")))) cleanKey = "return of the king";
-                else if (cleanKey.includes("fellowship of the ring") || (cleanKey.includes("lord of the rings") && (cleanKey.includes("01") || cleanKey.includes("bk 1") || cleanKey.includes("book 1") || cleanKey.includes("vol 1")))) cleanKey = "fellowship of the ring";
-                else if (cleanKey.includes("philosopher") || cleanKey.includes("sorcerer") || (cleanKey.includes("harry potter") && (cleanKey.includes("01") || cleanKey.includes("bk 1") || cleanKey.includes("book 1") || cleanKey.includes("vol 1")))) cleanKey = "harry potter 1";
-                else if (cleanKey.includes("chamber of secrets") || (cleanKey.includes("harry potter") && (cleanKey.includes("02") || cleanKey.includes("bk 2") || cleanKey.includes("book 2") || cleanKey.includes("vol 2")))) cleanKey = "harry potter 2";
-                else cleanKey = cleanKey.replace(/[^a-z0-9]/g, "").trim();
+                let rawLower = (b.title || "").toLowerCase();
+                let cleanKey = "";
+                if (rawLower.includes("hobbit")) cleanKey = "hobbit";
+                else if (rawLower.includes("two towers")) cleanKey = "two towers";
+                else if (rawLower.includes("return of the king")) cleanKey = "return of the king";
+                else if (rawLower.includes("fellowship of the ring")) cleanKey = "fellowship of the ring";
+                else if (rawLower.includes("philosopher") || rawLower.includes("sorcerer")) cleanKey = "harry potter 1";
+                else if (rawLower.includes("chamber of secrets")) cleanKey = "harry potter 2";
+                else if (rawLower.includes("prisoner of azkaban")) cleanKey = "harry potter 3";
+                else if (rawLower.includes("goblet of fire")) cleanKey = "harry potter 4";
+                else if (rawLower.includes("order of the phoenix")) cleanKey = "harry potter 5";
+                else if (rawLower.includes("half-blood prince") || rawLower.includes("half blood prince")) cleanKey = "harry potter 6";
+                else if (rawLower.includes("deathly hallows")) cleanKey = "harry potter 7";
+                else {
+                    let cleanStr = rawLower
+                        .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
+                        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ")
+                        .replace(/\b(?:18|19|20)\d\d\b/g, " ");
+
+                    if (cleanStr.includes("harry potter")) {
+                        if (cleanStr.includes("01") || cleanStr.includes("bk 1") || cleanStr.includes("book 1") || cleanStr.includes("vol 1")) cleanKey = "harry potter 1";
+                        else if (cleanStr.includes("02") || cleanStr.includes("bk 2") || cleanStr.includes("book 2") || cleanStr.includes("vol 2")) cleanKey = "harry potter 2";
+                        else if (cleanStr.includes("03") || cleanStr.includes("bk 3") || cleanStr.includes("book 3") || cleanStr.includes("vol 3")) cleanKey = "harry potter 3";
+                        else if (cleanStr.includes("04") || cleanStr.includes("bk 4") || cleanStr.includes("book 4") || cleanStr.includes("vol 4")) cleanKey = "harry potter 4";
+                        else if (cleanStr.includes("05") || cleanStr.includes("bk 5") || cleanStr.includes("book 5") || cleanStr.includes("vol 5")) cleanKey = "harry potter 5";
+                        else if (cleanStr.includes("06") || cleanStr.includes("bk 6") || cleanStr.includes("book 6") || cleanStr.includes("vol 6")) cleanKey = "harry potter 6";
+                        else if (cleanStr.includes("07") || cleanStr.includes("bk 7") || cleanStr.includes("book 7") || cleanStr.includes("vol 7")) cleanKey = "harry potter 7";
+                        else cleanKey = cleanStr.replace(/[^a-z0-9]/g, "").trim();
+                    } else {
+                        cleanKey = cleanStr.replace(/[^a-z0-9]/g, "").trim();
+                    }
+                }
 
                 if (!cleanKey) continue;
                 if (!titleMap.has(cleanKey)) titleMap.set(cleanKey, []);
