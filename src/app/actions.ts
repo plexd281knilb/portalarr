@@ -11,6 +11,7 @@ import prisma from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
+import { logger } from "@/lib/logger";
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -1462,6 +1463,7 @@ export async function getLibraryBooks(libraryId?: string) {
         orderBy: { createdAt: "desc" }
     });
 
+    logger.addLog("INFO", "API", `📥 GET /api/books requested for libraryId="${libraryId || 'all'}" (Target Libs: [${targetLibraryIds.join(", ")}])`);
     console.log(`[GET-LIBRARY-BOOKS] 🚀 Query requested for libraryId="${libraryId || 'all'}" (Resolved Target Libs: [${targetLibraryIds.join(", ")}])`);
     console.log(`[GET-LIBRARY-BOOKS] 📦 Raw DB records fetched from SQLite: ${books.length}`);
     
@@ -2824,6 +2826,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         }
                     });
                     matchedDbBookIds.add(newBook.id);
+                    logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
                     console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
 
                     // Fetch cover artwork asynchronously in background
@@ -2842,6 +2845,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 } else {
                     matchedDbBookIds.add(existing.id);
                     if (existing.fileSize !== stats.size) {
+                        logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" (ID: ${existing.id}, New Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
                         await prisma.book.update({
                             where: { id: existing.id },
                             data: { fileSize: stats.size }
@@ -2887,6 +2891,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         for (const dbBook of dbBooks) {
             if (!matchedDbBookIds.has(dbBook.id)) {
                 try {
+                    logger.addLog("WARN", "DATABASE", `🗑️ DB-DELETE: Purged missing book "${dbBook.title}" (ID: ${dbBook.id}) from SQLite.`);
                     await prisma.book.deleteMany({
                         where: { id: dbBook.id }
                     });
@@ -5815,4 +5820,35 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
             }
         };
     }
+}
+
+export async function getSystemLogsAction() {
+    return logger.getLogs();
+}
+
+export async function clearSystemLogsAction() {
+    await verifyAdmin();
+    logger.clearLogs();
+    return { success: true };
+}
+
+export async function dumpEntireDatabaseAction() {
+    await verifyAdmin();
+    const libraries = await prisma.library.findMany();
+    const books = await prisma.book.findMany();
+    const requests = await prisma.bookRequest.findMany();
+    const users = await prisma.user.findMany({ select: { id: true, username: true, role: true, status: true } });
+
+    logger.addLog("SYSTEM", "DATABASE", `=================== DUMPING ENTIRE SQLITE DATABASE ===================`);
+    logger.addLog("SYSTEM", "DATABASE", `📚 Libraries Count: ${libraries.length}`);
+    libraries.forEach(l => logger.addLog("INFO", "DATABASE", `  - [Lib ID: ${l.id}] Name: "${l.name}" | Path: "${l.path}" | MediaType: ${l.mediaType}`));
+    
+    logger.addLog("SYSTEM", "DATABASE", `📖 Books Count: ${books.length}`);
+    books.forEach(b => logger.addLog("INFO", "DATABASE", `  - [Book ID: ${b.id}] Title: "${b.title}" | Author: "${b.author}" | Path: "${b.filePath}" | Size: ${(((b.fileSize || 0)) / 1024 / 1024).toFixed(2)} MB`));
+    
+    logger.addLog("SYSTEM", "DATABASE", `👥 Users Count: ${users.length}`);
+    users.forEach(u => logger.addLog("INFO", "DATABASE", `  - [User ID: ${u.id}] Username: "${u.username}" | Role: ${u.role} | Status: ${u.status}`));
+
+    logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
+    return { librariesCount: libraries.length, booksCount: books.length, usersCount: users.length };
 }

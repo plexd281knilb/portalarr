@@ -27,11 +27,12 @@ import {
     Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, 
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
-    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff
+    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
+import SystemLogsViewer from "@/components/system-logs-viewer";
 
 export default function SettingsPage() {
     return (
@@ -344,7 +345,7 @@ function SettingsPageContent() {
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto p-1 max-w-4xl bg-muted/40 border border-muted/60 rounded-xl">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1 max-w-5xl bg-muted/40 border border-muted/60 rounded-xl">
                     <TabsTrigger value="general" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
                         <Sliders className="h-4 w-4 text-primary shrink-0" />
                         <span>General & Email</span>
@@ -360,6 +361,10 @@ function SettingsPageContent() {
                     <TabsTrigger value="beta" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
                         <Beaker className="h-4 w-4 text-purple-400 shrink-0" />
                         <span>Beta & Announcements</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="logs" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
+                        <Terminal className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <span>Live System Logs</span>
                     </TabsTrigger>
                 </TabsList>
                 
@@ -1179,6 +1184,10 @@ function SettingsPageContent() {
                             </CardContent>
                         </Card>
                     </div>
+                </TabsContent>
+
+                <TabsContent value="logs">
+                    <SystemLogsViewer />
                 </TabsContent>
             </Tabs>
         </div>

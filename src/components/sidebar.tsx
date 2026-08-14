@@ -14,7 +14,8 @@ import {
   LogOut,
   LifeBuoy,
   BookOpen,
-  User
+  User,
+  Terminal
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -66,12 +67,21 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
             </Link>
 
             {isAdmin && (
-              <Link href="/settings">
-                <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
-                  <Settings className="mr-2 h-4 w-4" />
-                  System Settings
-                </Button>
-              </Link>
+              <>
+                <Link href="/settings">
+                  <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
+                    <Settings className="mr-2 h-4 w-4" />
+                    System Settings
+                  </Button>
+                </Link>
+
+                <Link href="/settings?tab=logs">
+                  <Button variant={pathname.includes("tab=logs") ? "secondary" : "ghost"} className="w-full justify-start text-emerald-400 hover:text-emerald-300">
+                    <Terminal className="mr-2 h-4 w-4 text-emerald-400" />
+                    Live System Logs
+                  </Button>
+                </Link>
+              </>
             )}
           </div>
         </div>
