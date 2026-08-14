@@ -2581,67 +2581,82 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         let finalMediaItems = foundMediaItems;
         if (isAudiobookLib) {
             const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: fs.Stats }>();
-            const libPathResolved = path.resolve(scanPath).toLowerCase();
 
-            for (const item of foundMediaItems) {
-                const effBase = getEffectiveBookBaseName(item.fullPath, item.file, item.ext);
-                const parsedMeta = parseFilenameMetadata(effBase);
-                let rawLower = (parsedMeta.title || effBase).toLowerCase();
-                let normKey = "";
-                if (rawLower.includes("hobbit")) normKey = "hobbit";
-                else if (rawLower.includes("two towers")) normKey = "two towers";
-                else if (rawLower.includes("return of the king")) normKey = "return of the king";
-                else if (rawLower.includes("fellowship of the ring")) normKey = "fellowship of the ring";
-                else if (rawLower.includes("philosopher") || rawLower.includes("sorcerer") || (rawLower.includes("harry potter") && (rawLower.includes("01") || rawLower.includes("bk 1") || rawLower.includes("book 1") || rawLower.includes(" 1")))) normKey = "harry potter 1";
-                else if (rawLower.includes("chamber of secrets") || (rawLower.includes("harry potter") && (rawLower.includes("02") || rawLower.includes("bk 2") || rawLower.includes("book 2") || rawLower.includes(" 2")))) normKey = "harry potter 2";
-                else if (rawLower.includes("prisoner of azkaban") || (rawLower.includes("harry potter") && (rawLower.includes("03") || rawLower.includes("bk 3") || rawLower.includes("book 3") || rawLower.includes(" 3")))) normKey = "harry potter 3";
-                else if (rawLower.includes("goblet of fire") || (rawLower.includes("harry potter") && (rawLower.includes("04") || rawLower.includes("bk 4") || rawLower.includes("book 4") || rawLower.includes(" 4")))) normKey = "harry potter 4";
-                else if (rawLower.includes("order of the phoenix") || (rawLower.includes("harry potter") && (rawLower.includes("05") || rawLower.includes("bk 5") || rawLower.includes("book 5") || rawLower.includes(" 5")))) normKey = "harry potter 5";
-                else if (rawLower.includes("half-blood prince") || rawLower.includes("half blood prince") || (rawLower.includes("harry potter") && (rawLower.includes("06") || rawLower.includes("bk 6") || rawLower.includes("book 6") || rawLower.includes(" 6")))) normKey = "harry potter 6";
-                else if (rawLower.includes("deathly hallows") || (rawLower.includes("harry potter") && (rawLower.includes("07") || rawLower.includes("bk 7") || rawLower.includes("book 7") || rawLower.includes(" 7")))) normKey = "harry potter 7";
-                else {
-                    let cleanStr = rawLower
-                        .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
-                        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|abridged|audible|narrated|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ");
+            for (const targetDir of pathsToScan) {
+                if (!targetDir || !fs.existsSync(targetDir)) continue;
+                try {
+                    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
+                    for (const entry of entries) {
+                        const fullP = path.join(targetDir, entry.name);
+                        if (entry.isDirectory()) {
+                            let totalSize = 0;
+                            let sampleFile = "";
+                            let sampleExt = ".mp3";
 
-                    if (cleanStr.includes("harry potter")) {
-                        if (cleanStr.includes("01") || cleanStr.includes("bk 1") || cleanStr.includes("book 1") || cleanStr.includes("vol 1")) normKey = "harry potter 1";
-                        else if (cleanStr.includes("02") || cleanStr.includes("bk 2") || cleanStr.includes("book 2") || cleanStr.includes("vol 2")) normKey = "harry potter 2";
-                        else if (cleanStr.includes("03") || cleanStr.includes("bk 3") || cleanStr.includes("book 3") || cleanStr.includes("vol 3")) normKey = "harry potter 3";
-                        else if (cleanStr.includes("04") || cleanStr.includes("bk 4") || cleanStr.includes("book 4") || cleanStr.includes("vol 4")) normKey = "harry potter 4";
-                        else if (cleanStr.includes("05") || cleanStr.includes("bk 5") || cleanStr.includes("book 5") || cleanStr.includes("vol 5")) normKey = "harry potter 5";
-                        else if (cleanStr.includes("06") || cleanStr.includes("bk 6") || cleanStr.includes("book 6") || cleanStr.includes("vol 6")) normKey = "harry potter 6";
-                        else if (cleanStr.includes("07") || cleanStr.includes("bk 7") || cleanStr.includes("book 7") || cleanStr.includes("vol 7")) normKey = "harry potter 7";
-                        else normKey = cleanStr.replace(/[^a-z0-9]/g, "").trim();
-                    } else {
-                        normKey = cleanStr.replace(/[^a-z0-9]/g, "").trim();
+                            function calcFolderSize(dir: string, depth = 0) {
+                                if (depth > 6) return;
+                                try {
+                                    const subEntries = fs.readdirSync(dir, { withFileTypes: true });
+                                    for (const sub of subEntries) {
+                                        const subP = path.join(dir, sub.name);
+                                        if (sub.isDirectory()) {
+                                            calcFolderSize(subP, depth + 1);
+                                        } else {
+                                            const ext = path.extname(sub.name).toLowerCase();
+                                            if (validExtensions.includes(ext)) {
+                                                try {
+                                                    const st = fs.statSync(subP);
+                                                    totalSize += st.size;
+                                                    if (!sampleFile) {
+                                                        sampleFile = sub.name;
+                                                        sampleExt = ext;
+                                                    }
+                                                } catch (e) {}
+                                            }
+                                        }
+                                    }
+                                } catch (e) {}
+                            }
+
+                            calcFolderSize(fullP);
+
+                            if (totalSize > 0) {
+                                const parsed = parseFilenameMetadata(entry.name);
+                                const cleanKey = (parsed.title || entry.name).toLowerCase().replace(/[^a-z0-9]/g, "");
+                                
+                                if (cleanKey.length > 2 && !consolidatedMap.has(cleanKey)) {
+                                    consolidatedMap.set(cleanKey, {
+                                        fullPath: fullP,
+                                        file: sampleFile || entry.name,
+                                        ext: sampleExt,
+                                        stats: { size: totalSize } as any
+                                    });
+                                }
+                            }
+                        } else {
+                            const ext = path.extname(entry.name).toLowerCase();
+                            if (validExtensions.includes(ext)) {
+                                try {
+                                    const st = fs.statSync(fullP);
+                                    const cleanBase = path.basename(entry.name, ext);
+                                    const parsed = parseFilenameMetadata(cleanBase);
+                                    const cleanKey = (parsed.title || cleanBase).toLowerCase().replace(/[^a-z0-9]/g, "");
+                                    
+                                    if (cleanKey.length > 2 && !consolidatedMap.has(cleanKey)) {
+                                        consolidatedMap.set(cleanKey, {
+                                            fullPath: fullP,
+                                            file: entry.name,
+                                            ext,
+                                            stats: st
+                                        });
+                                    }
+                                } catch (e) {}
+                            }
+                        }
                     }
-                }
-
-                let masterPath = item.fullPath;
-                const relP = path.relative(scanPath, item.fullPath);
-                const relParts = relP.split(path.sep).filter(Boolean);
-                if (relParts.length >= 2) {
-                    masterPath = path.join(scanPath, relParts[0]);
-                } else {
-                    masterPath = item.fullPath;
-                }
-
-                if (consolidatedMap.has(normKey)) {
-                    const existingItem = consolidatedMap.get(normKey)!;
-                    const accumulatedSize = (existingItem.stats.size || 0) + item.stats.size;
-                    existingItem.stats = { ...existingItem.stats, size: accumulatedSize } as any;
-                    if (fs.existsSync(masterPath) && fs.statSync(masterPath).isDirectory()) {
-                        existingItem.fullPath = masterPath;
-                    }
-                } else {
-                    consolidatedMap.set(normKey, {
-                        ...item,
-                        fullPath: masterPath,
-                        stats: { ...item.stats } as any
-                    });
-                }
+                } catch (e) {}
             }
+
             finalMediaItems = Array.from(consolidatedMap.values());
         }
 
