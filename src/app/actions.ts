@@ -2891,13 +2891,18 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }
                 } else {
                     matchedDbBookIds.add(existing.id);
-                    if (existing.fileSize !== stats.size) {
-                        logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" (ID: ${existing.id}, New Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                    const updateData: any = {};
+                    if (existing.fileSize !== stats.size) updateData.fileSize = stats.size;
+                    if (existing.filePath !== fullPath) updateData.filePath = fullPath;
+                    if (existing.mediaType !== (library.mediaType || "ebook")) updateData.mediaType = library.mediaType || "ebook";
+
+                    if (Object.keys(updateData).length > 0) {
+                        logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" (ID: ${existing.id}, New Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
                         await prisma.book.update({
                             where: { id: existing.id },
-                            data: { fileSize: stats.size }
+                            data: updateData
                         }).catch(() => {});
-                        existing.fileSize = stats.size;
+                        Object.assign(existing, updateData);
                     }
                     const cleanBase = getEffectiveBookBaseName(fullPath, path.basename(fullPath), ext);
                     const parsedMeta = parseFilenameMetadata(cleanBase);
