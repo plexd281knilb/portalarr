@@ -95,6 +95,9 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 async function ensureSchemaColumns() {
     try {
+        await prisma.$executeRawUnsafe(`PRAGMA journal_mode = WAL;`).catch(() => {});
+        await prisma.$executeRawUnsafe(`PRAGMA busy_timeout = 5000;`).catch(() => {});
+
         const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Library");`);
         const columns = tableInfo.map((c: any) => c.name);
 
