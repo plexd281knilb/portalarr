@@ -2619,22 +2619,12 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
 
                 let masterPath = item.fullPath;
-                const parentDir = path.dirname(item.fullPath);
-                const parentResolved = path.resolve(parentDir).toLowerCase();
-
-                if (parentResolved !== libPathResolved) {
-                    const parentName = path.basename(parentDir);
-                    const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Disk|Track)\s*\d+$/i;
-                    if (discPattern.test(parentName)) {
-                        const grandParentDir = path.dirname(parentDir);
-                        if (path.resolve(grandParentDir).toLowerCase() !== libPathResolved) {
-                            masterPath = grandParentDir;
-                        } else {
-                            masterPath = parentDir;
-                        }
-                    } else {
-                        masterPath = parentDir;
-                    }
+                const relP = path.relative(scanPath, item.fullPath);
+                const relParts = relP.split(path.sep).filter(Boolean);
+                if (relParts.length >= 2) {
+                    masterPath = path.join(scanPath, relParts[0]);
+                } else {
+                    masterPath = item.fullPath;
                 }
 
                 if (consolidatedMap.has(normKey)) {
