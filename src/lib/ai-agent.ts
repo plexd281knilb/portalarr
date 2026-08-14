@@ -107,10 +107,16 @@ async function fetchGeminiContent(apiKey: string, modelName: string, systemPromp
                 if (rawText) return rawText;
             } else {
                 const errText = await res.text();
+                if (res.status === 429) {
+                    throw new Error(`Google Gemini API Rate Limit Exceeded (HTTP 429). Free Tier daily quota reached.`);
+                }
                 lastError = `Gemini (${ver}/${modelName}) HTTP ${res.status}: ${errText}`;
             }
         } catch (e: any) {
             lastError = e.message;
+            if (e.message && e.message.includes("429")) {
+                throw e;
+            }
         }
     }
 
