@@ -1801,13 +1801,12 @@ export async function createBookRequest(formData: FormData) {
         let finalYear = publishYear;
 
         try {
-            const aiMeta = await resolveRequestMetadataWithAI(`${title} ${author}`, mediaType);
-            if (aiMeta) {
-                if (aiMeta.title) finalTitle = aiMeta.title;
-                if (aiMeta.author && aiMeta.author !== "Unknown Author") finalAuthor = aiMeta.author;
-                if (aiMeta.series) finalSeries = aiMeta.series;
-                if (aiMeta.volumeNumber) finalVolNum = String(aiMeta.volumeNumber);
-                if (aiMeta.publishYear && !finalYear) finalYear = aiMeta.publishYear;
+            const heur = callDefaultResolver(`${title} ${author}`, mediaType);
+            if (heur) {
+                if (heur.title) finalTitle = heur.title;
+                if (heur.author && heur.author !== "Unknown Author") finalAuthor = heur.author;
+                if (heur.series) finalSeries = heur.series;
+                if (heur.volumeNumber) finalVolNum = String(heur.volumeNumber);
             }
         } catch (e) {}
 
