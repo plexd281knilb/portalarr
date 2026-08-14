@@ -93,10 +93,16 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
+let schemaPatched = false;
+
 async function ensureSchemaColumns() {
+    if (schemaPatched) return;
+    schemaPatched = true;
+
     try {
         await prisma.$queryRawUnsafe(`PRAGMA journal_mode = WAL;`).catch(() => {});
         await prisma.$queryRawUnsafe(`PRAGMA busy_timeout = 5000;`).catch(() => {});
+        await prisma.$queryRawUnsafe(`PRAGMA synchronous = NORMAL;`).catch(() => {});
 
         const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Library");`);
         const columns = tableInfo.map((c: any) => c.name);
