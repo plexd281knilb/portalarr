@@ -2565,6 +2565,12 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         }
         
         const candidatePool = [
+            "/mnt/user/Books",
+            "/mnt/user/Books/audiobooks",
+            "/mnt/user/books",
+            "/mnt/user/audiobooks",
+            "/mnt/user/Kidsbooks",
+            "/mnt/user/Kyrabooks",
             "/Userbooks",
             "/Userbooks/audiobooks",
             "/Kidsbooks",
