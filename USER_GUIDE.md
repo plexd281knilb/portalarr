@@ -2,15 +2,11 @@
 
 Welcome to **Portalarr**! This guide will walk you through accessing our library, setting up automatic Kindle delivery, requesting new Ebooks & Audiobooks, listening or downloading media, and manually selecting releases or importing downloads if needed.
 
----
-
 ## 🚀 1. Getting Started & Logging In
 
 1. Open your browser and navigate to the Portalarr server address (e.g. `https://home.domshomelab.com`).
 2. Log in using your **Username/Email & Password** or click **Sign in with Plex**.
 3. If you are a new user, click **Request Account Access** on the login screen. An administrator will review and approve your account.
-
----
 
 ## 📱 2. Optional Send-to-Kindle Setup (For E-Readers)
 
@@ -29,30 +25,26 @@ Amazon requires all senders to be approved before emails can reach your Kindle:
 3. Add the server sender address provided in your Portalarr Kindle Setup prompt (or ask your server admin).
 
 ### Step 3: Save or Skip
-* Enter your Kindle email in Portalarr and click **Save Email & Unlock Automatic Delivery**.
-* *Don't have a Kindle or want to download files manually?* Click **Skip for Now & Browse Library**. You can update this anytime by clicking the **Kindle Settings** button in the header.
-
----
+- Enter your Kindle email in Portalarr and click **Save Email & Unlock Automatic Delivery**.
+- *Don't have a Kindle or want to download files manually?* Click **Skip for Now & Browse Library**. You can update this anytime by clicking the **Kindle Settings** button in the header.
 
 ## 📚 3. Browsing & Accessing Media
 
 Portalarr organizes your media into dedicated tabs:
 
 ### 📖 Ebooks Tab
-* **Browse & Search**: Filter by library shelves, search by title or author, and sort by date or title.
-* **Series Grouping**: Toggle **Group by Series** to view books neatly organized by their book series.
-* **1-Click Kindle Send (`📧`)**: Click the Kindle button on any book card to wirelessly dispatch the EPUB/MOBI file directly to your e-reader.
-* **Direct Download (`⬇️`)**: Click the Download button to download EPUB or PDF files directly to your phone, tablet, or computer.
+- **Browse & Search**: Filter by library shelves, search by title or author, and sort by date or title.
+- **Series Grouping**: Toggle **Group by Series** to view books neatly organized by their book series.
+- **1-Click Kindle Send (`📧`)**: Click the Kindle button on any book card to wirelessly dispatch the EPUB/MOBI file directly to your e-reader.
+- **Direct Download (`⬇️`)**: Click the Download button to download EPUB or PDF files directly to your phone, tablet, or computer.
 
 ### 🎧 Audiobooks Tab
-* **Listen Online**: Click **Play (`▶️`)** on any audiobook to start streaming immediately in the built-in web audio player.
-* **Interactive Chapter Selector**: Click **Listen & Chapters** on any audiobook card to open the Chapter Selector Modal, jump to any specific chapter, or view file details.
-* **Reorder & Edit Chapters**: Click **✏️ Reorder & Edit Chapters** in the Chapter Selector Modal to change chapter numbers or click **⬆️ / ⬇️** buttons. Click **Save** to rename track files on disk so your custom order is permanent for all users!
-* **Multi-Track & Multi-Disc Support**: All chapter tracks and multi-disc folders (`Disc 01`, `Disc 02`) are seamlessly consolidated into a single audiobook card, strictly preserving the parent release title and accurately syncing format badges.
-* **Continuous Autoplay**: The built-in player automatically proceeds to the next chapter track seamlessly when the current chapter finishes.
-* **Floating Player**: The web audio player stays pinned at the bottom of your screen as you browse.
-
----
+- **Listen Online**: Click **Play (`▶️`)** on any audiobook to start streaming immediately in the built-in web audio player.
+- **Interactive Chapter Selector**: Click **Listen & Chapters** on any audiobook card to open the Chapter Selector Modal, jump to any specific chapter, or view file details.
+- **Reorder & Edit Chapters**: Click **✏️ Reorder & Edit Chapters** in the Chapter Selector Modal to change chapter numbers or click **⬆️ / ⬇️** buttons. Click **Save** to rename track files on disk so your custom order is permanent for all users!
+- **Multi-Track & Multi-Disc Support**: All chapter tracks and multi-disc folders (`Disc 01`, `Disc 02`) are seamlessly consolidated into a single audiobook card, strictly preserving the parent release title and accurately syncing format badges.
+- **Continuous Autoplay**: The built-in player automatically proceeds to the next chapter track seamlessly when the current chapter finishes.
+- **Floating Player**: The web audio player stays pinned at the bottom of your screen as you browse.
 
 ## 🔍 4. Requesting New Books & Audiobooks
 
@@ -66,23 +58,21 @@ Click the **`+ Request Ebook / Audiobook`** button on the Library page.
 2. Select the matching book to auto-fill title, author, publish year, and cover artwork.
 
 ### Step 3: Choose Format
-* **Format**: Select **📖 Ebook** or **🎧 Audiobook**.
+- **Format**: Select **📖 Ebook** or **🎧 Audiobook**.
 
 ### Step 4: Submit & Track Progress
 Click **Submit Request**. You can track its live progress under the **Requests** tab:
-* ⏳ **Pending**: Request queued for processing.
-* 🔍 **Searching**: System is searching indexers for the best quality release.
-* 📥 **Downloading**: Download active in SABnzbd or qBittorrent.
-* ✅ **Downloaded**: Download complete! The book is automatically added to the library shelf for instant reading or streaming.
-
----
+- ⏳ **Pending**: Request queued for processing.
+- 🔍 **Searching**: System is searching indexers for the best quality release.
+- 📥 **Downloading**: Download active in SABnzbd or qBittorrent.
+- ✅ **Downloaded**: Download complete! The book is automatically added to the library shelf for instant reading or streaming.
 
 ## 🛠️ 5. Troubleshooting, Release Selection & 1-Click Import
 
-* **📖 Ebooks**: View available PDF, EPUB, MOBI, and AZW3 e-books across all accessible public and private libraries.
-* **🎧 Audiobooks**: Browse audiobooks with embedded chapter metadata, HD cover art, total file sizes, and floating HTML5 audio playback. Click **`Scan Audio Folder`** anytime to refresh and discover newly added audiobooks on disk!
-* **🔄 User Scan Folder**: All approved users can click **`Scan Share Folder`** or **`Scan Audio Folder`** directly on library shelves to instantly scan folders for new files without needing admin intervention.
-* **📥 Request Media**: Click the **Requests** tab to search for missing books or audiobooks. If an entry is incomplete, click **`🔍 Re-Grab Release`** / **`🔍 Search Release`** to open the interactive Prowlarr release chooser modal. Toggle between **`📖 Ebook`** and **`🎧 Audiobook`** modes in the modal header to pick specific releases!
+- **📖 Ebooks**: View available PDF, EPUB, MOBI, and AZW3 e-books across all accessible public and private libraries.
+- **🎧 Audiobooks**: Browse audiobooks with embedded chapter metadata, HD cover art, total file sizes, and floating HTML5 audio playback. Click **`Scan Audio Folder`** anytime to refresh and discover newly added audiobooks on disk!
+- **🔄 User Scan Folder**: All approved users can click **`Scan Share Folder`** or **`Scan Audio Folder`** directly on library shelves to instantly scan folders for new files without needing admin intervention.
+- **📥 Request Media**: Click the **Requests** tab to search for missing books or audiobooks. If an entry is incomplete, click **`🔍 Re-Grab Release`** / **`🔍 Search Release`** to open the interactive Prowlarr release chooser modal. Toggle between **`📖 Ebook`** and **`🎧 Audiobook`** modes in the modal header to pick specific releases!
 
 ### 🔍 Manual Release Search (`Search Release` / `Re-Search`)
 1. Go to the **Requests** tab.
@@ -92,12 +82,10 @@ Click **Submit Request**. You can track its live progress under the **Requests**
 5. Click **`Push Release` (`📥`)** on your preferred release to send that exact file to the download client.
 
 ### 📥 1-Click Download Import (`Import Download`)
-* If SABnzbd or qBittorrent finished downloading a file but it hasn't appeared yet, click **`📥 Import Download`** on your request card. Portalarr will scan all completed download directories, copy the files to your shelf, auto-consolidate multi-track audiobooks, and mark the status as **`Downloaded`**.
+- If SABnzbd or qBittorrent finished downloading a file but it hasn't appeared yet, click **`📥 Import Download`** on your request card. Portalarr will scan all completed download directories, copy the files to your shelf, auto-consolidate multi-track audiobooks, and mark the status as **`Downloaded`**.
 
 ### 🔄 Retrying Failed Downloads
-* If a request shows **Failed**, click **`Retry Search`** to trigger an automated background re-search.
-
----
+- If a request shows **Failed**, click **`Retry Search`** to trigger an automated background re-search.
 
 ## ❓ 6. Need Help or Technical Support?
 
@@ -105,7 +93,5 @@ If a download fails or you need assistance:
 1. Click the **Support (`💬`)** icon in the main navigation bar.
 2. Submit a ticket detailing the issue.
 3. You will receive updates as the administrator resolves your request.
-
----
 
 *Happy Reading & Listening!* 📖🎧
