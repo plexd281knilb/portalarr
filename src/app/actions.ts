@@ -2932,21 +2932,23 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                           existing.title.includes("(");
 
                     if (needsCleaning || !coverUrl) {
-                        try {
-                            const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
-                            if (fetchedCover) {
-                                coverUrl = fetchedCover;
-                            }
-                        } catch (e) {}
+                        (async () => {
+                            try {
+                                const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
+                                if (fetchedCover) {
+                                    coverUrl = fetchedCover;
+                                }
+                            } catch (e) {}
 
-                        await prisma.book.update({
-                            where: { id: existing.id },
-                            data: {
-                                title,
-                                author,
-                                coverUrl
-                            }
-                        }).catch(() => {});
+                            await prisma.book.update({
+                                where: { id: existing.id },
+                                data: {
+                                    title,
+                                    author,
+                                    coverUrl
+                                }
+                            }).catch(() => {});
+                        })();
                     }
                 }
             }
