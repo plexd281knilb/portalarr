@@ -55,9 +55,10 @@ async function mobiBounceEpub(filePath: string): Promise<boolean> {
         const { promisify } = require("util");
         const execAsync = promisify(exec);
 
-        // 1. Check if ebook-convert is available
+        // 1. Check if ebook-convert is available (cross-platform check)
         try {
-            await execAsync("which ebook-convert");
+            const checkCmd = process.platform === "win32" ? "where ebook-convert" : "which ebook-convert";
+            await execAsync(checkCmd);
         } catch (e) {
             console.log("[MOBI-BOUNCE] ebook-convert is not installed or not in PATH. Skipping Mobi-Bounce.");
             return false;
@@ -3863,7 +3864,8 @@ export async function monitorAndRetryDownload(
                                     
                                     let hasConverter = false;
                                     try {
-                                        await execAsync("which ebook-convert");
+                                        const checkCmd = process.platform === "win32" ? "where ebook-convert" : "which ebook-convert";
+                                        await execAsync(checkCmd);
                                         hasConverter = true;
                                     } catch (e) {
                                         console.log("[AUTO-DOWNLOAD-MONITOR] ebook-convert is not in PATH. Skipping MOBI conversion.");
