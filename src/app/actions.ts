@@ -1201,16 +1201,14 @@ export async function getLibraries() {
     }
     
     for (const lib of libraries) {
-        if (lib.name.toLowerCase().includes("audio") || lib.downloadCategory === "audiobooks") {
-            if (lib.mediaType !== "audiobook") {
-                lib.mediaType = "audiobook";
-                prisma.library.update({
-                    where: { id: lib.id },
-                    data: { mediaType: "audiobook" }
-                }).catch(() => {});
-            }
-        } else if (!lib.mediaType) {
-            lib.mediaType = "ebook";
+        const isAudioByName = lib.name.toLowerCase().includes("audio");
+        const correctMediaType = isAudioByName ? "audiobook" : "ebook";
+        if (lib.mediaType !== correctMediaType) {
+            lib.mediaType = correctMediaType;
+            prisma.library.update({
+                where: { id: lib.id },
+                data: { mediaType: correctMediaType }
+            }).catch(() => {});
         }
     }
 
@@ -1392,10 +1390,10 @@ export async function getLibraryBooks(libraryId?: string) {
         targetLibraryIds = userLibs.map(l => l.id);
     } else if (libraryId === "audiobooks") {
         const userLibs = await getLibraries();
-        targetLibraryIds = userLibs.filter(l => l.mediaType === "audiobook" || l.name.toLowerCase().includes("audio")).map(l => l.id);
+        targetLibraryIds = userLibs.filter(l => l.name.toLowerCase().includes("audio")).map(l => l.id);
     } else if (libraryId === "ebooks") {
         const userLibs = await getLibraries();
-        targetLibraryIds = userLibs.filter(l => (l.mediaType || "ebook") === "ebook" && !l.name.toLowerCase().includes("audio")).map(l => l.id);
+        targetLibraryIds = userLibs.filter(l => !l.name.toLowerCase().includes("audio")).map(l => l.id);
     } else {
         const library = await prisma.library.findUnique({ where: { id: libraryId } });
         if (library) {
