@@ -2551,38 +2551,24 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             } catch (e) {}
         }
 
-        // Build list of candidate paths to scan for this library
+        // Build list of paths to scan strictly scoped to this library's path
         const pathsToScan = [scanPath];
         const parentP = path.dirname(scanPath);
-        if (parentP && parentP !== "/" && parentP !== "." && fs.existsSync(parentP) && !pathsToScan.includes(parentP)) {
-            pathsToScan.push(parentP);
+        
+        // If scanPath is a subfolder like /Userbooks/audiobooks, also scan parent /Userbooks
+        if (parentP && parentP !== "/" && parentP !== "." && fs.existsSync(parentP)) {
+            const parentName = path.basename(parentP).toLowerCase();
+            const scanName = path.basename(scanPath).toLowerCase();
+            if ((scanName === "audiobooks" || scanName === "audio") && (parentName.includes("userbooks") || parentName.includes("books"))) {
+                if (!pathsToScan.includes(parentP)) pathsToScan.push(parentP);
+            }
         }
+        
+        // If scanning root /Userbooks, also check subfolder /Userbooks/audiobooks
         if (isAudiobookLib) {
             const audioSub = path.join(scanPath, "audiobooks");
             if (fs.existsSync(audioSub) && !pathsToScan.includes(audioSub)) {
                 pathsToScan.push(audioSub);
-            }
-        }
-        
-        const candidatePool = [
-            "/mnt/user/Books",
-            "/mnt/user/Books/audiobooks",
-            "/mnt/user/books",
-            "/mnt/user/audiobooks",
-            "/mnt/user/Kidsbooks",
-            "/mnt/user/Kyrabooks",
-            "/Userbooks",
-            "/Userbooks/audiobooks",
-            "/Kidsbooks",
-            "/Kyrabooks",
-            "/user/Books",
-            "/user/books",
-            "/audiobooks",
-            "/books"
-        ];
-        for (const cand of candidatePool) {
-            if (cand && fs.existsSync(cand) && !pathsToScan.includes(cand)) {
-                pathsToScan.push(cand);
             }
         }
 
