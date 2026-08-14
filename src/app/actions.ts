@@ -2458,9 +2458,15 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         const dbBooks = await prisma.book.findMany({
             where: { libraryId: libraryId }
         });
+        const allDbBooks = await prisma.book.findMany();
+
         const dbBooksByPathLower = new Map<string, any>();
         for (const b of dbBooks) {
             dbBooksByPathLower.set(b.filePath.toLowerCase(), b);
+        }
+        const allDbBooksByPathLower = new Map<string, any>();
+        for (const b of allDbBooks) {
+            allDbBooksByPathLower.set(b.filePath.toLowerCase(), b);
         }
 
 
@@ -2772,7 +2778,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }
                 }
 
-                let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
+                let existing = dbBooksByPathLower.get(fullPath.toLowerCase()) || allDbBooksByPathLower.get(fullPath.toLowerCase());
 
                 if (!existing) {
                     const cleanBaseCheck = getEffectiveBookBaseName(fullPath, file, ext);
@@ -2780,7 +2786,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     const targetTitleNorm = (parsedMetaCheck.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
 
                     if (targetTitleNorm.length > 3) {
-                        existing = dbBooks.find(b => {
+                        existing = allDbBooks.find(b => {
                             if (matchedDbBookIds.has(b.id)) return false;
                             const dbTitleNorm = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
                             return dbTitleNorm === targetTitleNorm;
@@ -2895,12 +2901,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 } else {
                     matchedDbBookIds.add(existing.id);
                     const updateData: any = {};
+                    if (existing.libraryId !== libraryId) updateData.libraryId = libraryId;
                     if (existing.fileSize !== stats.size) updateData.fileSize = stats.size;
                     if (existing.filePath !== fullPath) updateData.filePath = fullPath;
                     if (existing.mediaType !== (library.mediaType || "ebook")) updateData.mediaType = library.mediaType || "ebook";
 
                     if (Object.keys(updateData).length > 0) {
-                        logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" (ID: ${existing.id}, New Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                        logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Reassigned/Updated book "${existing.title}" (ID: ${existing.id}, Target Lib: "${library.name}", New Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                        console.log(`[SCANNER] 🔄 Reassigned/Updated book "${existing.title}" to library "${library.name}" (ID: ${existing.id})`);
                         await prisma.book.update({
                             where: { id: existing.id },
                             data: updateData
