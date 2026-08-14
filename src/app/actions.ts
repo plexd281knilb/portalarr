@@ -2769,6 +2769,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
 
                 const targetMediaType = library.mediaType || "ebook";
+                const effectiveFilePath = isAudiobookLib ? path.join(fullPath, file) : fullPath;
+
                 let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
                 if (!existing) {
                     const crossMatch = allDbBooksByPathLower.get(fullPath.toLowerCase());
@@ -2778,7 +2780,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
 
                 if (!existing) {
-                    const cleanBaseCheck = getEffectiveBookBaseName(fullPath, file, ext);
+                    const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
                     const parsedMetaCheck = parseFilenameMetadata(cleanBaseCheck);
                     const targetTitleNorm = getNormTitle(parsedMetaCheck.title || cleanBaseCheck);
 
@@ -2795,7 +2797,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
 
                 if (!existing) {
-                    const cleanBase = getEffectiveBookBaseName(fullPath, file, ext);
+                    const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
                     const parsedMeta = parseFilenameMetadata(cleanBase);
                     let title = parsedMeta.title;
                     let author = parsedMeta.author;
@@ -2915,7 +2917,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         }).catch(() => {});
                         Object.assign(existing, updateData);
                     }
-                    const cleanBase = getEffectiveBookBaseName(fullPath, path.basename(fullPath), ext);
+                    const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
                     const parsedMeta = parseFilenameMetadata(cleanBase);
                     let parsedAuthor = parsedMeta.author;
                     let parsedTitle = parsedMeta.title;
