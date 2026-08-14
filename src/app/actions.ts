@@ -2609,11 +2609,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             calcFolderSize(fullP);
 
                             if (totalSize > 0) {
-                                const parsed = parseFilenameMetadata(entry.name);
-                                const cleanKey = (parsed.title || entry.name).toLowerCase().replace(/[^a-z0-9]/g, "");
-                                
-                                if (cleanKey.length > 2 && !consolidatedMap.has(cleanKey)) {
-                                    consolidatedMap.set(cleanKey, {
+                                const folderKey = fullP.toLowerCase();
+                                if (!consolidatedMap.has(folderKey)) {
+                                    consolidatedMap.set(folderKey, {
                                         fullPath: fullP,
                                         file: sampleFile || entry.name,
                                         ext: sampleExt,
@@ -2626,12 +2624,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             if (validExtensions.includes(ext)) {
                                 try {
                                     const st = fs.statSync(fullP);
-                                    const cleanBase = path.basename(entry.name, ext);
-                                    const parsed = parseFilenameMetadata(cleanBase);
-                                    const cleanKey = (parsed.title || cleanBase).toLowerCase().replace(/[^a-z0-9]/g, "");
-                                    
-                                    if (cleanKey.length > 2 && !consolidatedMap.has(cleanKey)) {
-                                        consolidatedMap.set(cleanKey, {
+                                    const fileKey = fullP.toLowerCase();
+                                    if (!consolidatedMap.has(fileKey)) {
+                                        consolidatedMap.set(fileKey, {
                                             fullPath: fullP,
                                             file: entry.name,
                                             ext,
