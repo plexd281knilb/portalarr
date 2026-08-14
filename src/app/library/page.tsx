@@ -1926,8 +1926,8 @@ function normalizeBookCardMetadata(book: any) {
                     <TabsTrigger value="libs" className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md">
                         <BookOpen className="h-4 w-4 shrink-0" /> <span>Ebooks</span>
                     </TabsTrigger>
-                    <TabsTrigger value="audiobooks" className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md">
-                        <Headphones className="h-4 w-4 text-amber-400 data-[state=active]:text-slate-950 shrink-0" /> <span>Audiobooks</span>
+                    <TabsTrigger value="audiobooks" className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md">
+                        <Headphones className="h-4 w-4 shrink-0" /> <span>Audiobooks</span>
                     </TabsTrigger>
                     <TabsTrigger value="requests" className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md">
                         <Send className="h-4 w-4 shrink-0" /> <span>Requests</span>
@@ -2183,13 +2183,13 @@ function normalizeBookCardMetadata(book: any) {
                 <TabsContent value="audiobooks" className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="lg:col-span-1 space-y-4">
-                            <Card className="border-amber-500/20 bg-slate-900/60 shadow-lg overflow-hidden">
-                                <CardHeader className="bg-amber-500/10 border-b border-amber-500/20 py-3.5 px-4">
-                                    <CardTitle className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-                                        <Headphones className="h-4 w-4" /> Audiobook Libraries
+                            <Card className="border-muted/60 bg-muted/10 overflow-hidden">
+                                <CardHeader className="py-4">
+                                    <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                        <Headphones className="h-4 w-4 text-primary" /> Audiobook Libraries
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="p-3 space-y-2">
+                                <CardContent className="p-2 space-y-1">
                                     {audiobookLibraries.length === 0 ? (
                                         <div className="p-4 text-center text-xs text-muted-foreground italic space-y-3">
                                             <p>No audiobook libraries configured yet.</p>
@@ -2197,7 +2197,7 @@ function normalizeBookCardMetadata(book: any) {
                                                 <Button 
                                                     size="sm" 
                                                     variant="outline" 
-                                                    className="text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10 mt-1"
+                                                    className="text-xs text-foreground border-muted hover:bg-muted/20 mt-1"
                                                     onClick={() => {
                                                         setLibName("Audiobooks");
                                                         setLibMediaType("audiobook");
@@ -2220,14 +2220,14 @@ function normalizeBookCardMetadata(book: any) {
                                                     onClick={() => setSelectedLibrary(lib)}
                                                     className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border ${
                                                         isSelected
-                                                            ? "bg-slate-900 border-amber-400/80 shadow-md ring-1 ring-amber-400/30 text-amber-300"
+                                                            ? "bg-slate-900 border-primary/80 shadow-md ring-1 ring-primary/30 text-primary font-bold"
                                                             : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/60 hover:text-white"
                                                     }`}
                                                 >
                                                     <span className="font-bold text-sm truncate">{lib.name}</span>
                                                     <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-bold shrink-0 ${
                                                         isSelected
-                                                            ? "bg-amber-400 text-black border-amber-400 font-extrabold"
+                                                            ? "bg-primary text-black border-primary font-extrabold"
                                                             : accessInfo.color
                                                     }`}>
                                                         {accessInfo.label}
@@ -2259,7 +2259,7 @@ function normalizeBookCardMetadata(book: any) {
                                                 <select
                                                     value={sortBy}
                                                     onChange={(e) => handleSortChange(e.target.value)}
-                                                    className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-md border border-amber-500/30 bg-slate-900 text-amber-300 hover:bg-slate-800/80 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
+                                                    className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-md border border-muted/60 bg-muted/20 text-foreground hover:bg-muted/30 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
                                                 >
                                                     <option value="recent" className="bg-slate-955 text-slate-100">Recently Added</option>
                                                     <option value="title-asc" className="bg-slate-955 text-slate-100">Title (A-Z)</option>
@@ -2274,7 +2274,7 @@ function normalizeBookCardMetadata(book: any) {
                                                 variant="outline" 
                                                 onClick={() => handleScanLibrary(selectedLibrary.id)}
                                                 disabled={scanning}
-                                                className="w-full lg:w-auto font-semibold border-amber-500/30 text-amber-400 hover:bg-amber-500/10 shrink-0"
+                                                className="w-full lg:w-auto font-semibold border-muted/60 text-foreground hover:bg-muted/30 shrink-0"
                                             >
                                                 {scanning ? (
                                                     <>
