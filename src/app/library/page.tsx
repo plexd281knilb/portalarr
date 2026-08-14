@@ -3657,11 +3657,18 @@ function normalizeBookCardMetadata(book: any) {
             )}
 
             {chaptersModalBook && (
-                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-2xl max-h-[88vh] flex flex-col border-amber-500/30 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden">
+                <div 
+                    className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 cursor-pointer"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            setChaptersModalBook(null);
+                        }
+                    }}
+                >
+                    <Card className="w-full max-w-2xl max-h-[88vh] flex flex-col border-amber-500/30 bg-slate-955 text-slate-100 shadow-2xl overflow-hidden cursor-default" onClick={(e) => e.stopPropagation()}>
                         <CardHeader className="border-b border-slate-800 pb-4 bg-slate-900/60">
                             <div className="flex items-start justify-between gap-4">
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-start gap-3">
                                     <div className="h-16 w-16 rounded-lg bg-slate-900 border border-slate-800 shrink-0 overflow-hidden flex items-center justify-center">
                                         {chaptersModalBook.coverUrl ? (
                                             /* eslint-disable-next-line @next/next/no-img-element */
@@ -3670,12 +3677,12 @@ function normalizeBookCardMetadata(book: any) {
                                             <Headphones className="h-8 w-8 text-amber-400" />
                                         )}
                                     </div>
-                                    <div>
+                                    <div className="space-y-1">
                                         <CardTitle className="text-lg font-bold line-clamp-1">{chaptersModalBook.title}</CardTitle>
                                         <CardDescription className="text-xs text-slate-400 line-clamp-1">
                                             {chaptersModalBook.author || "Unknown Author"} • {chaptersList.length} Chapters Found
                                         </CardDescription>
-                                        <div className="flex items-center gap-2 mt-2">
+                                        <div className="flex flex-wrap items-center gap-2 pt-1">
                                             {chaptersList.length > 0 && !isEditingChapters && (
                                                 <Button
                                                     size="sm"
@@ -3685,7 +3692,7 @@ function normalizeBookCardMetadata(book: any) {
                                                         setChaptersModalBook(null);
                                                     }}
                                                 >
-                                                    <Play className="h-3.5 w-3.5 fill-black" /> Play All (Start at Chapter 1)
+                                                    <Play className="h-3.5 w-3.5 fill-black" /> Play All
                                                 </Button>
                                             )}
                                             {chaptersList.length > 0 && (
@@ -3696,7 +3703,7 @@ function normalizeBookCardMetadata(book: any) {
                                                     onClick={() => setIsEditingChapters(!isEditingChapters)}
                                                 >
                                                     <Edit2 className="h-3.5 w-3.5" />
-                                                    {isEditingChapters ? "Cancel Editing" : "✏️ Reorder & Edit Chapters"}
+                                                    {isEditingChapters ? "Cancel Editing" : "✏️ Reorder Chapters"}
                                                 </Button>
                                             )}
                                             {chaptersList.length > 0 && (
@@ -3706,47 +3713,39 @@ function normalizeBookCardMetadata(book: any) {
                                                     className="h-7 text-xs font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 gap-1.5"
                                                     disabled={analyzingAiChapters}
                                                     onClick={handleAnalyzeChaptersWithAI}
+                                                    title="AI Auto-Detect & Name Chapters"
                                                 >
                                                     {analyzingAiChapters ? <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-300" /> : <Sparkles className="h-3.5 w-3.5 text-purple-300" />}
-                                                    🪄 AI Auto-Detect & Name Chapters
+                                                    🪄 AI Name Chapters
                                                 </Button>
                                             )}
                                         </div>
                                     </div>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setChaptersModalBook(null)}>
-                                    <X className="h-5 w-5" />
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 px-2.5 text-xs font-bold border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white shrink-0 gap-1" 
+                                    onClick={() => setChaptersModalBook(null)}
+                                    title="Close Popout"
+                                >
+                                    <X className="h-4 w-4" /> Close
                                 </Button>
                             </div>
                         </CardHeader>
-
-                        {isEditingChapters && (
-                            <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-xs text-amber-300 flex items-center justify-between">
-                                <span>✏️ <strong>Reorder Mode Active:</strong> Change track numbers or use ⬆️ / ⬇️ buttons to reorder tracks. Click Save when done to rename files on disk.</span>
-                                <Button
-                                    size="sm"
-                                    className="h-7 text-xs font-bold bg-emerald-500 text-black hover:bg-emerald-400 gap-1 shadow"
-                                    onClick={handleSaveChapterOrder}
-                                    disabled={savingChapters}
-                                >
-                                    {savingChapters ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                                    Save Order &amp; Rename Files
-                                </Button>
-                            </div>
-                        )}
-                        
-                        <CardContent className="flex-1 overflow-y-auto p-4 space-y-2">
+                        <CardContent className="p-4 space-y-2 overflow-y-auto max-h-[50vh]">
                             {loadingChapters ? (
-                                <div className="flex flex-col items-center justify-center p-12 space-y-3 text-slate-400">
+                                <div className="p-8 text-center text-xs text-slate-400 flex flex-col items-center gap-2">
                                     <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
-                                    <p className="text-xs">Scanning audiobook folder for chapter tracks...</p>
+                                    <span>Scanning track audio metadata...</span>
                                 </div>
                             ) : chaptersList.length === 0 ? (
-                                <div className="p-12 text-center text-sm text-slate-400 italic">
-                                    No audio chapter files detected in this folder.
+                                <div className="p-8 text-center text-xs text-slate-400 space-y-1">
+                                    <p>No audio chapter files detected on disk.</p>
+                                    <p className="text-[10px] text-slate-500">Ensure `.mp3` or `.m4b` files exist in this book's folder.</p>
                                 </div>
                             ) : (
-                                <div className="divide-y divide-slate-800/80">
+                                <div className="space-y-1.5">
                                     {chaptersList.map((ch, idx) => {
                                         const isCurrentlyPlaying = activePlayingTrack?.bookId === chaptersModalBook.id && activePlayingTrack?.currentChapterIndex === idx;
                                         return (
@@ -3838,25 +3837,39 @@ function normalizeBookCardMetadata(book: any) {
                             )}
                         </CardContent>
 
-                        {isEditingChapters && chaptersList.length > 0 && (
-                            <CardFooter className="border-t border-slate-800 p-3 bg-slate-900/60 flex items-center justify-between">
-                                <span className="text-xs text-slate-400">Total {chaptersList.length} tracks</span>
-                                <div className="flex gap-2">
-                                    <Button size="sm" variant="ghost" className="h-8 text-xs text-slate-400 hover:text-white" onClick={() => setIsEditingChapters(false)}>
-                                        Cancel
-                                    </Button>
+                        <CardFooter className="border-t border-slate-800 p-3 bg-slate-900/60 flex items-center justify-between">
+                            {isEditingChapters ? (
+                                <>
+                                    <span className="text-xs text-slate-400">Total {chaptersList.length} tracks</span>
+                                    <div className="flex gap-2">
+                                        <Button size="sm" variant="ghost" className="h-8 text-xs text-slate-400 hover:text-white" onClick={() => setIsEditingChapters(false)}>
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            className="h-8 text-xs font-bold bg-emerald-500 text-black hover:bg-emerald-400 gap-1.5 shadow"
+                                            onClick={handleSaveChapterOrder}
+                                            disabled={savingChapters}
+                                        >
+                                            {savingChapters ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                            Save Chapter Order &amp; Rename Files
+                                        </Button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-xs text-slate-400 font-medium">Total {chaptersList.length} Chapters</span>
                                     <Button
                                         size="sm"
-                                        className="h-8 text-xs font-bold bg-emerald-500 text-black hover:bg-emerald-400 gap-1.5 shadow"
-                                        onClick={handleSaveChapterOrder}
-                                        disabled={savingChapters}
+                                        variant="outline"
+                                        className="h-8 px-4 text-xs font-bold border-slate-700 text-slate-200 hover:bg-slate-800 gap-1.5 shadow-sm"
+                                        onClick={() => setChaptersModalBook(null)}
                                     >
-                                        {savingChapters ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                                        Save Chapter Order &amp; Rename Files
+                                        <X className="h-3.5 w-3.5 text-slate-400" /> Close / Back to Library
                                     </Button>
-                                </div>
-                            </CardFooter>
-                        )}
+                                </>
+                            )}
+                        </CardFooter>
                     </Card>
                 </div>
             )}
