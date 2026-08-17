@@ -11,6 +11,19 @@ const originalConsoleLog = console.log;
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
 
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+const getLogFilePath = () => {
+    const dataDir = path.join(process.cwd(), 'data');
+    if (fs.existsSync(dataDir)) {
+        return path.join(dataDir, 'system_logs.jsonl');
+    }
+    return path.join(os.tmpdir(), 'portalarr_system_logs.jsonl');
+};
+const logFilePath = getLogFilePath();
+
 class SystemLogger {
     private logs: SystemLogEntry[] = [];
     private maxLogs = 2000;
@@ -40,6 +53,12 @@ class SystemLogger {
             this.logs = this.logs.slice(0, this.maxLogs);
         }
 
+        try {
+            fs.appendFileSync(logFilePath, JSON.stringify(entry) + '\n');
+        } catch (e) {
+            // Ignore write errors
+        }
+
         if (!preventConsoleOutput) {
             const prefix = `[${entry.timestamp.substring(11, 19)}] [${entry.category}] [${entry.level}]`;
             if (level === "ERROR") {
@@ -53,11 +72,23 @@ class SystemLogger {
     }
 
     public getLogs(): SystemLogEntry[] {
+        try {
+            if (fs.existsSync(logFilePath)) {
+                const lines = fs.readFileSync(logFilePath, 'utf8').trim().split('\n').filter(Boolean);
+                const recent = lines.slice(-this.maxLogs);
+                return recent.map(l => JSON.parse(l)).reverse();
+            }
+        } catch (e) {
+            // Fallback to memory
+        }
         return this.logs;
     }
 
     public clearLogs(): void {
         this.logs = [];
+        try {
+            fs.writeFileSync(logFilePath, '');
+        } catch (e) {}
         this.addLog("INFO", "SYSTEM", "System logs buffer cleared by administrator.", undefined, true);
     }
 }
@@ -65,9 +96,7 @@ class SystemLogger {
 const globalLogger = global as unknown as { systemLoggerInstance: SystemLogger, consoleIntercepted: boolean };
 
 export const logger = globalLogger.systemLoggerInstance || new SystemLogger();
-if (process.env.NODE_ENV !== "production") {
-    globalLogger.systemLoggerInstance = logger;
-}
+globalLogger.systemLoggerInstance = logger;
 
 if (!globalLogger.consoleIntercepted) {
     globalLogger.consoleIntercepted = true;
