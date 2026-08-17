@@ -27,6 +27,7 @@ const logFilePath = getLogFilePath();
 class SystemLogger {
     private logs: SystemLogEntry[] = [];
     private maxLogs = 2000;
+    private writeCount = 0;
 
     constructor() {
         this.addLog("INFO", "SYSTEM", "Portalarr System Logger Initialized. Capturing real-time activity stream.", undefined, true);
@@ -55,6 +56,18 @@ class SystemLogger {
 
         try {
             fs.appendFileSync(logFilePath, JSON.stringify(entry) + '\n');
+            this.writeCount++;
+            
+            // Clean up file periodically to prevent infinite growth
+            if (this.writeCount > 500) {
+                this.writeCount = 0;
+                if (fs.existsSync(logFilePath)) {
+                    const lines = fs.readFileSync(logFilePath, 'utf8').trim().split('\n').filter(Boolean);
+                    if (lines.length > this.maxLogs * 1.5) {
+                        fs.writeFileSync(logFilePath, lines.slice(-this.maxLogs).join('\n') + '\n');
+                    }
+                }
+            }
         } catch (e) {
             // Ignore write errors
         }
