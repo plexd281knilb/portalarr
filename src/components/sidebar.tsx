@@ -158,11 +158,19 @@ export function MobileSidebar() {
                   </Link>
 
                   {isAdmin && (
-                    <Link href="/settings" onClick={() => setIsOpen(false)}>
-                      <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
-                        <Settings className="mr-2 h-4 w-4" /> System Settings
-                      </Button>
-                    </Link>
+                    <>
+                      <Link href="/settings" onClick={() => setIsOpen(false)}>
+                        <Button variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"} className="w-full justify-start">
+                          <Settings className="mr-2 h-4 w-4" /> System Settings
+                        </Button>
+                      </Link>
+
+                      <Link href="/settings?tab=logs" onClick={() => setIsOpen(false)}>
+                        <Button variant={pathname.includes("tab=logs") ? "secondary" : "ghost"} className="w-full justify-start text-emerald-400 hover:text-emerald-300">
+                          <Terminal className="mr-2 h-4 w-4 text-emerald-400" /> Live System Logs
+                        </Button>
+                      </Link>
+                    </>
                   )}
 
                    <div className="mt-8 border-t pt-4">

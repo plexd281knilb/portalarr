@@ -1875,6 +1875,12 @@ function normalizeBookCardMetadata(book: any) {
                                         onChange={(e) => setUserKindleEmail(e.target.value)}
                                     />
                                 </div>
+                                {userKindleEmail.trim() && !userKindleEmail.toLowerCase().endsWith("@kindle.com") && !userKindleEmail.toLowerCase().endsWith("@free.kindle.com") && (
+                                    <div className="flex items-start gap-2 mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-400">
+                                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                                        <p><strong>Warning:</strong> Send-to-Kindle emails typically end in @kindle.com. Please make sure you are not entering your personal Amazon login email.</p>
+                                    </div>
+                                )}
                                 <p className="text-[11px] text-muted-foreground leading-snug pt-1">
                                     Find your Kindle email under your Amazon Account &gt; <em>Content &amp; Devices</em> &gt; <em>Preferences</em> &gt; <em>Personal Document Settings</em>.
                                 </p>
@@ -1892,6 +1898,22 @@ function normalizeBookCardMetadata(book: any) {
                             </div>
 
                             <div className="space-y-3 pt-2">
+                                <div className="p-3.5 bg-red-500/15 border border-red-500/40 rounded-xl space-y-2 mb-4">
+                                    <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+                                        <AlertTriangle className="h-5 w-5" />
+                                        CRITICAL: Amazon Approved Senders
+                                    </div>
+                                    <p className="text-xs text-red-200 leading-relaxed">
+                                        Amazon will silently delete your books unless you whitelist our server. You <strong>MUST</strong> add the Portalarr server email address to your Amazon "Approved Personal Document E-mail List" before saving.
+                                    </p>
+                                    <div className="bg-red-950/40 p-2 rounded text-[11px] font-mono text-red-300 border border-red-500/20 text-center select-all">
+                                        {serverSmtpFrom || "Loading server email..."}
+                                    </div>
+                                    <p className="text-[10px] text-red-300/80 mt-1">
+                                        Go to: Amazon.com &gt; Account &gt; Content &amp; Devices &gt; Preferences &gt; Personal Document Settings &gt; Add a new approved e-mail address.
+                                    </p>
+                                </div>
+
                                 <Button type="submit" className="w-full h-11 font-semibold text-black gap-2">
                                     <Sparkles className="h-4 w-4" /> Save Email &amp; Unlock Automatic Delivery
                                 </Button>
@@ -3296,6 +3318,12 @@ function normalizeBookCardMetadata(book: any) {
                                                 onChange={(e) => setUserKindleEmail(e.target.value)}
                                                 required
                                             />
+                                            {userKindleEmail.trim() && !userKindleEmail.toLowerCase().endsWith("@kindle.com") && !userKindleEmail.toLowerCase().endsWith("@free.kindle.com") && (
+                                                <div className="flex items-start gap-2 mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-400">
+                                                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                                                    <p><strong>Warning:</strong> Send-to-Kindle emails typically end in @kindle.com. Please make sure you are not entering your personal Amazon login email.</p>
+                                                </div>
+                                            )}
                                             <p className="text-[10px] text-muted-foreground">
                                                 Your dedicated Kindle email address found in your Amazon devices list.
                                             </p>

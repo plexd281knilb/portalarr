@@ -476,6 +476,12 @@ export default function AccessSettingsPage() {
                                                 </span>
                                                 <span>•</span>
                                                 <span>Registered {format(new Date(user.createdAt), "MMM d, yyyy")}</span>
+                                                {user.lastLogin && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span>Last login: {format(new Date(user.lastLogin), "MMM d, yyyy h:mm a")}</span>
+                                                    </>
+                                                )}
                                             </div>
 
                                             {/* INLINE KINDLE EMAIL DISPLAY / EDIT */}

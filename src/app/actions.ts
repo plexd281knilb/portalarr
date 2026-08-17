@@ -563,14 +563,14 @@ export async function getAppUsers() {
         await verifyAdmin();
         return await prisma.user.findMany({
             orderBy: { createdAt: 'desc' },
-            select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true }
+            select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true, lastLogin: true }
         });
     } catch (e) {
         const user = await verifyUser().catch(() => null);
         if (user) {
             return await prisma.user.findMany({
                 orderBy: { createdAt: 'desc' },
-                select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true }
+                select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true, lastLogin: true }
             });
         }
         return [];

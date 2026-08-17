@@ -73,6 +73,7 @@ model User {
   kindleEmail String   @default("") // Send-to-Kindle email address
   role        String   @default("USER") // "ADMIN" or "USER"
   status      String   @default("APPROVED") // "APPROVED", "PENDING", "REJECTED"
+  lastLogin   DateTime? // Last time the user logged in
   createdAt   DateTime @default(now())
 }
 

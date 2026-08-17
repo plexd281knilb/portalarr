@@ -49,26 +49,26 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
             
             <div className="flex items-center gap-4">
                 {hasLibraryAccess && (
-                    <Button asChild variant="ghost" size="sm" className="hidden sm:flex gap-2 text-primary hover:text-primary hover:bg-primary/10">
-                        <Link href="/library">
+                    <Button asChild variant="ghost" size="sm" className="flex gap-2 text-primary hover:text-primary hover:bg-primary/10">
+                        <Link href="/library" title="Book Library">
                             <BookOpen className="h-4 w-4" /> 
-                            Book Library
+                            <span className="hidden sm:inline">Book Library</span>
                         </Link>
                     </Button>
                 )}
 
                 {pathname === "/beta" ? (
-                    <Button asChild variant="ghost" size="sm" className="hidden sm:flex gap-2">
-                        <Link href="/">
+                    <Button asChild variant="ghost" size="sm" className="flex gap-2">
+                        <Link href="/" title="Dashboard">
                             <LayoutDashboard className="h-4 w-4" /> 
-                            Dashboard
+                            <span className="hidden sm:inline">Dashboard</span>
                         </Link>
                     </Button>
                 ) : (
-                    <Button asChild variant="ghost" size="sm" className="hidden sm:flex gap-2">
-                        <Link href="/settings">
+                    <Button asChild variant="ghost" size="sm" className="flex gap-2">
+                        <Link href="/settings" title="Settings">
                             <Settings className="h-4 w-4" /> 
-                            Settings
+                            <span className="hidden sm:inline">Settings</span>
                         </Link>
                     </Button>
                 )}

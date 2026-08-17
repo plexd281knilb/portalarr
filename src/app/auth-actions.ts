@@ -132,6 +132,15 @@ export async function createSession(userId: string, username: string, role: stri
   const THIRTY_DAYS_SEC = 60 * 60 * 24 * 30; // 30 Days persistent login
   const expiresAt = new Date(Date.now() + THIRTY_DAYS_SEC * 1000);
 
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastLogin: new Date() }
+    });
+  } catch (e) {
+    console.error("[AUTH] Failed to update lastLogin for user:", e);
+  }
+
   const token = await new SignJWT({ userId, username, role, status })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
