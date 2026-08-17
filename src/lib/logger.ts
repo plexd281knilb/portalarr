@@ -89,7 +89,13 @@ class SystemLogger {
             if (fs.existsSync(logFilePath)) {
                 const lines = fs.readFileSync(logFilePath, 'utf8').trim().split('\n').filter(Boolean);
                 const recent = lines.slice(-this.maxLogs);
-                return recent.map(l => JSON.parse(l)).reverse();
+                return recent.map(l => {
+                    try {
+                        return JSON.parse(l);
+                    } catch (err) {
+                        return null; // Ignore corrupted interleaved lines from thread race conditions
+                    }
+                }).filter(Boolean).reverse();
             }
         } catch (e) {
             // Fallback to memory
