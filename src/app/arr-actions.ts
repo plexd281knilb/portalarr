@@ -12,6 +12,19 @@ async function verifySuperUserOrAdmin() {
     return session;
 }
 
+export async function testArrConfig(url: string, apiKey: string) {
+    try {
+        await verifySuperUserOrAdmin();
+        const profilesRes = await fetch(`${url}/api/v3/qualityprofile`, { headers: { "X-Api-Key": apiKey }, cache: "no-store" });
+        const foldersRes = await fetch(`${url}/api/v3/rootfolder`, { headers: { "X-Api-Key": apiKey }, cache: "no-store" });
+        
+        if (!profilesRes.ok || !foldersRes.ok) throw new Error("Failed to authenticate or fetch API data");
+        return { success: true, data: { profiles: await profilesRes.json(), folders: await foldersRes.json() } };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
     try {
         await verifySuperUserOrAdmin();

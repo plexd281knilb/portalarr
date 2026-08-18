@@ -15,6 +15,7 @@ import {
     testAppConnectionAction, testTautulliConnectionAction, testGlancesConnectionAction, validateDownloadsPathAction,
     getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI, runAiBatchMetadataScanner, testFolderPermissions
 } from "@/app/actions";
+import { testArrConfig } from "@/app/arr-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -161,6 +162,29 @@ function SettingsPageContent() {
         const res = await validateDownloadsPathAction(pathStr);
         setValidatingPath(false);
         setPathResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
+    };
+
+    const [arrMeta, setArrMeta] = useState<any>(null);
+    const [fetchingArrMeta, setFetchingArrMeta] = useState(false);
+    const handleFetchArrMeta = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        const form = e.currentTarget.closest('form');
+        if (!form) return;
+        const url = (form.elements.namedItem("url") as HTMLInputElement).value;
+        const apiKey = (form.elements.namedItem("apiKey") as HTMLInputElement).value;
+        if (!url || !apiKey) {
+            alert("URL and API Key are required to fetch metadata.");
+            return;
+        }
+        setFetchingArrMeta(true);
+        setArrMeta(null);
+        const res = await testArrConfig(url, apiKey);
+        if (res.success) {
+            setArrMeta(res.data);
+        } else {
+            alert("Failed to fetch profiles/folders: " + res.error);
+        }
+        setFetchingArrMeta(false);
     };
 
     const [permTesting, setPermTesting] = useState(false);
@@ -1020,7 +1044,7 @@ function SettingsPageContent() {
                                                         >
                                                             {testingAppId === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400" onClick={() => setEditingApp(app)}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400" onClick={() => { setEditingApp(app); setArrMeta(null); }}>
                                                             <Pencil className="h-3.5 w-3.5"/>
                                                         </Button>
                                                         <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(app.id, removeMediaApp)}>
@@ -1094,20 +1118,74 @@ function SettingsPageContent() {
                                         <div className="grid grid-cols-2 gap-2 mt-2">
                                             <div className="space-y-1">
                                                 <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Allowed Quality Profile IDs</Label>
-                                                <Input name="allowedQualityProfileIds" placeholder="e.g. 1,4,7" className="h-8 text-xs" defaultValue={editingApp?.allowedQualityProfileIds || ""} />
+                                                <Input id="allowedQualityProfileIds" name="allowedQualityProfileIds" placeholder="e.g. 1,4,7" className="h-8 text-xs" defaultValue={editingApp?.allowedQualityProfileIds || ""} />
                                             </div>
                                             <div className="space-y-1">
                                                 <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Allowed Root Folder IDs</Label>
-                                                <Input name="allowedRootFolderIds" placeholder="e.g. 1,2" className="h-8 text-xs" defaultValue={editingApp?.allowedRootFolderIds || ""} />
+                                                <Input id="allowedRootFolderIds" name="allowedRootFolderIds" placeholder="e.g. 1,2" className="h-8 text-xs" defaultValue={editingApp?.allowedRootFolderIds || ""} />
                                             </div>
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground ml-1">Comma-separated list of IDs. Super Users will only be able to select from these.</p>
+                                        <div className="flex items-center justify-between mt-1">
+                                            <p className="text-[10px] text-muted-foreground ml-1">Comma-separated list of IDs. Super Users will only be able to select from these.</p>
+                                            <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] px-2 py-0" onClick={handleFetchArrMeta} disabled={fetchingArrMeta}>
+                                                {fetchingArrMeta ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                                                Fetch IDs
+                                            </Button>
+                                        </div>
+                                        {arrMeta && (
+                                            <div className="space-y-3 bg-muted/30 p-2 rounded-md border mt-2">
+                                                <div>
+                                                    <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1">Quality Profiles (Click to toggle)</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {arrMeta.profiles.map((p: any) => (
+                                                            <Badge 
+                                                                key={p.id} 
+                                                                variant="outline" 
+                                                                className="cursor-pointer hover:bg-primary/20 text-[10px] py-0 transition-colors"
+                                                                onClick={() => {
+                                                                    const input = document.getElementById("allowedQualityProfileIds") as HTMLInputElement;
+                                                                    if (!input) return;
+                                                                    const current = input.value.split(',').map(s => s.trim()).filter(s => s);
+                                                                    const id = p.id.toString();
+                                                                    if (!current.includes(id)) input.value = current.length > 0 ? `${current.join(',')},${id}` : id;
+                                                                    else input.value = current.filter(s => s !== id).join(',');
+                                                                }}
+                                                            >
+                                                                {p.id}: {p.name}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1">Root Folders (Click to toggle)</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {arrMeta.folders.map((f: any) => (
+                                                            <Badge 
+                                                                key={f.id} 
+                                                                variant="outline" 
+                                                                className="cursor-pointer hover:bg-primary/20 text-[10px] py-0 transition-colors"
+                                                                onClick={() => {
+                                                                    const input = document.getElementById("allowedRootFolderIds") as HTMLInputElement;
+                                                                    if (!input) return;
+                                                                    const current = input.value.split(',').map(s => s.trim()).filter(s => s);
+                                                                    const id = f.id.toString();
+                                                                    if (!current.includes(id)) input.value = current.length > 0 ? `${current.join(',')},${id}` : id;
+                                                                    else input.value = current.filter(s => s !== id).join(',');
+                                                                }}
+                                                            >
+                                                                {f.id}: {f.path}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex gap-2">
                                         <Button type="submit" size="sm" className="w-full h-9 font-semibold">{editingApp ? "Update App" : "Add Application"}</Button>
                                         {editingApp && (
-                                            <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setEditingApp(null)}>
+                                            <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => { setEditingApp(null); setArrMeta(null); }}>
                                                 <X className="h-4 w-4"/>
                                             </Button>
                                         )}
