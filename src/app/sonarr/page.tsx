@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getEnabledArrInstances, getArrProfilesAndFolders, searchSonarrSeries, addSonarrSeries, getSonarrQueue, forceImportSonarrQueueItem } from "@/app/arr-actions"
+import { getEnabledArrInstances, getArrProfilesAndFolders, searchSonarrSeries, addSonarrSeries, getSonarrQueue, forceImportSonarrQueueItem, getSonarrLibrary, updateSonarrSeries, triggerSonarrSearch } from "@/app/arr-actions"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,6 +34,28 @@ export default function SonarrPage() {
     const [queueSearch, setQueueSearch] = useState("")
     const [importingId, setImportingId] = useState<string | null>(null)
 
+    // Library state
+    const [library, setLibrary] = useState<any[]>([])
+    const [libraryLoading, setLibraryLoading] = useState(false)
+    const [librarySearch, setLibrarySearch] = useState("")
+    const [modifyingId, setModifyingId] = useState<number | null>(null)
+
+    const fetchLibrary = async () => {
+        if (!selectedAppId) return;
+        setLibraryLoading(true);
+        try {
+            const res = await getSonarrLibrary(selectedAppId);
+            if (res.success && res.data) {
+                setLibrary(res.data);
+            } else {
+                console.error(res.error);
+            }
+        } catch (e) {
+            console.error("Library fetch error", e);
+        }
+        setLibraryLoading(false);
+    };
+
     useEffect(() => {
         getEnabledArrInstances("sonarr").then(res => {
             if (res.success && res.data) {
@@ -65,6 +87,7 @@ export default function SonarrPage() {
             }).catch(console.error)
             
             fetchQueue()
+            fetchLibrary()
         }
     }, [selectedAppId])
 
@@ -111,6 +134,7 @@ export default function SonarrPage() {
             const res = await addSonarrSeries(selectedAppId, series, parseInt(selectedProfileId), selectedFolderId)
             if (res.success) {
                 alert("Show added and missing episodes search started!")
+                fetchLibrary()
             } else {
                 alert("Failed to add show: " + res.error)
             }
@@ -120,6 +144,41 @@ export default function SonarrPage() {
         }
         setAddingSeriesId(null)
     }
+
+    const handleToggleMonitor = async (series: any) => {
+        if (!selectedAppId) return;
+        setModifyingId(series.id);
+        try {
+            const updatedSeries = { ...series, monitored: !series.monitored };
+            const res = await updateSonarrSeries(selectedAppId, updatedSeries);
+            if (res.success && res.data) {
+                setLibrary(prev => prev.map(s => s.id === series.id ? res.data : s));
+            } else {
+                alert("Failed to update monitored state: " + res.error);
+            }
+        } catch (e: any) {
+            console.error(e)
+            alert("Failed to update monitored state: " + e.message)
+        }
+        setModifyingId(null);
+    };
+
+    const handleTriggerSearch = async (series: any) => {
+        if (!selectedAppId) return;
+        setModifyingId(series.id);
+        try {
+            const res = await triggerSonarrSearch(selectedAppId, series.id);
+            if (res.success) {
+                alert(`Search command sent for: ${series.title}`);
+            } else {
+                alert("Failed to trigger search: " + res.error);
+            }
+        } catch (e: any) {
+            console.error(e)
+            alert("Failed to trigger search: " + e.message)
+        }
+        setModifyingId(null);
+    };
 
     const handleForceImport = async (downloadId: string) => {
         if (!selectedAppId) return;
@@ -150,13 +209,14 @@ export default function SonarrPage() {
     )
 
     const filteredQueue = queue.filter(q => q.title.toLowerCase().includes(queueSearch.toLowerCase()));
+    const filteredLibrary = library.filter(s => s.title.toLowerCase().includes(librarySearch.toLowerCase()));
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto pb-12">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h3 className="text-2xl font-bold text-cyan-400">Sonarr (TV Shows)</h3>
-                    <p className="text-sm text-muted-foreground">Self-serve TV show downloads and queue management.</p>
+                    <p className="text-sm text-muted-foreground">Self-serve TV show downloads and library management.</p>
                 </div>
                 {instances.length > 1 && (
                     <div className="flex items-center gap-2">
@@ -174,8 +234,9 @@ export default function SonarrPage() {
             </div>
 
             <Tabs defaultValue="search" className="w-full">
-                <TabsList className="grid w-full max-w-md grid-cols-2">
-                    <TabsTrigger value="search">Search & Add</TabsTrigger>
+                <TabsList className="grid w-full max-w-xl grid-cols-3">
+                    <TabsTrigger value="search">Search TVDB</TabsTrigger>
+                    <TabsTrigger value="library">Library ({library.length})</TabsTrigger>
                     <TabsTrigger value="queue">Activity / Queue</TabsTrigger>
                 </TabsList>
                 
@@ -254,6 +315,82 @@ export default function SonarrPage() {
                                     </div>
                                 ))}
                             </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* LIBRARY TAB */}
+                <TabsContent value="library" className="space-y-4 mt-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Library Management</CardTitle>
+                            <CardDescription>View, monitor, and search for new copies of existing TV shows.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {libraryLoading ? (
+                                <div className="py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></div>
+                            ) : (
+                                <>
+                                    <div className="relative max-w-sm mb-4">
+                                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input 
+                                            placeholder="Filter library..." 
+                                            className="pl-9"
+                                            value={librarySearch}
+                                            onChange={(e) => setLibrarySearch(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {filteredLibrary.map((series: any) => (
+                                            <div key={series.id} className="flex gap-4 border rounded-xl p-3 bg-card hover:bg-muted/10 transition-colors relative">
+                                                <div className="w-16 h-24 shrink-0 bg-muted rounded overflow-hidden">
+                                                    {series.images && series.images.length > 0 ? (
+                                                        <img src={series.images[0].url} alt="cover" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground text-center">No Cover</div>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col flex-1 min-w-0 py-1">
+                                                    <h4 className="font-semibold text-sm truncate pr-6">{series.title} ({series.year})</h4>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <Badge variant={series.statistics?.percentOfEpisodes === 100 ? "default" : "destructive"} className="text-[10px] uppercase">
+                                                            {series.statistics?.episodeFileCount || 0} / {series.statistics?.episodeCount || 0} EPs
+                                                        </Badge>
+                                                        <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground">
+                                                            {series.qualityProfileId ? profiles.find(p => p.id === series.qualityProfileId)?.name || series.qualityProfileId : "Unknown Profile"}
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="mt-auto flex items-center gap-2 pt-2">
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant={series.monitored ? "secondary" : "outline"}
+                                                            className="h-7 text-xs flex-1"
+                                                            disabled={modifyingId === series.id}
+                                                            onClick={() => handleToggleMonitor(series)}
+                                                        >
+                                                            {modifyingId === series.id ? <Loader2 className="h-3 w-3 animate-spin" /> : series.monitored ? "Unmonitor" : "Monitor"}
+                                                        </Button>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="default"
+                                                            className="h-7 text-xs flex-1"
+                                                            disabled={modifyingId === series.id}
+                                                            onClick={() => handleTriggerSearch(series)}
+                                                            title="Search for missing episodes or upgrades"
+                                                        >
+                                                            {modifyingId === series.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Search className="h-3 w-3 mr-1" /> Search Release</>}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                                <div className="absolute top-2 right-2 flex items-center">
+                                                    {series.monitored && <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400 text-[9px] px-1.5 border-emerald-500/30">MONITORED</Badge>}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {filteredLibrary.length === 0 && <p className="text-sm text-muted-foreground italic col-span-full">No TV shows found in library.</p>}
+                                    </div>
+                                </>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

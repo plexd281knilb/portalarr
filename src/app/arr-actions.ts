@@ -105,6 +105,30 @@ export async function arrApiPost(app: any, endpoint: string, body: any) {
     }
 }
 
+export async function arrApiPut(app: any, endpoint: string, body: any) {
+    try {
+        const cleanUrl = app.url.replace(/\/+$/, "");
+        const res = await fetch(`${cleanUrl}${endpoint}`, {
+            method: "PUT",
+            headers: { 
+                "X-Api-Key": app.apiKey,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body),
+            cache: "no-store"
+        });
+        if (!res.ok) throw new Error(`API PUT ${endpoint} failed: ${res.statusText}`);
+        const text = await res.text();
+        try {
+            return { success: true, data: JSON.parse(text) };
+        } catch (err) {
+            throw new Error(`API returned non-JSON. (Response: ${text.slice(0, 30)}...)`);
+        }
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 // ---- RADARR ----
 
 export async function searchRadarrMovies(appId: string, term: string) {
@@ -144,6 +168,48 @@ export async function addRadarrMovie(appId: string, movieData: any, qualityProfi
         };
 
         return await arrApiPost(app, "/api/v3/movie", body);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function getRadarrLibrary(appId: string) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("radarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Radarr instance not found or disabled");
+        
+        return await arrApiGet(app, "/api/v3/movie");
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function updateRadarrMovie(appId: string, movie: any) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("radarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Radarr instance not found or disabled");
+        
+        return await arrApiPut(app, `/api/v3/movie/${movie.id}`, movie);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function triggerRadarrSearch(appId: string, movieId: number) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("radarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Radarr instance not found or disabled");
+        
+        return await arrApiPost(app, "/api/v3/command", { name: "MoviesSearch", movieIds: [movieId] });
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -228,6 +294,48 @@ export async function addSonarrSeries(appId: string, seriesData: any, qualityPro
         };
 
         return await arrApiPost(app, "/api/v3/series", body);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function getSonarrLibrary(appId: string) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
+        
+        return await arrApiGet(app, "/api/v3/series");
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function updateSonarrSeries(appId: string, series: any) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
+        
+        return await arrApiPut(app, `/api/v3/series/${series.id}`, series);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function triggerSonarrSearch(appId: string, seriesId: number) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
+        
+        return await arrApiPost(app, "/api/v3/command", { name: "SeriesSearch", seriesId });
     } catch (e: any) {
         return { success: false, error: e.message };
     }
