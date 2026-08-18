@@ -1638,7 +1638,7 @@ export async function updateBook(id: string, title: string, author: string, cove
         } catch (e) {}
     }
 
-    await prisma.book.update({
+    await prisma.book.updateMany({
         where: { id },
         data: { title, author, coverUrl: finalCover }
     });
@@ -1686,7 +1686,7 @@ async function renameBookFileOnDisk(bookId: string): Promise<string> {
             console.log(`[FILE-RENAME] Renaming on-disk file: ${book.filePath} -> ${finalPath}`);
             fs.renameSync(book.filePath, finalPath);
             
-            await prisma.book.update({
+            await prisma.book.updateMany({
                 where: { id: bookId },
                 data: { filePath: finalPath }
             });
@@ -2152,7 +2152,7 @@ export async function runAiLibraryScanAction(libraryId: string): Promise<{ succe
                     const hdCover = await fetchBookCover(updateData.title || b.title, updateData.author || b.author, lib.mediaType || "ebook");
                     if (hdCover) updateData.coverUrl = hdCover;
 
-                    await prisma.book.update({
+                    await prisma.book.updateMany({
                         where: { id: b.id },
                         data: updateData
                     });
@@ -4295,7 +4295,7 @@ export async function resolveBookWithAI(bookId: string) {
             } catch (e) {}
         }
 
-        await prisma.book.update({
+        await prisma.book.updateMany({
             where: { id: bookId },
             data: {
                 title: aiResult.title,
@@ -5223,7 +5223,7 @@ export async function refreshBookCover(bookId: string) {
 
     const newCover = await fetchBookCover(title, author, book.mediaType || "ebook");
     if (newCover) {
-        await prisma.book.update({
+        await prisma.book.updateMany({
             where: { id: bookId },
             data: { 
                 coverUrl: newCover,
@@ -5367,7 +5367,7 @@ export async function getAudiobookChapters(bookId: string) {
 
                 if (resolvedPath) {
                     book.filePath = resolvedPath;
-                    await prisma.book.update({
+                    await prisma.book.updateMany({
                         where: { id: bookId },
                         data: { filePath: resolvedPath }
                     }).catch(() => {});
