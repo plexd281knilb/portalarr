@@ -419,8 +419,8 @@ export default function SonarrPage() {
                                                 <div className="flex flex-col flex-1 min-w-0 py-1">
                                                     <h4 className="font-semibold text-sm truncate pr-6">{series.title} ({series.year})</h4>
                                                     <div className="flex items-center gap-2 mt-1">
-                                                        <Badge variant={series.statistics?.percentOfEpisodes === 100 ? "default" : "destructive"} className="text-[10px] uppercase">
-                                                            {series.statistics?.episodeFileCount || 0} / {series.statistics?.episodeCount || 0} EPs
+                                                        <Badge variant={series.statistics?.percentOfEpisodes === 100 ? "default" : series.monitored ? "destructive" : "secondary"} className="text-[10px] uppercase">
+                                                            {series.statistics?.percentOfEpisodes === 100 ? "Downloaded" : series.monitored ? `${series.statistics?.episodeFileCount || 0} / ${series.statistics?.episodeCount || 0} EPs` : "Not Monitored"}
                                                         </Badge>
                                                         <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground">
                                                             {series.qualityProfileId ? profiles.find(p => p.id === series.qualityProfileId)?.name || series.qualityProfileId : "Unknown Profile"}

@@ -423,8 +423,8 @@ export default function RadarrPage() {
                                                 <div className="flex flex-col flex-1 min-w-0 py-1">
                                                     <h4 className="font-semibold text-sm truncate pr-6">{movie.title} ({movie.year})</h4>
                                                     <div className="flex items-center gap-2 mt-1">
-                                                        <Badge variant={movie.hasFile ? "default" : "destructive"} className="text-[10px] uppercase">
-                                                            {movie.hasFile ? "Downloaded" : "Missing"}
+                                                        <Badge variant={movie.hasFile ? "default" : movie.monitored ? "destructive" : "secondary"} className="text-[10px] uppercase">
+                                                            {movie.hasFile ? "Downloaded" : movie.monitored ? "Missing" : "Not Monitored"}
                                                         </Badge>
                                                         <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground">
                                                             {movie.qualityProfileId ? profiles.find(p => p.id === movie.qualityProfileId)?.name || movie.qualityProfileId : "Unknown Profile"}
