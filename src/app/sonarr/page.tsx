@@ -546,21 +546,21 @@ export default function SonarrPage() {
                         </DialogDescription>
                     </DialogHeader>
                     
-                    <div className="flex-1 overflow-hidden min-h-[50vh]">
+                    <div className="flex-1 overflow-y-auto min-h-[50vh] p-6">
                         {releasesLoading ? (
-                            <div className="h-full flex flex-col items-center justify-center p-12 text-muted-foreground">
+                            <div className="h-full flex flex-col items-center justify-center py-12 text-muted-foreground">
                                 <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
                                 <p>Searching indexers...</p>
                             </div>
                         ) : (
-                            <ScrollArea className="h-full px-6 py-4">
+                            <>
                                 {releases.length === 0 ? (
                                     <div className="text-center py-12 text-muted-foreground flex flex-col items-center">
                                         <XCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
                                         <p>No releases found.</p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-3 pb-6">
+                                    <div className="space-y-3">
                                         {releases.map((release: any, idx: number) => {
                                             const isDownloading = downloadingRelease === release.guid;
                                             const rejected = release.rejected && release.rejections && release.rejections.length > 0;
@@ -601,7 +601,7 @@ export default function SonarrPage() {
                                         })}
                                     </div>
                                 )}
-                            </ScrollArea>
+                            </>
                         )}
                     </div>
                 </DialogContent>
