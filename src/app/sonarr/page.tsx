@@ -243,11 +243,11 @@ export default function SonarrPage() {
                                                 <Button 
                                                     size="sm" 
                                                     onClick={() => handleAdd(series)}
-                                                    disabled={addingSeriesId === series.tvdbId || series.added}
-                                                    variant={series.added ? "secondary" : "default"}
+                                                    disabled={addingSeriesId === series.tvdbId || (series.id && series.id > 0) || (series.added && series.added !== "0001-01-01T00:00:00Z")}
+                                                    variant={(series.id && series.id > 0) || (series.added && series.added !== "0001-01-01T00:00:00Z") ? "secondary" : "default"}
                                                     className="h-7 text-xs"
                                                 >
-                                                    {addingSeriesId === series.tvdbId ? <Loader2 className="h-3 w-3 animate-spin" /> : series.added ? "Already Added" : <><Plus className="h-3 w-3 mr-1" /> Add Show</>}
+                                                    {addingSeriesId === series.tvdbId ? <Loader2 className="h-3 w-3 animate-spin" /> : ((series.id && series.id > 0) || (series.added && series.added !== "0001-01-01T00:00:00Z")) ? "Already Added" : <><Plus className="h-3 w-3 mr-1" /> Add Show</>}
                                                 </Button>
                                             </div>
                                         </div>
