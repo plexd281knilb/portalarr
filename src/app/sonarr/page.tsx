@@ -248,6 +248,7 @@ export default function SonarrPage() {
             const res = await updateSonarrSeries(selectedAppId, updatedSeries);
             if (res.success && res.data) {
                 setLibrary(prev => prev.map(s => s.id === series.id ? res.data : s));
+                setSearchResults(prev => prev.map(s => s.id === series.id ? res.data : s));
             } else {
                 alert("Failed to update monitored state: " + res.error);
             }
@@ -400,12 +401,17 @@ export default function SonarrPage() {
                                                 <span className="text-[10px] uppercase font-bold text-cyan-400/80">{series.network}</span>
                                                 <Button 
                                                     size="sm" 
-                                                    onClick={() => handleAdd(series)}
-                                                    disabled={addingSeriesId === series.tvdbId || (series.id && series.id > 0)}
-                                                    variant={(series.id && series.id > 0) ? "secondary" : "default"}
+                                                    onClick={() => {
+                                                        if (series.id && series.id > 0) handleToggleMonitor(series);
+                                                        else handleAdd(series);
+                                                    }}
+                                                    disabled={addingSeriesId === series.tvdbId || modifyingId === series.id || (series.id && series.id > 0 && series.monitored)}
+                                                    variant={(series.id && series.id > 0) ? (series.monitored ? "secondary" : "default") : "default"}
                                                     className="h-7 text-xs"
                                                 >
-                                                    {addingSeriesId === series.tvdbId ? <Loader2 className="h-3 w-3 animate-spin" /> : (series.id && series.id > 0) ? "Already Added" : <><Plus className="h-3 w-3 mr-1" /> Add Show</>}
+                                                    {addingSeriesId === series.tvdbId || modifyingId === series.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 
+                                                        (series.id && series.id > 0) ? (series.monitored ? "Already Added" : "Monitor") : 
+                                                        <><Plus className="h-3 w-3 mr-1" /> Add Show</>}
                                                 </Button>
                                             </div>
                                         </div>

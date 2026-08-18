@@ -219,6 +219,7 @@ export default function RadarrPage() {
             const res = await updateRadarrMovie(selectedAppId, updatedMovie);
             if (res.success && res.data) {
                 setLibrary(prev => prev.map(m => m.id === movie.id ? res.data : m));
+                setSearchResults(prev => prev.map(m => m.id === movie.id ? res.data : m));
             } else {
                 alert("Failed to update monitored state: " + res.error);
             }
@@ -371,12 +372,17 @@ export default function RadarrPage() {
                                                 <span className="text-[10px] uppercase font-bold text-blue-400/80">{movie.status}</span>
                                                 <Button 
                                                     size="sm" 
-                                                    onClick={() => handleAdd(movie)}
-                                                    disabled={addingMovieId === movie.tmdbId || (movie.id && movie.id > 0)}
-                                                    variant={(movie.id && movie.id > 0) ? "secondary" : "default"}
+                                                    onClick={() => {
+                                                        if (movie.id && movie.id > 0) handleToggleMonitor(movie);
+                                                        else handleAdd(movie);
+                                                    }}
+                                                    disabled={addingMovieId === movie.tmdbId || modifyingId === movie.id || (movie.id && movie.id > 0 && movie.monitored)}
+                                                    variant={(movie.id && movie.id > 0) ? (movie.monitored ? "secondary" : "default") : "default"}
                                                     className="h-7 text-xs"
                                                 >
-                                                    {addingMovieId === movie.tmdbId ? <Loader2 className="h-3 w-3 animate-spin" /> : (movie.id && movie.id > 0) ? "Already Added" : <><Plus className="h-3 w-3 mr-1" /> Add Movie</>}
+                                                    {addingMovieId === movie.tmdbId || modifyingId === movie.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 
+                                                        (movie.id && movie.id > 0) ? (movie.monitored ? "Already Added" : "Monitor") : 
+                                                        <><Plus className="h-3 w-3 mr-1" /> Add Movie</>}
                                                 </Button>
                                             </div>
                                         </div>
