@@ -405,14 +405,19 @@ export default function RadarrPage() {
                                 <div className="py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></div>
                             ) : (
                                 <>
-                                    <div className="relative max-w-sm mb-4">
-                                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                        <Input 
-                                            placeholder="Filter library..." 
-                                            className="pl-9"
-                                            value={librarySearch}
-                                            onChange={(e) => setLibrarySearch(e.target.value)}
-                                        />
+                                    <div className="flex gap-2 mb-4">
+                                        <div className="relative max-w-sm flex-1">
+                                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input 
+                                                placeholder="Filter library..." 
+                                                className="pl-9"
+                                                value={librarySearch}
+                                                onChange={(e) => setLibrarySearch(e.target.value)}
+                                            />
+                                        </div>
+                                        <Button variant="outline" size="icon" onClick={fetchLibrary} disabled={libraryLoading} title="Refresh Library">
+                                            <RefreshCw className={`h-4 w-4 ${libraryLoading ? 'animate-spin' : ''}`} />
+                                        </Button>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {filteredLibrary.map((movie: any) => {
