@@ -567,7 +567,9 @@ export default function RadarrPage() {
                                     <div className="space-y-3">
                                         {releases.map((release: any, idx: number) => {
                                             const isDownloading = downloadingRelease === release.guid;
-                                            const rejected = release.rejected && release.rejections && release.rejections.length > 0;
+                                            const benignPhrases = ["Existing file", "equal or higher", "Already in", "Custom Format score"];
+                                            const activeRejections = release.rejections?.filter((r: string) => !benignPhrases.some(phrase => r.toLowerCase().includes(phrase.toLowerCase()))) || [];
+                                            const rejected = release.rejected && activeRejections.length > 0;
                                             
                                             return (
                                                 <div key={release.guid || idx} className={`border rounded-lg p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center ${rejected ? 'opacity-60 bg-muted/30' : 'bg-card'}`}>
@@ -583,8 +585,8 @@ export default function RadarrPage() {
                                                             <span className="text-emerald-500 font-medium">{release.seeders} S</span>
                                                             <span className="text-red-500 font-medium">{release.leechers} L</span>
                                                         </div>
-                                                        {rejected && (
-                                                            <div className="mt-2 text-xs text-red-400 flex items-start gap-1">
+                                                        {(release.rejected && release.rejections?.length > 0) && (
+                                                            <div className={`mt-2 text-xs flex items-start gap-1 ${rejected ? 'text-red-400' : 'text-amber-500'}`}>
                                                                 <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
                                                                 <span>{release.rejections[0]}</span>
                                                             </div>
