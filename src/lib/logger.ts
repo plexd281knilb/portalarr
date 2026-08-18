@@ -124,6 +124,10 @@ if (!globalLogger.consoleIntercepted) {
         if (!args || args.length === 0) return;
         const msg = String(args[0]);
         if (msg.match(/^\[\d{2}:\d{2}:\d{2}\]/)) return;
+        
+        // Filter out expected Next.js Server Action cache miss warnings caused by deployment updates/reloads
+        if (msg.includes("Failed to find Server Action")) return;
+        if (args.length > 1 && String(args[1]).includes("Failed to find Server Action")) return;
 
         let category: SystemLogEntry["category"] = "SYSTEM";
         let cleanMsg = msg;
