@@ -72,7 +72,7 @@ export async function searchRadarrMovies(appId: string, term: string) {
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success) throw new Error(appsRes.error);
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Radarr instance not found or disabled");
         
@@ -86,7 +86,7 @@ export async function addRadarrMovie(appId: string, movieData: any, qualityProfi
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success) throw new Error(appsRes.error);
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Radarr instance not found or disabled");
 
@@ -114,7 +114,7 @@ export async function getRadarrQueue(appId: string) {
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success) throw new Error(appsRes.error);
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Radarr instance not found or disabled");
         
@@ -128,12 +128,12 @@ export async function forceImportRadarrQueueItem(appId: string, downloadId: stri
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success) throw new Error(appsRes.error);
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Radarr instance not found or disabled");
 
         const manualImportRes = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
-        if (!manualImportRes.success) throw new Error(manualImportRes.error);
+        if (!manualImportRes.success || !manualImportRes.data) throw new Error(manualImportRes.error || "Failed to load files");
         
         const manualImportFiles = manualImportRes.data;
         if (manualImportFiles && manualImportFiles.length > 0) {
@@ -156,7 +156,7 @@ export async function searchSonarrSeries(appId: string, term: string) {
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success) throw new Error(appsRes.error);
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Sonarr instance not found or disabled");
         
@@ -170,7 +170,7 @@ export async function addSonarrSeries(appId: string, seriesData: any, qualityPro
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success) throw new Error(appsRes.error);
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Sonarr instance not found or disabled");
 
@@ -198,7 +198,7 @@ export async function getSonarrQueue(appId: string) {
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success) throw new Error(appsRes.error);
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Sonarr instance not found or disabled");
         
@@ -212,12 +212,12 @@ export async function forceImportSonarrQueueItem(appId: string, downloadId: stri
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success) throw new Error(appsRes.error);
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Sonarr instance not found or disabled");
 
         const manualImportRes = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
-        if (!manualImportRes.success) throw new Error(manualImportRes.error);
+        if (!manualImportRes.success || !manualImportRes.data) throw new Error(manualImportRes.error || "Failed to load files");
 
         const manualImportFiles = manualImportRes.data;
         if (manualImportFiles && manualImportFiles.length > 0) {
@@ -239,14 +239,14 @@ export async function getArrProfilesAndFolders(appId: string, type: "radarr" | "
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances(type);
-        if (!appsRes.success) throw new Error(appsRes.error);
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Instance not found or disabled");
 
         const profilesRes = await arrApiGet(app, "/api/v3/qualityprofile");
         const foldersRes = await arrApiGet(app, "/api/v3/rootfolder");
-        if (!profilesRes.success) throw new Error(profilesRes.error);
-        if (!foldersRes.success) throw new Error(foldersRes.error);
+        if (!profilesRes.success || !profilesRes.data) throw new Error(profilesRes.error || "Failed to load profiles");
+        if (!foldersRes.success || !foldersRes.data) throw new Error(foldersRes.error || "Failed to load folders");
 
         return {
             success: true,
