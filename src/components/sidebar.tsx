@@ -15,17 +15,23 @@ import {
   LifeBuoy,
   BookOpen,
   User,
-  Terminal
+  Terminal,
+  Film,
+  Tv
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
+  const [role, setRole] = useState("")
 
   useEffect(() => {
     getSession().then((session) => {
-      if (session?.role === "ADMIN") {
-        setIsAdmin(true);
+      if (session) {
+        setRole(session.role || "");
+        if (session.role === "ADMIN") {
+          setIsAdmin(true);
+        }
       }
     });
   }, []);
@@ -65,6 +71,23 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                 Account Settings
               </Button>
             </Link>
+
+            {(isAdmin || role === "SUPER_USER") && (
+              <>
+                <Link href="/radarr">
+                  <Button variant={pathname.startsWith("/radarr") ? "secondary" : "ghost"} className="w-full justify-start text-blue-400 hover:text-blue-300">
+                    <Film className="mr-2 h-4 w-4 text-blue-400" />
+                    Radarr (Movies)
+                  </Button>
+                </Link>
+                <Link href="/sonarr">
+                  <Button variant={pathname.startsWith("/sonarr") ? "secondary" : "ghost"} className="w-full justify-start text-cyan-400 hover:text-cyan-300">
+                    <Tv className="mr-2 h-4 w-4 text-cyan-400" />
+                    Sonarr (TV Shows)
+                  </Button>
+                </Link>
+              </>
+            )}
 
             {isAdmin && (
               <>

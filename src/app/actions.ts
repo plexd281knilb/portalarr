@@ -428,10 +428,13 @@ export async function addMediaApp(formData: FormData) {
   const url = formData.get("url") as string;
   const externalUrl = formData.get("externalUrl") as string; 
   const rawApiKey = formData.get("apiKey") as string;
+  const enabledForUsers = formData.get("enabledForUsers") === "true";
+  const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
+  const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
   
   // Encrypt before saving
   await prisma.mediaApp.create({ 
-      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey) } 
+      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds } 
   });
   revalidatePath("/settings");
 }
@@ -444,11 +447,14 @@ export async function updateMediaApp(formData: FormData) {
     const url = formData.get("url") as string;
     const externalUrl = formData.get("externalUrl") as string;
     const rawApiKey = formData.get("apiKey") as string;
+    const enabledForUsers = formData.get("enabledForUsers") === "true";
+    const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
+    const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
 
     // Encrypt before saving
     await prisma.mediaApp.update({
         where: { id },
-        data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey) }
+        data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds }
     });
     revalidatePath("/settings");
 }

@@ -250,6 +250,7 @@ export default function AccessSettingsPage() {
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="ADMIN">Admin (Full Access & Settings)</SelectItem>
+                                        <SelectItem value="SUPER_USER">Super User (Radarr/Sonarr Access)</SelectItem>
                                         <SelectItem value="USER">User (Standard Access)</SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -532,6 +533,7 @@ export default function AccessSettingsPage() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="ADMIN">Admin</SelectItem>
+                                                <SelectItem value="SUPER_USER">Super User</SelectItem>
                                                 <SelectItem value="USER">User</SelectItem>
                                             </SelectContent>
                                         </Select>

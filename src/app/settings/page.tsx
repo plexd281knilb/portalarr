@@ -1083,6 +1083,27 @@ function SettingsPageContent() {
                                         </div>
                                     </div>
                                     <Input name="apiKey" placeholder="API Key / Password" className="h-9 text-sm font-mono" defaultValue={editingApp?.apiKey} />
+                                    
+                                    <div className="space-y-2 border-t pt-3 mt-3">
+                                        <div className="flex items-center space-x-2">
+                                            <input type="checkbox" id="enabledForUsers" name="enabledForUsers" value="true" defaultChecked={editingApp?.enabledForUsers} className="h-4 w-4 rounded border-gray-300" />
+                                            <Label htmlFor="enabledForUsers" className="text-sm font-medium">Enable for Super Users (Radarr/Sonarr)</Label>
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground ml-6">If enabled, this instance will appear on the Radarr/Sonarr pages for SUPER_USERs.</p>
+                                        
+                                        <div className="grid grid-cols-2 gap-2 mt-2">
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Allowed Quality Profile IDs</Label>
+                                                <Input name="allowedQualityProfileIds" placeholder="e.g. 1,4,7" className="h-8 text-xs" defaultValue={editingApp?.allowedQualityProfileIds || ""} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Allowed Root Folder IDs</Label>
+                                                <Input name="allowedRootFolderIds" placeholder="e.g. 1,2" className="h-8 text-xs" defaultValue={editingApp?.allowedRootFolderIds || ""} />
+                                            </div>
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground ml-1">Comma-separated list of IDs. Super Users will only be able to select from these.</p>
+                                    </div>
+
                                     <div className="flex gap-2">
                                         <Button type="submit" size="sm" className="w-full h-9 font-semibold">{editingApp ? "Update App" : "Add Application"}</Button>
                                         {editingApp && (
