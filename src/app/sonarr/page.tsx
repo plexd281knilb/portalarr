@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 import { Loader2, Search, Plus, Download, AlertCircle, RefreshCw, XCircle, CheckCircle2 } from "lucide-react"
 
 export function formatBytes(bytes: number, decimals = 2) {
@@ -680,7 +679,7 @@ export default function SonarrPage() {
                         {activeSeasons.filter((s: any) => s.seasonNumber > 0).map((season: any) => (
                             <div key={season.seasonNumber} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
                                 <div className="space-y-0.5">
-                                    <Label className="text-base font-medium">Season {season.seasonNumber}</Label>
+                                    <div className="text-base font-medium">Season {season.seasonNumber}</div>
                                     <p className="text-xs text-muted-foreground">
                                         {season.statistics?.episodeFileCount || 0} / {season.statistics?.totalEpisodeCount || season.statistics?.episodeCount || 0} Episodes
                                     </p>
