@@ -522,6 +522,18 @@ export default function SonarrPage() {
                                                         ⚠️ {item.errorMessage}
                                                     </div>
                                                 )}
+                                                {item.statusMessages && item.statusMessages.length > 0 && (
+                                                    <div className="mt-2 space-y-1">
+                                                        {item.statusMessages.map((msg: any, i: number) => (
+                                                            <div key={i} className="text-xs text-amber-500 flex flex-col bg-amber-500/10 p-2 rounded">
+                                                                <span className="font-semibold flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {msg.title}</span>
+                                                                {msg.messages && msg.messages.map((m: string, j: number) => (
+                                                                    <span key={j} className="text-[10px] text-amber-500/80 ml-4">{m}</span>
+                                                                ))}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="shrink-0 flex items-center gap-2">
                                                 <Button 
