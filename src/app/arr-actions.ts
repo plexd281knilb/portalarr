@@ -15,11 +15,25 @@ async function verifySuperUserOrAdmin() {
 export async function testArrConfig(url: string, apiKey: string) {
     try {
         await verifySuperUserOrAdmin();
-        const profilesRes = await fetch(`${url}/api/v3/qualityprofile`, { headers: { "X-Api-Key": apiKey }, cache: "no-store" });
-        const foldersRes = await fetch(`${url}/api/v3/rootfolder`, { headers: { "X-Api-Key": apiKey }, cache: "no-store" });
+        const cleanUrl = url.replace(/\/+$/, "");
+        const profilesRes = await fetch(`${cleanUrl}/api/v3/qualityprofile`, { headers: { "X-Api-Key": apiKey }, cache: "no-store" });
+        const foldersRes = await fetch(`${cleanUrl}/api/v3/rootfolder`, { headers: { "X-Api-Key": apiKey }, cache: "no-store" });
         
-        if (!profilesRes.ok || !foldersRes.ok) throw new Error("Failed to authenticate or fetch API data");
-        return { success: true, data: { profiles: await profilesRes.json(), folders: await foldersRes.json() } };
+        if (!profilesRes.ok) throw new Error(`Profiles API failed: ${profilesRes.statusText}`);
+        if (!foldersRes.ok) throw new Error(`Folders API failed: ${foldersRes.statusText}`);
+        
+        const profilesText = await profilesRes.text();
+        const foldersText = await foldersRes.text();
+        
+        let profiles, folders;
+        try {
+            profiles = JSON.parse(profilesText);
+            folders = JSON.parse(foldersText);
+        } catch (err) {
+            throw new Error(`API returned non-JSON. This usually means the URL is incorrect or a proxy is blocking access. (Response started with: ${profilesText.slice(0, 20)}...)`);
+        }
+        
+        return { success: true, data: { profiles, folders } };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -50,12 +64,18 @@ export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
 
 export async function arrApiGet(app: any, endpoint: string) {
     try {
-        const res = await fetch(`${app.url}${endpoint}`, {
+        const cleanUrl = app.url.replace(/\/+$/, "");
+        const res = await fetch(`${cleanUrl}${endpoint}`, {
             headers: { "X-Api-Key": app.apiKey },
             cache: "no-store"
         });
         if (!res.ok) throw new Error(`API GET ${endpoint} failed: ${res.statusText}`);
-        return { success: true, data: await res.json() };
+        const text = await res.text();
+        try {
+            return { success: true, data: JSON.parse(text) };
+        } catch (err) {
+            throw new Error(`API returned non-JSON. Incorrect URL or proxy issue? (Response: ${text.slice(0, 30)}...)`);
+        }
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -63,7 +83,8 @@ export async function arrApiGet(app: any, endpoint: string) {
 
 export async function arrApiPost(app: any, endpoint: string, body: any) {
     try {
-        const res = await fetch(`${app.url}${endpoint}`, {
+        const cleanUrl = app.url.replace(/\/+$/, "");
+        const res = await fetch(`${cleanUrl}${endpoint}`, {
             method: "POST",
             headers: { 
                 "X-Api-Key": app.apiKey,
@@ -73,7 +94,12 @@ export async function arrApiPost(app: any, endpoint: string, body: any) {
             cache: "no-store"
         });
         if (!res.ok) throw new Error(`API POST ${endpoint} failed: ${res.statusText}`);
-        return { success: true, data: await res.json() };
+        const text = await res.text();
+        try {
+            return { success: true, data: JSON.parse(text) };
+        } catch (err) {
+            throw new Error(`API returned non-JSON. (Response: ${text.slice(0, 30)}...)`);
+        }
     } catch (e: any) {
         return { success: false, error: e.message };
     }
