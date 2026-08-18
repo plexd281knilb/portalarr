@@ -534,9 +534,13 @@ export default function RadarrPage() {
                                                     <div className="mt-2 space-y-1">
                                                         {item.statusMessages.map((msg: any, i: number) => (
                                                             <div key={i} className="text-xs text-amber-500 flex flex-col bg-amber-500/10 p-2 rounded">
-                                                                <span className="font-semibold flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {msg.title}</span>
+                                                                {msg.title && msg.title !== item.title && (
+                                                                    <span className="font-semibold flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {msg.title}</span>
+                                                                )}
                                                                 {msg.messages && msg.messages.map((m: string, j: number) => (
-                                                                    <span key={j} className="text-[10px] text-amber-500/80 ml-4">{m}</span>
+                                                                    <span key={j} className="text-[10px] text-amber-500/80 ml-4 flex items-center gap-1">
+                                                                        {(!msg.title || msg.title === item.title) && j === 0 && <AlertCircle className="h-3 w-3 shrink-0" />} {m}
+                                                                    </span>
                                                                 ))}
                                                             </div>
                                                         ))}
