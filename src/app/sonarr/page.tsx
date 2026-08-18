@@ -691,7 +691,7 @@ export default function SonarrPage() {
                                                     
                                                     <Button 
                                                         onClick={() => handleDownloadRelease(release)}
-                                                        disabled={isDownloading || !!downloadingRelease}
+                                                        disabled={isDownloading || !!downloadingRelease || rejected}
                                                         variant={rejected ? "secondary" : "default"}
                                                         className="shrink-0 w-full sm:w-auto"
                                                     >
