@@ -369,7 +369,7 @@ export async function triggerSonarrSearch(appId: string, seriesId: number) {
     }
 }
 
-export async function getSonarrReleases(appId: string, seriesId: number) {
+export async function getSonarrReleases(appId: string, seriesId: number, seasonNumber?: number) {
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("sonarr");
@@ -377,7 +377,11 @@ export async function getSonarrReleases(appId: string, seriesId: number) {
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Sonarr instance not found or disabled");
         
-        return await arrApiGet(app, `/api/v3/release?seriesId=${seriesId}`);
+        let url = `/api/v3/release?seriesId=${seriesId}`;
+        if (seasonNumber !== undefined) {
+            url += `&seasonNumber=${seasonNumber}`;
+        }
+        return await arrApiGet(app, url);
     } catch (e: any) {
         return { success: false, error: e.message };
     }

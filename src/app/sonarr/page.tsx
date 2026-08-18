@@ -58,6 +58,7 @@ export default function SonarrPage() {
     const [releasesLoading, setReleasesLoading] = useState(false)
     const [releases, setReleases] = useState<any[]>([])
     const [activeSeries, setActiveSeries] = useState<any>(null)
+    const [activeSeasonNumber, setActiveSeasonNumber] = useState<number | undefined>(undefined)
     const [downloadingRelease, setDownloadingRelease] = useState<string | null>(null)
 
     // Manage Seasons Modal
@@ -97,25 +98,19 @@ export default function SonarrPage() {
         setSavingSeasons(false);
     };
 
-    const handleSearchRelease = async (series: any) => {
+    const handleSearchRelease = async (series: any, seasonNumber?: number) => {
         if (!selectedAppId) return;
         setActiveSeries(series);
+        setActiveSeasonNumber(seasonNumber);
         setReleasesModalOpen(true);
         setReleasesLoading(true);
         setReleases([]);
         
-        try {
-            const res = await getSonarrReleases(selectedAppId, series.id);
-            if (res.success && res.data) {
-                // Sort by weight/quality descending, or standard sort
-                setReleases(res.data.sort((a: any, b: any) => b.customFormatScore - a.customFormatScore));
-            } else {
-                alert("Failed to fetch releases: " + res.error);
-                setReleasesModalOpen(false);
-            }
-        } catch (e: any) {
-            console.error(e);
-            alert("Failed to fetch releases.");
+        const res = await getSonarrReleases(selectedAppId, series.id, seasonNumber);
+        if (res.success) {
+            setReleases(res.data.sort((a: any, b: any) => (b.customFormatScore || 0) - (a.customFormatScore || 0)));
+        } else {
+            alert("Failed to fetch releases: " + res.error);
             setReleasesModalOpen(false);
         }
         setReleasesLoading(false);
@@ -596,7 +591,7 @@ export default function SonarrPage() {
             <Dialog open={releasesModalOpen} onOpenChange={setReleasesModalOpen}>
                 <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
                     <DialogHeader className="px-6 py-4 border-b shrink-0">
-                        <DialogTitle>Interactive Search</DialogTitle>
+                        <DialogTitle>Releases - {activeSeries?.title} {activeSeasonNumber !== undefined ? `- Season ${activeSeasonNumber}` : ''}</DialogTitle>
                         <DialogDescription>
                             {activeSeries?.title} ({activeSeries?.year})
                         </DialogDescription>
@@ -684,14 +679,25 @@ export default function SonarrPage() {
                                         {season.statistics?.episodeFileCount || 0} / {season.statistics?.totalEpisodeCount || season.statistics?.episodeCount || 0} Episodes
                                     </p>
                                 </div>
-                                <Switch 
-                                    checked={season.monitored}
-                                    onCheckedChange={(checked) => {
-                                        setActiveSeasons(prev => prev.map(s => 
-                                            s.seasonNumber === season.seasonNumber ? { ...s, monitored: checked } : s
-                                        ));
-                                    }}
-                                />
+                                <div className="flex items-center gap-4">
+                                    <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className="h-7 text-xs" 
+                                        onClick={() => handleSearchRelease(activeSeasonsSeries, season.seasonNumber)}
+                                        title={`Search interactively for Season ${season.seasonNumber}`}
+                                    >
+                                        <Search className="h-3 w-3 mr-1" /> Search
+                                    </Button>
+                                    <Switch 
+                                        checked={season.monitored}
+                                        onCheckedChange={(checked) => {
+                                            setActiveSeasons(prev => prev.map(s => 
+                                                s.seasonNumber === season.seasonNumber ? { ...s, monitored: checked } : s
+                                            ));
+                                        }}
+                                    />
+                                </div>
                             </div>
                         ))}
                     </div>
