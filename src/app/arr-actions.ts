@@ -215,6 +215,34 @@ export async function triggerRadarrSearch(appId: string, movieId: number) {
     }
 }
 
+export async function getRadarrReleases(appId: string, movieId: number) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("radarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Radarr instance not found or disabled");
+        
+        return await arrApiGet(app, `/api/v3/release?movieId=${movieId}`);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function downloadRadarrRelease(appId: string, guid: string, indexerId: number) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("radarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Radarr instance not found or disabled");
+        
+        return await arrApiPost(app, "/api/v3/release", { guid, indexerId });
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function getRadarrQueue(appId: string) {
     try {
         await verifySuperUserOrAdmin();
@@ -336,6 +364,34 @@ export async function triggerSonarrSearch(appId: string, seriesId: number) {
         if (!app) throw new Error("Sonarr instance not found or disabled");
         
         return await arrApiPost(app, "/api/v3/command", { name: "SeriesSearch", seriesId });
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function getSonarrReleases(appId: string, seriesId: number) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
+        
+        return await arrApiGet(app, `/api/v3/release?seriesId=${seriesId}`);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function downloadSonarrRelease(appId: string, guid: string, indexerId: number) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
+        
+        return await arrApiPost(app, "/api/v3/release", { guid, indexerId });
     } catch (e: any) {
         return { success: false, error: e.message };
     }

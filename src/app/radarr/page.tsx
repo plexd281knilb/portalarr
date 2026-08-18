@@ -1,14 +1,29 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getEnabledArrInstances, getArrProfilesAndFolders, searchRadarrMovies, addRadarrMovie, getRadarrQueue, forceImportRadarrQueueItem, getRadarrLibrary, updateRadarrMovie, triggerRadarrSearch } from "@/app/arr-actions"
+import { 
+    getEnabledArrInstances, getArrProfilesAndFolders, 
+    searchRadarrMovies, addRadarrMovie, getRadarrQueue, forceImportRadarrQueueItem,
+    getRadarrLibrary, updateRadarrMovie, triggerRadarrSearch, getRadarrReleases, downloadRadarrRelease
+} from "@/app/arr-actions"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Search, Plus, Download, AlertCircle, RefreshCw } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Loader2, Search, Plus, Download, AlertCircle, RefreshCw, XCircle, CheckCircle2 } from "lucide-react"
+
+export function formatBytes(bytes: number, decimals = 2) {
+    if (!+bytes) return '0 Bytes'
+    const k = 1024
+    const dm = decimals < 0 ? 0 : decimals
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+}
 
 export default function RadarrPage() {
     const [instances, setInstances] = useState<any[]>([])
@@ -40,6 +55,56 @@ export default function RadarrPage() {
     const [libraryLoading, setLibraryLoading] = useState(false)
     const [librarySearch, setLibrarySearch] = useState("")
     const [modifyingId, setModifyingId] = useState<number | null>(null)
+
+    // Interactive Release Modal
+    const [releasesModalOpen, setReleasesModalOpen] = useState(false)
+    const [releasesLoading, setReleasesLoading] = useState(false)
+    const [releases, setReleases] = useState<any[]>([])
+    const [activeMovie, setActiveMovie] = useState<any>(null)
+    const [downloadingRelease, setDownloadingRelease] = useState<string | null>(null)
+
+    const handleSearchRelease = async (movie: any) => {
+        if (!selectedAppId) return;
+        setActiveMovie(movie);
+        setReleasesModalOpen(true);
+        setReleasesLoading(true);
+        setReleases([]);
+        
+        try {
+            const res = await getRadarrReleases(selectedAppId, movie.id);
+            if (res.success && res.data) {
+                // Sort by weight/quality descending, or standard sort
+                setReleases(res.data.sort((a: any, b: any) => b.customFormatScore - a.customFormatScore));
+            } else {
+                alert("Failed to fetch releases: " + res.error);
+                setReleasesModalOpen(false);
+            }
+        } catch (e: any) {
+            console.error(e);
+            alert("Failed to fetch releases.");
+            setReleasesModalOpen(false);
+        }
+        setReleasesLoading(false);
+    };
+
+    const handleDownloadRelease = async (release: any) => {
+        if (!selectedAppId || !activeMovie) return;
+        setDownloadingRelease(release.guid);
+        try {
+            const res = await downloadRadarrRelease(selectedAppId, release.guid, release.indexerId);
+            if (res.success) {
+                alert("Download started!");
+                setReleasesModalOpen(false);
+                setTimeout(fetchQueue, 2000);
+            } else {
+                alert("Failed to send release to download client: " + res.error);
+            }
+        } catch (e: any) {
+            console.error(e);
+            alert("Failed to download release: " + e.message);
+        }
+        setDownloadingRelease(null);
+    };
 
     const fetchLibrary = async () => {
         if (!selectedAppId) return;
@@ -385,8 +450,8 @@ export default function RadarrPage() {
                                                             variant="default"
                                                             className="h-7 text-xs flex-1"
                                                             disabled={modifyingId === movie.id}
-                                                            onClick={() => handleTriggerSearch(movie)}
-                                                            title="Search for a new release"
+                                                            onClick={() => handleSearchRelease(movie)}
+                                                            title="Search for a new release interactively"
                                                         >
                                                             {modifyingId === movie.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Search className="h-3 w-3 mr-1" /> Search Release</>}
                                                         </Button>
@@ -474,6 +539,77 @@ export default function RadarrPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {/* INTERACTIVE RELEASE MODAL */}
+            <Dialog open={releasesModalOpen} onOpenChange={setReleasesModalOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+                    <DialogHeader className="px-6 py-4 border-b shrink-0">
+                        <DialogTitle>Interactive Search</DialogTitle>
+                        <DialogDescription>
+                            {activeMovie?.title} ({activeMovie?.year})
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="flex-1 overflow-hidden min-h-[50vh]">
+                        {releasesLoading ? (
+                            <div className="h-full flex flex-col items-center justify-center p-12 text-muted-foreground">
+                                <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
+                                <p>Searching indexers...</p>
+                            </div>
+                        ) : (
+                            <ScrollArea className="h-full px-6 py-4">
+                                {releases.length === 0 ? (
+                                    <div className="text-center py-12 text-muted-foreground flex flex-col items-center">
+                                        <XCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                                        <p>No releases found.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 pb-6">
+                                        {releases.map((release: any, idx: number) => {
+                                            const isDownloading = downloadingRelease === release.guid;
+                                            const rejected = release.rejected && release.rejections && release.rejections.length > 0;
+                                            
+                                            return (
+                                                <div key={release.guid || idx} className={`border rounded-lg p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center ${rejected ? 'opacity-60 bg-muted/30' : 'bg-card'}`}>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                            <h5 className="font-medium text-sm break-all">{release.title}</h5>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap mt-2">
+                                                            <Badge variant="outline" className="text-[10px]">{release.quality?.quality?.name || "Unknown"}</Badge>
+                                                            <span className="flex items-center"><Download className="h-3 w-3 mr-1" /> {formatBytes(release.size)}</span>
+                                                            <span className="capitalize">{release.protocol}</span>
+                                                            <span className="bg-muted px-2 py-0.5 rounded text-foreground">{release.indexer}</span>
+                                                            <span className="text-emerald-500 font-medium">{release.seeders} S</span>
+                                                            <span className="text-red-500 font-medium">{release.leechers} L</span>
+                                                        </div>
+                                                        {rejected && (
+                                                            <div className="mt-2 text-xs text-red-400 flex items-start gap-1">
+                                                                <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                                                                <span>{release.rejections[0]}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <Button 
+                                                        onClick={() => handleDownloadRelease(release)}
+                                                        disabled={isDownloading || !!downloadingRelease}
+                                                        variant={rejected ? "secondary" : "default"}
+                                                        className="shrink-0 w-full sm:w-auto"
+                                                    >
+                                                        {isDownloading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                                                        Download
+                                                    </Button>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </ScrollArea>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
