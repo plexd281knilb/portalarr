@@ -369,7 +369,35 @@ export async function triggerSonarrSearch(appId: string, seriesId: number) {
     }
 }
 
-export async function getSonarrReleases(appId: string, seriesId: number, seasonNumber?: number) {
+export async function getSonarrEpisodes(appId: string, seriesId: number, seasonNumber: number) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
+        
+        return await arrApiGet(app, `/api/v3/episode?seriesId=${seriesId}&seasonNumber=${seasonNumber}`);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function updateSonarrEpisodeMonitor(appId: string, episodeIds: number[], monitored: boolean) {
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
+        
+        return await arrApiPut(app, `/api/v3/episode/monitor`, { episodeIds, monitored });
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function getSonarrReleases(appId: string, seriesId: number, seasonNumber?: number, episodeId?: number) {
     try {
         await verifySuperUserOrAdmin();
         const appsRes = await getEnabledArrInstances("sonarr");
@@ -378,7 +406,9 @@ export async function getSonarrReleases(appId: string, seriesId: number, seasonN
         if (!app) throw new Error("Sonarr instance not found or disabled");
         
         let url = `/api/v3/release?seriesId=${seriesId}`;
-        if (seasonNumber !== undefined) {
+        if (episodeId !== undefined) {
+            url = `/api/v3/release?episodeId=${episodeId}`;
+        } else if (seasonNumber !== undefined) {
             url += `&seasonNumber=${seasonNumber}`;
         }
         return await arrApiGet(app, url);

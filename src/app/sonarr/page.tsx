@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getEnabledArrInstances, getArrProfilesAndFolders, searchSonarrSeries, addSonarrSeries, getSonarrQueue, forceImportSonarrQueueItem, getSonarrLibrary, updateSonarrSeries, triggerSonarrSearch, getSonarrReleases, downloadSonarrRelease } from "@/app/arr-actions"
+import { getEnabledArrInstances, getArrProfilesAndFolders, searchSonarrSeries, addSonarrSeries, getSonarrQueue, forceImportSonarrQueueItem, getSonarrLibrary, updateSonarrSeries, triggerSonarrSearch, getSonarrReleases, downloadSonarrRelease, getSonarrEpisodes, updateSonarrEpisodeMonitor } from "@/app/arr-actions"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -59,13 +59,46 @@ export default function SonarrPage() {
     const [releases, setReleases] = useState<any[]>([])
     const [activeSeries, setActiveSeries] = useState<any>(null)
     const [activeSeasonNumber, setActiveSeasonNumber] = useState<number | undefined>(undefined)
+    const [activeEpisodeId, setActiveEpisodeId] = useState<number | undefined>(undefined)
     const [downloadingRelease, setDownloadingRelease] = useState<string | null>(null)
 
     // Manage Seasons Modal
     const [seasonsModalOpen, setSeasonsModalOpen] = useState(false)
-    const [activeSeasonsSeries, setActiveSeasonsSeries] = useState<any>(null)
     const [activeSeasons, setActiveSeasons] = useState<any[]>([])
+    const [activeSeasonsSeries, setActiveSeasonsSeries] = useState<any>(null)
     const [savingSeasons, setSavingSeasons] = useState(false)
+
+    // Manage Episodes Modal
+    const [episodesModalOpen, setEpisodesModalOpen] = useState(false)
+    const [episodesLoading, setEpisodesLoading] = useState(false)
+    const [episodes, setEpisodes] = useState<any[]>([])
+    const [activeSeasonNumberForEpisodes, setActiveSeasonNumberForEpisodes] = useState<number | undefined>(undefined)
+
+    const handleOpenEpisodes = async (seasonNumber: number) => {
+        if (!selectedAppId || !activeSeasonsSeries) return;
+        setActiveSeasonNumberForEpisodes(seasonNumber);
+        setEpisodesModalOpen(true);
+        setEpisodesLoading(true);
+        setEpisodes([]);
+        
+        const res = await getSonarrEpisodes(selectedAppId, activeSeasonsSeries.id, seasonNumber);
+        if (res.success) {
+            setEpisodes(res.data);
+        } else {
+            alert("Failed to load episodes: " + res.error);
+        }
+        setEpisodesLoading(false);
+    };
+
+    const handleToggleEpisodeMonitor = async (episodeId: number, currentMonitored: boolean) => {
+        if (!selectedAppId) return;
+        const res = await updateSonarrEpisodeMonitor(selectedAppId, [episodeId], !currentMonitored);
+        if (res.success) {
+            setEpisodes(prev => prev.map(e => e.id === episodeId ? { ...e, monitored: !currentMonitored } : e));
+        } else {
+            alert("Failed to toggle monitor: " + res.error);
+        }
+    };
 
     const handleOpenSeasons = (series: any) => {
         setActiveSeasonsSeries(series);
@@ -98,15 +131,16 @@ export default function SonarrPage() {
         setSavingSeasons(false);
     };
 
-    const handleSearchRelease = async (series: any, seasonNumber?: number) => {
+    const handleSearchRelease = async (series: any, seasonNumber?: number, episodeId?: number) => {
         if (!selectedAppId) return;
         setActiveSeries(series);
         setActiveSeasonNumber(seasonNumber);
+        setActiveEpisodeId(episodeId);
         setReleasesModalOpen(true);
         setReleasesLoading(true);
         setReleases([]);
         
-        const res = await getSonarrReleases(selectedAppId, series.id, seasonNumber);
+        const res = await getSonarrReleases(selectedAppId, series.id, seasonNumber, episodeId);
         if (res.success) {
             setReleases(res.data.sort((a: any, b: any) => (b.customFormatScore || 0) - (a.customFormatScore || 0)));
         } else {
@@ -699,10 +733,10 @@ export default function SonarrPage() {
                                         size="sm" 
                                         variant="outline" 
                                         className="h-7 text-xs" 
-                                        onClick={() => handleSearchRelease(activeSeasonsSeries, season.seasonNumber)}
-                                        title={`Search interactively for Season ${season.seasonNumber}`}
+                                        onClick={() => handleOpenEpisodes(season.seasonNumber)}
+                                        title={`View episodes for Season ${season.seasonNumber}`}
                                     >
-                                        <Search className="h-3 w-3 mr-1" /> Search
+                                        Episodes
                                     </Button>
                                     <Switch 
                                         checked={season.monitored}
@@ -723,6 +757,58 @@ export default function SonarrPage() {
                             {savingSeasons ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                             Save Changes
                         </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* MANAGE EPISODES MODAL */}
+            <Dialog open={episodesModalOpen} onOpenChange={setEpisodesModalOpen}>
+                <DialogContent className="max-w-xl max-h-[80vh] flex flex-col p-0">
+                    <DialogHeader className="px-6 py-4 border-b shrink-0">
+                        <DialogTitle>Season {activeSeasonNumberForEpisodes} Episodes</DialogTitle>
+                        <DialogDescription>
+                            {activeSeasonsSeries?.title}
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="flex-1 overflow-y-auto px-6 py-4">
+                        {episodesLoading ? (
+                            <div className="py-12 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                        ) : episodes.length === 0 ? (
+                            <div className="py-8 text-center text-sm text-muted-foreground">No episodes found.</div>
+                        ) : (
+                            <div className="space-y-3">
+                                {episodes.map((ep: any) => (
+                                    <div key={ep.id} className="flex items-center justify-between p-3 border rounded-xl hover:bg-muted/10 transition-colors">
+                                        <div className="space-y-1 pr-4 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-sm">Episode {ep.episodeNumber}</span>
+                                                <span className="text-sm font-medium truncate">{ep.title}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Badge variant={ep.hasFile ? "default" : ep.monitored ? "destructive" : "secondary"} className="text-[10px] uppercase">
+                                                    {ep.hasFile ? "Downloaded" : ep.monitored ? "Missing" : "Not Monitored"}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 shrink-0">
+                                            <Button 
+                                                size="sm" 
+                                                variant="outline" 
+                                                className="h-7 text-xs" 
+                                                onClick={() => handleSearchRelease(activeSeasonsSeries, activeSeasonNumberForEpisodes, ep.id)}
+                                            >
+                                                <Search className="h-3 w-3 mr-1" /> Search
+                                            </Button>
+                                            <Switch 
+                                                checked={ep.monitored}
+                                                onCheckedChange={() => handleToggleEpisodeMonitor(ep.id, ep.monitored)}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </DialogContent>
             </Dialog>
