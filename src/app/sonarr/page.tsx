@@ -518,16 +518,6 @@ export default function SonarrPage() {
                                                         >
                                                             Manage Seasons
                                                         </Button>
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="default"
-                                                            className="h-7 text-xs flex-1"
-                                                            disabled={modifyingId === series.id}
-                                                            onClick={() => handleSearchRelease(series)}
-                                                            title="Search for missing episodes interactively"
-                                                        >
-                                                            {modifyingId === series.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Search className="h-3 w-3 mr-1" /> Search Release</>}
-                                                        </Button>
                                                     </div>
                                                 </div>
                                                 <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
