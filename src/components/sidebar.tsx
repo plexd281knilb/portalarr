@@ -28,7 +28,7 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   useEffect(() => {
     getSession().then((session) => {
       if (session) {
-        setRole(session.role || "");
+        setRole((session.role as string) || "");
         if (session.role === "ADMIN") {
           setIsAdmin(true);
         }
