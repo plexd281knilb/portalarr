@@ -1590,7 +1590,7 @@ export async function getLibraryBooks(libraryId?: string) {
             if (heur.series) {
                 b.series = heur.series;
                 b.volumeNumber = heur.volumeNumber ? String(heur.volumeNumber) : null;
-                prisma.book.update({
+                prisma.book.updateMany({
                     where: { id: b.id },
                     data: { series: heur.series, volumeNumber: heur.volumeNumber ? String(heur.volumeNumber) : null }
                 }).catch(() => {});
@@ -1600,7 +1600,7 @@ export async function getLibraryBooks(libraryId?: string) {
         if (t !== b.title || a !== b.author) {
             b.title = t;
             b.author = a;
-            prisma.book.update({
+            prisma.book.updateMany({
                 where: { id: b.id },
                 data: { title: t, author: a }
             }).catch(() => {});
@@ -2511,14 +2511,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         const targetTitle = primary.title;
                         const targetAuthor = primary.author;
 
-                        await prisma.book.update({
+                        await prisma.book.updateMany({
                             where: { id: primary.id },
                             data: {
                                 fileSize: totalBytes,
                                 title: targetTitle,
                                 author: targetAuthor
                             }
-                        });
+                        }).catch(() => {});
 
                         const deleteIds = group.slice(1).map(item => item.id);
                         await prisma.book.deleteMany({
@@ -2904,7 +2904,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
                                 if (fetchedCover) {
                                     console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${title}": ${fetchedCover}`);
-                                    await prisma.book.update({
+                                    await prisma.book.updateMany({
                                         where: { id: newBook.id },
                                         data: { coverUrl: fetchedCover }
                                     }).catch(() => {});
@@ -2929,7 +2929,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     if (Object.keys(updateData).length > 0) {
                         logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Reassigned/Updated book "${existing.title}" (ID: ${existing.id}, Target Lib: "${library.name}", New Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
                         console.log(`[SCANNER] 🔄 Reassigned/Updated book "${existing.title}" to library "${library.name}" (ID: ${existing.id})`);
-                        await prisma.book.update({
+                        await prisma.book.updateMany({
                             where: { id: existing.id },
                             data: updateData
                         }).catch(() => {});
@@ -2960,7 +2960,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 }
                             } catch (e) {}
 
-                            await prisma.book.update({
+                            await prisma.book.updateMany({
                                 where: { id: existing.id },
                                 data: {
                                     title,
@@ -4339,7 +4339,7 @@ export async function runAiBatchMetadataScanner() {
                     } catch (e) {}
                 }
 
-                await prisma.book.update({
+                await prisma.book.updateMany({
                     where: { id: b.id },
                     data: {
                         title: aiResult.title || b.title,
