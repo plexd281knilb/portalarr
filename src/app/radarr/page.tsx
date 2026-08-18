@@ -512,7 +512,7 @@ export default function RadarrPage() {
                                         <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 border rounded-xl bg-muted/10">
                                             <div className="flex-1 min-w-0">
                                                 <div className="font-medium text-sm truncate" title={item.movie?.title || item.title}>{item.movie?.title || item.title}</div>
-                                                <div className="text-xs text-muted-foreground truncate mt-0.5" title={item.title}>{item.title}</div>
+                                                {item.movie?.title && <div className="text-xs text-muted-foreground truncate mt-0.5" title={item.title}>{item.title}</div>}
                                                 <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                                                     <span>{item.status}</span>
                                                     {item.sizeleft > 0 && item.size > 0 && (
