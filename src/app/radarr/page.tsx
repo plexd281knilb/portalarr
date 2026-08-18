@@ -288,11 +288,13 @@ export default function RadarrPage() {
 
                             {/* Search Results */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                                {searchResults.map((movie: any) => (
+                                {searchResults.map((movie: any) => {
+                                    const coverImg = movie.images?.find((i: any) => i.coverType === "poster")?.remoteUrl || movie.images?.[0]?.remoteUrl;
+                                    return (
                                     <div key={movie.tmdbId} className="flex gap-4 border rounded-xl p-3 bg-card hover:bg-muted/10 transition-colors">
                                         <div className="w-16 h-24 shrink-0 bg-muted rounded overflow-hidden">
-                                            {movie.images && movie.images.length > 0 ? (
-                                                <img src={movie.images[0].url} alt="cover" className="w-full h-full object-cover" />
+                                            {coverImg ? (
+                                                <img src={coverImg} alt="cover" className="w-full h-full object-cover" />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground text-center">No Cover</div>
                                             )}
@@ -314,7 +316,7 @@ export default function RadarrPage() {
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                )})}
                             </div>
                         </CardContent>
                     </Card>
@@ -342,11 +344,13 @@ export default function RadarrPage() {
                                         />
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {filteredLibrary.map((movie: any) => (
+                                        {filteredLibrary.map((movie: any) => {
+                                            const coverImg = movie.images?.find((i: any) => i.coverType === "poster")?.remoteUrl || movie.images?.[0]?.remoteUrl;
+                                            return (
                                             <div key={movie.id} className="flex gap-4 border rounded-xl p-3 bg-card hover:bg-muted/10 transition-colors relative">
                                                 <div className="w-16 h-24 shrink-0 bg-muted rounded overflow-hidden">
-                                                    {movie.images && movie.images.length > 0 ? (
-                                                        <img src={movie.images[0].url} alt="cover" className="w-full h-full object-cover" />
+                                                    {coverImg ? (
+                                                        <img src={coverImg} alt="cover" className="w-full h-full object-cover" />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground text-center">No Cover</div>
                                                     )}
@@ -364,10 +368,15 @@ export default function RadarrPage() {
                                                     <div className="mt-auto flex items-center gap-2 pt-2">
                                                         <Button 
                                                             size="sm" 
-                                                            variant={movie.monitored ? "secondary" : "outline"}
+                                                            variant={movie.monitored ? "destructive" : "secondary"}
                                                             className="h-7 text-xs flex-1"
                                                             disabled={modifyingId === movie.id}
-                                                            onClick={() => handleToggleMonitor(movie)}
+                                                            onClick={() => {
+                                                                if (movie.monitored) {
+                                                                    if (!window.confirm("Are you sure you want to unmonitor this movie?\n\nRadarr will no longer automatically search for or download new releases, upgrades, or missing files for this title.")) return;
+                                                                }
+                                                                handleToggleMonitor(movie);
+                                                            }}
                                                         >
                                                             {modifyingId === movie.id ? <Loader2 className="h-3 w-3 animate-spin" /> : movie.monitored ? "Unmonitor" : "Monitor"}
                                                         </Button>
@@ -387,7 +396,7 @@ export default function RadarrPage() {
                                                     {movie.monitored && <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400 text-[9px] px-1.5 border-emerald-500/30">MONITORED</Badge>}
                                                 </div>
                                             </div>
-                                        ))}
+                                        )})}
                                         {filteredLibrary.length === 0 && <p className="text-sm text-muted-foreground italic col-span-full">No movies found in library.</p>}
                                     </div>
                                 </>

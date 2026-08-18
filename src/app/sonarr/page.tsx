@@ -288,11 +288,13 @@ export default function SonarrPage() {
 
                             {/* Search Results */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                                {searchResults.map((series: any) => (
+                                {searchResults.map((series: any) => {
+                                    const coverImg = series.images?.find((i: any) => i.coverType === "poster")?.remoteUrl || series.images?.[0]?.remoteUrl;
+                                    return (
                                     <div key={series.tvdbId} className="flex gap-4 border rounded-xl p-3 bg-card hover:bg-muted/10 transition-colors">
                                         <div className="w-16 h-24 shrink-0 bg-muted rounded overflow-hidden">
-                                            {series.images && series.images.length > 0 ? (
-                                                <img src={series.images[0].url} alt="cover" className="w-full h-full object-cover" />
+                                            {coverImg ? (
+                                                <img src={coverImg} alt="cover" className="w-full h-full object-cover" />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground text-center">No Cover</div>
                                             )}
@@ -314,7 +316,7 @@ export default function SonarrPage() {
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                )})}
                             </div>
                         </CardContent>
                     </Card>
@@ -342,11 +344,13 @@ export default function SonarrPage() {
                                         />
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {filteredLibrary.map((series: any) => (
+                                        {filteredLibrary.map((series: any) => {
+                                            const coverImg = series.images?.find((i: any) => i.coverType === "poster")?.remoteUrl || series.images?.[0]?.remoteUrl;
+                                            return (
                                             <div key={series.id} className="flex gap-4 border rounded-xl p-3 bg-card hover:bg-muted/10 transition-colors relative">
                                                 <div className="w-16 h-24 shrink-0 bg-muted rounded overflow-hidden">
-                                                    {series.images && series.images.length > 0 ? (
-                                                        <img src={series.images[0].url} alt="cover" className="w-full h-full object-cover" />
+                                                    {coverImg ? (
+                                                        <img src={coverImg} alt="cover" className="w-full h-full object-cover" />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground text-center">No Cover</div>
                                                     )}
@@ -364,10 +368,15 @@ export default function SonarrPage() {
                                                     <div className="mt-auto flex items-center gap-2 pt-2">
                                                         <Button 
                                                             size="sm" 
-                                                            variant={series.monitored ? "secondary" : "outline"}
+                                                            variant={series.monitored ? "destructive" : "secondary"}
                                                             className="h-7 text-xs flex-1"
                                                             disabled={modifyingId === series.id}
-                                                            onClick={() => handleToggleMonitor(series)}
+                                                            onClick={() => {
+                                                                if (series.monitored) {
+                                                                    if (!window.confirm("Are you sure you want to unmonitor this show?\n\nSonarr will no longer automatically search for or download new episodes or missing files for this title.")) return;
+                                                                }
+                                                                handleToggleMonitor(series);
+                                                            }}
                                                         >
                                                             {modifyingId === series.id ? <Loader2 className="h-3 w-3 animate-spin" /> : series.monitored ? "Unmonitor" : "Monitor"}
                                                         </Button>
@@ -387,7 +396,7 @@ export default function SonarrPage() {
                                                     {series.monitored && <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400 text-[9px] px-1.5 border-emerald-500/30">MONITORED</Badge>}
                                                 </div>
                                             </div>
-                                        ))}
+                                        )})}
                                         {filteredLibrary.length === 0 && <p className="text-sm text-muted-foreground italic col-span-full">No TV shows found in library.</p>}
                                     </div>
                                 </>
