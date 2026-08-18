@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { Loader2, Search, Plus, Download, AlertCircle, RefreshCw, XCircle, CheckCircle2 } from "lucide-react"
 
 export function formatBytes(bytes: number, decimals = 2) {
@@ -58,6 +60,43 @@ export default function SonarrPage() {
     const [releases, setReleases] = useState<any[]>([])
     const [activeSeries, setActiveSeries] = useState<any>(null)
     const [downloadingRelease, setDownloadingRelease] = useState<string | null>(null)
+
+    // Manage Seasons Modal
+    const [seasonsModalOpen, setSeasonsModalOpen] = useState(false)
+    const [activeSeasonsSeries, setActiveSeasonsSeries] = useState<any>(null)
+    const [activeSeasons, setActiveSeasons] = useState<any[]>([])
+    const [savingSeasons, setSavingSeasons] = useState(false)
+
+    const handleOpenSeasons = (series: any) => {
+        setActiveSeasonsSeries(series);
+        // Clone seasons, sort by season number descending
+        const seasons = JSON.parse(JSON.stringify(series.seasons || []))
+            .sort((a: any, b: any) => b.seasonNumber - a.seasonNumber);
+        setActiveSeasons(seasons);
+        setSeasonsModalOpen(true);
+    };
+
+    const handleSaveSeasons = async () => {
+        if (!activeSeasonsSeries || !selectedAppId) return;
+        setSavingSeasons(true);
+        
+        // Auto-monitor the series if at least one season is monitored
+        const anyMonitored = activeSeasons.some((s: any) => s.monitored);
+        const updatedSeries = { 
+            ...activeSeasonsSeries, 
+            seasons: activeSeasons,
+            monitored: anyMonitored ? true : activeSeasonsSeries.monitored 
+        };
+        
+        const res = await updateSonarrSeries(selectedAppId, updatedSeries);
+        if (res.success) {
+            setSeasonsModalOpen(false);
+            fetchLibrary();
+        } else {
+            alert("Failed to update seasons: " + res.error);
+        }
+        setSavingSeasons(false);
+    };
 
     const handleSearchRelease = async (series: any) => {
         if (!selectedAppId) return;
@@ -433,17 +472,12 @@ export default function SonarrPage() {
                                                     <div className="mt-auto flex items-center gap-2 pt-2">
                                                         <Button 
                                                             size="sm" 
-                                                            variant={series.monitored ? "destructive" : "secondary"}
+                                                            variant="secondary"
                                                             className="h-7 text-xs flex-1"
                                                             disabled={modifyingId === series.id}
-                                                            onClick={() => {
-                                                                if (series.monitored) {
-                                                                    if (!window.confirm("Are you sure you want to unmonitor this show?\n\nSonarr will no longer automatically search for or download new episodes or missing files for this title.")) return;
-                                                                }
-                                                                handleToggleMonitor(series);
-                                                            }}
+                                                            onClick={() => handleOpenSeasons(series)}
                                                         >
-                                                            {modifyingId === series.id ? <Loader2 className="h-3 w-3 animate-spin" /> : series.monitored ? "Unmonitor" : "Monitor"}
+                                                            Manage Seasons
                                                         </Button>
                                                         <Button 
                                                             size="sm" 
@@ -625,6 +659,47 @@ export default function SonarrPage() {
                                 )}
                             </>
                         )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* MANAGE SEASONS MODAL */}
+            <Dialog open={seasonsModalOpen} onOpenChange={setSeasonsModalOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Manage Seasons</DialogTitle>
+                        <DialogDescription>
+                            {activeSeasonsSeries?.title} ({activeSeasonsSeries?.year})
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                        {activeSeasons.filter((s: any) => s.seasonNumber > 0).map((season: any) => (
+                            <div key={season.seasonNumber} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base font-medium">Season {season.seasonNumber}</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        {season.statistics?.episodeFileCount || 0} / {season.statistics?.totalEpisodeCount || season.statistics?.episodeCount || 0} Episodes
+                                    </p>
+                                </div>
+                                <Switch 
+                                    checked={season.monitored}
+                                    onCheckedChange={(checked) => {
+                                        setActiveSeasons(prev => prev.map(s => 
+                                            s.seasonNumber === season.seasonNumber ? { ...s, monitored: checked } : s
+                                        ));
+                                    }}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="flex justify-end gap-2 pt-4 border-t">
+                        <Button variant="outline" onClick={() => setSeasonsModalOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSaveSeasons} disabled={savingSeasons}>
+                            {savingSeasons ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            Save Changes
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
