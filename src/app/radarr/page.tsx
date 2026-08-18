@@ -35,10 +35,14 @@ export default function RadarrPage() {
     const [importingId, setImportingId] = useState<string | null>(null)
 
     useEffect(() => {
-        getEnabledArrInstances("radarr").then(apps => {
-            setInstances(apps)
-            if (apps.length > 0) {
-                setSelectedAppId(apps[0].id)
+        getEnabledArrInstances("radarr").then(res => {
+            if (res.success && res.data) {
+                setInstances(res.data)
+                if (res.data.length > 0) {
+                    setSelectedAppId(res.data[0].id)
+                }
+            } else {
+                console.error(res.error)
             }
             setLoading(false)
         }).catch(err => {
@@ -49,11 +53,15 @@ export default function RadarrPage() {
 
     useEffect(() => {
         if (selectedAppId) {
-            getArrProfilesAndFolders(selectedAppId, "radarr").then(data => {
-                setProfiles(data.profiles)
-                setFolders(data.folders)
-                if (data.profiles.length > 0) setSelectedProfileId(data.profiles[0].id.toString())
-                if (data.folders.length > 0) setSelectedFolderId(data.folders[0].id.toString())
+            getArrProfilesAndFolders(selectedAppId, "radarr").then(res => {
+                if (res.success && res.data) {
+                    setProfiles(res.data.profiles)
+                    setFolders(res.data.folders)
+                    if (res.data.profiles.length > 0) setSelectedProfileId(res.data.profiles[0].id.toString())
+                    if (res.data.folders.length > 0) setSelectedFolderId(res.data.folders[0].id.toString())
+                } else {
+                    console.error(res.error)
+                }
             }).catch(console.error)
             
             fetchQueue()
@@ -64,8 +72,12 @@ export default function RadarrPage() {
         if (!selectedAppId) return;
         setQueueLoading(true);
         try {
-            const data = await getRadarrQueue(selectedAppId);
-            setQueue(data.records || []);
+            const res = await getRadarrQueue(selectedAppId);
+            if (res.success && res.data) {
+                setQueue(res.data.records || []);
+            } else {
+                console.error(res.error);
+            }
         } catch (e) {
             console.error("Queue fetch error", e);
         }
@@ -78,8 +90,12 @@ export default function RadarrPage() {
         
         setSearching(true)
         try {
-            const results = await searchRadarrMovies(selectedAppId, searchTerm)
-            setSearchResults(results)
+            const res = await searchRadarrMovies(selectedAppId, searchTerm)
+            if (res.success && res.data) {
+                setSearchResults(res.data)
+            } else {
+                alert("Search failed: " + res.error)
+            }
         } catch (e) {
             console.error(e)
             alert("Search failed. See console.")
@@ -92,8 +108,12 @@ export default function RadarrPage() {
         
         setAddingMovieId(movie.tmdbId)
         try {
-            await addRadarrMovie(selectedAppId, movie, parseInt(selectedProfileId), selectedFolderId)
-            alert("Movie added and download started!")
+            const res = await addRadarrMovie(selectedAppId, movie, parseInt(selectedProfileId), selectedFolderId)
+            if (res.success) {
+                alert("Movie added and download started!")
+            } else {
+                alert("Failed to add movie: " + res.error)
+            }
         } catch (e: any) {
             console.error(e)
             alert("Failed to add movie: " + e.message)
@@ -105,9 +125,13 @@ export default function RadarrPage() {
         if (!selectedAppId) return;
         setImportingId(downloadId);
         try {
-            await forceImportRadarrQueueItem(selectedAppId, downloadId);
-            alert("Import command sent!");
-            setTimeout(fetchQueue, 2000);
+            const res = await forceImportRadarrQueueItem(selectedAppId, downloadId);
+            if (res.success) {
+                alert("Import command sent!");
+                setTimeout(fetchQueue, 2000);
+            } else {
+                alert("Failed to force import: " + res.error);
+            }
         } catch (e: any) {
             console.error(e);
             alert("Failed to force import: " + e.message);

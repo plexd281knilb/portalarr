@@ -13,180 +13,249 @@ async function verifySuperUserOrAdmin() {
 }
 
 export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
-    await verifySuperUserOrAdmin();
-    const apps = await prisma.mediaApp.findMany({
-        where: { type, enabledForUsers: true }
-    });
-    return apps.map(app => ({
-        id: app.id,
-        name: app.name,
-        url: app.url,
-        externalUrl: app.externalUrl,
-        allowedQualityProfileIds: app.allowedQualityProfileIds ? app.allowedQualityProfileIds.split(",").map(s => s.trim()) : [],
-        allowedRootFolderIds: app.allowedRootFolderIds ? app.allowedRootFolderIds.split(",").map(s => s.trim()) : [],
-        apiKey: decryptData(app.apiKey || "")
-    }));
+    try {
+        await verifySuperUserOrAdmin();
+        const apps = await prisma.mediaApp.findMany({
+            where: { type, enabledForUsers: true }
+        });
+        return {
+            success: true,
+            data: apps.map(app => ({
+                id: app.id,
+                name: app.name,
+                url: app.url,
+                externalUrl: app.externalUrl,
+                allowedQualityProfileIds: app.allowedQualityProfileIds ? app.allowedQualityProfileIds.split(",").map(s => s.trim()) : [],
+                allowedRootFolderIds: app.allowedRootFolderIds ? app.allowedRootFolderIds.split(",").map(s => s.trim()) : [],
+                apiKey: decryptData(app.apiKey || "")
+            }))
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function arrApiGet(app: any, endpoint: string) {
-    const res = await fetch(`${app.url}${endpoint}`, {
-        headers: { "X-Api-Key": app.apiKey },
-        cache: "no-store"
-    });
-    if (!res.ok) throw new Error(`API GET ${endpoint} failed: ${res.statusText}`);
-    return res.json();
+    try {
+        const res = await fetch(`${app.url}${endpoint}`, {
+            headers: { "X-Api-Key": app.apiKey },
+            cache: "no-store"
+        });
+        if (!res.ok) throw new Error(`API GET ${endpoint} failed: ${res.statusText}`);
+        return { success: true, data: await res.json() };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function arrApiPost(app: any, endpoint: string, body: any) {
-    const res = await fetch(`${app.url}${endpoint}`, {
-        method: "POST",
-        headers: { 
-            "X-Api-Key": app.apiKey,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body),
-        cache: "no-store"
-    });
-    if (!res.ok) throw new Error(`API POST ${endpoint} failed: ${res.statusText}`);
-    return res.json();
+    try {
+        const res = await fetch(`${app.url}${endpoint}`, {
+            method: "POST",
+            headers: { 
+                "X-Api-Key": app.apiKey,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body),
+            cache: "no-store"
+        });
+        if (!res.ok) throw new Error(`API POST ${endpoint} failed: ${res.statusText}`);
+        return { success: true, data: await res.json() };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 // ---- RADARR ----
 
 export async function searchRadarrMovies(appId: string, term: string) {
-    await verifySuperUserOrAdmin();
-    const apps = await getEnabledArrInstances("radarr");
-    const app = apps.find(a => a.id === appId);
-    if (!app) throw new Error("Radarr instance not found or disabled");
-    
-    return arrApiGet(app, `/api/v3/movie/lookup?term=${encodeURIComponent(term)}`);
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("radarr");
+        if (!appsRes.success) throw new Error(appsRes.error);
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Radarr instance not found or disabled");
+        
+        return await arrApiGet(app, `/api/v3/movie/lookup?term=${encodeURIComponent(term)}`);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function addRadarrMovie(appId: string, movieData: any, qualityProfileId: number, rootFolderPath: string) {
-    await verifySuperUserOrAdmin();
-    const apps = await getEnabledArrInstances("radarr");
-    const app = apps.find(a => a.id === appId);
-    if (!app) throw new Error("Radarr instance not found or disabled");
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("radarr");
+        if (!appsRes.success) throw new Error(appsRes.error);
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Radarr instance not found or disabled");
 
-    if (app.allowedQualityProfileIds.length > 0 && !app.allowedQualityProfileIds.includes(qualityProfileId.toString())) {
-        throw new Error("Quality profile not allowed for this instance");
-    }
-
-    const body = {
-        ...movieData,
-        qualityProfileId,
-        rootFolderPath,
-        monitored: true,
-        addOptions: {
-            searchForMovie: true
+        if (app.allowedQualityProfileIds.length > 0 && !app.allowedQualityProfileIds.includes(qualityProfileId.toString())) {
+            throw new Error("Quality profile not allowed for this instance");
         }
-    };
 
-    return arrApiPost(app, "/api/v3/movie", body);
+        const body = {
+            ...movieData,
+            qualityProfileId,
+            rootFolderPath,
+            monitored: true,
+            addOptions: {
+                searchForMovie: true
+            }
+        };
+
+        return await arrApiPost(app, "/api/v3/movie", body);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function getRadarrQueue(appId: string) {
-    await verifySuperUserOrAdmin();
-    const apps = await getEnabledArrInstances("radarr");
-    const app = apps.find(a => a.id === appId);
-    if (!app) throw new Error("Radarr instance not found or disabled");
-    
-    return arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000&sortKey=timeLeft&sortDirection=ascending");
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("radarr");
+        if (!appsRes.success) throw new Error(appsRes.error);
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Radarr instance not found or disabled");
+        
+        return await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000&sortKey=timeLeft&sortDirection=ascending");
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function forceImportRadarrQueueItem(appId: string, downloadId: string) {
-    await verifySuperUserOrAdmin();
-    const apps = await getEnabledArrInstances("radarr");
-    const app = apps.find(a => a.id === appId);
-    if (!app) throw new Error("Radarr instance not found or disabled");
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("radarr");
+        if (!appsRes.success) throw new Error(appsRes.error);
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Radarr instance not found or disabled");
 
-    const manualImportFiles = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
-    
-    if (manualImportFiles && manualImportFiles.length > 0) {
-        const importPayload = manualImportFiles.map((file: any) => ({
-            ...file,
-            importApproved: true
-        }));
-        return arrApiPost(app, "/api/v3/manualimport", importPayload);
+        const manualImportRes = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
+        if (!manualImportRes.success) throw new Error(manualImportRes.error);
+        
+        const manualImportFiles = manualImportRes.data;
+        if (manualImportFiles && manualImportFiles.length > 0) {
+            const importPayload = manualImportFiles.map((file: any) => ({
+                ...file,
+                importApproved: true
+            }));
+            return await arrApiPost(app, "/api/v3/manualimport", importPayload);
+        }
+        
+        return { success: false, error: "No files found to import" };
+    } catch (e: any) {
+        return { success: false, error: e.message };
     }
-    
-    return { success: false, message: "No files found to import" };
 }
 
 // ---- SONARR ----
 
 export async function searchSonarrSeries(appId: string, term: string) {
-    await verifySuperUserOrAdmin();
-    const apps = await getEnabledArrInstances("sonarr");
-    const app = apps.find(a => a.id === appId);
-    if (!app) throw new Error("Sonarr instance not found or disabled");
-    
-    return arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(term)}`);
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success) throw new Error(appsRes.error);
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
+        
+        return await arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(term)}`);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function addSonarrSeries(appId: string, seriesData: any, qualityProfileId: number, rootFolderPath: string) {
-    await verifySuperUserOrAdmin();
-    const apps = await getEnabledArrInstances("sonarr");
-    const app = apps.find(a => a.id === appId);
-    if (!app) throw new Error("Sonarr instance not found or disabled");
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success) throw new Error(appsRes.error);
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
 
-    if (app.allowedQualityProfileIds.length > 0 && !app.allowedQualityProfileIds.includes(qualityProfileId.toString())) {
-        throw new Error("Quality profile not allowed for this instance");
-    }
-
-    const body = {
-        ...seriesData,
-        qualityProfileId,
-        rootFolderPath,
-        monitored: true,
-        addOptions: {
-            searchForMissingEpisodes: true
+        if (app.allowedQualityProfileIds.length > 0 && !app.allowedQualityProfileIds.includes(qualityProfileId.toString())) {
+            throw new Error("Quality profile not allowed for this instance");
         }
-    };
 
-    return arrApiPost(app, "/api/v3/series", body);
+        const body = {
+            ...seriesData,
+            qualityProfileId,
+            rootFolderPath,
+            monitored: true,
+            addOptions: {
+                searchForMissingEpisodes: true
+            }
+        };
+
+        return await arrApiPost(app, "/api/v3/series", body);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function getSonarrQueue(appId: string) {
-    await verifySuperUserOrAdmin();
-    const apps = await getEnabledArrInstances("sonarr");
-    const app = apps.find(a => a.id === appId);
-    if (!app) throw new Error("Sonarr instance not found or disabled");
-    
-    return arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000&sortKey=timeLeft&sortDirection=ascending");
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success) throw new Error(appsRes.error);
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
+        
+        return await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000&sortKey=timeLeft&sortDirection=ascending");
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function forceImportSonarrQueueItem(appId: string, downloadId: string) {
-    await verifySuperUserOrAdmin();
-    const apps = await getEnabledArrInstances("sonarr");
-    const app = apps.find(a => a.id === appId);
-    if (!app) throw new Error("Sonarr instance not found or disabled");
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances("sonarr");
+        if (!appsRes.success) throw new Error(appsRes.error);
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Sonarr instance not found or disabled");
 
-    const manualImportFiles = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
-    
-    if (manualImportFiles && manualImportFiles.length > 0) {
-        const importPayload = manualImportFiles.map((file: any) => ({
-            ...file,
-            importApproved: true
-        }));
-        return arrApiPost(app, "/api/v3/manualimport", importPayload);
+        const manualImportRes = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
+        if (!manualImportRes.success) throw new Error(manualImportRes.error);
+
+        const manualImportFiles = manualImportRes.data;
+        if (manualImportFiles && manualImportFiles.length > 0) {
+            const importPayload = manualImportFiles.map((file: any) => ({
+                ...file,
+                importApproved: true
+            }));
+            return await arrApiPost(app, "/api/v3/manualimport", importPayload);
+        }
+        
+        return { success: false, error: "No files found to import" };
+    } catch (e: any) {
+        return { success: false, error: e.message };
     }
-    
-    return { success: false, message: "No files found to import" };
 }
 
 // Meta fetchers for Quality Profiles and Root Folders
 export async function getArrProfilesAndFolders(appId: string, type: "radarr" | "sonarr") {
-    await verifySuperUserOrAdmin();
-    const apps = await getEnabledArrInstances(type);
-    const app = apps.find(a => a.id === appId);
-    if (!app) throw new Error("Instance not found or disabled");
+    try {
+        await verifySuperUserOrAdmin();
+        const appsRes = await getEnabledArrInstances(type);
+        if (!appsRes.success) throw new Error(appsRes.error);
+        const app = appsRes.data.find((a: any) => a.id === appId);
+        if (!app) throw new Error("Instance not found or disabled");
 
-    const profiles = await arrApiGet(app, "/api/v3/qualityprofile");
-    const folders = await arrApiGet(app, "/api/v3/rootfolder");
+        const profilesRes = await arrApiGet(app, "/api/v3/qualityprofile");
+        const foldersRes = await arrApiGet(app, "/api/v3/rootfolder");
+        if (!profilesRes.success) throw new Error(profilesRes.error);
+        if (!foldersRes.success) throw new Error(foldersRes.error);
 
-    return {
-        profiles: profiles.filter((p: any) => app.allowedQualityProfileIds.length === 0 || app.allowedQualityProfileIds.includes(p.id.toString())),
-        folders: folders.filter((f: any) => app.allowedRootFolderIds.length === 0 || app.allowedRootFolderIds.includes(f.id.toString()))
-    };
+        return {
+            success: true,
+            data: {
+                profiles: profilesRes.data.filter((p: any) => app.allowedQualityProfileIds.length === 0 || app.allowedQualityProfileIds.includes(p.id.toString())),
+                folders: foldersRes.data.filter((f: any) => app.allowedRootFolderIds.length === 0 || app.allowedRootFolderIds.includes(f.id.toString()))
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
