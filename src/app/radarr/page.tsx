@@ -372,11 +372,11 @@ export default function RadarrPage() {
                                                 <Button 
                                                     size="sm" 
                                                     onClick={() => handleAdd(movie)}
-                                                    disabled={addingMovieId === movie.tmdbId || (movie.id && movie.id > 0) || (movie.added && movie.added !== "0001-01-01T00:00:00Z")}
-                                                    variant={(movie.id && movie.id > 0) || (movie.added && movie.added !== "0001-01-01T00:00:00Z") ? "secondary" : "default"}
+                                                    disabled={addingMovieId === movie.tmdbId || (movie.id && movie.id > 0)}
+                                                    variant={(movie.id && movie.id > 0) ? "secondary" : "default"}
                                                     className="h-7 text-xs"
                                                 >
-                                                    {addingMovieId === movie.tmdbId ? <Loader2 className="h-3 w-3 animate-spin" /> : ((movie.id && movie.id > 0) || (movie.added && movie.added !== "0001-01-01T00:00:00Z")) ? "Already Added" : <><Plus className="h-3 w-3 mr-1" /> Add Movie</>}
+                                                    {addingMovieId === movie.tmdbId ? <Loader2 className="h-3 w-3 animate-spin" /> : (movie.id && movie.id > 0) ? "Already Added" : <><Plus className="h-3 w-3 mr-1" /> Add Movie</>}
                                                 </Button>
                                             </div>
                                         </div>
