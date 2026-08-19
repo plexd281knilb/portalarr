@@ -110,7 +110,7 @@ export default function LandingSupport() {
               className="w-full text-[10px] sm:text-xs font-semibold border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
             >
               <Link href="/radarr">
-                <Wrench className="h-3 w-3 mr-1" /> Fix Radarr Issues
+                <Wrench className="h-3 w-3 mr-1" /> Fix Movies Issues
               </Link>
             </Button>
             <Button
@@ -119,7 +119,7 @@ export default function LandingSupport() {
               className="w-full text-[10px] sm:text-xs font-semibold border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10"
             >
               <Link href="/sonarr">
-                <Wrench className="h-3 w-3 mr-1" /> Fix Sonarr Issues
+                <Wrench className="h-3 w-3 mr-1" /> Fix TV Shows Issues
               </Link>
             </Button>
           </div>
@@ -135,7 +135,7 @@ export default function LandingSupport() {
                 ) as HTMLTextAreaElement;
                 if (issueArea) {
                   issueArea.value =
-                    "I would like to request Super User access to fix my own Radarr/Sonarr issues.";
+                    "I would like to request Super User access to fix my own Movies and TV Shows issues.";
                   issueArea.focus();
                 }
               }}
