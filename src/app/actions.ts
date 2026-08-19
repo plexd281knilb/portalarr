@@ -3174,11 +3174,14 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const requester = req?.requestedBy || "";
         const reqMediaType = req?.mediaType || "ebook";
         
-        // Instant Fulfill: Check if book is already downloaded in library
+        const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req?.coverUrl);
+        const resolvedLibId = targetLib?.id;
+        
+        // Instant Fulfill: Check if book is already downloaded in the TARGET library
         const normTitleReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (normTitleReq.length > 2) {
+        if (normTitleReq.length > 2 && resolvedLibId) {
             const allBooks = await prisma.book.findMany({
-                where: { mediaType: reqMediaType }
+                where: { mediaType: reqMediaType, libraryId: resolvedLibId }
             });
             const existingBook = allBooks.find(b => {
                 const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -3186,7 +3189,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             });
 
             if (existingBook) {
-                console.log(`[AUTO-DOWNLOAD] Book "${title}" already exists in library! Fulfilling request ${requestId} immediately.`);
+                console.log(`[AUTO-DOWNLOAD] Book "${title}" already exists in target library! Fulfilling request ${requestId} immediately.`);
                 await prisma.bookRequest.update({
                     where: { id: requestId },
                     data: { status: "Downloaded" }
@@ -3195,7 +3198,6 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             }
         }
         
-        const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req?.coverUrl);
         const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
 
         const prowlarrApp = await prisma.mediaApp.findFirst({
