@@ -803,6 +803,21 @@ export default function SonarrPage() {
                             <h4 className="font-semibold text-sm truncate pr-6">
                               {series.title} ({series.year})
                             </h4>
+                            {(series.firstAired || series.network) && (
+                              <div className="text-[10px] text-muted-foreground mt-0.5 flex gap-2">
+                                {series.firstAired && (
+                                  <span>
+                                    Premiered:{" "}
+                                    {new Date(
+                                      series.firstAired,
+                                    ).toLocaleDateString()}
+                                  </span>
+                                )}
+                                {series.network && (
+                                  <span>Network: {series.network}</span>
+                                )}
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 mt-1">
                               <Badge
                                 variant={
