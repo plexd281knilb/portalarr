@@ -2871,11 +2871,11 @@ function BookLibraryPageContent() {
                                             >
                                               {book.author}
                                             </p>
-                                            <div className="mt-auto pt-2 flex gap-2">
+                                            <div className="mt-auto pt-2 flex flex-col gap-1">
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="flex-1 h-7 text-[10px]"
+                                                className="w-full h-7 text-[10px]"
                                                 onClick={() =>
                                                   handleAutoDownloadMissingBook(
                                                     {
@@ -2895,7 +2895,7 @@ function BookLibraryPageContent() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="flex-1 h-7 text-[10px]"
+                                                className="w-full h-7 text-[10px]"
                                                 onClick={() =>
                                                   handleSearchAndReplaceRelease(
                                                     {
