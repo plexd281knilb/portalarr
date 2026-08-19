@@ -1248,23 +1248,18 @@ export default function SonarrPage() {
                 {episodes.map((ep: any) => (
                   <div
                     key={ep.id}
-                    className="flex items-center justify-between p-3 border rounded-xl hover:bg-muted/10 transition-colors"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-xl hover:bg-muted/10 transition-colors gap-3"
                   >
-                    <div className="space-y-1 pr-4 min-w-0">
+                    <div className="flex flex-col min-w-0 flex-1 pr-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm">
+                        <span className="font-bold text-sm whitespace-nowrap">
                           Episode {ep.episodeNumber}
                         </span>
-                        <span className="text-sm font-medium truncate">
+                        <span className="text-sm font-medium truncate text-muted-foreground">
                           {ep.title}
                         </span>
-                        {ep.airDate && (
-                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                            ({ep.airDate})
-                          </span>
-                        )}
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                         <Badge
                           variant={
                             ep.hasFile
@@ -1273,7 +1268,7 @@ export default function SonarrPage() {
                                 ? "destructive"
                                 : "secondary"
                           }
-                          className="text-[10px] uppercase"
+                          className="text-[10px] uppercase font-bold"
                         >
                           {ep.hasFile
                             ? "Downloaded"
@@ -1281,9 +1276,15 @@ export default function SonarrPage() {
                               ? "Missing"
                               : "Not Monitored"}
                         </Badge>
+                        {ep.airDate && (
+                          <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                            Air Date:{" "}
+                            {new Date(ep.airDate).toLocaleDateString()}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <Button
                         size="sm"
                         variant="outline"
