@@ -1526,10 +1526,6 @@ export async function getLibraryBooks(libraryId?: string) {
         where: { libraryId: { in: targetLibraryIds } },
         orderBy: { createdAt: "desc" }
     });
-
-    logger.addLog("INFO", "API", `📥 GET /api/books requested for libraryId="${libraryId || 'all'}" (Target Libs: [${targetLibraryIds.join(", ")}])`);
-    console.log(`[GET-LIBRARY-BOOKS] 🚀 Query requested for libraryId="${libraryId || 'all'}" (Resolved Target Libs: [${targetLibraryIds.join(", ")}])`);
-    console.log(`[GET-LIBRARY-BOOKS] 📦 Raw DB records fetched from SQLite: ${books.length}`);
     
     // Instant Deduplication by Title Key
     const titleMap = new Map<string, typeof books[number]>();
@@ -1661,7 +1657,6 @@ export async function getLibraryBooks(libraryId?: string) {
     }
 
     uniqueBooks.sort((a, b) => a.title.localeCompare(b.title));
-    console.log(`[GET-LIBRARY-BOOKS] 📚 Returning ${uniqueBooks.length} books for library "${libraryId || 'all'}": [${uniqueBooks.map(b => b.title).join(", ")}]`);
     return uniqueBooks;
 }
 
@@ -2932,24 +2927,31 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         : (stats.mtime || new Date());
 
                     try {
-                        const newBook = await prisma.book.create({
-                            data: {
-                                title,
-                                author,
-                                series,
-                                volumeNumber,
-                                coverUrl: "",
-                                filePath: fullPath,
-                                fileSize: stats.size,
-                                fileType: ext.replace(".", ""),
-                                mediaType: library.mediaType || "ebook",
-                                libraryId: libraryId,
-                                createdAt: fileAddedDate
-                            }
+                        let newBook = await prisma.book.findFirst({
+                            where: { filePath: fullPath }
                         });
+
+                        if (!newBook) {
+                            newBook = await prisma.book.create({
+                                data: {
+                                    title,
+                                    author,
+                                    series,
+                                    volumeNumber,
+                                    coverUrl: "",
+                                    filePath: fullPath,
+                                    fileSize: stats.size,
+                                    fileType: ext.replace(".", ""),
+                                    mediaType: library.mediaType || "ebook",
+                                    libraryId: libraryId,
+                                    createdAt: fileAddedDate
+                                }
+                            });
+                            logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                            console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
+                        }
+                        
                         matchedDbBookIds.add(newBook.id);
-                        logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                        console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
 
                         // Fetch cover artwork asynchronously in background
                         (async () => {
@@ -3038,6 +3040,29 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
             }
         }
+
+        // Post-scan database deduplication by exact filePath
+        try {
+            const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
+            const pathMap = new Map<string, string>();
+            const duplicateIds: string[] = [];
+            
+            for (const b of currentDbBooks) {
+                const p = b.filePath.toLowerCase();
+                if (pathMap.has(p)) {
+                    duplicateIds.push(b.id);
+                } else {
+                    pathMap.set(p, b.id);
+                }
+            }
+            
+            if (duplicateIds.length > 0) {
+                console.log(`[SCANNER-DEDUP] Purging ${duplicateIds.length} exact file path duplicate rows from SQLite.`);
+                await prisma.book.deleteMany({
+                    where: { id: { in: duplicateIds } }
+                });
+            }
+        } catch (pathDedupErr) {}
 
         // Post-scan database deduplication by title key
         try {
@@ -3789,9 +3814,7 @@ function findFirstMediaFileInDir(dir: string, validExtensions: string[], depth =
 }
 
 function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = "ebook"): string | null {
-    console.log(`[DOWNLOAD-FINDER] Scanning directory: ${dir} for ${mediaType}: "${bookTitle}"`);
     if (!fs.existsSync(dir)) {
-        console.log(`[DOWNLOAD-FINDER] Directory does not exist: ${dir}`);
         return null;
     }
     
@@ -3814,7 +3837,6 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
     
     try {
         const files = fs.readdirSync(dir);
-        console.log(`[DOWNLOAD-FINDER] Found ${files.length} items in ${dir}`);
         for (const file of files) {
             const fullPath = path.join(dir, file);
             const stat = fs.statSync(fullPath);
@@ -3843,7 +3865,6 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 if (isDirectoryTitleMatch) {
                     const firstMediaFile = findFirstMediaFileInDir(fullPath, validExtensions);
                     if (firstMediaFile) {
-                        console.log(`[DOWNLOAD-FINDER] DIRECTORY MATCH FOUND: ${fullPath} (via matching release folder "${file}")`);
                         return firstMediaFile;
                     }
                 }
@@ -3852,17 +3873,13 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 const subFound = findDownloadedFile(fullPath, bookTitle, mediaType);
                 if (subFound) return subFound;
 
-                const found = findDownloadedFile(fullPath, bookTitle, mediaType);
-                if (found) return found;
             } else {
                 const ext = path.extname(file).toLowerCase();
                 if (validExtensions.includes(ext)) {
                     const cleanFileName = file.toLowerCase().replace(/[^a-z0-9]/g, "");
                     const cleanFullPath = fullPath.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    console.log(`[DOWNLOAD-FINDER] Inspecting file: ${file} (path: ${fullPath})`);
                     
                     if (cleanFileName.includes(cleanBookTitle) || cleanFullPath.includes(cleanBookTitle) || cleanBookTitle.includes(cleanFileName.replace(/(epub|pdf|mobi|cbz|m4b|mp3|m4a|flac)$/, ""))) {
-                        console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (direct title match)`);
                         return fullPath;
                     }
                     
@@ -3875,9 +3892,7 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                     }
                     
                     const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
-                    console.log(`[DOWNLOAD-FINDER] Word match count: ${matchCount}/${finalTitleWords.length} (needed at least ${requiredMatches})`);
                     if (finalTitleWords.length > 0 && matchCount >= requiredMatches) {
-                        console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (fuzzy path match)`);
                         return fullPath;
                     }
                 }
@@ -3964,6 +3979,7 @@ export async function monitorAndRetryDownload(
             
             let targetLib: any = null;
             let copySuccessful = false;
+            let finalDestPath = "";
             try {
                 const reqMedia = currentReq?.mediaType || "ebook";
                 targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia);
@@ -4016,8 +4032,6 @@ export async function monitorAndRetryDownload(
                                                        rootBookFolder === "./downloads" || 
                                                        rootBookFolder === "/app/downloads" || 
                                                        rootBookFolder === process.env.DOWNLOADS_DIR;
-
-                            let finalDestPath = "";
 
                             if (!isRootDownloadsDir && fs.existsSync(rootBookFolder) && fs.statSync(rootBookFolder).isDirectory()) {
                                 const folderName = path.basename(rootBookFolder);
@@ -4134,16 +4148,20 @@ export async function monitorAndRetryDownload(
                 }
                 
                 const allBooks = await prisma.book.findMany();
+                const finalPathClean = finalDestPath ? finalDestPath.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
                 const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                
                 const matchedBook = allBooks.find(b => {
+                    const bPathClean = b.filePath.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    // 1. Direct file path match (safest and most accurate)
+                    if (finalPathClean && finalPathClean.length > 5 && bPathClean === finalPathClean) return true;
+                    
+                    // 2. Fallback: exact title match
                     const bTitleClean = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    const bAuthorClean = b.author ? b.author.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+                    if (reqTitleClean && reqTitleClean.length > 3 && bTitleClean === reqTitleClean) return true;
                     
-                    if (bTitleClean.includes(reqTitleClean) || reqTitleClean.includes(bTitleClean)) return true;
-                    if (bAuthorClean.includes(reqTitleClean) || reqTitleClean.includes(bAuthorClean)) return true;
-                    
-                    const pathClean = b.filePath.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    if (pathClean.includes(reqTitleClean)) return true;
+                    // 3. Fallback: filename contains the exact title (and the title is sufficiently long)
+                    if (reqTitleClean && reqTitleClean.length > 5 && bPathClean.includes(reqTitleClean)) return true;
                     
                     return false;
                 });

@@ -2274,7 +2274,16 @@ function normalizeBookCardMetadata(book: any) {
                                         </div>
                                     ) : groupBySeries ? (
                                         <div className="space-y-8">
-                                            {Object.entries(seriesGroups).map(([seriesName, seriesBooks]) => (
+                                            {Object.entries(seriesGroups).map(([seriesName, seriesBooks]) => {
+                                                const actualMissing = (missingBooksMap[seriesName] || []).filter((mBook: any) => {
+                                                    const mTitle = mBook.title.toLowerCase();
+                                                    return !seriesBooks.some((b: any) => {
+                                                        const bTitle = (b.cleanSeriesTitle || b.title).toLowerCase();
+                                                        return bTitle.includes(mTitle) || mTitle.includes(bTitle);
+                                                    });
+                                                });
+                                                
+                                                return (
                                                 <div key={seriesName} className="space-y-4 border border-slate-800/80 p-4 rounded-xl bg-slate-900/10 animate-in fade-in duration-300">
                                                     <h3 className="text-sm font-extrabold text-primary flex items-center gap-2 border-b border-slate-800 pb-2">
                                                         📚 {seriesName} 
@@ -2289,13 +2298,13 @@ function normalizeBookCardMetadata(book: any) {
                                                         {seriesBooks.map(book => renderBookCard(book))}
                                                     </div>
                                                     
-                                                    {missingBooksMap[seriesName] && missingBooksMap[seriesName].length > 0 && (
+                                                    {actualMissing.length > 0 && (
                                                         <div className="mt-6 pt-4 border-t border-slate-800/50 border-dashed">
                                                             <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider flex items-center gap-2">
                                                                 <Library className="h-3 w-3" /> Missing from Series
                                                             </h4>
                                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 opacity-60 grayscale hover:grayscale-0 transition-all duration-300">
-                                                                {missingBooksMap[seriesName].map((book: any, i: number) => (
+                                                                {actualMissing.map((book: any, i: number) => (
                                                                     <div key={i} className="flex gap-4 border rounded-xl p-3 bg-card border-dashed">
                                                                         <div className="w-16 h-24 shrink-0 bg-muted rounded overflow-hidden shadow-sm relative group">
                                                                             {book.coverUrl ? (
@@ -2323,7 +2332,7 @@ function normalizeBookCardMetadata(book: any) {
                                                             </div>
                                                         </div>
                                                     )}
-                                                    {missingBooksMap[seriesName] && missingBooksMap[seriesName].length === 0 && (
+                                                    {missingBooksMap[seriesName] !== undefined && actualMissing.length === 0 && (
                                                         <div className="mt-4 text-xs text-muted-foreground italic">No missing books found for this series.</div>
                                                     )}
                                                 </div>
