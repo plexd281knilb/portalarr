@@ -623,7 +623,7 @@ export default function SonarrPage() {
                           {series.title} ({series.year})
                         </h4>
                         {(series.firstAired || series.network) && (
-                          <div className="text-[10px] text-muted-foreground mt-0.5 flex gap-2">
+                          <div className="text-[10px] text-muted-foreground mt-1 font-semibold uppercase tracking-wider flex gap-3 flex-wrap">
                             {series.firstAired && (
                               <span>
                                 Premiered:{" "}
@@ -804,7 +804,7 @@ export default function SonarrPage() {
                               {series.title} ({series.year})
                             </h4>
                             {(series.firstAired || series.network) && (
-                              <div className="text-[10px] text-muted-foreground mt-0.5 flex gap-2">
+                              <div className="text-[10px] text-muted-foreground mt-1 font-semibold uppercase tracking-wider flex gap-3 flex-wrap">
                                 {series.firstAired && (
                                   <span>
                                     Premiered:{" "}

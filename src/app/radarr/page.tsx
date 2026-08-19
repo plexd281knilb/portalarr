@@ -530,9 +530,9 @@ export default function RadarrPage() {
                         {(movie.inCinemas ||
                           movie.digitalRelease ||
                           movie.physicalRelease) && (
-                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                          <div className="text-[10px] text-muted-foreground mt-1 font-semibold uppercase tracking-wider flex gap-3 flex-wrap">
                             {movie.inCinemas && (
-                              <span className="mr-2">
+                              <span>
                                 Cinemas:{" "}
                                 {new Date(movie.inCinemas).toLocaleDateString()}
                               </span>
@@ -709,9 +709,9 @@ export default function RadarrPage() {
                             {(movie.inCinemas ||
                               movie.digitalRelease ||
                               movie.physicalRelease) && (
-                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                              <div className="text-[10px] text-muted-foreground mt-1 font-semibold uppercase tracking-wider flex gap-3 flex-wrap">
                                 {movie.inCinemas && (
-                                  <span className="mr-2">
+                                  <span>
                                     Cinemas:{" "}
                                     {new Date(
                                       movie.inCinemas,
