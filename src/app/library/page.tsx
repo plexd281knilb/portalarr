@@ -2903,15 +2903,42 @@ function normalizeBookCardMetadata(book: any) {
                                                             {req.status}
                                                         </Badge>
                                                         {req.status.startsWith("Failed") && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="h-7 text-xs border-red-500/40 text-red-400 hover:bg-red-950/60 font-semibold gap-1"
-                                                                title="Copy Full Error Message"
-                                                                onClick={() => showErrorModal(req.status, "Request Error Details")}
-                                                            >
-                                                                <Copy className="h-3 w-3" /> Copy Error
-                                                            </Button>
+                                                            <div className="flex gap-1.5 items-center">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold"
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            await retryBookRequest(req.id);
+                                                                            alert("Auto-retry search successfully queued in the background!");
+                                                                            const reqs = await getBookRequests();
+                                                                            setRequests(reqs || []);
+                                                                        } catch (err: any) {
+                                                                            alert(err.message || "Failed to retry request.");
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    Auto-Retry
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-7 text-[10px]"
+                                                                    onClick={() => triggerProwlarrSearch(req)}
+                                                                >
+                                                                    <Search className="h-3 w-3 mr-1" /> Search Release
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-7 w-7 p-0 border-red-500/40 text-red-400 hover:bg-red-950/60 shrink-0"
+                                                                    title="Copy Full Error Message"
+                                                                    onClick={() => showErrorModal(req.status, "Request Error Details")}
+                                                                >
+                                                                    <Copy className="h-3 w-3" />
+                                                                </Button>
+                                                            </div>
                                                         )}
                                                         {(isAdmin || req.requestedBy === user?.username) && (
                                                             <div className="flex gap-1 items-center">
@@ -3013,7 +3040,7 @@ function normalizeBookCardMetadata(book: any) {
                                                              </Button>
                                                          )}
                                                           {req.status.startsWith("Failed") && (
-                                                              <div className="flex gap-1.5 items-center">
+                                                              <div className="flex gap-1.5 items-center flex-wrap">
                                                                   <Button
                                                                       size="sm"
                                                                       variant="outline"
@@ -3021,7 +3048,7 @@ function normalizeBookCardMetadata(book: any) {
                                                                       onClick={async () => {
                                                                           try {
                                                                               await retryBookRequest(req.id);
-                                                                              alert("Retry search successfully queued in the background!");
+                                                                              alert("Auto-retry search successfully queued in the background!");
                                                                               const reqs = await getBookRequests();
                                                                               setRequests(reqs || []);
                                                                           } catch (err: any) {
@@ -3029,7 +3056,15 @@ function normalizeBookCardMetadata(book: any) {
                                                                           }
                                                                       }}
                                                                   >
-                                                                      Retry Search
+                                                                      Auto-Retry
+                                                                  </Button>
+                                                                  <Button
+                                                                      size="sm"
+                                                                      variant="outline"
+                                                                      className="h-7 text-[10px] flex-1 min-w-[100px]"
+                                                                      onClick={() => triggerProwlarrSearch(req)}
+                                                                  >
+                                                                      <Search className="h-3 w-3 mr-1" /> Search Release
                                                                   </Button>
                                                                   {(isAdmin || req.requestedBy === user?.username) && (
                                                                       <Button
