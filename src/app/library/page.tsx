@@ -429,6 +429,7 @@ function BookLibraryPageContent() {
   >(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [requestedFor, setRequestedFor] = useState("");
+  const [visibleCount, setVisibleCount] = useState(48);
 
   // Open Library Autocomplete states
   const [openLibrarySuggestions, setOpenLibrarySuggestions] = useState<any[]>(
@@ -1280,6 +1281,10 @@ function BookLibraryPageContent() {
       setBooks([]);
     }
   }, [selectedLibrary, activeTab]);
+
+  useEffect(() => {
+    setVisibleCount(48);
+  }, [searchQuery, sortBy, groupBySeries, activeTab, selectedLibrary]);
 
   async function loadBooks(libId: string) {
     setBooksLoading(true);
@@ -2756,8 +2761,9 @@ function BookLibraryPageContent() {
                     </div>
                   ) : groupBySeries ? (
                     <div className="space-y-8">
-                      {Object.entries(seriesGroups).map(
-                        ([seriesName, seriesBooks]) => {
+                      {Object.entries(seriesGroups)
+                        .slice(0, visibleCount)
+                        .map(([seriesName, seriesBooks]) => {
                           const actualMissing = (
                             missingBooksMap[seriesName] || []
                           ).filter((mBook: any) => {
@@ -2876,9 +2882,14 @@ function BookLibraryPageContent() {
                                 )}
                             </div>
                           );
-                        },
-                      )}
-                      {standaloneBooks.length > 0 && (
+                        })}
+                      {standaloneBooks.slice(
+                        0,
+                        Math.max(
+                          0,
+                          visibleCount - Object.keys(seriesGroups).length,
+                        ),
+                      ).length > 0 && (
                         <div className="space-y-4 pt-4 border-t border-slate-800">
                           <h3 className="text-sm font-extrabold text-slate-300 flex items-center gap-2 border-b border-slate-800 pb-2">
                             📖 Standalone & Uncategorized Books
@@ -2891,16 +2902,39 @@ function BookLibraryPageContent() {
                             </Badge>
                           </h3>
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {standaloneBooks.map((book) =>
-                              renderBookCard(book),
-                            )}
+                            {standaloneBooks
+                              .slice(
+                                0,
+                                Math.max(
+                                  0,
+                                  visibleCount -
+                                    Object.keys(seriesGroups).length,
+                                ),
+                              )
+                              .map((book) => renderBookCard(book))}
                           </div>
                         </div>
                       )}
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {sortedBooks.map((book) => renderBookCard(book))}
+                      {sortedBooks
+                        .slice(0, visibleCount)
+                        .map((book) => renderBookCard(book))}
+                    </div>
+                  )}
+                  {visibleCount <
+                    (groupBySeries
+                      ? Object.keys(seriesGroups).length +
+                        standaloneBooks.length
+                      : sortedBooks.length) && (
+                    <div className="flex justify-center pt-8">
+                      <Button
+                        variant="outline"
+                        onClick={() => setVisibleCount((v) => v + 48)}
+                      >
+                        Load More Books
+                      </Button>
                     </div>
                   )}
                 </>
@@ -3098,7 +3132,19 @@ function BookLibraryPageContent() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {sortedBooks.map((book) => renderAudiobookCard(book))}
+                      {sortedBooks
+                        .slice(0, visibleCount)
+                        .map((book) => renderAudiobookCard(book))}
+                    </div>
+                  )}
+                  {visibleCount < sortedBooks.length && (
+                    <div className="flex justify-center pt-8">
+                      <Button
+                        variant="outline"
+                        onClick={() => setVisibleCount((v) => v + 48)}
+                      >
+                        Load More Audiobooks
+                      </Button>
                     </div>
                   )}
                 </>

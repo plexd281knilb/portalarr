@@ -517,7 +517,7 @@ export default function SonarrPage() {
       <Tabs defaultValue="search" className="w-full">
         <TabsList className="grid w-full max-w-xl grid-cols-3">
           <TabsTrigger value="search">Search TVDB</TabsTrigger>
-          <TabsTrigger value="library">Library ({library.length})</TabsTrigger>
+          <TabsTrigger value="library">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
           <TabsTrigger value="queue">Activity / Queue</TabsTrigger>
         </TabsList>
 
