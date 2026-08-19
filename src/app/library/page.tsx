@@ -2335,6 +2335,7 @@ function normalizeBookCardMetadata(book: any) {
                                                     {missingBooksMap[seriesName] !== undefined && actualMissing.length === 0 && (
                                                         <div className="mt-4 text-xs text-muted-foreground italic">No missing books found for this series.</div>
                                                     )}
+                                                </div>
                                                 );
                                             })}
                                             {standaloneBooks.length > 0 && (
