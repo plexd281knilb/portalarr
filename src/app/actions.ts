@@ -1960,9 +1960,14 @@ export async function createBookRequest(formData: FormData) {
                 finalCover = await fetchBookCover(finalTitle, finalAuthor, mediaType) || "";
             } catch (e) {}
         }
+        
+        const libraryId = formData.get("libraryId") as string;
+        if (libraryId) {
+            finalCover = finalCover ? `${finalCover}?lib=${libraryId}` : `?lib=${libraryId}`;
+        }
 
         if (type === "series") {
-            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType);
+            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId);
             if (expanded) {
                 // Save the parent series request record itself in the DB
                 await prisma.bookRequest.create({
@@ -2035,7 +2040,7 @@ export async function createBookRequest(formData: FormData) {
     }
 }
 
-async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook"): Promise<boolean> {
+async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string): Promise<boolean> {
     try {
         const query = `series:"${seriesTitle}"`;
         const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
@@ -2086,9 +2091,13 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                     ? doc.author_name[0] 
                     : author || "Unknown Author";
                     
-                const coverUrl = doc.cover_i 
+                let coverUrl = doc.cover_i 
                     ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
                     : "";
+                
+                if (libraryId) {
+                    coverUrl = coverUrl ? `${coverUrl}?lib=${libraryId}` : `?lib=${libraryId}`;
+                }
                     
                 uniqueBooks.push({
                     title: doc.title,
@@ -3139,8 +3148,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
     }
 }
 
-async function getTargetLibraryForUser(username: string, mediaType: string = "ebook") {
+async function getTargetLibraryForUser(username: string, mediaType: string = "ebook", coverUrl?: string | null) {
     try {
+        if (coverUrl && coverUrl.includes("?lib=")) {
+            const parsedLibId = coverUrl.split("?lib=")[1].split("&")[0];
+            const explicitLib = await prisma.library.findUnique({ where: { id: parsedLibId } });
+            if (explicitLib) return explicitLib;
+        }
+
         const libraries = await prisma.library.findMany();
         if (libraries.length === 0) return null;
         
@@ -3295,7 +3310,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             }
         }
         
-        const targetLib = await getTargetLibraryForUser(requester, reqMediaType);
+        const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req?.coverUrl);
         const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
 
         const prowlarrApp = await prisma.mediaApp.findFirst({
@@ -3572,7 +3587,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     
     const requester = req.requestedBy || "";
     const reqMediaType = req.mediaType || "ebook";
-    const targetLib = await getTargetLibraryForUser(requester, reqMediaType);
+    const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req.coverUrl);
     const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
     
     if (protocol === "usenet") {
@@ -3992,7 +4007,7 @@ export async function monitorAndRetryDownload(
             let finalDestPath = "";
             try {
                 const reqMedia = currentReq?.mediaType || "ebook";
-                targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia);
+                targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl);
                 if (targetLib) {
                     const settings = await prisma.settings.findFirst();
                     const configuredPath = settings?.downloadsPath || "/downloads";
@@ -4237,7 +4252,7 @@ export async function monitorAndRetryDownload(
             const currentReq = await prisma.bookRequest.findUnique({ where: { id: requestId } });
             const reqMedia = currentReq?.mediaType || "ebook";
             const requester = currentReq?.requestedBy || "";
-            const backupLib = await getTargetLibraryForUser(requester, reqMedia);
+            const backupLib = await getTargetLibraryForUser(requester, reqMedia, currentReq?.coverUrl);
             const nextCategory = backupLib ? getDownloadCategoryForLibrary(backupLib.name, reqMedia) : (reqMedia === "audiobook" ? "audiobooks" : "books");
             
             let nextDownloadId = "";
@@ -5016,7 +5031,7 @@ export async function getSeriesBooksList(seriesTitle: string, author: string = "
     }
 }
 
-export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[], requestedFor?: string, mediaType: string = "ebook") {
+export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[], requestedFor?: string, mediaType: string = "ebook", libraryId?: string) {
     try {
         const session = await verifyUser();
         const isAdmin = session.role === "ADMIN";
@@ -5028,11 +5043,16 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
         }
         
         for (const book of booksList) {
+            let finalCover = book.coverUrl;
+            if (libraryId) {
+                finalCover = finalCover ? `${finalCover}?lib=${libraryId}` : `?lib=${libraryId}`;
+            }
+            
             const request = await prisma.bookRequest.create({
                 data: {
                     title: book.title,
                     author: book.author,
-                    coverUrl: book.coverUrl,
+                    coverUrl: finalCover,
                     publishYear: book.publishYear,
                     requestedBy: targetUser,
                     type: "book",
@@ -5353,7 +5373,7 @@ export async function importCompletedDownload(requestId: string) {
     if (!currentReq) return { success: false, error: "Request not found" };
 
     const reqMedia = currentReq.mediaType || "ebook";
-    const targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia);
+    const targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl);
     if (!targetLib) return { success: false, error: "No target library shelf configured for user" };
 
     const settings = await prisma.settings.findFirst();

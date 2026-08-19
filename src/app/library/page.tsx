@@ -1540,6 +1540,7 @@ function normalizeBookCardMetadata(book: any) {
                 if (book.coverUrl) fd.append("coverUrl", book.coverUrl);
                 fd.append("mediaType", detectedMediaType);
                 fd.append("type", "single");
+                if (selectedLibrary?.id) fd.append("libraryId", selectedLibrary.id);
 
                 await createBookRequest(fd);
                 const reqs = await getBookRequests();
@@ -1584,7 +1585,7 @@ function normalizeBookCardMetadata(book: any) {
                     setIsSubmittingRequest(false);
                     return;
                 }
-                res = await createMultipleBookRequests(checkedBooks, requestedFor, reqMediaType);
+                res = await createMultipleBookRequests(checkedBooks, requestedFor, reqMediaType, selectedLibrary?.id);
             } else {
                 const formData = new FormData();
                 formData.append("title", reqTitle.trim());
@@ -1595,6 +1596,9 @@ function normalizeBookCardMetadata(book: any) {
                 formData.append("publishYear", reqPublishYear);
                 if (requestedFor) {
                     formData.append("requestedFor", requestedFor);
+                }
+                if (selectedLibrary?.id) {
+                    formData.append("libraryId", selectedLibrary.id);
                 }
                 res = await createBookRequest(formData);
             }
@@ -2857,7 +2861,7 @@ function normalizeBookCardMetadata(book: any) {
                                                                     className="mt-1 h-4 w-4 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 shrink-0 cursor-pointer"
                                                                 />
                                                             )}
-                                                            {req.coverUrl ? (
+                                                            {req.coverUrl && req.coverUrl.startsWith("http") ? (
                                                             <img 
                                                                 src={req.coverUrl} 
                                                                 alt={req.title} 
