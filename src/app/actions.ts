@@ -4135,6 +4135,7 @@ export async function monitorAndRetryDownload(
                     downloadStatus = "failed";
                     break;
                 }
+            }
         }
 
         if (downloadStatus === "failed") {
