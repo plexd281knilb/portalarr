@@ -1798,7 +1798,7 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
 export async function createBookRequest(formData: FormData) {
     try {
         const session = await verifyUser();
-        const isAdmin = session.role === "ADMIN";
+        const isAdmin = session.role === "ADMIN" || session.role === "SUPER_USER";
         const title = formData.get("title") as string;
         const author = formData.get("author") as string || "";
         const type = formData.get("type") as string || "book"; // "book" or "series"
@@ -2182,6 +2182,10 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     clean = clean.replace(/\s*\(Narrated by [^)]+\)/gi, "");
     clean = clean.replace(/Thank\s*you/gi, "");
     clean = clean.replace(/^(?:Kidsbooks|Userbooks|Kyrabooks|Books|Downloads|Audiobooks|Audio)\s*[-_]\s*/i, "");
+    
+    // Strip scene tags and trailing truncated parentheses often left by bad folder names
+    clean = clean.replace(/\s*\([^)]*NMR[^)]*\)?/gi, "");
+    clean = clean.replace(/\s*\([^)]*$/g, "");
 
     // Strip empty parentheses and brackets left behind
     clean = clean.replace(/\[[^\]]+\]/g, " ");
@@ -2812,7 +2816,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                     if (options?.enableAi) {
                         try {
-                            const aiMeta = await resolveMetadataWithAI(cleanBase, library.mediaType || "ebook");
+                            const aiMeta = await resolveMetadataWithAI(parsedMeta.cleanQuery || cleanBase, library.mediaType || "ebook");
                             if (aiMeta) {
                                 if (aiMeta.title) title = aiMeta.title;
                                 if (aiMeta.author && aiMeta.author !== "Unknown Author") author = aiMeta.author;

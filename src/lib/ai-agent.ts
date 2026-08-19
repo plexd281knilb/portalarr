@@ -434,6 +434,11 @@ export function callDefaultResolver(rawFilename: string, mediaType: string): AIR
     clean = clean.replace(/\s*\(Rob Inglis\)/gi, "");
     clean = clean.replace(/\s*\(Unabridged\)/gi, "");
     clean = clean.replace(/Thank\s*you/gi, "");
+    
+    // Strip scene tags and trailing truncated parentheses often left by bad folder names
+    clean = clean.replace(/\s*\([^)]*NMR[^)]*\)?/gi, "");
+    clean = clean.replace(/\s*\([^)]*$/g, "");
+    
     clean = clean.replace(/\[[^\]]+\]/g, " ");
     clean = clean.replace(/\(\s*\)/g, "").replace(/\[\s*\]/g, "");
 
