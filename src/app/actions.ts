@@ -1822,12 +1822,14 @@ export async function createBookRequest(formData: FormData) {
         let finalYear = publishYear;
 
         try {
-            const heur = callDefaultResolver(`${title} ${author}`, mediaType);
-            if (heur) {
-                if (heur.title) finalTitle = heur.title;
-                if (heur.author && heur.author !== "Unknown Author") finalAuthor = heur.author;
-                if (heur.series) finalSeries = heur.series;
-                if (heur.volumeNumber) finalVolNum = String(heur.volumeNumber);
+            if (!author) {
+                const heur = callDefaultResolver(`${title} ${author}`, mediaType);
+                if (heur) {
+                    if (heur.title) finalTitle = heur.title;
+                    if (heur.author && heur.author !== "Unknown Author") finalAuthor = heur.author;
+                    if (heur.series) finalSeries = heur.series;
+                    if (heur.volumeNumber) finalVolNum = String(heur.volumeNumber);
+                }
             }
         } catch (e) {}
 
@@ -3744,22 +3746,31 @@ function findFirstMediaFileInDir(dir: string, validExtensions: string[], depth =
     return null;
 }
 
-function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = "ebook"): string[] {
+function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = "ebook", bookAuthor?: string): string[] {
     if (!fs.existsSync(dir)) {
         return [];
     }
     
-    const cleanBookTitle = bookTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+    // If the database accidentally saved the author name inside the title string, strip it out for the fuzzy search
+    let searchTitle = bookTitle.toLowerCase();
+    if (bookAuthor) {
+        const authorWords = bookAuthor.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 2);
+        for (const aw of authorWords) {
+            searchTitle = searchTitle.replace(new RegExp(`\\b${aw}\\b`, 'g'), "");
+        }
+    }
+
+    const cleanBookTitle = searchTitle.replace(/[^a-z0-9]/g, "");
     
     const stopWords = new Set(["and", "the", "for", "with", "from", "that", "this", "these", "those", "a", "an", "of", "to", "in", "on", "at", "by", "or", "but", "as", "is", "are", "was", "were", "be", "been", "has", "have", "had", "do", "does", "did", "epub", "pdf", "mobi", "cbz", "m4b", "mp3", "flac"]);
     
-    const titleWords = bookTitle.toLowerCase()
+    const titleWords = searchTitle
         .split(/[^a-z0-9]/)
         .filter(w => w.length > 2 && !stopWords.has(w));
         
     let finalTitleWords = titleWords;
     if (finalTitleWords.length === 0) {
-        finalTitleWords = bookTitle.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 0);
+        finalTitleWords = searchTitle.split(/[^a-z0-9]/).filter(w => w.length > 0);
     }
     
     const validExtensions = mediaType === "audiobook"
@@ -3803,7 +3814,7 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 }
                 
                 // Recurse into subdirectories
-                const subFound = findDownloadedFile(fullPath, bookTitle, mediaType);
+                const subFound = findDownloadedFile(fullPath, bookTitle, mediaType, bookAuthor);
                 if (subFound.length > 0) {
                     matches.push(...subFound);
                 }
@@ -3934,7 +3945,12 @@ export async function monitorAndRetryDownload(
                     let allFound: string[] = [];
                     for (const p of searchPaths) {
                         if (fs.existsSync(p)) {
-                            const foundFiles = findDownloadedFile(p, currentReq.title, reqMedia);
+                            // Try exact release title match first
+                            let foundFiles = findDownloadedFile(p, release.title, reqMedia, currentReq.author || undefined);
+                            if (foundFiles.length === 0) {
+                                // Fallback to fuzzy UI title match
+                                foundFiles = findDownloadedFile(p, currentReq.title, reqMedia, currentReq.author || undefined);
+                            }
                             if (foundFiles.length > 0) {
                                 allFound.push(...foundFiles);
                             }
@@ -5346,7 +5362,7 @@ export async function importCompletedDownload(requestId: string) {
     let allFound: string[] = [];
     for (const p of searchPaths) {
         if (fs.existsSync(p)) {
-            const foundFiles = findDownloadedFile(p, currentReq.title, reqMedia);
+            const foundFiles = findDownloadedFile(p, currentReq.title, reqMedia, currentReq.author || undefined);
             if (foundFiles.length > 0) {
                 allFound.push(...foundFiles);
             }
