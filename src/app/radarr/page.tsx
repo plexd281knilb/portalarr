@@ -527,6 +527,27 @@ export default function RadarrPage() {
                         <h4 className="font-semibold text-sm truncate">
                           {movie.title} ({movie.year})
                         </h4>
+                        {(movie.inCinemas ||
+                          movie.digitalRelease ||
+                          movie.physicalRelease) && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {movie.inCinemas && (
+                              <span className="mr-2">
+                                Cinemas:{" "}
+                                {new Date(movie.inCinemas).toLocaleDateString()}
+                              </span>
+                            )}
+                            {(movie.digitalRelease ||
+                              movie.physicalRelease) && (
+                              <span>
+                                Release:{" "}
+                                {new Date(
+                                  movie.digitalRelease || movie.physicalRelease,
+                                ).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <p className="text-xs text-muted-foreground line-clamp-2 mt-1 mb-auto">
                           {movie.overview}
                         </p>
