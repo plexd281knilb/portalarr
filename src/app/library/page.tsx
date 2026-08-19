@@ -3000,16 +3000,7 @@ function normalizeBookCardMetadata(book: any) {
                                                                  )}
                                                              </div>
                                                          )}
-                                                         {(isAdmin || req.requestedBy === user?.username) && (
-                                                             <Button
-                                                                 size="sm"
-                                                                 variant="outline"
-                                                                 className="h-7 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 bg-cyan-500/5 font-semibold mr-1"
-                                                                 onClick={() => triggerProwlarrSearch(req)}
-                                                             >
-                                                                 <Search className="h-3 w-3 mr-1" /> Search Release
-                                                             </Button>
-                                                         )}
+
                                                          {(isAdmin || req.requestedBy === user?.username) && (req.status === "Approved" || req.status === "Downloading") && (
                                                              <Button 
                                                                  size="sm" 
@@ -3070,16 +3061,7 @@ function normalizeBookCardMetadata(book: any) {
                                                                   >
                                                                       <Search className="h-3 w-3 mr-1" /> Search Release
                                                                   </Button>
-                                                                  {(isAdmin || req.requestedBy === user?.username) && (
-                                                                      <Button
-                                                                          size="sm"
-                                                                          variant="outline"
-                                                                          className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold"
-                                                                          onClick={() => triggerProwlarrSearch(req)}
-                                                                      >
-                                                                          <Search className="h-3 w-3 mr-1" /> Search Release
-                                                                      </Button>
-                                                                  )}
+
                                                               </div>
                                                           )}
                                                     </div>
