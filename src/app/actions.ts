@@ -141,6 +141,53 @@ async function fetchGoogleBooksCover(title: string, author: string): Promise<str
     }
     return null;
 }
+
+export async function findMissingBooksInSeries(seriesName: string, author: string, existingTitles: string[]) {
+    try {
+        const q = `${seriesName} ${author}`;
+        const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=15`;
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!res.ok) return { success: false, error: "Failed to query OpenLibrary" };
+        const data = await res.json();
+        
+        if (!data.docs) return { success: true, data: [] };
+        
+        const books = [];
+        const existingLower = existingTitles.map(t => t.toLowerCase().trim());
+        
+        for (const item of data.docs) {
+            const title = item.title || "";
+            const bookAuthor = item.author_name?.[0] || author;
+            const coverId = item.cover_i;
+            const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
+            
+            if (!title) continue;
+            
+            let isMissing = true;
+            for (const ext of existingLower) {
+                if (ext.includes(title.toLowerCase()) || title.toLowerCase().includes(ext)) {
+                    isMissing = false;
+                    break;
+                }
+            }
+            
+            if (isMissing) {
+                books.push({
+                    title: title,
+                    author: bookAuthor,
+                    coverUrl: coverUrl
+                });
+            }
+        }
+        
+        const uniqueBooks = Array.from(new Map(books.map(b => [b.title.toLowerCase(), b])).values());
+        
+        return { success: true, data: uniqueBooks };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 async function fetchITunesCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
     try {
         const cleanAuthor = author && author !== "Unknown Author" ? author : "";

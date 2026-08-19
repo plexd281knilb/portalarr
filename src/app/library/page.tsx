@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
   getLibraries, 
@@ -29,6 +29,8 @@ import {
   submitSupportTicket,
   retryBookRequest,
   refreshBookCover,
+  findMissingBooksInSeries,
+
   seedDefaultLibraries,
   importCompletedDownload,
   getAudiobookChapters,
@@ -48,7 +50,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, Plus, Search, Trash2, Edit3, Edit2, Save, ArrowUp, ArrowDown,
   UploadCloud, Check, X, FileText, Download, Copy,
-  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX, Bot, Wand2
+  LifeBuoy, Shield, Loader2, Sparkles, Mail, Send, AlertTriangle, ArrowRight, Info, Headphones, Volume2, Play, Pause, Disc, Image as ImageIcon, RefreshCw, UserX, Bot, Wand2, Library
 } from "lucide-react";
 
 function isServerActionMismatch(err: any): boolean {
@@ -249,6 +251,8 @@ function BookLibraryPageContent() {
     const [libraries, setLibraries] = useState<any[]>([]);
     const [selectedLibrary, setSelectedLibrary] = useState<any>(null);
     const [books, setBooks] = useState<any[]>([]);
+    const [missingBooksMap, setMissingBooksMap] = useState<Record<string, any[]>>({});
+    const [loadingMissingSeries, setLoadingMissingSeries] = useState<Record<string, boolean>>({});
     const [requests, setRequests] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
@@ -1504,6 +1508,22 @@ function normalizeBookCardMetadata(book: any) {
         }
     }
 
+    async function handleFetchMissingBooks(seriesName: string, author: string, existingTitles: string[]) {
+        setLoadingMissingSeries(prev => ({ ...prev, [seriesName]: true }));
+        try {
+            const res = await findMissingBooksInSeries(seriesName, author, existingTitles);
+            if (res.success && res.data) {
+                setMissingBooksMap(prev => ({ ...prev, [seriesName]: res.data }));
+            } else {
+                alert("Failed to fetch missing books: " + res.error);
+            }
+        } catch (e: any) {
+            alert("Error: " + e.message);
+        } finally {
+            setLoadingMissingSeries(prev => ({ ...prev, [seriesName]: false }));
+        }
+    }
+
     async function handleSearchAndReplaceRelease(book: any) {
         try {
             const detectedMediaType = (activeTab === "audiobooks" || book.mediaType === "audiobook" || book.library?.mediaType === "audiobook") ? "audiobook" : "ebook";
@@ -1737,81 +1757,112 @@ function normalizeBookCardMetadata(book: any) {
         }
     }
 
-    const sortedBooks = [...books]
-        .filter(book => 
-            book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (book.author && book.author.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
-        .sort((a, b) => {
-            if (sortBy === "title-asc") {
-                return a.title.localeCompare(b.title);
-            }
-            if (sortBy === "title-desc") {
-                return b.title.localeCompare(a.title);
-            }
-            if (sortBy === "author-asc") {
-                return (a.author || "").localeCompare(b.author || "");
-            }
-            if (sortBy === "author-desc") {
-                return (b.author || "").localeCompare(a.author || "");
-            }
-            const dateA = new Date(a.createdAt || 0).getTime();
-            const dateB = new Date(b.createdAt || 0).getTime();
-            return dateB - dateA;
-        });
-
-    // Group books by series if selected
-    const seriesGroups: { [key: string]: typeof books } = {};
-    const standaloneBooks: typeof books = [];
-
-    const requestSeries = (requests || [])
-        .filter(r => r && r.type === "series" && typeof r.title === "string")
-        .map(r => r.title.toLowerCase().trim());
-
-    const dynamicSeriesSet = new Set<string>();
-    for (const book of sortedBooks) {
-        if (book.series) {
-            dynamicSeriesSet.add(book.series.toLowerCase().trim());
-        } else {
-            const info = extractSeriesInfo(book.title, book.filePath, []);
-            if (info.seriesName) {
-                dynamicSeriesSet.add(info.seriesName.toLowerCase().trim());
-            }
-        }
-    }
-
-    const combinedSeries = Array.from(new Set([...requestSeries, ...dynamicSeriesSet]));
-
-    if (groupBySeries) {
-        for (const book of sortedBooks) {
-            const info = extractSeriesInfo(book.title, book.filePath, combinedSeries);
-            const seriesNameCandidate = book.series || info.seriesName;
-            if (seriesNameCandidate) {
-                let sName = seriesNameCandidate;
-                if (book.author && book.author !== "Unknown Author") {
-                    sName = sName.replace(new RegExp('^' + book.author + '[:\\-\\s]+', 'i'), '').trim();
+    const { sortedBooks, seriesGroups, standaloneBooks } = useMemo(() => {
+        const sorted = [...books]
+            .filter(book => 
+                book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (book.author && book.author.toLowerCase().includes(searchQuery.toLowerCase()))
+            )
+            .sort((a, b) => {
+                if (sortBy === "title-asc") {
+                    return a.title.localeCompare(b.title);
                 }
-                const formattedSeriesName = sName
-                    .split(" ")
-                    .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-                    .join(" ");
-                
-                if (!seriesGroups[formattedSeriesName]) {
-                    seriesGroups[formattedSeriesName] = [];
+                if (sortBy === "title-desc") {
+                    return b.title.localeCompare(a.title);
                 }
-                const volumeNum = parseFloat(book.volumeNumber || info.volume || "0") || 0;
-                (book as any).seriesVolume = volumeNum;
-                (book as any).cleanSeriesTitle = info.bookTitle || book.title;
-                seriesGroups[formattedSeriesName].push(book);
+                if (sortBy === "author-asc") {
+                    return (a.author || "").localeCompare(b.author || "");
+                }
+                if (sortBy === "author-desc") {
+                    return (b.author || "").localeCompare(a.author || "");
+                }
+                const dateA = new Date(a.createdAt || 0).getTime();
+                const dateB = new Date(b.createdAt || 0).getTime();
+                return dateB - dateA;
+            });
+
+        const sGroups: { [key: string]: typeof books } = {};
+        const stBooks: typeof books = [];
+
+        const reqSeries = (requests || [])
+            .filter(r => r && r.type === "series" && typeof r.title === "string")
+            .map(r => r.title.toLowerCase().trim());
+
+        const dynamicSeriesSet = new Set<string>();
+        for (const book of sorted) {
+            if (book.series) {
+                dynamicSeriesSet.add(book.series.toLowerCase().trim());
             } else {
-                standaloneBooks.push(book);
+                const info = extractSeriesInfo(book.title, book.filePath, []);
+                if (info.seriesName) {
+                    dynamicSeriesSet.add(info.seriesName.toLowerCase().trim());
+                }
             }
         }
 
-        for (const seriesName in seriesGroups) {
-            seriesGroups[seriesName].sort((a, b) => ((a as any).seriesVolume || 0) - ((b as any).seriesVolume || 0));
+        const combinedSeries = Array.from(new Set([...reqSeries, ...dynamicSeriesSet]));
+
+        if (groupBySeries) {
+            for (const book of sorted) {
+                const info = extractSeriesInfo(book.title, book.filePath, combinedSeries);
+                const seriesNameCandidate = book.series || info.seriesName;
+                if (seriesNameCandidate) {
+                    let sName = seriesNameCandidate;
+                    if (book.author && book.author !== "Unknown Author") {
+                        sName = sName.replace(new RegExp('^' + book.author + '[:\\-\\s]+', 'i'), '').trim();
+                    }
+                    const formattedSeriesName = sName
+                        .split(" ")
+                        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(" ");
+                    
+                    if (!sGroups[formattedSeriesName]) {
+                        sGroups[formattedSeriesName] = [];
+                    }
+                    const volumeNum = parseFloat(book.volumeNumber || info.volume || "0") || 0;
+                    (book as any).seriesVolume = volumeNum;
+                    (book as any).cleanSeriesTitle = info.bookTitle || book.title;
+                    sGroups[formattedSeriesName].push(book);
+                } else {
+                    stBooks.push(book);
+                }
+            }
+
+            for (const seriesName in sGroups) {
+                sGroups[seriesName].sort((a, b) => ((a as any).seriesVolume || 0) - ((b as any).seriesVolume || 0));
+            }
+        } else {
+            stBooks.push(...sorted);
         }
-    }
+
+        return { sortedBooks: sorted, seriesGroups: sGroups, standaloneBooks: stBooks };
+    }, [books, searchQuery, sortBy, requests, groupBySeries]);
+
+    useEffect(() => {
+        if (!groupBySeries || Object.keys(seriesGroups).length === 0) return;
+        
+        let mounted = true;
+        
+        const fetchMissing = async () => {
+            const entries = Object.entries(seriesGroups);
+            for (const [seriesName, sBooks] of entries) {
+                if (!mounted) break;
+                // Avoid refetching if already fetched or currently fetching
+                if (missingBooksMap[seriesName] !== undefined || loadingMissingSeries[seriesName]) continue;
+                
+                // Fire off fetch via handleFetchMissingBooks
+                // Wait, handleFetchMissingBooks uses setState directly
+                await handleFetchMissingBooks(seriesName, sBooks[0].author || "Unknown", sBooks.map(b => b.title));
+                
+                // Sleep to avoid hammering Open Library
+                if (mounted) await new Promise(r => setTimeout(r, 800));
+            }
+        };
+        
+        fetchMissing();
+        
+        return () => { mounted = false; };
+    }, [seriesGroups, groupBySeries]);
 
     const eligibleRequestUsers = allUsers.filter(u => {
         // 1. Has Kindle email configured
@@ -2230,10 +2281,51 @@ function normalizeBookCardMetadata(book: any) {
                                                         <Badge variant="outline" className="text-[10px] py-0 border-primary/40 text-primary font-bold bg-primary/5">
                                                             {seriesBooks.length} {seriesBooks.length === 1 ? 'Book' : 'Books'}
                                                         </Badge>
+                                                        {loadingMissingSeries[seriesName] && (
+                                                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground ml-2" />
+                                                        )}
                                                     </h3>
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
                                                         {seriesBooks.map(book => renderBookCard(book))}
                                                     </div>
+                                                    
+                                                    {missingBooksMap[seriesName] && missingBooksMap[seriesName].length > 0 && (
+                                                        <div className="mt-6 pt-4 border-t border-slate-800/50 border-dashed">
+                                                            <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider flex items-center gap-2">
+                                                                <Library className="h-3 w-3" /> Missing from Series
+                                                            </h4>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 opacity-60 grayscale hover:grayscale-0 transition-all duration-300">
+                                                                {missingBooksMap[seriesName].map((book: any, i: number) => (
+                                                                    <div key={i} className="flex gap-4 border rounded-xl p-3 bg-card border-dashed">
+                                                                        <div className="w-16 h-24 shrink-0 bg-muted rounded overflow-hidden shadow-sm relative group">
+                                                                            {book.coverUrl ? (
+                                                                                <img src={book.coverUrl} alt="cover" className="w-full h-full object-cover" />
+                                                                            ) : (
+                                                                                <div className="w-full h-full flex flex-col items-center justify-center text-xs text-muted-foreground text-center bg-slate-900/50 p-1">
+                                                                                    <BookOpen className="h-6 w-6 mb-1 opacity-20" />
+                                                                                    No Cover
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="flex flex-col flex-1 min-w-0 py-1">
+                                                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                                                <h4 className="font-bold text-sm truncate pr-2 text-primary" title={book.title}>{book.title}</h4>
+                                                                            </div>
+                                                                            <p className="text-xs text-muted-foreground truncate mb-1" title={book.author}>{book.author}</p>
+                                                                            <div className="mt-auto pt-2 flex gap-2">
+                                                                                <Button size="sm" variant="outline" className="w-full h-7 text-[10px]" onClick={() => handleSearchAndReplaceRelease({ ...book, mediaType: activeTab === 'audiobooks' ? 'audiobook' : 'ebook' })}>
+                                                                                    <Search className="h-3 w-3 mr-1" /> Download
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {missingBooksMap[seriesName] && missingBooksMap[seriesName].length === 0 && (
+                                                        <div className="mt-4 text-xs text-muted-foreground italic">No missing books found for this series.</div>
+                                                    )}
                                                 </div>
                                             ))}
                                             {standaloneBooks.length > 0 && (
