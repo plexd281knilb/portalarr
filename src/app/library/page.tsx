@@ -1812,6 +1812,7 @@ function BookLibraryPageContent() {
         fd.append("mediaType", detectedMediaType);
         fd.append("type", "single");
         if (selectedLibrary?.id) fd.append("libraryId", selectedLibrary.id);
+        fd.append("disableAutoDownload", "true");
 
         await createBookRequest(fd);
         const reqs = await getBookRequests();
@@ -1838,6 +1839,34 @@ function BookLibraryPageContent() {
       await triggerProwlarrSearch(req, detectedMediaType);
     } catch (err: any) {
       alert(err.message || "Failed to initiate release search.");
+    }
+  }
+
+  async function handleAutoDownloadMissingBook(book: any) {
+    try {
+      const detectedMediaType =
+        activeTab === "audiobooks" ||
+        book.mediaType === "audiobook" ||
+        book.library?.mediaType === "audiobook"
+          ? "audiobook"
+          : "ebook";
+
+      const fd = new FormData();
+      fd.append("title", book.title);
+      fd.append("author", book.author || "");
+      if (book.publishYear) fd.append("publishYear", String(book.publishYear));
+      if (book.coverUrl) fd.append("coverUrl", book.coverUrl);
+      fd.append("mediaType", detectedMediaType);
+      fd.append("type", "single");
+      if (selectedLibrary?.id) fd.append("libraryId", selectedLibrary.id);
+
+      await createBookRequest(fd);
+      const reqs = await getBookRequests();
+      setRequests(reqs || []);
+      
+      alert(`Auto-download triggered for ${book.title}! Check the active queue.`);
+    } catch (err: any) {
+      alert(err.message || "Failed to trigger auto-download.");
     }
   }
 
@@ -2846,7 +2875,27 @@ function BookLibraryPageContent() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="w-full h-7 text-[10px]"
+                                                className="flex-1 h-7 text-[10px]"
+                                                onClick={() =>
+                                                  handleAutoDownloadMissingBook(
+                                                    {
+                                                      ...book,
+                                                      mediaType:
+                                                        activeTab ===
+                                                        "audiobooks"
+                                                          ? "audiobook"
+                                                          : "ebook",
+                                                    },
+                                                  )
+                                                }
+                                              >
+                                                <Download className="h-3 w-3 mr-1" />{" "}
+                                                Auto Grab
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="flex-1 h-7 text-[10px]"
                                                 onClick={() =>
                                                   handleSearchAndReplaceRelease(
                                                     {
@@ -2861,7 +2910,7 @@ function BookLibraryPageContent() {
                                                 }
                                               >
                                                 <Search className="h-3 w-3 mr-1" />{" "}
-                                                Download
+                                                Search
                                               </Button>
                                             </div>
                                           </div>

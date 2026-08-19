@@ -1878,6 +1878,9 @@ export async function createBookRequest(formData: FormData) {
             }
         }
         
+        const isApproved = isAdmin || targetUser === "system";
+        const disableAutoDownload = formData.get("disableAutoDownload") === "true";
+        
         const request = await prisma.bookRequest.create({
             data: {
                 title: finalTitle,
@@ -1889,11 +1892,11 @@ export async function createBookRequest(formData: FormData) {
                 requestedBy: targetUser,
                 type,
                 mediaType,
-                status: "Pending"
+                status: isApproved ? "Approved" : "Pending"
             }
         });
         
-        if (type === "book") {
+        if (type === "book" && isApproved && !disableAutoDownload) {
             autoDownloadBookRequest(request.id, finalTitle, finalAuthor).catch(err => {
                 console.error(`[AUTO-DOWNLOAD-BG] Failed for request "${finalTitle}":`, err);
             });
