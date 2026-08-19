@@ -4243,12 +4243,27 @@ export async function monitorAndRetryDownload(
                     } else {
                         console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully ingested audiobook "${matchedBook.title}". Skipping email delivery (audiobooks are stored in library for streaming).`);
                     }
+                    return;
                 } else {
-                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching request title: "${req.title}"`);
+                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching request title: "${req.title}". Deleting library copy and retrying next release.`);
+                    
+                    await prisma.bookRequest.update({
+                        where: { id: requestId },
+                        data: { status: `Failed - Scanner rejected file` }
+                    });
+                    
+                    const targetParent = targetLib ? path.dirname(finalDestPath) : "";
+                    if (targetLib && targetParent && targetParent !== targetLib.path) {
+                        try {
+                            fs.rmSync(targetParent, { recursive: true, force: true });
+                        } catch (e) {}
+                    } else {
+                        removePathSafely(finalDestPath);
+                    }
+                    
+                    downloadStatus = "failed";
+                    break;
                 }
-                
-                return;
-            }
         }
 
         if (downloadStatus === "failed") {
