@@ -87,7 +87,14 @@ async function mobiBounceEpub(filePath: string): Promise<boolean> {
         console.log(`[MOBI-BOUNCE] Starting conversion for: ${basename}`);
         
         // Step 1: EPUB to MOBI
-        await execAsync(`ebook-convert "${filePath}" "${tempMobi}"`);
+        try {
+            await execAsync(`ebook-convert "${filePath}" "${tempMobi}"`);
+        } catch (convErr: any) {
+            if (convErr.message && (convErr.message.includes("DRMError") || convErr.message.includes("is DRM protected"))) {
+                throw new Error("DRM_PROTECTED");
+            }
+            throw convErr;
+        }
         
         // Step 2: MOBI to EPUB (forcing language to en)
         await execAsync(`ebook-convert "${tempMobi}" "${tempOutput}" --language en`);
@@ -113,6 +120,9 @@ async function mobiBounceEpub(filePath: string): Promise<boolean> {
         
         return false;
     } catch (err: any) {
+        if (err.message === "DRM_PROTECTED") {
+            throw err;
+        }
         console.error(`[MOBI-BOUNCE] Failed during conversion:`, err.message);
         return false;
     }
@@ -4080,10 +4090,39 @@ export async function monitorAndRetryDownload(
                             }
                             
                             // Sanitize and flatten formatting (Mobi-Bounce)
+                            let hasDrm = false;
                             try {
                                 await mobiBounceEpub(finalDestPath);
                             } catch (bounceErr: any) {
-                                console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${finalDestPath}:`, bounceErr.message);
+                                if (bounceErr.message === "DRM_PROTECTED") {
+                                    hasDrm = true;
+                                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Detected DRM in release "${release.title}". Deleting and marking download as failed to retry another release.`);
+                                } else {
+                                    console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${finalDestPath}:`, bounceErr.message);
+                                }
+                            }
+
+                            if (hasDrm) {
+                                copySuccessful = false;
+                                downloadStatus = "failed";
+
+                                try {
+                                    await deleteDownload(release.protocol, downloadId, release.title);
+                                } catch (e) {}
+
+                                try {
+                                    if (fs.existsSync(foundFilePath)) fs.unlinkSync(foundFilePath);
+                                } catch (e) {}
+                                
+                                removePathSafely(finalDestPath);
+                                
+                                if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+                                    try {
+                                        fs.rmSync(rootBookFolder, { recursive: true, force: true });
+                                    } catch (e) {}
+                                }
+                                
+                                break; // Breaks out of the poll loop to immediately trigger the next release
                             }
                             
                             let clientDeleted = false;
