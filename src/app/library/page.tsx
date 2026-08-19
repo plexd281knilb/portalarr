@@ -1768,14 +1768,12 @@ function BookLibraryPageContent() {
   async function handleFetchMissingBooks(
     seriesName: string,
     author: string,
-    existingTitles: string[],
   ) {
     setLoadingMissingSeries((prev) => ({ ...prev, [seriesName]: true }));
     try {
       const res = await findMissingBooksInSeries(
         seriesName,
         author,
-        existingTitles,
       );
       if (res.success && res.data) {
         setMissingBooksMap((prev) => ({ ...prev, [seriesName]: res.data }));
@@ -2194,7 +2192,6 @@ function BookLibraryPageContent() {
         await handleFetchMissingBooks(
           seriesName,
           sBooks[0].author || "Unknown",
-          sBooks.map((b) => b.title),
         );
 
         // Sleep to avoid hammering Open Library

@@ -167,7 +167,7 @@ async function fetchGoogleBooksCover(title: string, author: string): Promise<str
     return null;
 }
 
-export async function findMissingBooksInSeries(seriesName: string, author: string, existingTitles: string[]) {
+export async function findMissingBooksInSeries(seriesName: string, author: string) {
     try {
         const q = `${seriesName} ${author}`;
         const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=15`;
@@ -179,7 +179,6 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         if (!data.docs) return { success: true, data: [] };
         
         const books = [];
-        const existingLower = existingTitles.map(t => t.toLowerCase().trim());
         
         for (const item of data.docs) {
             const title = item.title || "";
@@ -189,21 +188,11 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
             
             if (!title) continue;
             
-            let isMissing = true;
-            for (const ext of existingLower) {
-                if (ext.includes(title.toLowerCase()) || title.toLowerCase().includes(ext)) {
-                    isMissing = false;
-                    break;
-                }
-            }
-            
-            if (isMissing) {
-                books.push({
-                    title: title,
-                    author: bookAuthor,
-                    coverUrl: coverUrl
-                });
-            }
+            books.push({
+                title: title,
+                author: bookAuthor,
+                coverUrl: coverUrl
+            });
         }
         
         const uniqueBooks = Array.from(new Map(books.map(b => [b.title.toLowerCase(), b])).values());
