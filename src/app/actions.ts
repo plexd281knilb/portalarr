@@ -3247,6 +3247,17 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         }
 
         candidates.sort((a: any, b: any) => {
+            if (reqMediaType === "ebook") {
+                const aTitle = (a.title || "").toLowerCase();
+                const bTitle = (b.title || "").toLowerCase();
+                const aIsEpub = aTitle.includes("epub");
+                const bIsEpub = bTitle.includes("epub");
+                
+                // Heavily penalize non-epub formats (azw3, mobi, pdf)
+                if (aIsEpub && !bIsEpub) return -1;
+                if (!aIsEpub && bIsEpub) return 1;
+            }
+
             if (a.protocol === "usenet" && b.protocol !== "usenet") return -1;
             if (a.protocol !== "usenet" && b.protocol === "usenet") return 1;
             if (a.protocol === "torrent" && b.protocol === "torrent") {
@@ -3372,6 +3383,25 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
+        });
+
+        uniqueFiltered.sort((a: any, b: any) => {
+            if (mediaType === "ebook") {
+                const aTitle = (a.title || "").toLowerCase();
+                const bTitle = (b.title || "").toLowerCase();
+                const aIsEpub = aTitle.includes("epub");
+                const bIsEpub = bTitle.includes("epub");
+                
+                if (aIsEpub && !bIsEpub) return -1;
+                if (!aIsEpub && bIsEpub) return 1;
+            }
+
+            if (a.protocol === "usenet" && b.protocol !== "usenet") return -1;
+            if (a.protocol !== "usenet" && b.protocol === "usenet") return 1;
+            if (a.protocol === "torrent" && b.protocol === "torrent") {
+                return (b.seeders || 0) - (a.seeders || 0);
+            }
+            return 0;
         });
 
         return uniqueFiltered.map((r: any) => ({
