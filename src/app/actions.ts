@@ -17,6 +17,21 @@ import { logger } from "@/lib/logger";
 // --- SECURITY LAYER ---
 // ============================================================================
 
+async function fetchWithRetry(url: string, options: any, retries = 3) {
+    let lastErr;
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await fetch(url, options);
+            if (res.ok) return res;
+        } catch (e) {
+            lastErr = e;
+        }
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    if (lastErr) throw lastErr;
+    return fetch(url, options); // fallback throw
+}
+
 async function verifyAdmin() {
     const user = await verifyUser();
     if (user.role !== "ADMIN" || (user.status && user.status !== "APPROVED")) {
@@ -156,8 +171,9 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
     try {
         const q = `${seriesName} ${author}`;
         const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=15`;
-        const res = await fetch(url, { headers: { "Accept": "application/json" } });
-        if (!res.ok) return { success: false, error: "Failed to query OpenLibrary" };
+        const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
+        
+        if (!res || !res.ok) return { success: false, error: "Failed to query OpenLibrary" };
         const data = await res.json();
         
         if (!data.docs) return { success: true, data: [] };
@@ -271,7 +287,7 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
     try {
         const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
         const cleanedQuery = cleanSearchQuery(query);
-        const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
+        const res = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
             headers: { "Accept": "application/json" }
         });
         if (res.ok) {
@@ -302,7 +318,7 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
     // Tier 4: Open Library Title-Only Fallback
     try {
         const cleanTitleOnly = cleanSearchQuery(title);
-        const resTitleOnly = await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
+        const resTitleOnly = await fetchWithRetry(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
             headers: { "Accept": "application/json" }
         });
         if (resTitleOnly.ok) {
@@ -2043,7 +2059,7 @@ export async function createBookRequest(formData: FormData) {
 async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string): Promise<boolean> {
     try {
         const query = `series:"${seriesTitle}"`;
-        const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
+        const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
             headers: { "Accept": "application/json" },
             next: { revalidate: 3600 }
         });
@@ -2053,7 +2069,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
         
         if (docs.length === 0) {
             console.log(`[SERIES-EXPANSION] No books found for series:"${seriesTitle}". Trying general keyword fallback...`);
-            const fallbackResponse = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(seriesTitle)}&fields=key,title,author_name,cover_i,first_publish_year`, {
+            const fallbackResponse = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(seriesTitle)}&fields=key,title,author_name,cover_i,first_publish_year`, {
                 headers: { "Accept": "application/json" },
                 next: { revalidate: 3600 }
             });
@@ -4940,7 +4956,7 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
 export async function searchOpenLibrary(query: string) {
     if (!query || query.trim().length < 2) return [];
     try {
-        const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
+        const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
             headers: { "Accept": "application/json" },
             next: { revalidate: 3600 }
         });
@@ -4970,7 +4986,7 @@ export async function searchOpenLibrary(query: string) {
 export async function getSeriesBooksList(seriesTitle: string, author: string = "") {
     try {
         const query = author ? `${seriesTitle} ${author}` : seriesTitle;
-        const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
+        const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
             headers: { "Accept": "application/json" },
             next: { revalidate: 3600 }
         });
