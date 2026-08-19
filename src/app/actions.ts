@@ -3744,9 +3744,9 @@ function findFirstMediaFileInDir(dir: string, validExtensions: string[], depth =
     return null;
 }
 
-function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = "ebook"): string | null {
+function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = "ebook"): string[] {
     if (!fs.existsSync(dir)) {
-        return null;
+        return [];
     }
     
     const cleanBookTitle = bookTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -3766,6 +3766,8 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
         ? [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".zip", ".rar"]
         : [".epub", ".pdf", ".mobi", ".cbz", ".cbr", ".azw3"];
     
+    let matches: string[] = [];
+
     try {
         const files = fs.readdirSync(dir);
         for (const file of files) {
@@ -3796,13 +3798,15 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 if (isDirectoryTitleMatch) {
                     const firstMediaFile = findFirstMediaFileInDir(fullPath, validExtensions);
                     if (firstMediaFile) {
-                        return firstMediaFile;
+                        matches.push(firstMediaFile);
                     }
                 }
                 
-                // Recurse into subdirectories to find files inside nested release folders
+                // Recurse into subdirectories
                 const subFound = findDownloadedFile(fullPath, bookTitle, mediaType);
-                if (subFound) return subFound;
+                if (subFound.length > 0) {
+                    matches.push(...subFound);
+                }
 
             } else {
                 const ext = path.extname(file).toLowerCase();
@@ -3811,7 +3815,8 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                     const cleanFullPath = fullPath.toLowerCase().replace(/[^a-z0-9]/g, "");
                     
                     if (cleanFileName.includes(cleanBookTitle) || cleanFullPath.includes(cleanBookTitle) || cleanBookTitle.includes(cleanFileName.replace(/(epub|pdf|mobi|cbz|m4b|mp3|m4a|flac)$/, ""))) {
-                        return fullPath;
+                        matches.push(fullPath);
+                        continue;
                     }
                     
                     const combinedSearchStr = `${file} ${fullPath}`.toLowerCase();
@@ -3824,16 +3829,16 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                     
                     const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
                     if (finalTitleWords.length > 0 && matchCount >= requiredMatches) {
-                        return fullPath;
+                        matches.push(fullPath);
                     }
                 }
             }
         }
     } catch (e: any) {
         console.error(`[BACKGROUND-DOWNLOAD-FINDER] Error reading directory ${dir}:`, e.message);
-        return null;
     }
-    return null;
+    
+    return matches;
 }
 
 async function copyFolderRecursiveAsync(source: string, target: string) {
@@ -3926,11 +3931,27 @@ export async function monitorAndRetryDownload(
                     ];
                     console.log(`[AUTO-DOWNLOAD-MONITOR] Searching for completed download in paths:`, searchPaths);
                     let foundFilePath: string | null = null;
+                    let allFound: string[] = [];
                     for (const p of searchPaths) {
                         if (fs.existsSync(p)) {
-                            foundFilePath = findDownloadedFile(p, currentReq.title, reqMedia);
-                            if (foundFilePath) break;
+                            const foundFiles = findDownloadedFile(p, currentReq.title, reqMedia);
+                            if (foundFiles.length > 0) {
+                                allFound.push(...foundFiles);
+                            }
                         }
+                    }
+
+                    if (allFound.length > 0) {
+                        if (reqMedia === "ebook") {
+                            allFound.sort((a, b) => {
+                                const aIsEpub = a.toLowerCase().endsWith(".epub");
+                                const bIsEpub = b.toLowerCase().endsWith(".epub");
+                                if (aIsEpub && !bIsEpub) return -1;
+                                if (!aIsEpub && bIsEpub) return 1;
+                                return 0;
+                            });
+                        }
+                        foundFilePath = allFound[0];
                     }
 
                     if (foundFilePath) {
@@ -5322,11 +5343,27 @@ export async function importCompletedDownload(requestId: string) {
     ];
 
     let foundFilePath: string | null = null;
+    let allFound: string[] = [];
     for (const p of searchPaths) {
         if (fs.existsSync(p)) {
-            foundFilePath = findDownloadedFile(p, currentReq.title, reqMedia);
-            if (foundFilePath) break;
+            const foundFiles = findDownloadedFile(p, currentReq.title, reqMedia);
+            if (foundFiles.length > 0) {
+                allFound.push(...foundFiles);
+            }
         }
+    }
+
+    if (allFound.length > 0) {
+        if (reqMedia === "ebook") {
+            allFound.sort((a, b) => {
+                const aIsEpub = a.toLowerCase().endsWith(".epub");
+                const bIsEpub = b.toLowerCase().endsWith(".epub");
+                if (aIsEpub && !bIsEpub) return -1;
+                if (!aIsEpub && bIsEpub) return 1;
+                return 0;
+            });
+        }
+        foundFilePath = allFound[0];
     }
 
     if (!foundFilePath) {
