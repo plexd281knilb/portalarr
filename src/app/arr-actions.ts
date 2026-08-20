@@ -157,12 +157,16 @@ export async function addRadarrMovie(appId: string, movieData: any, qualityProfi
             throw new Error("Quality profile not allowed for this instance");
         }
 
+        // Remove id if it exists in movieData to prevent Bad Request when creating new entity
+        const { id, ...cleanedMovieData } = movieData;
+
         const body = {
-            ...movieData,
+            ...cleanedMovieData,
             qualityProfileId,
             rootFolderPath,
             monitored: true,
             addOptions: {
+                monitor: "movieOnly",
                 searchForMovie: true
             }
         };
@@ -274,7 +278,11 @@ export async function forceImportRadarrQueueItem(appId: string, downloadId: stri
                 ...file,
                 importApproved: true
             }));
-            return await arrApiPost(app, "/api/v3/manualimport", importPayload);
+            return await arrApiPost(app, "/api/v3/command", {
+                name: "ManualImport",
+                files: importPayload,
+                importMode: "move"
+            });
         }
         
         return { success: false, error: "No files found to import" };
@@ -311,12 +319,17 @@ export async function addSonarrSeries(appId: string, seriesData: any, qualityPro
             throw new Error("Quality profile not allowed for this instance");
         }
 
+        // Remove id if it exists in seriesData to prevent Bad Request when creating new entity
+        const { id, ...cleanedSeriesData } = seriesData;
+
         const body = {
-            ...seriesData,
+            ...cleanedSeriesData,
             qualityProfileId,
+            languageProfileId: seriesData.languageProfileId || 1,
             rootFolderPath,
             monitored: true,
             addOptions: {
+                monitor: "all",
                 searchForMissingEpisodes: true
             }
         };
@@ -462,7 +475,11 @@ export async function forceImportSonarrQueueItem(appId: string, downloadId: stri
                 ...file,
                 importApproved: true
             }));
-            return await arrApiPost(app, "/api/v3/manualimport", importPayload);
+            return await arrApiPost(app, "/api/v3/command", {
+                name: "ManualImport",
+                files: importPayload,
+                importMode: "move"
+            });
         }
         
         return { success: false, error: "No files found to import" };
