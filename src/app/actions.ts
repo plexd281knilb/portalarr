@@ -450,6 +450,24 @@ export async function removeTautulliInstance(id: string) {
   revalidatePath("/settings");
 }
 
+export async function updateTautulliInstance(formData: FormData) {
+  await verifyAdmin();
+  const id = formData.get("id") as string;
+  const name = formData.get("name") as string;
+  const url = formData.get("url") as string;
+  const rawApiKey = formData.get("apiKey") as string;
+  
+  if (!id) return { success: false, error: "ID missing" };
+  
+  // Encrypt before saving
+  await prisma.tautulliInstance.update({ 
+      where: { id },
+      data: { name, url, apiKey: encryptData(rawApiKey) } 
+  });
+  revalidatePath("/settings");
+  return { success: true };
+}
+
 export async function getTautulliInstances() {
     await verifyAdmin();
     const instances = await prisma.tautulliInstance.findMany();
@@ -469,6 +487,22 @@ export async function removeGlancesInstance(id: string) {
   await verifyAdmin();
   await prisma.glancesInstance.delete({ where: { id } });
   revalidatePath("/settings");
+}
+
+export async function updateGlancesInstance(formData: FormData) {
+  await verifyAdmin();
+  const id = formData.get("id") as string;
+  const name = formData.get("name") as string;
+  const url = formData.get("url") as string;
+  
+  if (!id) return { success: false, error: "ID missing" };
+
+  await prisma.glancesInstance.update({ 
+      where: { id },
+      data: { name, url } 
+  });
+  revalidatePath("/settings");
+  return { success: true };
 }
 
 export async function getGlancesInstances() {
