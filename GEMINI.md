@@ -16,6 +16,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
   - **Security:** AES-256-GCM encryption for sensitive service tokens (Plex, SMTP, API keys).
 - **Core Features:**
   - **Unified Status Widgets:** Real-time stream stats (Tautulli), server health metrics (Glances), and deduplicated active download queues (qBittorrent, SABnzbd, NZBGet).
+  - **Responsive Radarr & Sonarr Views:** Mobile-optimized, flexible wrap layouts for Movie and TV libraries featuring prominent release date labeling ("Air Date") and seamless dropdowns.
   - **Audiobook & Ebook Unified Library:** Dedicated tabs for Ebooks and Audiobooks, library media type filtering (`ebook` vs `audiobook`), built-in floating HTML5 audio player with interactive Chapter Selector Modal, user chapter reordering & disk track renaming (`reorderAudiobookChapters`), HTTP Range streaming (`/api/books/[id]/stream`), continuous autoplay next chapter, Send-to-Kindle integration, multi-disc folder ingestion (`Disc 01/`, `Disc 02/`), and Prowlarr category routing (`3030` Audiobooks vs `3040` Ebooks).
   - **3-Tier Cover Artwork Engine:** Automated high-definition artwork resolution (iTunes 600x600 HD → Open Library `-L.jpg` → Google Books `zoom=0`), with an instant **"Fetch Cover" (`🖼️`)** action button on library cards.
   - **Smart Multi-Track Audiobook Consolidation:** Folder-level metadata resolution for multi-track audiobooks (`01 Dudley Demented.mp3`, `02 A Peck of Owls.mp3`), auto-merging chapter tracks into unified book entries (`Harry Potter and the Order of the Phoenix` by `J. K. Rowling`) with total size calculation and HD artwork.
@@ -25,7 +26,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
   - **Overhauled System Settings Tabs:**
     - **General & Email:** Dashboard alert banner, SMTP server setup, test email dispatch, Send-to-Kindle Amazon approved senders guide, and Completed Downloads folder path access validator (`FolderCheck`).
     - **Access Control:** User directory live search, status filters, inline role toggling (`Admin` vs `User`), Kindle email manager (`✏️`), Admin password reset modal (`🔑`), 1-click bulk approvals (`CheckCheck`), and Plex friends auto-sync.
-    - **Monitoring & Apps:** Live connection diagnostic buttons (`"Test"`) for Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Jellyseerr, Bazarr, etc.
+    - **Monitoring & Apps:** Live connection diagnostic buttons (`"Test"`), inline edit states (`✏️`), dynamic port pre-filling, and unified settings management for Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Jellyseerr, Bazarr, etc.
     - **Beta & Announcements:** Markdown Roadmap editor and interactive Beta Testing Cards manager.
   - **Support System:** Direct ticket submission for users, and a ticket management panel at `/admin/tickets` for administrators (with SMTP email updates).
   - **Interactive Beta Portal:** A modular dashboard at `/beta` showcasing active and upcoming beta features/services.
