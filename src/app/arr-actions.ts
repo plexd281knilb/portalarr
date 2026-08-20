@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { decryptData } from "@/lib/encryption"
 import { getSession } from "@/app/auth-actions"
+import { logger } from "@/lib/logger"
 
 async function verifySuperUserOrAdmin() {
     const session = await getSession();
@@ -77,6 +78,7 @@ export async function arrApiGet(app: any, endpoint: string) {
             throw new Error(`API returned non-JSON. Incorrect URL or proxy issue? (Response: ${text.slice(0, 30)}...)`);
         }
     } catch (e: any) {
+        logger.addLog("ERROR", "API", `[arrApiGet] Failed fetching ${endpoint}: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
@@ -101,6 +103,7 @@ export async function arrApiPost(app: any, endpoint: string, body: any) {
             throw new Error(`API returned non-JSON. (Response: ${text.slice(0, 30)}...)`);
         }
     } catch (e: any) {
+        logger.addLog("ERROR", "API", `[arrApiPost] Failed POST to ${endpoint}: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
@@ -125,6 +128,7 @@ export async function arrApiPut(app: any, endpoint: string, body: any) {
             throw new Error(`API returned non-JSON. (Response: ${text.slice(0, 30)}...)`);
         }
     } catch (e: any) {
+        logger.addLog("ERROR", "API", `[arrApiPut] Failed PUT to ${endpoint}: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
