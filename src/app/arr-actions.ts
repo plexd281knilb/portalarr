@@ -309,6 +309,17 @@ export async function forceImportRadarrQueueItem(appId: string, downloadId: stri
             }
         }
 
+        // If queue mapping failed (e.g., ambiguous movies), fallback to history lookup
+        if (targetMovieId === 0) {
+            const historyRes = await arrApiGet(app, "/api/v3/history?page=1&pageSize=1000");
+            if (historyRes.success && historyRes.data && historyRes.data.records) {
+                const historyItem = historyRes.data.records.find((r: any) => r.data?.downloadId === downloadId);
+                if (historyItem && historyItem.movieId) {
+                    targetMovieId = historyItem.movieId;
+                }
+            }
+        }
+
         const manualImportRes = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
         if (!manualImportRes.success || !manualImportRes.data) throw new Error(manualImportRes.error || "Failed to load files");
         
@@ -524,6 +535,20 @@ export async function forceImportSonarrQueueItem(appId: string, downloadId: stri
                     targetEpisodeId = queueItem.episodeId;
                 } else if (queueItem.episode?.id) {
                     targetEpisodeId = queueItem.episode.id;
+                }
+            }
+        }
+
+        // If queue mapping failed (e.g., ambiguous series), fallback to history lookup
+        if (targetSeriesId === 0) {
+            const historyRes = await arrApiGet(app, "/api/v3/history?page=1&pageSize=1000");
+            if (historyRes.success && historyRes.data && historyRes.data.records) {
+                const historyItem = historyRes.data.records.find((r: any) => r.data?.downloadId === downloadId);
+                if (historyItem && historyItem.seriesId) {
+                    targetSeriesId = historyItem.seriesId;
+                    if (historyItem.episodeId) {
+                        targetEpisodeId = historyItem.episodeId;
+                    }
                 }
             }
         }
