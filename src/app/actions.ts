@@ -17,6 +17,21 @@ import { logger } from "@/lib/logger";
 // --- SECURITY LAYER ---
 // ============================================================================
 
+async function fetchWithRetry(url: string, options: any, retries = 3) {
+    let lastErr;
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await fetch(url, options);
+            if (res.ok) return res;
+        } catch (e) {
+            lastErr = e;
+        }
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    if (lastErr) throw lastErr;
+    return fetch(url, options); // fallback throw
+}
+
 async function verifyAdmin() {
     const user = await verifyUser();
     if (user.role !== "ADMIN" || (user.status && user.status !== "APPROVED")) {
@@ -87,7 +102,14 @@ async function mobiBounceEpub(filePath: string): Promise<boolean> {
         console.log(`[MOBI-BOUNCE] Starting conversion for: ${basename}`);
         
         // Step 1: EPUB to MOBI
-        await execAsync(`ebook-convert "${filePath}" "${tempMobi}"`);
+        try {
+            await execAsync(`ebook-convert "${filePath}" "${tempMobi}"`);
+        } catch (convErr: any) {
+            if (convErr.message && (convErr.message.includes("DRMError") || convErr.message.includes("is DRM protected"))) {
+                throw new Error("DRM_PROTECTED");
+            }
+            throw convErr;
+        }
         
         // Step 2: MOBI to EPUB (forcing language to en)
         await execAsync(`ebook-convert "${tempMobi}" "${tempOutput}" --language en`);
@@ -113,6 +135,9 @@ async function mobiBounceEpub(filePath: string): Promise<boolean> {
         
         return false;
     } catch (err: any) {
+        if (err.message === "DRM_PROTECTED") {
+            throw err;
+        }
         console.error(`[MOBI-BOUNCE] Failed during conversion:`, err.message);
         return false;
     }
@@ -141,6 +166,43 @@ async function fetchGoogleBooksCover(title: string, author: string): Promise<str
     }
     return null;
 }
+
+export async function findMissingBooksInSeries(seriesName: string, author: string) {
+    try {
+        const q = `${seriesName} ${author}`;
+        const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=15`;
+        const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
+        
+        if (!res || !res.ok) return { success: false, error: "Failed to query OpenLibrary" };
+        const data = await res.json();
+        
+        if (!data.docs) return { success: true, data: [] };
+        
+        const books = [];
+        
+        for (const item of data.docs) {
+            const title = item.title || "";
+            const bookAuthor = item.author_name?.[0] || author;
+            const coverId = item.cover_i;
+            const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
+            
+            if (!title) continue;
+            
+            books.push({
+                title: title,
+                author: bookAuthor,
+                coverUrl: coverUrl
+            });
+        }
+        
+        const uniqueBooks = Array.from(new Map(books.map(b => [b.title.toLowerCase(), b])).values());
+        
+        return { success: true, data: uniqueBooks };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 async function fetchITunesCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
     try {
         const cleanAuthor = author && author !== "Unknown Author" ? author : "";
@@ -214,7 +276,7 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
     try {
         const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
         const cleanedQuery = cleanSearchQuery(query);
-        const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
+        const res = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
             headers: { "Accept": "application/json" }
         });
         if (res.ok) {
@@ -245,7 +307,7 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
     // Tier 4: Open Library Title-Only Fallback
     try {
         const cleanTitleOnly = cleanSearchQuery(title);
-        const resTitleOnly = await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
+        const resTitleOnly = await fetchWithRetry(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
             headers: { "Accept": "application/json" }
         });
         if (resTitleOnly.ok) {
@@ -428,10 +490,13 @@ export async function addMediaApp(formData: FormData) {
   const url = formData.get("url") as string;
   const externalUrl = formData.get("externalUrl") as string; 
   const rawApiKey = formData.get("apiKey") as string;
+  const enabledForUsers = formData.get("enabledForUsers") === "true";
+  const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
+  const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
   
   // Encrypt before saving
   await prisma.mediaApp.create({ 
-      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey) } 
+      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds } 
   });
   revalidatePath("/settings");
 }
@@ -444,11 +509,14 @@ export async function updateMediaApp(formData: FormData) {
     const url = formData.get("url") as string;
     const externalUrl = formData.get("externalUrl") as string;
     const rawApiKey = formData.get("apiKey") as string;
+    const enabledForUsers = formData.get("enabledForUsers") === "true";
+    const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
+    const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
 
     // Encrypt before saving
     await prisma.mediaApp.update({
         where: { id },
-        data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey) }
+        data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds }
     });
     revalidatePath("/settings");
 }
@@ -1473,143 +1541,9 @@ export async function getLibraryBooks(libraryId?: string) {
         where: { libraryId: { in: targetLibraryIds } },
         orderBy: { createdAt: "desc" }
     });
-
-    logger.addLog("INFO", "API", `📥 GET /api/books requested for libraryId="${libraryId || 'all'}" (Target Libs: [${targetLibraryIds.join(", ")}])`);
-    console.log(`[GET-LIBRARY-BOOKS] 🚀 Query requested for libraryId="${libraryId || 'all'}" (Resolved Target Libs: [${targetLibraryIds.join(", ")}])`);
-    console.log(`[GET-LIBRARY-BOOKS] 📦 Raw DB records fetched from SQLite: ${books.length}`);
     
-    // Instant Deduplication by Title Key
-    const titleMap = new Map<string, typeof books[number]>();
-    const deleteIds: string[] = [];
-
-    for (const b of books) {
-        const rawTitle = (b.title || "").trim().toLowerCase();
-        if (rawTitle === "userbooks" || rawTitle === "user books" || rawTitle === "books" || rawTitle === "audiobooks" || rawTitle === "downloads") {
-            deleteIds.push(b.id);
-            continue;
-        }
-
-        let normTitle = rawTitle.replace(/[^a-z0-9]/g, "");
-        if (!normTitle) continue;
-
-        const dedupKey = `${b.libraryId}_${b.mediaType || "ebook"}_${normTitle}`;
-
-        if (titleMap.has(dedupKey)) {
-            const existing = titleMap.get(dedupKey)!;
-            const existingSize = existing.fileSize || 0;
-            const currentSize = b.fileSize || 0;
-            if (currentSize >= existingSize) {
-                deleteIds.push(existing.id);
-                titleMap.set(dedupKey, b);
-            } else {
-                deleteIds.push(b.id);
-            }
-        } else {
-            titleMap.set(dedupKey, b);
-        }
-    }
-
-    if (deleteIds.length > 0) {
-        prisma.book.deleteMany({
-            where: { id: { in: deleteIds } }
-        }).catch(err => console.error("[GET-BOOKS-DEDUP] Error purging duplicates:", err.message));
-    }
-
-    const uniqueBooks = Array.from(titleMap.values());
-    for (const b of uniqueBooks) {
-        let t = b.title || "";
-        let a = b.author || "Unknown Author";
-
-        t = t.replace(/\s*\(\s*\)\s*/g, " ")
-             .replace(/\s*\[\s*\]\s*/g, " ")
-             .replace(/\s*\([^)]*retail[^)]*\)/gi, " ")
-             .replace(/\s*\([^)]*epub[^)]*\)/gi, " ")
-             .replace(/\s*\([^)]*pdf[^)]*\)/gi, " ")
-             .replace(/Thank\s*you/gi, " ")
-             .replace(/\bWW\b/gi, " ")
-             .replace(/\s+/g, " ")
-             .trim();
-
-        if (a === "Unknown Author" || t.includes("[") || t.includes("]") || t.toLowerCase().includes("alex 011") || t.toLowerCase().includes("prince of the nile") || t.toLowerCase().includes("lord of the rings") || t.toLowerCase().includes("harry potter") || t.toLowerCase().includes("philosopher")) {
-            const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
-            const parsed = parseFilenameMetadata(rawTarget);
-            if (parsed.title) t = parsed.title;
-            if (parsed.author && parsed.author !== "Unknown Author") a = parsed.author;
-        }
-
-        const lowerT = t.toLowerCase();
-        const lowerA = a.toLowerCase();
-
-        if (lowerT.includes("chamber of secrets")) {
-            t = "Harry Potter and the Chamber of Secrets";
-            a = "J. K. Rowling";
-        } else if (lowerT.includes("prisoner of azkaban")) {
-            t = "Harry Potter and the Prisoner of Azkaban";
-            a = "J. K. Rowling";
-        } else if (lowerT.includes("goblet of fire")) {
-            t = "Harry Potter and the Goblet of Fire";
-            a = "J. K. Rowling";
-        } else if (lowerT.includes("order of the phoenix")) {
-            t = "Harry Potter and the Order of the Phoenix";
-            a = "J. K. Rowling";
-        } else if (lowerT.includes("half-blood prince") || lowerT.includes("half blood prince")) {
-            t = "Harry Potter and the Half-Blood Prince";
-            a = "J. K. Rowling";
-        } else if (lowerT.includes("deathly hallows")) {
-            t = "Harry Potter and the Deathly Hallows";
-            a = "J. K. Rowling";
-        } else if (lowerT.includes("philosopher") || lowerT.includes("sorcerer") || (lowerT.includes("harry potter") && (lowerT.includes("01") || lowerT.includes("bk 1") || lowerT.includes("book 1")))) {
-            t = "Harry Potter and the Sorcerer's Stone";
-            a = "J. K. Rowling";
-        } else if (lowerT.includes("two towers") || (lowerT.includes("lord of the rings") && (lowerT.includes("02") || lowerT.includes("book 2") || lowerT.includes("vol 2")))) {
-            t = "The Two Towers";
-            a = "J. R. R. Tolkien";
-        } else if (lowerT.includes("return of the king") || (lowerT.includes("lord of the rings") && (lowerT.includes("03") || lowerT.includes("book 3") || lowerT.includes("vol 3")))) {
-            t = "The Return of the King";
-            a = "J. R. R. Tolkien";
-        } else if (lowerT.includes("fellowship of the ring") || (lowerT.includes("lord of the rings") && (lowerT.includes("01") || lowerT.includes("book 1") || lowerT.includes("vol 1")))) {
-            t = "The Fellowship of the Ring";
-            a = "J. R. R. Tolkien";
-        } else if (lowerT.includes("prince of the nile") || lowerT.includes("alex 011")) {
-            t = "Alix: The Prince of the Nile";
-            a = "Jacques Martin";
-        } else if (lowerT.includes("if cats disappeared from the world")) {
-            t = "If Cats Disappeared from the World";
-            a = "Genki Kawamura";
-        } else if (lowerT.includes("foundryside") || lowerA.includes("foundryside")) {
-            t = "Foundryside";
-            a = "Robert Jackson Bennett";
-        } else if (lowerT.includes("japanese verbs at a glance") || lowerA.includes("japanese verbs at a glance") || lowerT.includes("n chino") || lowerA.includes("n chino")) {
-            t = "Japanese Verbs at a Glance";
-            a = "N. Chino";
-        }
-
-        if (!b.series) {
-            const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
-            const heur = callDefaultResolver(rawTarget, b.mediaType || "ebook");
-            if (heur.series) {
-                b.series = heur.series;
-                b.volumeNumber = heur.volumeNumber ? String(heur.volumeNumber) : null;
-                prisma.book.updateMany({
-                    where: { id: b.id },
-                    data: { series: heur.series, volumeNumber: heur.volumeNumber ? String(heur.volumeNumber) : null }
-                }).catch(() => {});
-            }
-        }
-
-        if (t !== b.title || a !== b.author) {
-            b.title = t;
-            b.author = a;
-            prisma.book.updateMany({
-                where: { id: b.id },
-                data: { title: t, author: a }
-            }).catch(() => {});
-        }
-    }
-
-    uniqueBooks.sort((a, b) => a.title.localeCompare(b.title));
-    console.log(`[GET-LIBRARY-BOOKS] 📚 Returning ${uniqueBooks.length} books for library "${libraryId || 'all'}": [${uniqueBooks.map(b => b.title).join(", ")}]`);
-    return uniqueBooks;
+    books.sort((a, b) => a.title.localeCompare(b.title));
+    return books;
 }
 
 export async function deleteBook(id: string) {
@@ -1864,7 +1798,7 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
 export async function createBookRequest(formData: FormData) {
     try {
         const session = await verifyUser();
-        const isAdmin = session.role === "ADMIN";
+        const isAdmin = session.role === "ADMIN" || session.role === "SUPER_USER";
         const title = formData.get("title") as string;
         const author = formData.get("author") as string || "";
         const type = formData.get("type") as string || "book"; // "book" or "series"
@@ -1888,12 +1822,14 @@ export async function createBookRequest(formData: FormData) {
         let finalYear = publishYear;
 
         try {
-            const heur = callDefaultResolver(`${title} ${author}`, mediaType);
-            if (heur) {
-                if (heur.title) finalTitle = heur.title;
-                if (heur.author && heur.author !== "Unknown Author") finalAuthor = heur.author;
-                if (heur.series) finalSeries = heur.series;
-                if (heur.volumeNumber) finalVolNum = String(heur.volumeNumber);
+            if (!author) {
+                const heur = callDefaultResolver(`${title} ${author}`, mediaType);
+                if (heur) {
+                    if (heur.title) finalTitle = heur.title;
+                    if (heur.author && heur.author !== "Unknown Author") finalAuthor = heur.author;
+                    if (heur.series) finalSeries = heur.series;
+                    if (heur.volumeNumber) finalVolNum = String(heur.volumeNumber);
+                }
             }
         } catch (e) {}
 
@@ -1902,9 +1838,14 @@ export async function createBookRequest(formData: FormData) {
                 finalCover = await fetchBookCover(finalTitle, finalAuthor, mediaType) || "";
             } catch (e) {}
         }
+        
+        const libraryId = formData.get("libraryId") as string;
+        if (libraryId) {
+            finalCover = finalCover ? `${finalCover}?lib=${libraryId}` : `?lib=${libraryId}`;
+        }
 
         if (type === "series") {
-            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType);
+            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId);
             if (expanded) {
                 // Save the parent series request record itself in the DB
                 await prisma.bookRequest.create({
@@ -1937,6 +1878,9 @@ export async function createBookRequest(formData: FormData) {
             }
         }
         
+        const isApproved = isAdmin || targetUser === "system";
+        const disableAutoDownload = formData.get("disableAutoDownload") === "true";
+        
         const request = await prisma.bookRequest.create({
             data: {
                 title: finalTitle,
@@ -1948,11 +1892,11 @@ export async function createBookRequest(formData: FormData) {
                 requestedBy: targetUser,
                 type,
                 mediaType,
-                status: "Pending"
+                status: isApproved ? "Approved" : "Pending"
             }
         });
         
-        if (type === "book") {
+        if (type === "book" && isApproved && !disableAutoDownload) {
             autoDownloadBookRequest(request.id, finalTitle, finalAuthor).catch(err => {
                 console.error(`[AUTO-DOWNLOAD-BG] Failed for request "${finalTitle}":`, err);
             });
@@ -1977,10 +1921,10 @@ export async function createBookRequest(formData: FormData) {
     }
 }
 
-async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook"): Promise<boolean> {
+async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string): Promise<boolean> {
     try {
         const query = `series:"${seriesTitle}"`;
-        const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
+        const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
             headers: { "Accept": "application/json" },
             next: { revalidate: 3600 }
         });
@@ -1990,7 +1934,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
         
         if (docs.length === 0) {
             console.log(`[SERIES-EXPANSION] No books found for series:"${seriesTitle}". Trying general keyword fallback...`);
-            const fallbackResponse = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(seriesTitle)}&fields=key,title,author_name,cover_i,first_publish_year`, {
+            const fallbackResponse = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(seriesTitle)}&fields=key,title,author_name,cover_i,first_publish_year`, {
                 headers: { "Accept": "application/json" },
                 next: { revalidate: 3600 }
             });
@@ -2028,9 +1972,13 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                     ? doc.author_name[0] 
                     : author || "Unknown Author";
                     
-                const coverUrl = doc.cover_i 
+                let coverUrl = doc.cover_i 
                     ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
                     : "";
+                
+                if (libraryId) {
+                    coverUrl = coverUrl ? `${coverUrl}?lib=${libraryId}` : `?lib=${libraryId}`;
+                }
                     
                 uniqueBooks.push({
                     title: doc.title,
@@ -2234,6 +2182,10 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     clean = clean.replace(/\s*\(Narrated by [^)]+\)/gi, "");
     clean = clean.replace(/Thank\s*you/gi, "");
     clean = clean.replace(/^(?:Kidsbooks|Userbooks|Kyrabooks|Books|Downloads|Audiobooks|Audio)\s*[-_]\s*/i, "");
+    
+    // Strip scene tags and trailing truncated parentheses often left by bad folder names
+    clean = clean.replace(/\s*\([^)]*NMR[^)]*\)?/gi, "");
+    clean = clean.replace(/\s*\([^)]*$/g, "");
 
     // Strip empty parentheses and brackets left behind
     clean = clean.replace(/\[[^\]]+\]/g, " ");
@@ -2864,7 +2816,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                     if (options?.enableAi) {
                         try {
-                            const aiMeta = await resolveMetadataWithAI(cleanBase, library.mediaType || "ebook");
+                            const aiMeta = await resolveMetadataWithAI(parsedMeta.cleanQuery || cleanBase, library.mediaType || "ebook");
                             if (aiMeta) {
                                 if (aiMeta.title) title = aiMeta.title;
                                 if (aiMeta.author && aiMeta.author !== "Unknown Author") author = aiMeta.author;
@@ -2879,24 +2831,31 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         : (stats.mtime || new Date());
 
                     try {
-                        const newBook = await prisma.book.create({
-                            data: {
-                                title,
-                                author,
-                                series,
-                                volumeNumber,
-                                coverUrl: "",
-                                filePath: fullPath,
-                                fileSize: stats.size,
-                                fileType: ext.replace(".", ""),
-                                mediaType: library.mediaType || "ebook",
-                                libraryId: libraryId,
-                                createdAt: fileAddedDate
-                            }
+                        let newBook = await prisma.book.findFirst({
+                            where: { filePath: fullPath }
                         });
+
+                        if (!newBook) {
+                            newBook = await prisma.book.create({
+                                data: {
+                                    title,
+                                    author,
+                                    series,
+                                    volumeNumber,
+                                    coverUrl: "",
+                                    filePath: fullPath,
+                                    fileSize: stats.size,
+                                    fileType: ext.replace(".", ""),
+                                    mediaType: library.mediaType || "ebook",
+                                    libraryId: libraryId,
+                                    createdAt: fileAddedDate
+                                }
+                            });
+                            logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                            console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
+                        }
+                        
                         matchedDbBookIds.add(newBook.id);
-                        logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                        console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
 
                         // Fetch cover artwork asynchronously in background
                         (async () => {
@@ -2986,6 +2945,29 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             }
         }
 
+        // Post-scan database deduplication by exact filePath
+        try {
+            const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
+            const pathMap = new Map<string, string>();
+            const duplicateIds: string[] = [];
+            
+            for (const b of currentDbBooks) {
+                const p = b.filePath.toLowerCase();
+                if (pathMap.has(p)) {
+                    duplicateIds.push(b.id);
+                } else {
+                    pathMap.set(p, b.id);
+                }
+            }
+            
+            if (duplicateIds.length > 0) {
+                console.log(`[SCANNER-DEDUP] Purging ${duplicateIds.length} exact file path duplicate rows from SQLite.`);
+                await prisma.book.deleteMany({
+                    where: { id: { in: duplicateIds } }
+                });
+            }
+        } catch (pathDedupErr) {}
+
         // Post-scan database deduplication by title key
         try {
             const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
@@ -3051,8 +3033,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
     }
 }
 
-async function getTargetLibraryForUser(username: string, mediaType: string = "ebook") {
+async function getTargetLibraryForUser(username: string, mediaType: string = "ebook", coverUrl?: string | null) {
     try {
+        if (coverUrl && coverUrl.includes("?lib=")) {
+            const parsedLibId = coverUrl.split("?lib=")[1].split("&")[0];
+            const explicitLib = await prisma.library.findUnique({ where: { id: parsedLibId } });
+            if (explicitLib) return explicitLib;
+        }
+
         const libraries = await prisma.library.findMany();
         if (libraries.length === 0) return null;
         
@@ -3186,11 +3174,14 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const requester = req?.requestedBy || "";
         const reqMediaType = req?.mediaType || "ebook";
         
-        // Instant Fulfill: Check if book is already downloaded in library
+        const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req?.coverUrl);
+        const resolvedLibId = targetLib?.id;
+        
+        // Instant Fulfill: Check if book is already downloaded in the TARGET library
         const normTitleReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (normTitleReq.length > 2) {
+        if (normTitleReq.length > 2 && resolvedLibId) {
             const allBooks = await prisma.book.findMany({
-                where: { mediaType: reqMediaType }
+                where: { mediaType: reqMediaType, libraryId: resolvedLibId }
             });
             const existingBook = allBooks.find(b => {
                 const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -3198,7 +3189,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             });
 
             if (existingBook) {
-                console.log(`[AUTO-DOWNLOAD] Book "${title}" already exists in library! Fulfilling request ${requestId} immediately.`);
+                console.log(`[AUTO-DOWNLOAD] Book "${title}" already exists in target library! Fulfilling request ${requestId} immediately.`);
                 await prisma.bookRequest.update({
                     where: { id: requestId },
                     data: { status: "Downloaded" }
@@ -3207,7 +3198,6 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             }
         }
         
-        const targetLib = await getTargetLibraryForUser(requester, reqMediaType);
         const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
 
         const prowlarrApp = await prisma.mediaApp.findFirst({
@@ -3268,6 +3258,17 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         }
 
         candidates.sort((a: any, b: any) => {
+            if (reqMediaType === "ebook") {
+                const aTitle = (a.title || "").toLowerCase();
+                const bTitle = (b.title || "").toLowerCase();
+                const aIsEpub = aTitle.includes("epub");
+                const bIsEpub = bTitle.includes("epub");
+                
+                // Heavily penalize non-epub formats (azw3, mobi, pdf)
+                if (aIsEpub && !bIsEpub) return -1;
+                if (!aIsEpub && bIsEpub) return 1;
+            }
+
             if (a.protocol === "usenet" && b.protocol !== "usenet") return -1;
             if (a.protocol !== "usenet" && b.protocol === "usenet") return 1;
             if (a.protocol === "torrent" && b.protocol === "torrent") {
@@ -3395,6 +3396,25 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
             return true;
         });
 
+        uniqueFiltered.sort((a: any, b: any) => {
+            if (mediaType === "ebook") {
+                const aTitle = (a.title || "").toLowerCase();
+                const bTitle = (b.title || "").toLowerCase();
+                const aIsEpub = aTitle.includes("epub");
+                const bIsEpub = bTitle.includes("epub");
+                
+                if (aIsEpub && !bIsEpub) return -1;
+                if (!aIsEpub && bIsEpub) return 1;
+            }
+
+            if (a.protocol === "usenet" && b.protocol !== "usenet") return -1;
+            if (a.protocol !== "usenet" && b.protocol === "usenet") return 1;
+            if (a.protocol === "torrent" && b.protocol === "torrent") {
+                return (b.seeders || 0) - (a.seeders || 0);
+            }
+            return 0;
+        });
+
         return uniqueFiltered.map((r: any) => ({
             title: r.title,
             size: r.size,
@@ -3484,7 +3504,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     
     const requester = req.requestedBy || "";
     const reqMediaType = req.mediaType || "ebook";
-    const targetLib = await getTargetLibraryForUser(requester, reqMediaType);
+    const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req.coverUrl);
     const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
     
     if (protocol === "usenet") {
@@ -3668,9 +3688,28 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
             if (sabApp) {
                 const sabUrl = cleanUrl(sabApp.url);
                 const sabKey = decryptData(sabApp.apiKey as string);
-                const res1 = await fetch(`${sabUrl}/api?mode=queue&name=delete&value=${downloadId}&apikey=${sabKey}`);
-                const res2 = await fetch(`${sabUrl}/api?mode=history&name=delete&value=${downloadId}&del_files=1&apikey=${sabKey}`);
-                return res1.ok && res2.ok;
+                let targetId = downloadId;
+                
+                if (!targetId && title) {
+                    const titleLower = title.toLowerCase().trim();
+                    try {
+                        const hRes = await fetch(`${sabUrl}/api?mode=history&output=json&apikey=${sabKey}`);
+                        if (hRes.ok) {
+                            const hData = await hRes.json();
+                            const slot = (hData.history?.slots || []).find((s: any) => 
+                                (s.name || "").toLowerCase().includes(titleLower) || 
+                                (s.nzb_name || "").toLowerCase().includes(titleLower)
+                            );
+                            if (slot) targetId = slot.nzo_id;
+                        }
+                    } catch (e) {}
+                }
+
+                if (targetId) {
+                    const res1 = await fetch(`${sabUrl}/api?mode=queue&name=delete&value=${targetId}&apikey=${sabKey}`);
+                    const res2 = await fetch(`${sabUrl}/api?mode=history&name=delete&value=${targetId}&del_files=1&apikey=${sabKey}`);
+                    return res1.ok && res2.ok;
+                }
             }
             return false;
         } else {
@@ -3735,38 +3774,51 @@ function findFirstMediaFileInDir(dir: string, validExtensions: string[], depth =
     return null;
 }
 
-function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = "ebook"): string | null {
-    console.log(`[DOWNLOAD-FINDER] Scanning directory: ${dir} for ${mediaType}: "${bookTitle}"`);
+function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = "ebook", bookAuthor?: string): string[] {
     if (!fs.existsSync(dir)) {
-        console.log(`[DOWNLOAD-FINDER] Directory does not exist: ${dir}`);
-        return null;
+        return [];
     }
     
-    const cleanBookTitle = bookTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+    // If the database accidentally saved the author name inside the title string, strip it out for the fuzzy search
+    let searchTitle = bookTitle.toLowerCase();
+    if (bookAuthor) {
+        const authorWords = bookAuthor.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 2);
+        for (const aw of authorWords) {
+            searchTitle = searchTitle.replace(new RegExp(`\\b${aw}\\b`, 'g'), "");
+        }
+    }
+
+    const cleanBookTitle = searchTitle.replace(/[^a-z0-9]/g, "");
     
     const stopWords = new Set(["and", "the", "for", "with", "from", "that", "this", "these", "those", "a", "an", "of", "to", "in", "on", "at", "by", "or", "but", "as", "is", "are", "was", "were", "be", "been", "has", "have", "had", "do", "does", "did", "epub", "pdf", "mobi", "cbz", "m4b", "mp3", "flac"]);
     
-    const titleWords = bookTitle.toLowerCase()
+    const titleWords = searchTitle
         .split(/[^a-z0-9]/)
         .filter(w => w.length > 2 && !stopWords.has(w));
         
     let finalTitleWords = titleWords;
     if (finalTitleWords.length === 0) {
-        finalTitleWords = bookTitle.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 0);
+        finalTitleWords = searchTitle.split(/[^a-z0-9]/).filter(w => w.length > 0);
     }
     
     const validExtensions = mediaType === "audiobook"
         ? [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".zip", ".rar"]
         : [".epub", ".pdf", ".mobi", ".cbz", ".cbr", ".azw3"];
     
+    let matches: string[] = [];
+
     try {
         const files = fs.readdirSync(dir);
-        console.log(`[DOWNLOAD-FINDER] Found ${files.length} items in ${dir}`);
         for (const file of files) {
             const fullPath = path.join(dir, file);
             const stat = fs.statSync(fullPath);
             
             if (stat.isDirectory()) {
+                // Skip incomplete SABnzbd folders
+                if (file.startsWith("_UNPACK_") || file.startsWith("_FAILED_")) {
+                    continue;
+                }
+
                 const cleanDirName = file.toLowerCase().replace(/[^a-z0-9]/g, "");
                 const cleanFullPath = fullPath.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -3790,27 +3842,25 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 if (isDirectoryTitleMatch) {
                     const firstMediaFile = findFirstMediaFileInDir(fullPath, validExtensions);
                     if (firstMediaFile) {
-                        console.log(`[DOWNLOAD-FINDER] DIRECTORY MATCH FOUND: ${fullPath} (via matching release folder "${file}")`);
-                        return firstMediaFile;
+                        matches.push(firstMediaFile);
                     }
                 }
                 
-                // Recurse into subdirectories to find files inside nested release folders
-                const subFound = findDownloadedFile(fullPath, bookTitle, mediaType);
-                if (subFound) return subFound;
+                // Recurse into subdirectories
+                const subFound = findDownloadedFile(fullPath, bookTitle, mediaType, bookAuthor);
+                if (subFound.length > 0) {
+                    matches.push(...subFound);
+                }
 
-                const found = findDownloadedFile(fullPath, bookTitle, mediaType);
-                if (found) return found;
             } else {
                 const ext = path.extname(file).toLowerCase();
                 if (validExtensions.includes(ext)) {
                     const cleanFileName = file.toLowerCase().replace(/[^a-z0-9]/g, "");
                     const cleanFullPath = fullPath.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    console.log(`[DOWNLOAD-FINDER] Inspecting file: ${file} (path: ${fullPath})`);
                     
                     if (cleanFileName.includes(cleanBookTitle) || cleanFullPath.includes(cleanBookTitle) || cleanBookTitle.includes(cleanFileName.replace(/(epub|pdf|mobi|cbz|m4b|mp3|m4a|flac)$/, ""))) {
-                        console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (direct title match)`);
-                        return fullPath;
+                        matches.push(fullPath);
+                        continue;
                     }
                     
                     const combinedSearchStr = `${file} ${fullPath}`.toLowerCase();
@@ -3822,19 +3872,17 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                     }
                     
                     const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
-                    console.log(`[DOWNLOAD-FINDER] Word match count: ${matchCount}/${finalTitleWords.length} (needed at least ${requiredMatches})`);
                     if (finalTitleWords.length > 0 && matchCount >= requiredMatches) {
-                        console.log(`[DOWNLOAD-FINDER] MATCH FOUND: ${fullPath} (fuzzy path match)`);
-                        return fullPath;
+                        matches.push(fullPath);
                     }
                 }
             }
         }
     } catch (e: any) {
         console.error(`[BACKGROUND-DOWNLOAD-FINDER] Error reading directory ${dir}:`, e.message);
-        return null;
     }
-    return null;
+    
+    return matches;
 }
 
 async function copyFolderRecursiveAsync(source: string, target: string) {
@@ -3911,9 +3959,10 @@ export async function monitorAndRetryDownload(
             
             let targetLib: any = null;
             let copySuccessful = false;
+            let finalDestPath = "";
             try {
                 const reqMedia = currentReq?.mediaType || "ebook";
-                targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia);
+                targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl);
                 if (targetLib) {
                     const settings = await prisma.settings.findFirst();
                     const configuredPath = settings?.downloadsPath || "/downloads";
@@ -3926,26 +3975,50 @@ export async function monitorAndRetryDownload(
                     ];
                     console.log(`[AUTO-DOWNLOAD-MONITOR] Searching for completed download in paths:`, searchPaths);
                     let foundFilePath: string | null = null;
+                    let allFound: string[] = [];
                     for (const p of searchPaths) {
                         if (fs.existsSync(p)) {
-                            foundFilePath = findDownloadedFile(p, currentReq.title, reqMedia);
-                            if (foundFilePath) break;
+                            // Try exact release title match first
+                            let foundFiles = findDownloadedFile(p, release.title, reqMedia, currentReq.author || undefined);
+                            if (foundFiles.length === 0) {
+                                // Fallback to fuzzy UI title match
+                                foundFiles = findDownloadedFile(p, currentReq.title, reqMedia, currentReq.author || undefined);
+                            }
+                            if (foundFiles.length > 0) {
+                                allFound.push(...foundFiles);
+                            }
                         }
+                    }
+
+                    if (allFound.length > 0) {
+                        if (reqMedia === "ebook") {
+                            allFound.sort((a, b) => {
+                                const aIsEpub = a.toLowerCase().endsWith(".epub");
+                                const bIsEpub = b.toLowerCase().endsWith(".epub");
+                                if (aIsEpub && !bIsEpub) return -1;
+                                if (!aIsEpub && bIsEpub) return 1;
+                                return 0;
+                            });
+                        }
+                        foundFilePath = allFound[0];
                     }
 
                     if (foundFilePath) {
                         if (isForeignLanguage(path.basename(foundFilePath))) {
                             console.warn(`[AUTO-DOWNLOAD-MONITOR] Completed download file "${path.basename(foundFilePath)}" matches foreign language indicators. Deleting and marking download as failed to retry English releases.`);
                             
+                            let clientCleaned = false;
                             try {
-                                await deleteDownload(release.protocol, downloadId, release.title);
+                                clientCleaned = await deleteDownload(release.protocol, downloadId, release.title);
                             } catch (e) {}
                             
-                            try {
-                                if (fs.existsSync(foundFilePath)) {
-                                    fs.unlinkSync(foundFilePath);
-                                }
-                            } catch (e) {}
+                            if (!clientCleaned) {
+                                try {
+                                    if (fs.existsSync(foundFilePath)) {
+                                        removePathSafely(foundFilePath);
+                                    }
+                                } catch (e) {}
+                            }
                             
                             downloadStatus = "failed";
                         } else {
@@ -3963,8 +4036,6 @@ export async function monitorAndRetryDownload(
                                                        rootBookFolder === "./downloads" || 
                                                        rootBookFolder === "/app/downloads" || 
                                                        rootBookFolder === process.env.DOWNLOADS_DIR;
-
-                            let finalDestPath = "";
 
                             if (!isRootDownloadsDir && fs.existsSync(rootBookFolder) && fs.statSync(rootBookFolder).isDirectory()) {
                                 const folderName = path.basename(rootBookFolder);
@@ -4013,10 +4084,41 @@ export async function monitorAndRetryDownload(
                             }
                             
                             // Sanitize and flatten formatting (Mobi-Bounce)
+                            let hasDrm = false;
                             try {
                                 await mobiBounceEpub(finalDestPath);
                             } catch (bounceErr: any) {
-                                console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${finalDestPath}:`, bounceErr.message);
+                                if (bounceErr.message === "DRM_PROTECTED") {
+                                    hasDrm = true;
+                                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Detected DRM in release "${release.title}". Deleting and marking download as failed to retry another release.`);
+                                } else {
+                                    console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${finalDestPath}:`, bounceErr.message);
+                                }
+                            }
+
+                            if (hasDrm) {
+                                copySuccessful = false;
+                                downloadStatus = "failed";
+
+                                let clientCleaned = false;
+                                try {
+                                    clientCleaned = await deleteDownload(release.protocol, downloadId, release.title);
+                                } catch (e) {}
+
+                                if (!clientCleaned) {
+                                    try {
+                                        if (fs.existsSync(foundFilePath)) removePathSafely(foundFilePath);
+                                    } catch (e) {}
+                                    
+                                    if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+                                        try {
+                                            removePathSafely(rootBookFolder);
+                                        } catch (e) {}
+                                    }
+                                }
+                                removePathSafely(finalDestPath); // Always delete the copied destination file
+                                
+                                break; // Breaks out of the poll loop to immediately trigger the next release
                             }
                             
                             let clientDeleted = false;
@@ -4039,7 +4141,7 @@ export async function monitorAndRetryDownload(
                                     }
                                     if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
                                         try {
-                                            fs.rmSync(rootBookFolder, { recursive: true, force: true });
+                                            removePathSafely(rootBookFolder);
                                             console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully removed completed download folder on disk: ${rootBookFolder}`);
                                         } catch (e) {}
                                     }
@@ -4081,16 +4183,20 @@ export async function monitorAndRetryDownload(
                 }
                 
                 const allBooks = await prisma.book.findMany();
+                const finalPathClean = finalDestPath ? finalDestPath.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
                 const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                
                 const matchedBook = allBooks.find(b => {
+                    const bPathClean = b.filePath.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    // 1. Direct file path match (safest and most accurate)
+                    if (finalPathClean && finalPathClean.length > 5 && bPathClean === finalPathClean) return true;
+                    
+                    // 2. Fallback: exact title match
                     const bTitleClean = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    const bAuthorClean = b.author ? b.author.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+                    if (reqTitleClean && reqTitleClean.length > 3 && bTitleClean === reqTitleClean) return true;
                     
-                    if (bTitleClean.includes(reqTitleClean) || reqTitleClean.includes(bTitleClean)) return true;
-                    if (bAuthorClean.includes(reqTitleClean) || reqTitleClean.includes(bAuthorClean)) return true;
-                    
-                    const pathClean = b.filePath.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    if (pathClean.includes(reqTitleClean)) return true;
+                    // 3. Fallback: filename contains the exact title (and the title is sufficiently long)
+                    if (reqTitleClean && reqTitleClean.length > 5 && bPathClean.includes(reqTitleClean)) return true;
                     
                     return false;
                 });
@@ -4102,11 +4208,27 @@ export async function monitorAndRetryDownload(
                     } else {
                         console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully ingested audiobook "${matchedBook.title}". Skipping email delivery (audiobooks are stored in library for streaming).`);
                     }
+                    return;
                 } else {
-                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching request title: "${req.title}"`);
+                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching request title: "${req.title}". Deleting library copy and retrying next release.`);
+                    
+                    await prisma.bookRequest.update({
+                        where: { id: requestId },
+                        data: { status: `Failed - Scanner rejected file` }
+                    });
+                    
+                    const targetParent = targetLib ? path.dirname(finalDestPath) : "";
+                    if (targetLib && targetParent && targetParent !== targetLib.path) {
+                        try {
+                            fs.rmSync(targetParent, { recursive: true, force: true });
+                        } catch (e) {}
+                    } else {
+                        removePathSafely(finalDestPath);
+                    }
+                    
+                    downloadStatus = "failed";
+                    break;
                 }
-                
-                return;
             }
         }
 
@@ -4127,7 +4249,7 @@ export async function monitorAndRetryDownload(
             const currentReq = await prisma.bookRequest.findUnique({ where: { id: requestId } });
             const reqMedia = currentReq?.mediaType || "ebook";
             const requester = currentReq?.requestedBy || "";
-            const backupLib = await getTargetLibraryForUser(requester, reqMedia);
+            const backupLib = await getTargetLibraryForUser(requester, reqMedia, currentReq?.coverUrl);
             const nextCategory = backupLib ? getDownloadCategoryForLibrary(backupLib.name, reqMedia) : (reqMedia === "audiobook" ? "audiobooks" : "books");
             
             let nextDownloadId = "";
@@ -4815,7 +4937,7 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
 export async function searchOpenLibrary(query: string) {
     if (!query || query.trim().length < 2) return [];
     try {
-        const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
+        const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
             headers: { "Accept": "application/json" },
             next: { revalidate: 3600 }
         });
@@ -4845,7 +4967,7 @@ export async function searchOpenLibrary(query: string) {
 export async function getSeriesBooksList(seriesTitle: string, author: string = "") {
     try {
         const query = author ? `${seriesTitle} ${author}` : seriesTitle;
-        const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
+        const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
             headers: { "Accept": "application/json" },
             next: { revalidate: 3600 }
         });
@@ -4906,7 +5028,7 @@ export async function getSeriesBooksList(seriesTitle: string, author: string = "
     }
 }
 
-export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[], requestedFor?: string, mediaType: string = "ebook") {
+export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[], requestedFor?: string, mediaType: string = "ebook", libraryId?: string) {
     try {
         const session = await verifyUser();
         const isAdmin = session.role === "ADMIN";
@@ -4918,11 +5040,16 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
         }
         
         for (const book of booksList) {
+            let finalCover = book.coverUrl;
+            if (libraryId) {
+                finalCover = finalCover ? `${finalCover}?lib=${libraryId}` : `?lib=${libraryId}`;
+            }
+            
             const request = await prisma.bookRequest.create({
                 data: {
                     title: book.title,
                     author: book.author,
-                    coverUrl: book.coverUrl,
+                    coverUrl: finalCover,
                     publishYear: book.publishYear,
                     requestedBy: targetUser,
                     type: "book",
@@ -5243,7 +5370,7 @@ export async function importCompletedDownload(requestId: string) {
     if (!currentReq) return { success: false, error: "Request not found" };
 
     const reqMedia = currentReq.mediaType || "ebook";
-    const targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia);
+    const targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl);
     if (!targetLib) return { success: false, error: "No target library shelf configured for user" };
 
     const settings = await prisma.settings.findFirst();
@@ -5270,11 +5397,27 @@ export async function importCompletedDownload(requestId: string) {
     ];
 
     let foundFilePath: string | null = null;
+    let allFound: string[] = [];
     for (const p of searchPaths) {
         if (fs.existsSync(p)) {
-            foundFilePath = findDownloadedFile(p, currentReq.title, reqMedia);
-            if (foundFilePath) break;
+            const foundFiles = findDownloadedFile(p, currentReq.title, reqMedia, currentReq.author || undefined);
+            if (foundFiles.length > 0) {
+                allFound.push(...foundFiles);
+            }
         }
+    }
+
+    if (allFound.length > 0) {
+        if (reqMedia === "ebook") {
+            allFound.sort((a, b) => {
+                const aIsEpub = a.toLowerCase().endsWith(".epub");
+                const bIsEpub = b.toLowerCase().endsWith(".epub");
+                if (aIsEpub && !bIsEpub) return -1;
+                if (!aIsEpub && bIsEpub) return 1;
+                return 0;
+            });
+        }
+        foundFilePath = allFound[0];
     }
 
     if (!foundFilePath) {
@@ -5305,16 +5448,21 @@ export async function importCompletedDownload(requestId: string) {
     }
 
     // Clean up original downloaded file/folder and client entries
+    let clientCleanedUsenet = false;
+    let clientCleanedTorrent = false;
     try {
-        await deleteDownload("usenet", "", currentReq.title);
-        await deleteDownload("torrent", "", currentReq.title);
+        clientCleanedUsenet = await deleteDownload("usenet", "", currentReq.title);
+        clientCleanedTorrent = await deleteDownload("torrent", "", currentReq.title);
     } catch (e) {}
 
-    if (fs.existsSync(foundFilePath)) {
-        removePathSafely(foundFilePath);
-    }
-    if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
-        removePathSafely(rootBookFolder);
+    // Only manually delete files in Node if the client didn't successfully handle it (prevents EACCES locking)
+    if (!clientCleanedUsenet && !clientCleanedTorrent) {
+        if (fs.existsSync(foundFilePath)) {
+            removePathSafely(foundFilePath);
+        }
+        if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+            removePathSafely(rootBookFolder);
+        }
     }
 
     // Auto-scan target library shelf so newly imported media is immediately available with AI resolution

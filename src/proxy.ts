@@ -78,6 +78,14 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/settings/profile", req.url));
     }
 
+    // 6. Role-based protection for Radarr/Sonarr routes
+    if ((pathname.startsWith("/radarr") || pathname.startsWith("/sonarr")) && payload.role !== "ADMIN" && payload.role !== "SUPER_USER") {
+      if (pathname.startsWith("/api")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+
     return NextResponse.next();
   } catch (err) {
     // Invalid session, clean up session cookie and redirect/return 401
