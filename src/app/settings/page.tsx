@@ -347,6 +347,9 @@ function SettingsPageContent() {
 
         setEditingApp(null); 
         setEditingBetaCard(null);
+        setEditingTautulli(null);
+        setEditingGlances(null);
+        setNewAppType("");
         loadAllData();
     };
 
