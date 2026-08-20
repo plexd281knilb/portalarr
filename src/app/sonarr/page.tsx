@@ -171,10 +171,20 @@ export default function SonarrPage() {
 
   const handleOpenSeasons = (series: any) => {
     setActiveSeasonsSeries(series);
+    const isNew = !series.id || series.id === 0;
+    
     // Clone seasons, sort by season number descending
     const seasons = JSON.parse(JSON.stringify(series.seasons || [])).sort(
       (a: any, b: any) => b.seasonNumber - a.seasonNumber,
     );
+
+    if (isNew) {
+        // Default all seasons to monitored for new requests
+        seasons.forEach((s: any) => {
+            s.monitored = true;
+        });
+    }
+
     setActiveSeasons(seasons);
     setSeasonsModalOpen(true);
   };
@@ -191,12 +201,40 @@ export default function SonarrPage() {
       monitored: anyMonitored ? true : activeSeasonsSeries.monitored,
     };
 
-    const res = await updateSonarrSeries(selectedAppId, updatedSeries);
-    if (res.success) {
-      setSeasonsModalOpen(false);
-      fetchLibrary();
+    if (!activeSeasonsSeries.id || activeSeasonsSeries.id === 0) {
+      if (!selectedProfileId || !selectedFolderId) {
+        alert("Please select a profile and root folder first.");
+        setSavingSeasons(false);
+        return;
+      }
+      setAddingSeriesId(activeSeasonsSeries.tvdbId);
+      try {
+        const res = await addSonarrSeries(
+          selectedAppId,
+          updatedSeries,
+          parseInt(selectedProfileId),
+          selectedFolderId,
+        );
+        if (res.success) {
+          alert("Show added and search started!");
+          setSeasonsModalOpen(false);
+          fetchLibrary();
+        } else {
+          alert("Failed to add show: " + res.error);
+        }
+      } catch (e: any) {
+        console.error(e);
+        alert("Failed to add show: " + e.message);
+      }
+      setAddingSeriesId(null);
     } else {
-      alert("Failed to update seasons: " + res.error);
+      const res = await updateSonarrSeries(selectedAppId, updatedSeries);
+      if (res.success) {
+        setSeasonsModalOpen(false);
+        fetchLibrary();
+      } else {
+        alert("Failed to update seasons: " + res.error);
+      }
     }
     setSavingSeasons(false);
   };
@@ -349,29 +387,6 @@ export default function SonarrPage() {
     setSearching(false);
   };
 
-  const handleAdd = async (series: any) => {
-    if (!selectedAppId || !selectedProfileId || !selectedFolderId) return;
-
-    setAddingSeriesId(series.tvdbId);
-    try {
-      const res = await addSonarrSeries(
-        selectedAppId,
-        series,
-        parseInt(selectedProfileId),
-        selectedFolderId,
-      );
-      if (res.success) {
-        alert("Show added and missing episodes search started!");
-        fetchLibrary();
-      } else {
-        alert("Failed to add show: " + res.error);
-      }
-    } catch (e: any) {
-      console.error(e);
-      alert("Failed to add show: " + e.message);
-    }
-    setAddingSeriesId(null);
-  };
 
   const handleToggleMonitor = async (series: any) => {
     if (!selectedAppId) return;
@@ -649,7 +664,7 @@ export default function SonarrPage() {
                             onClick={() => {
                               if (series.id && series.id > 0)
                                 handleToggleMonitor(series);
-                              else handleAdd(series);
+                              else handleOpenSeasons(series);
                             }}
                             disabled={
                               addingSeriesId === series.tvdbId ||
@@ -1219,7 +1234,7 @@ export default function SonarrPage() {
               {savingSeasons ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              Save Changes
+              {(!activeSeasonsSeries?.id || activeSeasonsSeries?.id === 0) ? "Add Series" : "Save Changes"}
             </Button>
           </div>
         </DialogContent>

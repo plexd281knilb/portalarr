@@ -333,7 +333,7 @@ export async function addSonarrSeries(appId: string, seriesData: any, qualityPro
             rootFolderPath,
             monitored: true,
             addOptions: {
-                monitor: "all",
+                monitor: "unknown",
                 searchForMissingEpisodes: true
             }
         };
