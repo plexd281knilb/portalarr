@@ -70,8 +70,17 @@ export async function arrApiGet(app: any, endpoint: string) {
             headers: { "X-Api-Key": app.apiKey },
             cache: "no-store"
         });
-        if (!res.ok) throw new Error(`API GET ${endpoint} failed: ${res.statusText}`);
         const text = await res.text();
+        if (!res.ok) {
+            let errorDetails = text;
+            try {
+                const parsed = JSON.parse(text);
+                if (Array.isArray(parsed) && parsed[0]?.errorMessage) {
+                    errorDetails = parsed.map(e => e.errorMessage).join(", ");
+                }
+            } catch (e) {}
+            throw new Error(`API GET ${endpoint} failed: ${res.statusText} - ${errorDetails}`);
+        }
         try {
             return { success: true, data: JSON.parse(text) };
         } catch (err) {
@@ -95,8 +104,17 @@ export async function arrApiPost(app: any, endpoint: string, body: any) {
             body: JSON.stringify(body),
             cache: "no-store"
         });
-        if (!res.ok) throw new Error(`API POST ${endpoint} failed: ${res.statusText}`);
         const text = await res.text();
+        if (!res.ok) {
+            let errorDetails = text;
+            try {
+                const parsed = JSON.parse(text);
+                if (Array.isArray(parsed) && parsed[0]?.errorMessage) {
+                    errorDetails = parsed.map(e => e.errorMessage).join(", ");
+                }
+            } catch (e) {}
+            throw new Error(`API POST ${endpoint} failed: ${res.statusText} - ${errorDetails}`);
+        }
         try {
             return { success: true, data: JSON.parse(text) };
         } catch (err) {
@@ -120,8 +138,17 @@ export async function arrApiPut(app: any, endpoint: string, body: any) {
             body: JSON.stringify(body),
             cache: "no-store"
         });
-        if (!res.ok) throw new Error(`API PUT ${endpoint} failed: ${res.statusText}`);
         const text = await res.text();
+        if (!res.ok) {
+            let errorDetails = text;
+            try {
+                const parsed = JSON.parse(text);
+                if (Array.isArray(parsed) && parsed[0]?.errorMessage) {
+                    errorDetails = parsed.map(e => e.errorMessage).join(", ");
+                }
+            } catch (e) {}
+            throw new Error(`API PUT ${endpoint} failed: ${res.statusText} - ${errorDetails}`);
+        }
         try {
             return { success: true, data: JSON.parse(text) };
         } catch (err) {
@@ -324,12 +351,11 @@ export async function addSonarrSeries(appId: string, seriesData: any, qualityPro
         }
 
         // Remove id if it exists in seriesData to prevent Bad Request when creating new entity
-        const { id, ...cleanedSeriesData } = seriesData;
+        const { id, languageProfileId: lookupLangId, ...cleanedSeriesData } = seriesData;
 
-        const body = {
+        const body: any = {
             ...cleanedSeriesData,
             qualityProfileId,
-            languageProfileId: seriesData.languageProfileId || 1,
             rootFolderPath,
             monitored: true,
             addOptions: {
@@ -337,6 +363,12 @@ export async function addSonarrSeries(appId: string, seriesData: any, qualityPro
                 searchForMissingEpisodes: true
             }
         };
+
+        // Sonarr v3 requires languageProfileId. Sonarr v4 removed it and throws Bad Request if present.
+        // We detect which version they are running by checking if the lookup payload included it.
+        if (lookupLangId !== undefined) {
+            body.languageProfileId = lookupLangId || 1;
+        }
 
         return await arrApiPost(app, "/api/v3/series", body);
     } catch (e: any) {
