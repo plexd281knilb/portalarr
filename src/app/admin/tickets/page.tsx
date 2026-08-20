@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-// 2. Add Trash2 to your icon imports
-import { Mail, LifeBuoy, Send, Trash2, Loader2 } from "lucide-react";
+import { Mail, LifeBuoy, Send, Trash2, Loader2, UserCog, Film, Tv, BookOpen } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import Link from "next/link";
 
 export default function AdminTicketsPage() {
     const [tickets, setTickets] = useState<any[]>([]);
@@ -119,6 +119,29 @@ export default function AdminTicketsPage() {
                                 {ticket.issue}
                             </div>
                             
+                            <div className="flex flex-wrap gap-2 pt-2">
+                                <Link href={`/settings/access?search=${encodeURIComponent(ticket.email)}`} passHref>
+                                    <Button variant="outline" size="sm" className="h-8 text-xs border-blue-500/30 text-blue-500 hover:bg-blue-500 hover:text-white">
+                                        <UserCog className="h-3 w-3 mr-1.5" /> Manage User
+                                    </Button>
+                                </Link>
+                                <Link href="/radarr" passHref>
+                                    <Button variant="outline" size="sm" className="h-8 text-xs border-yellow-500/30 text-yellow-500 hover:bg-yellow-500 hover:text-white">
+                                        <Film className="h-3 w-3 mr-1.5" /> Radarr
+                                    </Button>
+                                </Link>
+                                <Link href="/sonarr" passHref>
+                                    <Button variant="outline" size="sm" className="h-8 text-xs border-cyan-500/30 text-cyan-500 hover:bg-cyan-500 hover:text-white">
+                                        <Tv className="h-3 w-3 mr-1.5" /> Sonarr
+                                    </Button>
+                                </Link>
+                                <Link href="/library" passHref>
+                                    <Button variant="outline" size="sm" className="h-8 text-xs border-purple-500/30 text-purple-500 hover:bg-purple-500 hover:text-white">
+                                        <BookOpen className="h-3 w-3 mr-1.5" /> Library
+                                    </Button>
+                                </Link>
+                            </div>
+
                             <form onSubmit={(e) => handleUpdate(e, ticket.id)} className="space-y-4 pt-4 border-t border-dashed">
                                 <div className="space-y-2">
                                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
