@@ -3688,9 +3688,28 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
             if (sabApp) {
                 const sabUrl = cleanUrl(sabApp.url);
                 const sabKey = decryptData(sabApp.apiKey as string);
-                const res1 = await fetch(`${sabUrl}/api?mode=queue&name=delete&value=${downloadId}&apikey=${sabKey}`);
-                const res2 = await fetch(`${sabUrl}/api?mode=history&name=delete&value=${downloadId}&del_files=1&apikey=${sabKey}`);
-                return res1.ok && res2.ok;
+                let targetId = downloadId;
+                
+                if (!targetId && title) {
+                    const titleLower = title.toLowerCase().trim();
+                    try {
+                        const hRes = await fetch(`${sabUrl}/api?mode=history&output=json&apikey=${sabKey}`);
+                        if (hRes.ok) {
+                            const hData = await hRes.json();
+                            const slot = (hData.history?.slots || []).find((s: any) => 
+                                (s.name || "").toLowerCase().includes(titleLower) || 
+                                (s.nzb_name || "").toLowerCase().includes(titleLower)
+                            );
+                            if (slot) targetId = slot.nzo_id;
+                        }
+                    } catch (e) {}
+                }
+
+                if (targetId) {
+                    const res1 = await fetch(`${sabUrl}/api?mode=queue&name=delete&value=${targetId}&apikey=${sabKey}`);
+                    const res2 = await fetch(`${sabUrl}/api?mode=history&name=delete&value=${targetId}&del_files=1&apikey=${sabKey}`);
+                    return res1.ok && res2.ok;
+                }
             }
             return false;
         } else {
@@ -3795,6 +3814,11 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
             const stat = fs.statSync(fullPath);
             
             if (stat.isDirectory()) {
+                // Skip incomplete SABnzbd folders
+                if (file.startsWith("_UNPACK_") || file.startsWith("_FAILED_")) {
+                    continue;
+                }
+
                 const cleanDirName = file.toLowerCase().replace(/[^a-z0-9]/g, "");
                 const cleanFullPath = fullPath.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -3983,15 +4007,18 @@ export async function monitorAndRetryDownload(
                         if (isForeignLanguage(path.basename(foundFilePath))) {
                             console.warn(`[AUTO-DOWNLOAD-MONITOR] Completed download file "${path.basename(foundFilePath)}" matches foreign language indicators. Deleting and marking download as failed to retry English releases.`);
                             
+                            let clientCleaned = false;
                             try {
-                                await deleteDownload(release.protocol, downloadId, release.title);
+                                clientCleaned = await deleteDownload(release.protocol, downloadId, release.title);
                             } catch (e) {}
                             
-                            try {
-                                if (fs.existsSync(foundFilePath)) {
-                                    fs.unlinkSync(foundFilePath);
-                                }
-                            } catch (e) {}
+                            if (!clientCleaned) {
+                                try {
+                                    if (fs.existsSync(foundFilePath)) {
+                                        removePathSafely(foundFilePath);
+                                    }
+                                } catch (e) {}
+                            }
                             
                             downloadStatus = "failed";
                         } else {
@@ -4073,21 +4100,23 @@ export async function monitorAndRetryDownload(
                                 copySuccessful = false;
                                 downloadStatus = "failed";
 
+                                let clientCleaned = false;
                                 try {
-                                    await deleteDownload(release.protocol, downloadId, release.title);
+                                    clientCleaned = await deleteDownload(release.protocol, downloadId, release.title);
                                 } catch (e) {}
 
-                                try {
-                                    if (fs.existsSync(foundFilePath)) fs.unlinkSync(foundFilePath);
-                                } catch (e) {}
-                                
-                                removePathSafely(finalDestPath);
-                                
-                                if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+                                if (!clientCleaned) {
                                     try {
-                                        fs.rmSync(rootBookFolder, { recursive: true, force: true });
+                                        if (fs.existsSync(foundFilePath)) removePathSafely(foundFilePath);
                                     } catch (e) {}
+                                    
+                                    if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+                                        try {
+                                            removePathSafely(rootBookFolder);
+                                        } catch (e) {}
+                                    }
                                 }
+                                removePathSafely(finalDestPath); // Always delete the copied destination file
                                 
                                 break; // Breaks out of the poll loop to immediately trigger the next release
                             }
@@ -4112,7 +4141,7 @@ export async function monitorAndRetryDownload(
                                     }
                                     if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
                                         try {
-                                            fs.rmSync(rootBookFolder, { recursive: true, force: true });
+                                            removePathSafely(rootBookFolder);
                                             console.log(`[AUTO-DOWNLOAD-MONITOR] Successfully removed completed download folder on disk: ${rootBookFolder}`);
                                         } catch (e) {}
                                     }
@@ -5419,16 +5448,21 @@ export async function importCompletedDownload(requestId: string) {
     }
 
     // Clean up original downloaded file/folder and client entries
+    let clientCleanedUsenet = false;
+    let clientCleanedTorrent = false;
     try {
-        await deleteDownload("usenet", "", currentReq.title);
-        await deleteDownload("torrent", "", currentReq.title);
+        clientCleanedUsenet = await deleteDownload("usenet", "", currentReq.title);
+        clientCleanedTorrent = await deleteDownload("torrent", "", currentReq.title);
     } catch (e) {}
 
-    if (fs.existsSync(foundFilePath)) {
-        removePathSafely(foundFilePath);
-    }
-    if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
-        removePathSafely(rootBookFolder);
+    // Only manually delete files in Node if the client didn't successfully handle it (prevents EACCES locking)
+    if (!clientCleanedUsenet && !clientCleanedTorrent) {
+        if (fs.existsSync(foundFilePath)) {
+            removePathSafely(foundFilePath);
+        }
+        if (!isRootDownloadsDir && fs.existsSync(rootBookFolder)) {
+            removePathSafely(rootBookFolder);
+        }
     }
 
     // Auto-scan target library shelf so newly imported media is immediately available with AI resolution
