@@ -12,8 +12,9 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 - **3-Tier Cover Artwork Engine:** Automated 600x600 HD cover resolution (iTunes → Open Library → Google Books) with instant 1-click artwork fetch buttons (`🖼️`).
 - **Interactive Release Selection & 1-Click Ingestion:** Interactive release chooser modal for indexers, manual release selection, retry search, and **`📥 Import Download`** action button for instant manual download folder ingestion.
 - **Live Auto-Refreshing Requests:** Real-time 5-second polling updates request statuses (`Pending` → `Searching` → `Downloading` → `Downloaded`) and automatically syncs completed downloads to your library shelf with built-in race condition prevention for safe file-lock cleanup.
+- **Responsive Radarr & Sonarr Views:** Mobile-optimized, flexible wrap layouts for Movie and TV libraries featuring prominent release date labeling ("Air Date") and seamless dropdowns.
 - **Robust Settings & Diagnostic Tools:**
-  - **Live App Connection Testing:** Test connectivity to Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Bazarr, etc., directly from settings.
+  - **Live App Connection Testing & Management:** Test connectivity, inline edit setups, and auto-prefill default ports for Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Bazarr, etc., directly from settings.
   - **Access Control Overhaul:** Admin/User role toggles, Send-to-Kindle email manager, admin password reset modal (`🔑`), live user search, and 1-click bulk approvals (`CheckCheck`).
   - **Folder Path Validator:** Inspect permissions and item counts for completed download directories.
 - **Plex Friends Auto-Sync:** Automatically scans your Plex friends list and provisions approved accounts with role synchronization.

@@ -5,8 +5,8 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
     getSettings, saveSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction,
-    getTautulliInstances, addTautulliInstance, removeTautulliInstance,
-    getGlancesInstances, addGlancesInstance, removeGlancesInstance,
+    getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance,
+    getGlancesInstances, addGlancesInstance, removeGlancesInstance, updateGlancesInstance,
     getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
     getBetaDashboardText, updateBetaDashboardText,
     getBetaCards, createBetaCard, updateBetaCard, deleteBetaCard,
@@ -34,6 +34,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function SettingsPage() {
     return (
@@ -46,6 +48,22 @@ export default function SettingsPage() {
         </Suspense>
     );
 }
+
+const DEFAULT_PORTS: Record<string, string> = {
+    radarr: "7878",
+    sonarr: "8989",
+    lidarr: "8686",
+    readarr: "8787",
+    prowlarr: "9696",
+    bazarr: "6767",
+    overseerr: "5055",
+    jellyseerr: "5055",
+    ombi: "3579",
+    sabnzbd: "8080",
+    nzbget: "6789",
+    qBittorrent: "8080",
+    maintainerr: "6246"
+};
 
 function SettingsPageContent() {
     const router = useRouter();
@@ -91,7 +109,11 @@ function SettingsPageContent() {
 
     // Edit Mode States
     const [editingApp, setEditingApp] = useState<any>(null);
+    const [newAppType, setNewAppType] = useState<string>("");
+    const [editingTautulli, setEditingTautulli] = useState<any>(null);
+    const [editingGlances, setEditingGlances] = useState<any>(null);
     const [editingBetaCard, setEditingBetaCard] = useState<any>(null);
+    const [betaCardContent, setBetaCardContent] = useState<string>("");
 
     // Test Email States
     const [testEmailLoading, setTestEmailLoading] = useState(false);
@@ -328,6 +350,10 @@ function SettingsPageContent() {
 
         setEditingApp(null); 
         setEditingBetaCard(null);
+        setEditingTautulli(null);
+        setEditingGlances(null);
+        setNewAppType("");
+        setBetaCardContent("");
         loadAllData();
     };
 
@@ -920,48 +946,62 @@ function SettingsPageContent() {
                         <Card className="flex flex-col">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <PlaySquare className="h-5 w-5 text-primary"/> Tautulli Streams
+                                    <PlaySquare className="h-5 w-5 text-primary"/> {editingTautulli ? "Edit Tautulli" : "Tautulli Streams"}
                                 </CardTitle>
-                                <CardDescription>Plex stream monitoring instances.</CardDescription>
+                                <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Plex stream monitoring instances."}</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 flex-1">
-                                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                                    {tautulli.length === 0 && <p className="text-xs text-muted-foreground italic">No Tautulli instances added.</p>}
-                                    {tautulli.map(t => (
-                                        <div key={t.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
-                                            <div className="flex justify-between items-center">
-                                                <span className="truncate font-semibold">{t.name}</span>
-                                                <div className="flex items-center gap-1">
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="ghost" 
-                                                        className="h-7 text-[11px] px-2 text-primary"
-                                                        disabled={testingTautulliId === t.id}
-                                                        onClick={() => handleTestTautulli(t.id)}
-                                                    >
-                                                        {testingTautulliId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
-                                                    </Button>
-                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(t.id, removeTautulliInstance)}>
-                                                        <Trash2 className="h-3.5 w-3.5"/>
-                                                    </Button>
+                                {!editingTautulli && (
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {tautulli.length === 0 && <p className="text-xs text-muted-foreground italic">No Tautulli instances added.</p>}
+                                        {tautulli.map(t => (
+                                            <div key={t.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="truncate font-semibold">{t.name}</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[11px] px-2 text-primary"
+                                                            disabled={testingTautulliId === t.id}
+                                                            onClick={() => handleTestTautulli(t.id)}
+                                                        >
+                                                            {testingTautulliId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400" onClick={() => setEditingTautulli(t)}>
+                                                            <Pencil className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(t.id, removeTautulliInstance)}>
+                                                            <Trash2 className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                    </div>
                                                 </div>
+                                                {tautulliTestResults[t.id] && (
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${tautulliTestResults[t.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                        {tautulliTestResults[t.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                        <span className="truncate">{tautulliTestResults[t.id].msg || tautulliTestResults[t.id].err}</span>
+                                                    </div>
+                                                )}
                                             </div>
-                                            {tautulliTestResults[t.id] && (
-                                                <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${tautulliTestResults[t.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
-                                                    {tautulliTestResults[t.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                                    <span className="truncate">{tautulliTestResults[t.id].msg || tautulliTestResults[t.id].err}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                                <form onSubmit={(e) => handleForm(e, addTautulliInstance)} className="space-y-2 border-t pt-4 mt-auto">
-                                    <div className="grid gap-2">
-                                        <Input name="name" placeholder="Friendly Name (e.g. Main Plex)" required className="h-9 text-sm"/>
-                                        <Input name="url" placeholder="URL (http://192.168.1.50:8181)" required className="h-9 text-sm font-mono"/>
-                                        <Input name="apiKey" placeholder="Tautulli API Key" required className="h-9 text-sm font-mono"/>
+                                        ))}
                                     </div>
-                                    <Button type="submit" size="sm" className="w-full mt-2 font-semibold">Add Tautulli Instance</Button>
+                                )}
+                                <form onSubmit={(e) => {
+                                    handleForm(e, editingTautulli ? updateTautulliInstance : addTautulliInstance);
+                                    if (editingTautulli) setEditingTautulli(null);
+                                }} className={`space-y-2 ${!editingTautulli && "border-t pt-4 mt-auto"}`}>
+                                    {editingTautulli && <input type="hidden" name="id" value={editingTautulli.id} />}
+                                    <div className="grid gap-2">
+                                        <Input name="name" placeholder="Friendly Name (e.g. Main Plex)" required className="h-9 text-sm" defaultValue={editingTautulli?.name} />
+                                        <Input name="url" placeholder="URL (http://192.168.1.50:8181)" required className="h-9 text-sm font-mono" defaultValue={editingTautulli?.url} />
+                                        <Input name="apiKey" placeholder="Tautulli API Key" required className="h-9 text-sm font-mono" defaultValue={editingTautulli?.apiKey} />
+                                    </div>
+                                    <div className="flex gap-2 mt-2">
+                                        <Button type="submit" size="sm" className="flex-1 font-semibold">{editingTautulli ? "Save Changes" : "Add Tautulli Instance"}</Button>
+                                        {editingTautulli && (
+                                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingTautulli(null)}>Cancel</Button>
+                                        )}
+                                    </div>
                                 </form>
                             </CardContent>
                         </Card>
@@ -970,47 +1010,61 @@ function SettingsPageContent() {
                         <Card className="flex flex-col">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <Activity className="h-5 w-5 text-sky-400"/> Glances Hardware
+                                    <Activity className="h-5 w-5 text-sky-400"/> {editingGlances ? "Edit Glances" : "Glances Hardware"}
                                 </CardTitle>
-                                <CardDescription>CPU, Memory, and System Metrics.</CardDescription>
+                                <CardDescription>{editingGlances ? `Modifying ${editingGlances.name}` : "CPU, Memory, and System Metrics."}</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 flex-1">
-                                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                                    {glances.length === 0 && <p className="text-xs text-muted-foreground italic">No Glances instances added.</p>}
-                                    {glances.map(g => (
-                                        <div key={g.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
-                                            <div className="flex justify-between items-center">
-                                                <span className="truncate font-semibold">{g.name}</span>
-                                                <div className="flex items-center gap-1">
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="ghost" 
-                                                        className="h-7 text-[11px] px-2 text-sky-400"
-                                                        disabled={testingGlancesId === g.id}
-                                                        onClick={() => handleTestGlances(g.id)}
-                                                    >
-                                                        {testingGlancesId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
-                                                    </Button>
-                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(g.id, removeGlancesInstance)}>
-                                                        <Trash2 className="h-3.5 w-3.5"/>
-                                                    </Button>
+                                {!editingGlances && (
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {glances.length === 0 && <p className="text-xs text-muted-foreground italic">No Glances instances added.</p>}
+                                        {glances.map(g => (
+                                            <div key={g.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="truncate font-semibold">{g.name}</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[11px] px-2 text-sky-400"
+                                                            disabled={testingGlancesId === g.id}
+                                                            onClick={() => handleTestGlances(g.id)}
+                                                        >
+                                                            {testingGlancesId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400" onClick={() => setEditingGlances(g)}>
+                                                            <Pencil className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(g.id, removeGlancesInstance)}>
+                                                            <Trash2 className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                    </div>
                                                 </div>
+                                                {glancesTestResults[g.id] && (
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${glancesTestResults[g.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                        {glancesTestResults[g.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                        <span className="truncate">{glancesTestResults[g.id].msg || glancesTestResults[g.id].err}</span>
+                                                    </div>
+                                                )}
                                             </div>
-                                            {glancesTestResults[g.id] && (
-                                                <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${glancesTestResults[g.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
-                                                    {glancesTestResults[g.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                                    <span className="truncate">{glancesTestResults[g.id].msg || glancesTestResults[g.id].err}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                                <form onSubmit={(e) => handleForm(e, addGlancesInstance)} className="space-y-2 border-t pt-4 mt-auto">
-                                    <div className="grid gap-2">
-                                        <Input name="name" placeholder="Server Name (e.g. Unraid)" required className="h-9 text-sm"/>
-                                        <Input name="url" placeholder="URL (http://192.168.1.50:61208)" required className="h-9 text-sm font-mono"/>
+                                        ))}
                                     </div>
-                                    <Button type="submit" size="sm" className="w-full mt-2 font-semibold">Add Glances Server</Button>
+                                )}
+                                <form onSubmit={(e) => {
+                                    handleForm(e, editingGlances ? updateGlancesInstance : addGlancesInstance);
+                                    if (editingGlances) setEditingGlances(null);
+                                }} className={`space-y-2 ${!editingGlances && "border-t pt-4 mt-auto"}`}>
+                                    {editingGlances && <input type="hidden" name="id" value={editingGlances.id} />}
+                                    <div className="grid gap-2">
+                                        <Input name="name" placeholder="Server Name (e.g. Unraid)" required className="h-9 text-sm" defaultValue={editingGlances?.name} />
+                                        <Input name="url" placeholder="URL (http://192.168.1.50:61208)" required className="h-9 text-sm font-mono" defaultValue={editingGlances?.url} />
+                                    </div>
+                                    <div className="flex gap-2 mt-2">
+                                        <Button type="submit" size="sm" className="flex-1 font-semibold">{editingGlances ? "Save Changes" : "Add Glances Server"}</Button>
+                                        {editingGlances && (
+                                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingGlances(null)}>Cancel</Button>
+                                        )}
+                                    </div>
                                 </form>
                             </CardContent>
                         </Card>
@@ -1063,9 +1117,18 @@ function SettingsPageContent() {
                                     </div>
                                 )}
 
-                                <form onSubmit={(e) => handleForm(e, editingApp ? updateMediaApp : addMediaApp)} className={`space-y-3 ${!editingApp && "border-t pt-4 mt-auto"}`}>
+                                <form onSubmit={(e) => {
+                                    handleForm(e, editingApp ? updateMediaApp : addMediaApp);
+                                    if (editingApp) setEditingApp(null);
+                                    setNewAppType("");
+                                }} className={`space-y-3 ${!editingApp && "border-t pt-4 mt-auto"}`}>
                                     {editingApp && <input type="hidden" name="id" value={editingApp.id} />}
-                                    <Select name="type" required defaultValue={editingApp?.type}>
+                                    <Select 
+                                        name="type" 
+                                        required 
+                                        defaultValue={editingApp?.type}
+                                        onValueChange={(v) => setNewAppType(v)}
+                                    >
                                         <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="App Type" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectGroup>
@@ -1099,7 +1162,13 @@ function SettingsPageContent() {
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
                                             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Internal URL</Label>
-                                            <Input name="url" placeholder="http://192.168.1.50:8080" required className="h-9 text-sm font-mono" defaultValue={editingApp?.url} />
+                                            <Input 
+                                                name="url" 
+                                                placeholder={`http://192.168.1.50:${DEFAULT_PORTS[newAppType || editingApp?.type] || "8080"}`} 
+                                                required 
+                                                className="h-9 text-sm font-mono" 
+                                                defaultValue={editingApp?.url} 
+                                            />
                                         </div>
                                         <div className="space-y-1">
                                             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">External URL</Label>
@@ -1185,7 +1254,7 @@ function SettingsPageContent() {
                                     <div className="flex gap-2">
                                         <Button type="submit" size="sm" className="w-full h-9 font-semibold">{editingApp ? "Update App" : "Add Application"}</Button>
                                         {editingApp && (
-                                            <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => { setEditingApp(null); setArrMeta(null); }}>
+                                            <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => { setEditingApp(null); setArrMeta(null); setNewAppType(""); }}>
                                                 <X className="h-4 w-4"/>
                                             </Button>
                                         )}
@@ -1206,14 +1275,26 @@ function SettingsPageContent() {
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
-                                <Textarea 
-                                    name="text" 
-                                    defaultValue={roadmapText} 
-                                    rows={8} 
-                                    className="font-mono text-sm"
-                                    placeholder="### 🚀 Upcoming Features..."
-                                    required
-                                />
+                                <Tabs defaultValue="write" className="w-full">
+                                    <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
+                                        <TabsTrigger value="write">Write</TabsTrigger>
+                                        <TabsTrigger value="preview">Preview</TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent value="write">
+                                        <Textarea 
+                                            name="text" 
+                                            value={roadmapText} 
+                                            onChange={(e) => setRoadmapText(e.target.value)}
+                                            rows={8} 
+                                            className="font-mono text-sm"
+                                            placeholder="### 🚀 Upcoming Features..."
+                                            required
+                                        />
+                                    </TabsContent>
+                                    <TabsContent value="preview" className="border rounded-md p-4 min-h-[212px] bg-muted/10 prose prose-invert max-w-none text-sm overflow-y-auto">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{roadmapText || "*No content*"}</ReactMarkdown>
+                                    </TabsContent>
+                                </Tabs>
                                 <Button type="submit" className="font-semibold">Save Roadmap Text</Button>
                             </form>
                         </CardContent>
@@ -1228,7 +1309,26 @@ function SettingsPageContent() {
                             </CardHeader>
                             <CardContent>
                                 <form onSubmit={(e) => handleForm(e, updateBetaDashboardText)} className="space-y-4">
-                                    <Textarea name="text" rows={6} defaultValue={betaText} required placeholder="### Interested in Beta Testing?..." />
+                                    <Tabs defaultValue="write" className="w-full">
+                                        <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
+                                            <TabsTrigger value="write">Write</TabsTrigger>
+                                            <TabsTrigger value="preview">Preview</TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="write">
+                                            <Textarea 
+                                                name="text" 
+                                                rows={6} 
+                                                value={betaText} 
+                                                onChange={(e) => setBetaText(e.target.value)}
+                                                className="font-mono text-sm"
+                                                required 
+                                                placeholder="### Interested in Beta Testing?..." 
+                                            />
+                                        </TabsContent>
+                                        <TabsContent value="preview" className="border rounded-md p-4 min-h-[164px] bg-muted/10 prose prose-invert max-w-none text-sm overflow-y-auto">
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{betaText || "*No content*"}</ReactMarkdown>
+                                        </TabsContent>
+                                    </Tabs>
                                     <Button type="submit" className="font-semibold">Save Intro Text</Button>
                                 </form>
                             </CardContent>
@@ -1250,7 +1350,7 @@ function SettingsPageContent() {
                                                     <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
                                                 </div>
                                                 <div className="flex gap-1 shrink-0 ml-2">
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setEditingBetaCard(card)}>
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => { setEditingBetaCard(card); setBetaCardContent(card.content); }}>
                                                         <Pencil className="h-4 w-4 text-blue-500" />
                                                     </Button>
                                                     <Button type="button" variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
@@ -1261,7 +1361,10 @@ function SettingsPageContent() {
                                         ))}
                                     </div>
                                 )}
-                                <form onSubmit={(e) => handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard)} className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}>
+                                <form onSubmit={(e) => {
+                                    handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard);
+                                    setBetaCardContent("");
+                                }} className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}>
                                     {editingBetaCard && <input type="hidden" name="id" value={editingBetaCard.id} />}
                                     <div className="space-y-2">
                                         <Label>Card Title</Label>
@@ -1269,7 +1372,26 @@ function SettingsPageContent() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Content (Markdown)</Label>
-                                        <Textarea name="content" placeholder="Instructions..." rows={4} defaultValue={editingBetaCard?.content} required />
+                                        <Tabs defaultValue="write" className="w-full">
+                                            <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2 h-7">
+                                                <TabsTrigger value="write" className="text-xs">Write</TabsTrigger>
+                                                <TabsTrigger value="preview" className="text-xs">Preview</TabsTrigger>
+                                            </TabsList>
+                                            <TabsContent value="write">
+                                                <Textarea 
+                                                    name="content" 
+                                                    placeholder="Instructions..." 
+                                                    rows={4} 
+                                                    value={betaCardContent} 
+                                                    onChange={(e) => setBetaCardContent(e.target.value)} 
+                                                    required 
+                                                    className="font-mono text-sm"
+                                                />
+                                            </TabsContent>
+                                            <TabsContent value="preview" className="border rounded-md p-3 min-h-[104px] bg-muted/10 prose prose-invert max-w-none text-xs overflow-y-auto">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{betaCardContent || "*No content*"}</ReactMarkdown>
+                                            </TabsContent>
+                                        </Tabs>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2"><Label>Button Text</Label><Input name="buttonText" defaultValue={editingBetaCard?.buttonText} /></div>
@@ -1277,7 +1399,7 @@ function SettingsPageContent() {
                                     </div>
                                     <div className="flex gap-2">
                                         <Button type="submit" className="w-full font-semibold">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
-                                        {editingBetaCard && <Button type="button" variant="outline" onClick={() => setEditingBetaCard(null)}><X className="h-4 w-4"/></Button>}
+                                        {editingBetaCard && <Button type="button" variant="outline" onClick={() => { setEditingBetaCard(null); setBetaCardContent(""); }}><X className="h-4 w-4"/></Button>}
                                     </div>
                                 </form>
                             </CardContent>

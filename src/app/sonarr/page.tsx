@@ -171,10 +171,20 @@ export default function SonarrPage() {
 
   const handleOpenSeasons = (series: any) => {
     setActiveSeasonsSeries(series);
+    const isNew = !series.id || series.id === 0;
+    
     // Clone seasons, sort by season number descending
     const seasons = JSON.parse(JSON.stringify(series.seasons || [])).sort(
       (a: any, b: any) => b.seasonNumber - a.seasonNumber,
     );
+
+    if (isNew) {
+        // Default all seasons to monitored for new requests
+        seasons.forEach((s: any) => {
+            s.monitored = true;
+        });
+    }
+
     setActiveSeasons(seasons);
     setSeasonsModalOpen(true);
   };
@@ -191,12 +201,40 @@ export default function SonarrPage() {
       monitored: anyMonitored ? true : activeSeasonsSeries.monitored,
     };
 
-    const res = await updateSonarrSeries(selectedAppId, updatedSeries);
-    if (res.success) {
-      setSeasonsModalOpen(false);
-      fetchLibrary();
+    if (!activeSeasonsSeries.id || activeSeasonsSeries.id === 0) {
+      if (!selectedProfileId || !selectedFolderId) {
+        alert("Please select a profile and root folder first.");
+        setSavingSeasons(false);
+        return;
+      }
+      setAddingSeriesId(activeSeasonsSeries.tvdbId);
+      try {
+        const res = await addSonarrSeries(
+          selectedAppId,
+          updatedSeries,
+          parseInt(selectedProfileId),
+          selectedFolderId,
+        );
+        if (res.success) {
+          alert("Show added and search started!");
+          setSeasonsModalOpen(false);
+          fetchLibrary();
+        } else {
+          alert("Failed to add show: " + res.error);
+        }
+      } catch (e: any) {
+        console.error(e);
+        alert("Failed to add show: " + e.message);
+      }
+      setAddingSeriesId(null);
     } else {
-      alert("Failed to update seasons: " + res.error);
+      const res = await updateSonarrSeries(selectedAppId, updatedSeries);
+      if (res.success) {
+        setSeasonsModalOpen(false);
+        fetchLibrary();
+      } else {
+        alert("Failed to update seasons: " + res.error);
+      }
     }
     setSavingSeasons(false);
   };
@@ -302,7 +340,7 @@ export default function SonarrPage() {
             if (res.data.profiles.length > 0)
               setSelectedProfileId(res.data.profiles[0].id.toString());
             if (res.data.folders.length > 0)
-              setSelectedFolderId(res.data.folders[0].id.toString());
+              setSelectedFolderId(res.data.folders[0].path);
           } else {
             console.error(res.error);
           }
@@ -349,29 +387,6 @@ export default function SonarrPage() {
     setSearching(false);
   };
 
-  const handleAdd = async (series: any) => {
-    if (!selectedAppId || !selectedProfileId || !selectedFolderId) return;
-
-    setAddingSeriesId(series.tvdbId);
-    try {
-      const res = await addSonarrSeries(
-        selectedAppId,
-        series,
-        parseInt(selectedProfileId),
-        selectedFolderId,
-      );
-      if (res.success) {
-        alert("Show added and missing episodes search started!");
-        fetchLibrary();
-      } else {
-        alert("Failed to add show: " + res.error);
-      }
-    } catch (e: any) {
-      console.error(e);
-      alert("Failed to add show: " + e.message);
-    }
-    setAddingSeriesId(null);
-  };
 
   const handleToggleMonitor = async (series: any) => {
     if (!selectedAppId) return;
@@ -515,10 +530,10 @@ export default function SonarrPage() {
       </div>
 
       <Tabs defaultValue="search" className="w-full">
-        <TabsList className="grid w-full max-w-xl grid-cols-3">
-          <TabsTrigger value="search">Search TVDB</TabsTrigger>
-          <TabsTrigger value="library">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
-          <TabsTrigger value="queue">Activity / Queue</TabsTrigger>
+        <TabsList className="flex h-auto w-full flex-wrap sm:grid sm:max-w-xl sm:grid-cols-3 overflow-x-auto justify-start sm:justify-center">
+          <TabsTrigger value="search" className="flex-1 min-w-[120px]">Search TVDB</TabsTrigger>
+          <TabsTrigger value="library" className="flex-1 min-w-[120px]">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
+          <TabsTrigger value="queue" className="flex-1 min-w-[120px]">Activity / Queue</TabsTrigger>
         </TabsList>
 
         {/* SEARCH TAB */}
@@ -585,7 +600,7 @@ export default function SonarrPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {folders.map((f) => (
-                        <SelectItem key={f.id} value={f.id.toString()}>
+                        <SelectItem key={f.id} value={f.path}>
                           {f.path}
                         </SelectItem>
                       ))}
@@ -649,7 +664,7 @@ export default function SonarrPage() {
                             onClick={() => {
                               if (series.id && series.id > 0)
                                 handleToggleMonitor(series);
-                              else handleAdd(series);
+                              else handleOpenSeasons(series);
                             }}
                             disabled={
                               addingSeriesId === series.tvdbId ||
@@ -706,7 +721,7 @@ export default function SonarrPage() {
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                  <div className="flex flex-col md:flex-row gap-2 mb-4">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -716,12 +731,12 @@ export default function SonarrPage() {
                         onChange={(e) => setLibrarySearch(e.target.value)}
                       />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                       <Select
                         value={libFilterStatus}
                         onValueChange={(val: any) => setLibFilterStatus(val)}
                       >
-                        <SelectTrigger className="w-[140px]">
+                        <SelectTrigger className="flex-1 sm:w-[140px] min-w-[120px]">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -738,7 +753,7 @@ export default function SonarrPage() {
                         value={libSort}
                         onValueChange={(val: any) => setLibSort(val)}
                       >
-                        <SelectTrigger className="w-[160px]">
+                        <SelectTrigger className="flex-1 sm:w-[160px] min-w-[140px]">
                           <SelectValue placeholder="Sort" />
                         </SelectTrigger>
                         <SelectContent>
@@ -758,6 +773,7 @@ export default function SonarrPage() {
                         onClick={fetchLibrary}
                         disabled={libraryLoading}
                         title="Refresh Library"
+                        className="shrink-0"
                       >
                         <RefreshCw
                           className={`h-4 w-4 ${libraryLoading ? "animate-spin" : ""}`}
@@ -888,7 +904,7 @@ export default function SonarrPage() {
         {/* QUEUE TAB */}
         <TabsContent value="queue" className="space-y-4 mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0 pb-4 border-b">
               <div className="space-y-1">
                 <CardTitle>Activity / Queue</CardTitle>
                 <CardDescription>
@@ -1218,7 +1234,7 @@ export default function SonarrPage() {
               {savingSeasons ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              Save Changes
+              {(!activeSeasonsSeries?.id || activeSeasonsSeries?.id === 0) ? "Add Series" : "Save Changes"}
             </Button>
           </div>
         </DialogContent>

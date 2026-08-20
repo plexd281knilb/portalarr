@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { decryptData } from "@/lib/encryption"
 import { getSession } from "@/app/auth-actions"
+import { logger } from "@/lib/logger"
 
 async function verifySuperUserOrAdmin() {
     const session = await getSession();
@@ -69,14 +70,24 @@ export async function arrApiGet(app: any, endpoint: string) {
             headers: { "X-Api-Key": app.apiKey },
             cache: "no-store"
         });
-        if (!res.ok) throw new Error(`API GET ${endpoint} failed: ${res.statusText}`);
         const text = await res.text();
+        if (!res.ok) {
+            let errorDetails = text;
+            try {
+                const parsed = JSON.parse(text);
+                if (Array.isArray(parsed) && parsed[0]?.errorMessage) {
+                    errorDetails = parsed.map(e => e.errorMessage).join(", ");
+                }
+            } catch (e) {}
+            throw new Error(`API GET ${endpoint} failed: ${res.statusText} - ${errorDetails}`);
+        }
         try {
             return { success: true, data: JSON.parse(text) };
         } catch (err) {
             throw new Error(`API returned non-JSON. Incorrect URL or proxy issue? (Response: ${text.slice(0, 30)}...)`);
         }
     } catch (e: any) {
+        logger.addLog("ERROR", "API", `[arrApiGet] Failed fetching ${endpoint}: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
@@ -93,14 +104,24 @@ export async function arrApiPost(app: any, endpoint: string, body: any) {
             body: JSON.stringify(body),
             cache: "no-store"
         });
-        if (!res.ok) throw new Error(`API POST ${endpoint} failed: ${res.statusText}`);
         const text = await res.text();
+        if (!res.ok) {
+            let errorDetails = text;
+            try {
+                const parsed = JSON.parse(text);
+                if (Array.isArray(parsed) && parsed[0]?.errorMessage) {
+                    errorDetails = parsed.map(e => e.errorMessage).join(", ");
+                }
+            } catch (e) {}
+            throw new Error(`API POST ${endpoint} failed: ${res.statusText} - ${errorDetails}`);
+        }
         try {
             return { success: true, data: JSON.parse(text) };
         } catch (err) {
             throw new Error(`API returned non-JSON. (Response: ${text.slice(0, 30)}...)`);
         }
     } catch (e: any) {
+        logger.addLog("ERROR", "API", `[arrApiPost] Failed POST to ${endpoint}: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
@@ -117,14 +138,24 @@ export async function arrApiPut(app: any, endpoint: string, body: any) {
             body: JSON.stringify(body),
             cache: "no-store"
         });
-        if (!res.ok) throw new Error(`API PUT ${endpoint} failed: ${res.statusText}`);
         const text = await res.text();
+        if (!res.ok) {
+            let errorDetails = text;
+            try {
+                const parsed = JSON.parse(text);
+                if (Array.isArray(parsed) && parsed[0]?.errorMessage) {
+                    errorDetails = parsed.map(e => e.errorMessage).join(", ");
+                }
+            } catch (e) {}
+            throw new Error(`API PUT ${endpoint} failed: ${res.statusText} - ${errorDetails}`);
+        }
         try {
             return { success: true, data: JSON.parse(text) };
         } catch (err) {
             throw new Error(`API returned non-JSON. (Response: ${text.slice(0, 30)}...)`);
         }
     } catch (e: any) {
+        logger.addLog("ERROR", "API", `[arrApiPut] Failed PUT to ${endpoint}: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
@@ -157,8 +188,11 @@ export async function addRadarrMovie(appId: string, movieData: any, qualityProfi
             throw new Error("Quality profile not allowed for this instance");
         }
 
+        // Remove id if it exists in movieData to prevent Bad Request when creating new entity
+        const { id, ...cleanedMovieData } = movieData;
+
         const body = {
-            ...movieData,
+            ...cleanedMovieData,
             qualityProfileId,
             rootFolderPath,
             monitored: true,
@@ -265,6 +299,27 @@ export async function forceImportRadarrQueueItem(appId: string, downloadId: stri
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Radarr instance not found or disabled");
 
+        // Retrieve the queue to find the correct movieId for this download
+        const queueRes = await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000");
+        let targetMovieId = 0;
+        if (queueRes.success && queueRes.data && queueRes.data.records) {
+            const queueItem = queueRes.data.records.find((r: any) => r.downloadId === downloadId);
+            if (queueItem && queueItem.movieId) {
+                targetMovieId = queueItem.movieId;
+            }
+        }
+
+        // If queue mapping failed (e.g., ambiguous movies), fallback to history lookup
+        if (targetMovieId === 0) {
+            const historyRes = await arrApiGet(app, "/api/v3/history?page=1&pageSize=1000");
+            if (historyRes.success && historyRes.data && historyRes.data.records) {
+                const historyItem = historyRes.data.records.find((r: any) => r.data?.downloadId === downloadId);
+                if (historyItem && historyItem.movieId) {
+                    targetMovieId = historyItem.movieId;
+                }
+            }
+        }
+
         const manualImportRes = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
         if (!manualImportRes.success || !manualImportRes.data) throw new Error(manualImportRes.error || "Failed to load files");
         
@@ -272,9 +327,14 @@ export async function forceImportRadarrQueueItem(appId: string, downloadId: stri
         if (manualImportFiles && manualImportFiles.length > 0) {
             const importPayload = manualImportFiles.map((file: any) => ({
                 ...file,
+                movieId: file.movieId || targetMovieId,
                 importApproved: true
             }));
-            return await arrApiPost(app, "/api/v3/manualimport", importPayload);
+            return await arrApiPost(app, "/api/v3/command", {
+                name: "ManualImport",
+                files: importPayload,
+                importMode: "move"
+            });
         }
         
         return { success: false, error: "No files found to import" };
@@ -311,15 +371,25 @@ export async function addSonarrSeries(appId: string, seriesData: any, qualityPro
             throw new Error("Quality profile not allowed for this instance");
         }
 
-        const body = {
-            ...seriesData,
+        // Remove id if it exists in seriesData to prevent Bad Request when creating new entity
+        const { id, languageProfileId: lookupLangId, ...cleanedSeriesData } = seriesData;
+
+        const body: any = {
+            ...cleanedSeriesData,
             qualityProfileId,
             rootFolderPath,
             monitored: true,
             addOptions: {
+                monitor: "unknown",
                 searchForMissingEpisodes: true
             }
         };
+
+        // Sonarr v3 requires languageProfileId. Sonarr v4 removed it and throws Bad Request if present.
+        // We detect which version they are running by checking if the lookup payload included it.
+        if (lookupLangId !== undefined) {
+            body.languageProfileId = lookupLangId || 1;
+        }
 
         return await arrApiPost(app, "/api/v3/series", body);
     } catch (e: any) {
@@ -453,6 +523,36 @@ export async function forceImportSonarrQueueItem(appId: string, downloadId: stri
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Sonarr instance not found or disabled");
 
+        // Retrieve the queue to find the correct seriesId for this download
+        const queueRes = await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000");
+        let targetSeriesId = 0;
+        let targetEpisodeId = 0;
+        if (queueRes.success && queueRes.data && queueRes.data.records) {
+            const queueItem = queueRes.data.records.find((r: any) => r.downloadId === downloadId);
+            if (queueItem && queueItem.seriesId) {
+                targetSeriesId = queueItem.seriesId;
+                if (queueItem.episodeId) {
+                    targetEpisodeId = queueItem.episodeId;
+                } else if (queueItem.episode?.id) {
+                    targetEpisodeId = queueItem.episode.id;
+                }
+            }
+        }
+
+        // If queue mapping failed (e.g., ambiguous series), fallback to history lookup
+        if (targetSeriesId === 0) {
+            const historyRes = await arrApiGet(app, "/api/v3/history?page=1&pageSize=1000");
+            if (historyRes.success && historyRes.data && historyRes.data.records) {
+                const historyItem = historyRes.data.records.find((r: any) => r.data?.downloadId === downloadId);
+                if (historyItem && historyItem.seriesId) {
+                    targetSeriesId = historyItem.seriesId;
+                    if (historyItem.episodeId) {
+                        targetEpisodeId = historyItem.episodeId;
+                    }
+                }
+            }
+        }
+
         const manualImportRes = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
         if (!manualImportRes.success || !manualImportRes.data) throw new Error(manualImportRes.error || "Failed to load files");
 
@@ -460,9 +560,15 @@ export async function forceImportSonarrQueueItem(appId: string, downloadId: stri
         if (manualImportFiles && manualImportFiles.length > 0) {
             const importPayload = manualImportFiles.map((file: any) => ({
                 ...file,
+                seriesId: file.seriesId || targetSeriesId,
+                episodeIds: (file.episodeIds && file.episodeIds.length > 0) ? file.episodeIds : (targetEpisodeId ? [targetEpisodeId] : []),
                 importApproved: true
             }));
-            return await arrApiPost(app, "/api/v3/manualimport", importPayload);
+            return await arrApiPost(app, "/api/v3/command", {
+                name: "ManualImport",
+                files: importPayload,
+                importMode: "move"
+            });
         }
         
         return { success: false, error: "No files found to import" };
