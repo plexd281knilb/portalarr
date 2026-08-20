@@ -340,7 +340,7 @@ export default function SonarrPage() {
             if (res.data.profiles.length > 0)
               setSelectedProfileId(res.data.profiles[0].id.toString());
             if (res.data.folders.length > 0)
-              setSelectedFolderId(res.data.folders[0].id.toString());
+              setSelectedFolderId(res.data.folders[0].path);
           } else {
             console.error(res.error);
           }
@@ -600,7 +600,7 @@ export default function SonarrPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {folders.map((f) => (
-                        <SelectItem key={f.id} value={f.id.toString()}>
+                        <SelectItem key={f.id} value={f.path}>
                           {f.path}
                         </SelectItem>
                       ))}
