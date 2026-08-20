@@ -34,6 +34,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function SettingsPage() {
     return (
@@ -111,6 +113,7 @@ function SettingsPageContent() {
     const [editingTautulli, setEditingTautulli] = useState<any>(null);
     const [editingGlances, setEditingGlances] = useState<any>(null);
     const [editingBetaCard, setEditingBetaCard] = useState<any>(null);
+    const [betaCardContent, setBetaCardContent] = useState<string>("");
 
     // Test Email States
     const [testEmailLoading, setTestEmailLoading] = useState(false);
@@ -350,6 +353,7 @@ function SettingsPageContent() {
         setEditingTautulli(null);
         setEditingGlances(null);
         setNewAppType("");
+        setBetaCardContent("");
         loadAllData();
     };
 
@@ -1271,14 +1275,26 @@ function SettingsPageContent() {
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
-                                <Textarea 
-                                    name="text" 
-                                    defaultValue={roadmapText} 
-                                    rows={8} 
-                                    className="font-mono text-sm"
-                                    placeholder="### 🚀 Upcoming Features..."
-                                    required
-                                />
+                                <Tabs defaultValue="write" className="w-full">
+                                    <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
+                                        <TabsTrigger value="write">Write</TabsTrigger>
+                                        <TabsTrigger value="preview">Preview</TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent value="write">
+                                        <Textarea 
+                                            name="text" 
+                                            value={roadmapText} 
+                                            onChange={(e) => setRoadmapText(e.target.value)}
+                                            rows={8} 
+                                            className="font-mono text-sm"
+                                            placeholder="### 🚀 Upcoming Features..."
+                                            required
+                                        />
+                                    </TabsContent>
+                                    <TabsContent value="preview" className="border rounded-md p-4 min-h-[212px] bg-muted/10 prose prose-invert max-w-none text-sm overflow-y-auto">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{roadmapText || "*No content*"}</ReactMarkdown>
+                                    </TabsContent>
+                                </Tabs>
                                 <Button type="submit" className="font-semibold">Save Roadmap Text</Button>
                             </form>
                         </CardContent>
@@ -1293,7 +1309,26 @@ function SettingsPageContent() {
                             </CardHeader>
                             <CardContent>
                                 <form onSubmit={(e) => handleForm(e, updateBetaDashboardText)} className="space-y-4">
-                                    <Textarea name="text" rows={6} defaultValue={betaText} required placeholder="### Interested in Beta Testing?..." />
+                                    <Tabs defaultValue="write" className="w-full">
+                                        <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
+                                            <TabsTrigger value="write">Write</TabsTrigger>
+                                            <TabsTrigger value="preview">Preview</TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="write">
+                                            <Textarea 
+                                                name="text" 
+                                                rows={6} 
+                                                value={betaText} 
+                                                onChange={(e) => setBetaText(e.target.value)}
+                                                className="font-mono text-sm"
+                                                required 
+                                                placeholder="### Interested in Beta Testing?..." 
+                                            />
+                                        </TabsContent>
+                                        <TabsContent value="preview" className="border rounded-md p-4 min-h-[164px] bg-muted/10 prose prose-invert max-w-none text-sm overflow-y-auto">
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{betaText || "*No content*"}</ReactMarkdown>
+                                        </TabsContent>
+                                    </Tabs>
                                     <Button type="submit" className="font-semibold">Save Intro Text</Button>
                                 </form>
                             </CardContent>
@@ -1315,7 +1350,7 @@ function SettingsPageContent() {
                                                     <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
                                                 </div>
                                                 <div className="flex gap-1 shrink-0 ml-2">
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setEditingBetaCard(card)}>
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => { setEditingBetaCard(card); setBetaCardContent(card.content); }}>
                                                         <Pencil className="h-4 w-4 text-blue-500" />
                                                     </Button>
                                                     <Button type="button" variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
@@ -1326,7 +1361,10 @@ function SettingsPageContent() {
                                         ))}
                                     </div>
                                 )}
-                                <form onSubmit={(e) => handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard)} className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}>
+                                <form onSubmit={(e) => {
+                                    handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard);
+                                    setBetaCardContent("");
+                                }} className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}>
                                     {editingBetaCard && <input type="hidden" name="id" value={editingBetaCard.id} />}
                                     <div className="space-y-2">
                                         <Label>Card Title</Label>
@@ -1334,7 +1372,26 @@ function SettingsPageContent() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Content (Markdown)</Label>
-                                        <Textarea name="content" placeholder="Instructions..." rows={4} defaultValue={editingBetaCard?.content} required />
+                                        <Tabs defaultValue="write" className="w-full">
+                                            <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2 h-7">
+                                                <TabsTrigger value="write" className="text-xs">Write</TabsTrigger>
+                                                <TabsTrigger value="preview" className="text-xs">Preview</TabsTrigger>
+                                            </TabsList>
+                                            <TabsContent value="write">
+                                                <Textarea 
+                                                    name="content" 
+                                                    placeholder="Instructions..." 
+                                                    rows={4} 
+                                                    value={betaCardContent} 
+                                                    onChange={(e) => setBetaCardContent(e.target.value)} 
+                                                    required 
+                                                    className="font-mono text-sm"
+                                                />
+                                            </TabsContent>
+                                            <TabsContent value="preview" className="border rounded-md p-3 min-h-[104px] bg-muted/10 prose prose-invert max-w-none text-xs overflow-y-auto">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{betaCardContent || "*No content*"}</ReactMarkdown>
+                                            </TabsContent>
+                                        </Tabs>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2"><Label>Button Text</Label><Input name="buttonText" defaultValue={editingBetaCard?.buttonText} /></div>
@@ -1342,7 +1399,7 @@ function SettingsPageContent() {
                                     </div>
                                     <div className="flex gap-2">
                                         <Button type="submit" className="w-full font-semibold">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
-                                        {editingBetaCard && <Button type="button" variant="outline" onClick={() => setEditingBetaCard(null)}><X className="h-4 w-4"/></Button>}
+                                        {editingBetaCard && <Button type="button" variant="outline" onClick={() => { setEditingBetaCard(null); setBetaCardContent(""); }}><X className="h-4 w-4"/></Button>}
                                     </div>
                                 </form>
                             </CardContent>
