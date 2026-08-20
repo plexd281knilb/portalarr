@@ -84,13 +84,13 @@ export default function SonarrPage() {
 
   // Queue state
   const [queue, setQueue] = useState<any[]>([]);
-  const [queueLoading, setQueueLoading] = useState(false);
+  const [queueLoading, setQueueLoading] = useState(true);
   const [queueSearch, setQueueSearch] = useState("");
   const [importingId, setImportingId] = useState<string | null>(null);
 
   // Library state
   const [library, setLibrary] = useState<any[]>([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(true);
   const [librarySearch, setLibrarySearch] = useState("");
   const [modifyingId, setModifyingId] = useState<number | null>(null);
   const [libSort, setLibSort] = useState<
@@ -530,10 +530,10 @@ export default function SonarrPage() {
       </div>
 
       <Tabs defaultValue="search" className="w-full">
-        <TabsList className="flex h-auto w-full flex-wrap sm:grid sm:max-w-xl sm:grid-cols-3 overflow-x-auto justify-start sm:justify-center">
-          <TabsTrigger value="search" className="flex-1 min-w-[120px]">Search TVDB</TabsTrigger>
-          <TabsTrigger value="library" className="flex-1 min-w-[120px]">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
-          <TabsTrigger value="queue" className="flex-1 min-w-[120px]">Activity / Queue</TabsTrigger>
+        <TabsList className="grid grid-cols-3 w-full h-auto p-1 bg-muted/50 rounded-lg">
+          <TabsTrigger value="search" className="text-[10px] sm:text-xs py-2 px-1 whitespace-normal text-center h-full">Search TVDB</TabsTrigger>
+          <TabsTrigger value="library" className="text-[10px] sm:text-xs py-2 px-1 whitespace-normal text-center h-full">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
+          <TabsTrigger value="queue" className="text-[10px] sm:text-xs py-2 px-1 whitespace-normal text-center h-full">Activity / Queue</TabsTrigger>
         </TabsList>
 
         {/* SEARCH TAB */}
