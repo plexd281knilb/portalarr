@@ -299,6 +299,16 @@ export async function forceImportRadarrQueueItem(appId: string, downloadId: stri
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Radarr instance not found or disabled");
 
+        // Retrieve the queue to find the correct movieId for this download
+        const queueRes = await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000");
+        let targetMovieId = 0;
+        if (queueRes.success && queueRes.data && queueRes.data.records) {
+            const queueItem = queueRes.data.records.find((r: any) => r.downloadId === downloadId);
+            if (queueItem && queueItem.movieId) {
+                targetMovieId = queueItem.movieId;
+            }
+        }
+
         const manualImportRes = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
         if (!manualImportRes.success || !manualImportRes.data) throw new Error(manualImportRes.error || "Failed to load files");
         
@@ -306,6 +316,7 @@ export async function forceImportRadarrQueueItem(appId: string, downloadId: stri
         if (manualImportFiles && manualImportFiles.length > 0) {
             const importPayload = manualImportFiles.map((file: any) => ({
                 ...file,
+                movieId: file.movieId || targetMovieId,
                 importApproved: true
             }));
             return await arrApiPost(app, "/api/v3/command", {
@@ -501,6 +512,22 @@ export async function forceImportSonarrQueueItem(appId: string, downloadId: stri
         const app = appsRes.data.find((a: any) => a.id === appId);
         if (!app) throw new Error("Sonarr instance not found or disabled");
 
+        // Retrieve the queue to find the correct seriesId for this download
+        const queueRes = await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000");
+        let targetSeriesId = 0;
+        let targetEpisodeId = 0;
+        if (queueRes.success && queueRes.data && queueRes.data.records) {
+            const queueItem = queueRes.data.records.find((r: any) => r.downloadId === downloadId);
+            if (queueItem && queueItem.seriesId) {
+                targetSeriesId = queueItem.seriesId;
+                if (queueItem.episodeId) {
+                    targetEpisodeId = queueItem.episodeId;
+                } else if (queueItem.episode?.id) {
+                    targetEpisodeId = queueItem.episode.id;
+                }
+            }
+        }
+
         const manualImportRes = await arrApiGet(app, `/api/v3/manualimport?downloadId=${encodeURIComponent(downloadId)}`);
         if (!manualImportRes.success || !manualImportRes.data) throw new Error(manualImportRes.error || "Failed to load files");
 
@@ -508,6 +535,8 @@ export async function forceImportSonarrQueueItem(appId: string, downloadId: stri
         if (manualImportFiles && manualImportFiles.length > 0) {
             const importPayload = manualImportFiles.map((file: any) => ({
                 ...file,
+                seriesId: file.seriesId || targetSeriesId,
+                episodeIds: (file.episodeIds && file.episodeIds.length > 0) ? file.episodeIds : (targetEpisodeId ? [targetEpisodeId] : []),
                 importApproved: true
             }));
             return await arrApiPost(app, "/api/v3/command", {
