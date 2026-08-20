@@ -34,6 +34,14 @@ export default function AccessSettingsPage() {
     const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL");
     const [searchQuery, setSearchQuery] = useState("");
 
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const search = params.get("search");
+            if (search) setSearchQuery(search);
+        }
+    }, []);
+
     // Change Password state
     const [passCurrent, setPassCurrent] = useState("");
     const [passNew, setPassNew] = useState("");

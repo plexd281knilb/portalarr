@@ -963,12 +963,34 @@ export async function submitSupportTicket(formData: FormData) {
                 auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
             } as any);
 
+            const appUrl = await getAppUrl();
+            const htmlContent = `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                    <h2 style="color: #0f172a;">New Support Ticket</h2>
+                    <p><strong>User:</strong> ${name} (<a href="mailto:${email}">${email}</a>)</p>
+                    
+                    <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0; border-radius: 4px;">
+                        <h4 style="margin-top: 0; color: #475569;">Issue:</h4>
+                        <p style="white-space: pre-wrap; margin-bottom: 0;">${issue}</p>
+                    </div>
+
+                    <h4 style="color: #475569; margin-bottom: 10px;">Quick Actions</h4>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <a href="${appUrl}/settings/access?search=${encodeURIComponent(email)}" style="display: inline-block; padding: 8px 12px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Manage User Access</a>
+                        <a href="${appUrl}/radarr" style="display: inline-block; padding: 8px 12px; background-color: #eab308; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Radarr (Movies)</a>
+                        <a href="${appUrl}/sonarr" style="display: inline-block; padding: 8px 12px; background-color: #06b6d4; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Sonarr (Shows)</a>
+                        <a href="${appUrl}/admin/tickets" style="display: inline-block; padding: 8px 12px; background-color: #64748b; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">View Tickets Dashboard</a>
+                    </div>
+                </div>
+            `;
+
             await transporter.sendMail({
                 from: `"Support" <${settings.smtpUser}>`,
                 to: settings.smtpUser, 
                 replyTo: email,
                 subject: `New Ticket from ${name}`,
-                text: `User: ${name} (${email})\n\nIssue:\n${issue}`
+                text: `User: ${name} (${email})\n\nIssue:\n${issue}\n\nQuick Actions:\nManage User: ${appUrl}/settings/access?search=${encodeURIComponent(email)}\nTickets: ${appUrl}/admin/tickets`,
+                html: htmlContent
             });
         }
         revalidatePath("/");
