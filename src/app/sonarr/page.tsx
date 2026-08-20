@@ -515,10 +515,10 @@ export default function SonarrPage() {
       </div>
 
       <Tabs defaultValue="search" className="w-full">
-        <TabsList className="grid w-full max-w-xl grid-cols-3">
-          <TabsTrigger value="search">Search TVDB</TabsTrigger>
-          <TabsTrigger value="library">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
-          <TabsTrigger value="queue">Activity / Queue</TabsTrigger>
+        <TabsList className="flex h-auto w-full flex-wrap sm:grid sm:max-w-xl sm:grid-cols-3 overflow-x-auto justify-start sm:justify-center">
+          <TabsTrigger value="search" className="flex-1 min-w-[120px]">Search TVDB</TabsTrigger>
+          <TabsTrigger value="library" className="flex-1 min-w-[120px]">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
+          <TabsTrigger value="queue" className="flex-1 min-w-[120px]">Activity / Queue</TabsTrigger>
         </TabsList>
 
         {/* SEARCH TAB */}
@@ -706,7 +706,7 @@ export default function SonarrPage() {
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                  <div className="flex flex-col md:flex-row gap-2 mb-4">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -716,12 +716,12 @@ export default function SonarrPage() {
                         onChange={(e) => setLibrarySearch(e.target.value)}
                       />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                       <Select
                         value={libFilterStatus}
                         onValueChange={(val: any) => setLibFilterStatus(val)}
                       >
-                        <SelectTrigger className="w-[140px]">
+                        <SelectTrigger className="flex-1 sm:w-[140px] min-w-[120px]">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -738,7 +738,7 @@ export default function SonarrPage() {
                         value={libSort}
                         onValueChange={(val: any) => setLibSort(val)}
                       >
-                        <SelectTrigger className="w-[160px]">
+                        <SelectTrigger className="flex-1 sm:w-[160px] min-w-[140px]">
                           <SelectValue placeholder="Sort" />
                         </SelectTrigger>
                         <SelectContent>
@@ -758,6 +758,7 @@ export default function SonarrPage() {
                         onClick={fetchLibrary}
                         disabled={libraryLoading}
                         title="Refresh Library"
+                        className="shrink-0"
                       >
                         <RefreshCw
                           className={`h-4 w-4 ${libraryLoading ? "animate-spin" : ""}`}
@@ -888,7 +889,7 @@ export default function SonarrPage() {
         {/* QUEUE TAB */}
         <TabsContent value="queue" className="space-y-4 mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0 pb-4 border-b">
               <div className="space-y-1">
                 <CardTitle>Activity / Queue</CardTitle>
                 <CardDescription>
