@@ -197,7 +197,6 @@ export async function addRadarrMovie(appId: string, movieData: any, qualityProfi
             rootFolderPath,
             monitored: true,
             addOptions: {
-                monitor: "movieOnly",
                 searchForMovie: true
             }
         };
