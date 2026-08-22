@@ -81,13 +81,13 @@ export default function RadarrPage() {
 
   // Queue state
   const [queue, setQueue] = useState<any[]>([]);
-  const [queueLoading, setQueueLoading] = useState(false);
+  const [queueLoading, setQueueLoading] = useState(true);
   const [queueSearch, setQueueSearch] = useState("");
   const [importingId, setImportingId] = useState<string | null>(null);
 
   // Library state
   const [library, setLibrary] = useState<any[]>([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(true);
   const [librarySearch, setLibrarySearch] = useState("");
   const [modifyingId, setModifyingId] = useState<number | null>(null);
   const [libSort, setLibSort] = useState<
@@ -420,10 +420,10 @@ export default function RadarrPage() {
       </div>
 
       <Tabs defaultValue="search" className="w-full">
-        <TabsList className="flex h-auto w-full flex-wrap sm:grid sm:max-w-xl sm:grid-cols-3 overflow-x-auto justify-start sm:justify-center">
-          <TabsTrigger value="search" className="flex-1 min-w-[120px]">Search TMDB</TabsTrigger>
-          <TabsTrigger value="library" className="flex-1 min-w-[120px]">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
-          <TabsTrigger value="queue" className="flex-1 min-w-[120px]">Activity / Queue</TabsTrigger>
+        <TabsList className="grid grid-cols-3 w-full h-auto p-1 bg-muted/50 rounded-lg">
+          <TabsTrigger value="search" className="text-[10px] sm:text-xs py-2 px-1 whitespace-normal text-center h-full">Search TMDB</TabsTrigger>
+          <TabsTrigger value="library" className="text-[10px] sm:text-xs py-2 px-1 whitespace-normal text-center h-full">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
+          <TabsTrigger value="queue" className="text-[10px] sm:text-xs py-2 px-1 whitespace-normal text-center h-full">Activity / Queue</TabsTrigger>
         </TabsList>
 
         {/* SEARCH TAB */}
@@ -508,9 +508,13 @@ export default function RadarrPage() {
                   return (
                     <div
                       key={movie.tmdbId}
-                      className="flex gap-4 border rounded-xl p-3 bg-card hover:bg-muted/10 transition-colors"
+                      className={`flex flex-row gap-3 p-3 rounded-xl border border-border/50 bg-card hover:bg-accent/5 transition-colors relative overflow-hidden ${
+                        movie.id && movie.id > 0
+                          ? "ring-1 ring-blue-500/20"
+                          : ""
+                      }`}
                     >
-                      <div className="w-16 h-24 shrink-0 bg-muted rounded overflow-hidden">
+                      <div className="w-20 sm:w-[90px] h-32 sm:h-[135px] shrink-0 bg-muted rounded-md overflow-hidden relative">
                         {coverImg ? (
                           <img
                             src={coverImg}
