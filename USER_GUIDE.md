@@ -62,7 +62,7 @@ Click the `+ Request Ebook / Audiobook` button on the Library page.
 
 ### Step 4: Submit & Track Progress
 Click Submit Request. You can track its live progress under the Requests tab:
-- ⏳ Pending: Request queued for processing.
+- ⏳ Pending / Approved: Request is auto-approved and queued for processing.
 - 🔍 Searching: System is searching indexers for the best quality release.
 - 📥 Downloading: Download active in SABnzbd or qBittorrent.
 - ✅ Downloaded: Download complete! The book is automatically added to the library shelf for instant reading or streaming.
