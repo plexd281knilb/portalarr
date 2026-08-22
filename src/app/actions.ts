@@ -4457,7 +4457,7 @@ export async function testAiAgentConnection(sampleText?: string) {
         const targetSample = sampleText || "J.R.R.Tolkien-Lord.of.the.Rings.01-The.Hobbit.Rob.Inglis-PoF";
         console.log(`[AI-AGENT-TEST] 🤖 Testing AI Metadata Agent with query: "${targetSample}"...`);
         const result = await resolveMetadataWithAI(targetSample, "audiobook");
-        console.log(`[AI-AGENT-TEST] ✨ Test Result: "${result.title}" by "${result.author}" [Series: ${result.series || "N/A"}] via ${result.providerUsed}`);
+        console.log(`[AI-AGENT-TEST] ✨ Test Result: "${result.title}" by "${result.author}" [Series: ${result.series || "N/A"} #${result.volumeNumber || "N/A"}] via ${result.providerUsed}`);
         return { success: true, result };
     } catch (e: any) {
         console.error("[TEST-AI-AGENT-ERROR]:", e);
