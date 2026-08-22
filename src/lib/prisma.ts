@@ -271,6 +271,34 @@ if (!globalForScheduler.schedulerInitialized) {
             console.error("[BACKGROUND-JOB] Error in scheduled auto-retry runner:", retryErr.message || retryErr);
           }
           
+          // Auto-approve and download any existing "Pending" requests
+          try {
+            const pendingRequests = await prisma.bookRequest.findMany({
+              where: { status: "Pending" }
+            });
+            
+            if (pendingRequests.length > 0) {
+              console.log(`[BACKGROUND-JOB] Found ${pendingRequests.length} Pending request(s). Auto-approving and downloading...`);
+              const { autoDownloadBookRequest } = await import("../app/actions");
+              for (const req of pendingRequests) {
+                try {
+                  await prisma.bookRequest.update({
+                    where: { id: req.id },
+                    data: { status: "Approved" }
+                  });
+                  
+                  autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
+                    console.error(`[AUTO-DOWNLOAD-PENDING-BG] Failed for request "${req.title}":`, err.message || err);
+                  });
+                } catch (reqErr: any) {
+                  console.error(`[BACKGROUND-JOB] Error auto-approving request "${req.title}":`, reqErr.message || reqErr);
+                }
+              }
+            }
+          } catch (pendingErr: any) {
+            console.error("[BACKGROUND-JOB] Error in scheduled pending request runner:", pendingErr.message || pendingErr);
+          }
+          
           await prisma.settings.upsert({
             where: { id: "global" },
             update: { lastAutoSync: new Date() },

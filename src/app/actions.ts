@@ -1934,7 +1934,7 @@ export async function createBookRequest(formData: FormData) {
             }
         }
         
-        const isApproved = isAdmin || targetUser === "system";
+        const isApproved = true; // Auto-approve all requests
         const disableAutoDownload = formData.get("disableAutoDownload") === "true";
         
         const request = await prisma.bookRequest.create({
@@ -2057,7 +2057,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                     requestedBy,
                     type: "book",
                     mediaType,
-                    status: "Pending"
+                    status: "Approved"
                 }
             });
             
@@ -5110,7 +5110,7 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
                     requestedBy: targetUser,
                     type: "book",
                     mediaType: mediaType,
-                    status: "Pending"
+                    status: "Approved"
                 }
             });
             
@@ -5175,7 +5175,7 @@ export async function retryBookRequest(requestId: string) {
     
     await prisma.bookRequest.update({
         where: { id: requestId },
-        data: { status: "Pending" }
+        data: { status: "Approved" }
     });
     
     autoDownloadBookRequest(requestId, request.title, request.author || "").catch(err => {
