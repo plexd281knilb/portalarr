@@ -242,15 +242,19 @@ if (!globalForScheduler.schedulerInitialized) {
           // Check for failed requests that are older than 5 days to auto-retry
           try {
             const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+            const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+            
             const failedRequests = await prisma.bookRequest.findMany({
               where: {
-                status: { startsWith: "Failed" },
-                updatedAt: { lte: fiveDaysAgo }
+                OR: [
+                  { status: { startsWith: "Failed" }, updatedAt: { lte: fiveDaysAgo } },
+                  { status: { in: ["Approved", "Downloading", "Searching"] }, updatedAt: { lte: twelveHoursAgo } }
+                ]
               }
             });
             
             if (failedRequests.length > 0) {
-              console.log(`[BACKGROUND-JOB] Found ${failedRequests.length} failed request(s) older than 5 days. Auto-retrying...`);
+              console.log(`[BACKGROUND-JOB] Found ${failedRequests.length} stuck/failed request(s). Auto-retrying...`);
               const { autoDownloadBookRequest } = await import("../app/actions");
               for (const req of failedRequests) {
                 try {
