@@ -2243,10 +2243,22 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     clean = clean.replace(/\s*\([^)]*NMR[^)]*\)?/gi, "");
     clean = clean.replace(/\s*\([^)]*$/g, "");
 
-    // Strip empty parentheses and brackets left behind
+    // Strip empty parentheses and brackets left behind, including ( 0)
     clean = clean.replace(/\[[^\]]+\]/g, " ");
     clean = clean.replace(/\(\s*\)/g, "");
     clean = clean.replace(/\[\s*\]/g, "");
+    clean = clean.replace(/\(\s*0\s*\)/g, "");
+    clean = clean.replace(/\[\s*0\s*\]/g, "");
+    clean = clean.replace(/\s*\(\s*with[^)]+\)/gi, "");
+
+    // Strip leading series or track numbers like "01 - ", "04 2 - ", "Bridgerton 06 - "
+    const seriesPrefixPattern = /^(?:[a-zA-Z\s'-]+)?(?:#|Book|Vol|Volume)?\s*\d{1,3}(?:\.\d{1,2}|\s+\d{1,2})?\s*-\s*/i;
+    if (seriesPrefixPattern.test(clean)) {
+        const lower = clean.toLowerCase();
+        if (!lower.includes("catch 22") && !lower.includes("fahrenheit 451")) {
+            clean = clean.replace(seriesPrefixPattern, "");
+        }
+    }
 
     // Match comic series + volume number: "Alex 011-The Prince of the Nile" or "Alix 011-The Prince of the Nile"
     const seriesVolMatch = clean.match(/^(Alex|Alix)\s+(\d{1,3})\s*[-:]\s*(.+)$/i);
