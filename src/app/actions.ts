@@ -2488,6 +2488,54 @@ function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): 
     return rawBase;
 }
 
+function extractMetadataFromPath(fullPath: string, file: string, ext: string, scanPath: string): { title: string, author: string, cleanQuery: string } {
+    const rawBase = path.basename(file, ext);
+    let title = rawBase;
+    let author = "Unknown Author";
+
+    const parsedFile = parseFilenameMetadata(rawBase);
+    if (parsedFile.author !== "Unknown Author") {
+        return { title: parsedFile.title, author: parsedFile.author, cleanQuery: parsedFile.cleanQuery };
+    }
+
+    const relPath = path.relative(scanPath, fullPath);
+    const parts = relPath.split(path.sep).filter(Boolean);
+
+    if (parts.length > 0 && parts[parts.length - 1] === file) {
+        parts.pop();
+    }
+
+    const cleanParts = parts.filter(p => {
+        const lower = p.toLowerCase();
+        if (lower === "unknown author" || lower === "unknown") return false;
+        if (/^(?:Disc|CD|Part|Vol|Volume|Track|Disk)\s*\d+$/i.test(lower)) return false;
+        return true;
+    });
+
+    if (cleanParts.length >= 2) {
+        author = cleanParts[cleanParts.length - 2];
+        title = cleanParts[cleanParts.length - 1];
+    } else if (cleanParts.length === 1) {
+        const parsedFolder = parseFilenameMetadata(cleanParts[0]);
+        if (parsedFolder.author !== "Unknown Author") {
+            author = parsedFolder.author;
+            title = parsedFolder.title;
+        } else {
+            title = parsedFolder.title || cleanParts[0];
+        }
+    } else {
+        title = parsedFile.title || rawBase;
+    }
+    
+    const finalParse = parseFilenameMetadata(title);
+    if (finalParse.author !== "Unknown Author" && author === "Unknown Author") {
+        author = finalParse.author;
+        title = finalParse.title;
+    }
+
+    return { title, author, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
+}
+
 export async function scanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
@@ -2852,7 +2900,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
                 
                 const cleanBaseCheckForOrg = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                const parsedMetaCheckForOrg = parseFilenameMetadata(cleanBaseCheckForOrg);
+                const parsedMetaCheckForOrg = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
                 
                 if (!orgTitle || !orgAuthor || orgAuthor === "Unknown Author") {
                     if (!orgTitle) orgTitle = parsedMetaCheckForOrg.title || cleanBaseCheckForOrg;
@@ -2912,7 +2960,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                 if (!existing) {
                     const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMetaCheck = parseFilenameMetadata(cleanBaseCheck);
+                    const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
                     const targetTitleNorm = getNormTitle(parsedMetaCheck.title || cleanBaseCheck);
 
                     if (targetTitleNorm.length > 3) {
@@ -2929,7 +2977,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                 if (!existing) {
                     const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMeta = parseFilenameMetadata(cleanBase);
+                    const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
                     let title = parsedMeta.title;
                     let author = parsedMeta.author;
                     let coverUrl = "";
@@ -3059,7 +3107,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         Object.assign(existing, updateData);
                     }
                     const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMeta = parseFilenameMetadata(cleanBase);
+                    const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
                     let parsedAuthor = parsedMeta.author;
                     let parsedTitle = parsedMeta.title;
 
