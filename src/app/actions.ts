@@ -2916,21 +2916,35 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             }
                             const isDir = fs.statSync(fullPath).isDirectory();
                             if (isDir) {
-                                await copyFolderRecursiveAsync(fullPath, destFolder);
+                                try {
+                                    await fs.promises.rename(fullPath, destFolder);
+                                } catch (err: any) {
+                                    if (err.code === 'EXDEV') {
+                                        await copyFolderRecursiveAsync(fullPath, destFolder);
+                                        removePathSafely(fullPath);
+                                    } else throw err;
+                                }
                                 await setPermissionsRecursiveAsync(destFolder);
-                                removePathSafely(fullPath);
                                 fullPath = destFolder;
                             } else {
                                 const destPath = path.join(destFolder, path.basename(fullPath));
-                                await fs.promises.copyFile(fullPath, destPath);
+                                try {
+                                    await fs.promises.rename(fullPath, destPath);
+                                } catch (err: any) {
+                                    if (err.code === 'EXDEV') {
+                                        await fs.promises.copyFile(fullPath, destPath);
+                                        removePathSafely(fullPath);
+                                    } else throw err;
+                                }
                                 await setPermissionsRecursiveAsync(destPath);
-                                removePathSafely(fullPath);
                                 fullPath = destPath;
                             }
                             console.log(`[SCANNER-AUTO-ORGANIZE] Moved loose/messy file to ${fullPath}`);
+                            logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Moved badly named file into pristine folder -> "${destFolder}"`);
                         }
                     } catch (orgErr: any) {
                         console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
+                        logger.addLog("ERROR", "SCANNER", `❌ AUTO-ORGANIZE FAILED for "${fullPath}": ${orgErr.message}`);
                     }
                 }
                 // ==== END AUTO-ORGANIZE ====
