@@ -387,6 +387,7 @@ function BookLibraryPageContent() {
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [activeRequestForSearch, setActiveRequestForSearch] =
     useState<any>(null);
+  const [customSearchQuery, setCustomSearchQuery] = useState("");
   const [searchProwlarrError, setSearchProwlarrError] = useState("");
   const [pushingReleaseId, setPushingReleaseId] = useState<string | null>(null);
 
@@ -1720,7 +1721,7 @@ function BookLibraryPageContent() {
     }
   }
 
-  async function triggerProwlarrSearch(req: any, overrideMediaType?: string) {
+  async function triggerProwlarrSearch(req: any, overrideMediaType?: string, customQuery?: string) {
     const targetMediaType =
       overrideMediaType ||
       req.mediaType ||
@@ -1730,8 +1731,14 @@ function BookLibraryPageContent() {
     setSearchingProwlarr(true);
     setProwlarrResults([]);
     setSearchProwlarrError("");
+    
+    // Set the initial custom query if not already typing
+    if (!customQuery && !customSearchQuery) {
+        setCustomSearchQuery(req.author ? `${req.title} ${req.author}` : req.title);
+    }
+    
     try {
-      const queryText = req.author ? `${req.title} ${req.author}` : req.title;
+      const queryText = customQuery || customSearchQuery || (req.author ? `${req.title} ${req.author}` : req.title);
       const res = await searchProwlarrIndexers(queryText, targetMediaType);
       setProwlarrResults(res || []);
     } catch (e: any) {
@@ -1754,6 +1761,7 @@ function BookLibraryPageContent() {
       const reqs = await getBookRequests();
       setRequests(reqs || []);
       setActiveRequestForSearch(null);
+      setCustomSearchQuery("");
       alert("Release successfully pushed to download client!");
     } catch (e: any) {
       showErrorModal(
@@ -4631,50 +4639,75 @@ function BookLibraryPageContent() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  onClick={() => setActiveRequestForSearch(null)}
+                  onClick={() => { setActiveRequestForSearch(null); setCustomSearchQuery(""); }}
                 >
                   <X className="h-5 w-5" />
                 </Button>
               </div>
-              <CardDescription className="flex items-center justify-between gap-2 flex-wrap">
-                <span>
-                  Prowlarr Indexers query status:{" "}
-                  {searchingProwlarr
-                    ? "Searching indexers..."
-                    : `${prowlarrResults.length} releases found.`}
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground font-medium">
-                    Format:
+              <CardDescription className="flex flex-col gap-3 mt-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Refine search query (e.g. Add 'Full-Cast')"
+                    value={customSearchQuery}
+                    onChange={(e) => setCustomSearchQuery(e.target.value)}
+                    className="flex-1 h-8 text-xs"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, customSearchQuery);
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs px-3"
+                    onClick={() => triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, customSearchQuery)}
+                    disabled={searchingProwlarr}
+                  >
+                    <Search className="h-3 w-3 mr-1" /> Search
+                  </Button>
+                </div>
+                
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span>
+                    Prowlarr Indexers query status:{" "}
+                    {searchingProwlarr
+                      ? "Searching indexers..."
+                      : `${prowlarrResults.length} releases found.`}
                   </span>
-                  <Button
-                    size="sm"
-                    variant={
-                      activeRequestForSearch.mediaType === "ebook"
-                        ? "default"
-                        : "outline"
-                    }
-                    className="h-6 text-xs px-2.5 font-semibold"
-                    onClick={() =>
-                      triggerProwlarrSearch(activeRequestForSearch, "ebook")
-                    }
-                  >
-                    📖 Ebook
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={
-                      activeRequestForSearch.mediaType === "audiobook"
-                        ? "default"
-                        : "outline"
-                    }
-                    className="h-6 text-xs px-2.5 font-semibold"
-                    onClick={() =>
-                      triggerProwlarrSearch(activeRequestForSearch, "audiobook")
-                    }
-                  >
-                    🎧 Audiobook
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground font-medium">
+                      Format:
+                    </span>
+                    <Button
+                      size="sm"
+                      variant={
+                        activeRequestForSearch.mediaType === "ebook"
+                          ? "default"
+                          : "outline"
+                      }
+                      className="h-6 text-xs px-2.5 font-semibold"
+                      onClick={() =>
+                        triggerProwlarrSearch(activeRequestForSearch, "ebook", customSearchQuery)
+                      }
+                    >
+                      📖 Ebook
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={
+                        activeRequestForSearch.mediaType === "audiobook"
+                          ? "default"
+                          : "outline"
+                      }
+                      className="h-6 text-xs px-2.5 font-semibold"
+                      onClick={() =>
+                        triggerProwlarrSearch(activeRequestForSearch, "audiobook", customSearchQuery)
+                      }
+                    >
+                      🎧 Audiobook
+                    </Button>
+                  </div>
                 </div>
               </CardDescription>
             </CardHeader>
@@ -4759,7 +4792,7 @@ function BookLibraryPageContent() {
             <CardFooter className="border-t border-muted/50 pt-4 bg-muted/10 flex justify-end">
               <Button
                 variant="outline"
-                onClick={() => setActiveRequestForSearch(null)}
+                onClick={() => { setActiveRequestForSearch(null); setCustomSearchQuery(""); }}
               >
                 Close
               </Button>
