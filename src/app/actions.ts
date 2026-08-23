@@ -174,23 +174,30 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         
         // 1. Primary: iTunes API (Fastest and most reliable for commercial books)
         try {
-            const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&limit=15`;
-            const iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
-            if (iRes && iRes.ok) {
-                const data = await iRes.json();
-                if (data.results && data.results.length > 0) {
-                    for (const item of data.results) {
-                        if (!item.trackName) continue;
-                        let artwork = item.artworkUrl100 || item.artworkUrl60;
-                        if (artwork) {
-                            artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
-                        }
-                        books.push({
-                            title: item.trackName,
-                            author: item.artistName || author,
-                            coverUrl: artwork
-                        });
+            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&limit=15`;
+            let iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
+            let data = iRes && iRes.ok ? await iRes.json() : null;
+            
+            // If no ebook found, try audiobook
+            if (!data || !data.results || data.results.length === 0) {
+                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&limit=15`;
+                iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
+                data = iRes && iRes.ok ? await iRes.json() : null;
+            }
+            
+            if (data && data.results && data.results.length > 0) {
+                for (const item of data.results) {
+                    const title = item.trackName || item.collectionName;
+                    if (!title) continue;
+                    let artwork = item.artworkUrl100 || item.artworkUrl60;
+                    if (artwork) {
+                        artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
                     }
+                    books.push({
+                        title: title,
+                        author: item.artistName || author,
+                        coverUrl: artwork
+                    });
                 }
             }
         } catch(e) {
@@ -4018,6 +4025,24 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
     return matches;
 }
 
+async function setPermissionsRecursiveAsync(target: string) {
+    if (!fs.existsSync(target)) return;
+    try {
+        const stat = await fs.promises.stat(target);
+        if (stat.isDirectory()) {
+            await fs.promises.chmod(target, 0o777);
+            const files = await fs.promises.readdir(target);
+            for (const file of files) {
+                await setPermissionsRecursiveAsync(path.join(target, file));
+            }
+        } else {
+            await fs.promises.chmod(target, 0o666);
+        }
+    } catch (e) {
+        // Ignore permission errors if not owned by the node process
+    }
+}
+
 async function copyFolderRecursiveAsync(source: string, target: string) {
     if (!fs.existsSync(target)) {
         await fs.promises.mkdir(target, { recursive: true });
@@ -4175,12 +4200,14 @@ export async function monitorAndRetryDownload(
                                 const destFolder = path.join(targetLib.path, folderName);
                                 console.log(`[AUTO-DOWNLOAD-MONITOR] Copying complete multi-disc/multi-track folder from ${rootBookFolder} to ${destFolder}`);
                                 await copyFolderRecursiveAsync(rootBookFolder, destFolder);
+                                await setPermissionsRecursiveAsync(destFolder);
                                 copySuccessful = true;
                                 finalDestPath = path.join(destFolder, path.basename(foundFilePath));
                             } else {
                                 const destPath = path.join(targetLib.path, path.basename(foundFilePath));
                                 console.log(`[AUTO-DOWNLOAD-MONITOR] Moving downloaded file from ${foundFilePath} to ${destPath}`);
                                 await fs.promises.copyFile(foundFilePath, destPath);
+                                await setPermissionsRecursiveAsync(destPath);
                                 copySuccessful = true;
                                 finalDestPath = destPath;
                             }
@@ -5074,24 +5101,31 @@ export async function searchOpenLibrary(query: string) {
         
         // 1. Primary: iTunes API
         try {
-            const iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=ebook&limit=8`;
-            const iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
-            if (iRes && iRes.ok) {
-                const data = await iRes.json();
-                if (data.results && data.results.length > 0) {
-                    for (const item of data.results) {
-                        if (!item.trackName) continue;
-                        let artwork = item.artworkUrl100 || item.artworkUrl60;
-                        if (artwork) {
-                            artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
-                        }
-                        results.push({
-                            title: item.trackName,
-                            author: item.artistName || "Unknown Author",
-                            coverUrl: artwork || "",
-                            year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year"
-                        });
+            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=ebook&limit=8`;
+            let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
+            let data = iRes && iRes.ok ? await iRes.json() : null;
+            
+            // If no ebook found, try audiobook
+            if (!data || !data.results || data.results.length === 0) {
+                iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=audiobook&limit=8`;
+                iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
+                data = iRes && iRes.ok ? await iRes.json() : null;
+            }
+            
+            if (data && data.results && data.results.length > 0) {
+                for (const item of data.results) {
+                    const title = item.trackName || item.collectionName;
+                    if (!title) continue;
+                    let artwork = item.artworkUrl100 || item.artworkUrl60;
+                    if (artwork) {
+                        artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
                     }
+                    results.push({
+                        title: title,
+                        author: item.artistName || "Unknown Author",
+                        coverUrl: artwork || "",
+                        year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year"
+                    });
                 }
             }
         } catch(e) {
@@ -5697,10 +5731,12 @@ export async function importCompletedDownload(requestId: string) {
         const folderName = path.basename(rootBookFolder);
         const destFolder = path.join(targetLib.path, folderName);
         await copyFolderRecursiveAsync(rootBookFolder, destFolder);
+        await setPermissionsRecursiveAsync(destFolder);
         finalDestPath = path.join(destFolder, path.basename(foundFilePath));
     } else {
         const destPath = path.join(targetLib.path, path.basename(foundFilePath));
         await fs.promises.copyFile(foundFilePath, destPath);
+        await setPermissionsRecursiveAsync(destPath);
         finalDestPath = destPath;
     }
 
