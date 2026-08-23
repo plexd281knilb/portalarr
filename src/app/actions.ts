@@ -2368,7 +2368,7 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
                 let partB = parts.slice(1).join(" - ");
                 partB = partB.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
 
-                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/i;
+                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/;
                 const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partB);
                 const isPartAAuthor = authorPattern.test(partA);
 
@@ -2498,6 +2498,10 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
         return { title: parsedFile.title, author: parsedFile.author, cleanQuery: parsedFile.cleanQuery };
     }
 
+    const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Track|Disk)\s*\d+$/i;
+    const pureNumPattern = /^\d+$/;
+    const isTrackFilename = /^(?:\d{1,3}[\s._-]+)+/i.test(rawBase.trim()) || discPattern.test(rawBase.trim()) || pureNumPattern.test(rawBase.trim()) || rawBase.length <= 3;
+
     const relPath = path.relative(scanPath, fullPath);
     const parts = relPath.split(path.sep).filter(Boolean);
 
@@ -2516,12 +2520,17 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
         author = cleanParts[cleanParts.length - 2];
         title = cleanParts[cleanParts.length - 1];
     } else if (cleanParts.length === 1) {
-        const parsedFolder = parseFilenameMetadata(cleanParts[0]);
-        if (parsedFolder.author !== "Unknown Author") {
-            author = parsedFolder.author;
-            title = parsedFolder.title;
+        if (!isTrackFilename) {
+            author = cleanParts[0];
+            title = parsedFile.title || rawBase;
         } else {
-            title = parsedFolder.title || cleanParts[0];
+            const parsedFolder = parseFilenameMetadata(cleanParts[0]);
+            if (parsedFolder.author !== "Unknown Author") {
+                author = parsedFolder.author;
+                title = parsedFolder.title;
+            } else {
+                title = parsedFolder.title || cleanParts[0];
+            }
         }
     } else {
         title = parsedFile.title || rawBase;
