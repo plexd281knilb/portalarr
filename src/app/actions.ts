@@ -3761,7 +3761,7 @@ async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: st
             }
         }
 
-        const hRes = await fetch(`${sabUrl}/api?mode=history&output=json&apikey=${sabKey}`);
+        const hRes = await fetch(`${sabUrl}/api?mode=history&output=json&limit=100&apikey=${sabKey}`);
         if (hRes.ok) {
             const hData = await hRes.json();
             const slots = hData.history?.slots || [];
@@ -3833,7 +3833,8 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
                 if (!targetId && title) {
                     const titleLower = title.toLowerCase().trim();
                     try {
-                        const hRes = await fetch(`${sabUrl}/api?mode=history&output=json&apikey=${sabKey}`);
+                        // Search a larger history window (100 items) so we don't miss older completed downloads
+                        const hRes = await fetch(`${sabUrl}/api?mode=history&output=json&limit=100&apikey=${sabKey}`);
                         if (hRes.ok) {
                             const hData = await hRes.json();
                             const slot = (hData.history?.slots || []).find((s: any) => 
@@ -4195,16 +4196,24 @@ export async function monitorAndRetryDownload(
                                                        rootBookFolder === "/app/downloads" || 
                                                        rootBookFolder === process.env.DOWNLOADS_DIR;
 
+                            const safeAuthor = (currentReq.author && currentReq.author !== "Unknown Author") 
+                                ? currentReq.author.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
+                                : "Unknown Author";
+                            const safeTitle = currentReq.title.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+                            const destFolder = path.join(targetLib.path, safeAuthor, safeTitle);
+                            
+                            if (!fs.existsSync(destFolder)) {
+                                fs.mkdirSync(destFolder, { recursive: true });
+                            }
+
                             if (!isRootDownloadsDir && fs.existsSync(rootBookFolder) && fs.statSync(rootBookFolder).isDirectory()) {
-                                const folderName = path.basename(rootBookFolder);
-                                const destFolder = path.join(targetLib.path, folderName);
                                 console.log(`[AUTO-DOWNLOAD-MONITOR] Copying complete multi-disc/multi-track folder from ${rootBookFolder} to ${destFolder}`);
                                 await copyFolderRecursiveAsync(rootBookFolder, destFolder);
                                 await setPermissionsRecursiveAsync(destFolder);
                                 copySuccessful = true;
                                 finalDestPath = path.join(destFolder, path.basename(foundFilePath));
                             } else {
-                                const destPath = path.join(targetLib.path, path.basename(foundFilePath));
+                                const destPath = path.join(destFolder, path.basename(foundFilePath));
                                 console.log(`[AUTO-DOWNLOAD-MONITOR] Moving downloaded file from ${foundFilePath} to ${destPath}`);
                                 await fs.promises.copyFile(foundFilePath, destPath);
                                 await setPermissionsRecursiveAsync(destPath);
@@ -5726,15 +5735,23 @@ export async function importCompletedDownload(requestId: string) {
 
     const isRootDownloadsDir = searchPaths.includes(rootBookFolder);
 
+    const safeAuthor = (currentReq.author && currentReq.author !== "Unknown Author") 
+        ? currentReq.author.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
+        : "Unknown Author";
+    const safeTitle = currentReq.title.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+    const destFolder = path.join(targetLib.path, safeAuthor, safeTitle);
+    
+    if (!fs.existsSync(destFolder)) {
+        fs.mkdirSync(destFolder, { recursive: true });
+    }
+
     let finalDestPath = "";
     if (!isRootDownloadsDir && fs.existsSync(rootBookFolder) && fs.statSync(rootBookFolder).isDirectory()) {
-        const folderName = path.basename(rootBookFolder);
-        const destFolder = path.join(targetLib.path, folderName);
         await copyFolderRecursiveAsync(rootBookFolder, destFolder);
         await setPermissionsRecursiveAsync(destFolder);
         finalDestPath = path.join(destFolder, path.basename(foundFilePath));
     } else {
-        const destPath = path.join(targetLib.path, path.basename(foundFilePath));
+        const destPath = path.join(destFolder, path.basename(foundFilePath));
         await fs.promises.copyFile(foundFilePath, destPath);
         await setPermissionsRecursiveAsync(destPath);
         finalDestPath = destPath;
