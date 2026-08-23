@@ -170,29 +170,94 @@ async function fetchGoogleBooksCover(title: string, author: string): Promise<str
 export async function findMissingBooksInSeries(seriesName: string, author: string) {
     try {
         const q = `${seriesName} ${author}`;
-        const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=15`;
-        const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
+        let books = [];
         
-        if (!res || !res.ok) return { success: false, error: "Failed to query OpenLibrary" };
-        const data = await res.json();
+        // 1. Primary: iTunes API (Fastest and most reliable for commercial books)
+        try {
+            const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&limit=15`;
+            const iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
+            if (iRes && iRes.ok) {
+                const data = await iRes.json();
+                if (data.results && data.results.length > 0) {
+                    for (const item of data.results) {
+                        if (!item.trackName) continue;
+                        let artwork = item.artworkUrl100 || item.artworkUrl60;
+                        if (artwork) {
+                            artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
+                        }
+                        books.push({
+                            title: item.trackName,
+                            author: item.artistName || author,
+                            coverUrl: artwork
+                        });
+                    }
+                }
+            }
+        } catch(e) {
+            console.warn("[API-FAILOVER] iTunes search failed for missing books:", e);
+        }
+
+        // 2. Failover: OpenLibrary
+        if (books.length === 0) {
+            try {
+                const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=15`;
+                const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
+                
+                if (res && res.ok) {
+                    const data = await res.json();
+                    if (data.docs) {
+                        for (const item of data.docs) {
+                            const title = item.title || "";
+                            const bookAuthor = item.author_name?.[0] || author;
+                            const coverId = item.cover_i;
+                            const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
+                            
+                            if (!title) continue;
+                            
+                            books.push({
+                                title: title,
+                                author: bookAuthor,
+                                coverUrl: coverUrl
+                            });
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("[API-FAILOVER] OpenLibrary search failed for missing books:", e);
+            }
+        }
         
-        if (!data.docs) return { success: true, data: [] };
+        // 3. Failover: Google Books
+        if (books.length === 0) {
+            try {
+                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=15`;
+                const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+                if (gRes && gRes.ok) {
+                    const data = await gRes.json();
+                    if (data.items) {
+                        for (const item of data.items) {
+                            const title = item.volumeInfo?.title || "";
+                            const bookAuthor = item.volumeInfo?.authors?.[0] || author;
+                            let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || null;
+                            if (coverUrl) {
+                                coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "");
+                            }
+                            if (!title) continue;
+                            books.push({
+                                title: title,
+                                author: bookAuthor,
+                                coverUrl: coverUrl
+                            });
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn("[API-FAILOVER] Google Books search failed for missing books:", e);
+            }
+        }
         
-        const books = [];
-        
-        for (const item of data.docs) {
-            const title = item.title || "";
-            const bookAuthor = item.author_name?.[0] || author;
-            const coverId = item.cover_i;
-            const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
-            
-            if (!title) continue;
-            
-            books.push({
-                title: title,
-                author: bookAuthor,
-                coverUrl: coverUrl
-            });
+        if (books.length === 0) {
+            return { success: false, error: "Failed to query all metadata APIs (iTunes, OpenLibrary, Google Books)" };
         }
         
         const uniqueBooks = Array.from(new Map(books.map(b => [b.title.toLowerCase(), b])).values());
@@ -5005,29 +5070,96 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
 export async function searchOpenLibrary(query: string) {
     if (!query || query.trim().length < 2) return [];
     try {
-        const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
-            headers: { "Accept": "application/json" },
-            next: { revalidate: 3600 }
-        });
-        if (!response.ok) throw new Error("Open Library search failed");
+        let results = [];
         
-        const data = await response.json();
-        const docs = data.docs || [];
+        // 1. Primary: iTunes API
+        try {
+            const iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=ebook&limit=8`;
+            const iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
+            if (iRes && iRes.ok) {
+                const data = await iRes.json();
+                if (data.results && data.results.length > 0) {
+                    for (const item of data.results) {
+                        if (!item.trackName) continue;
+                        let artwork = item.artworkUrl100 || item.artworkUrl60;
+                        if (artwork) {
+                            artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
+                        }
+                        results.push({
+                            title: item.trackName,
+                            author: item.artistName || "Unknown Author",
+                            coverUrl: artwork || "",
+                            year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year"
+                        });
+                    }
+                }
+            }
+        } catch(e) {
+            console.warn("[API-FAILOVER] iTunes search failed:", e);
+        }
+
+        // 2. Failover: Open Library
+        if (results.length === 0) {
+            try {
+                const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
+                    headers: { "Accept": "application/json" },
+                    next: { revalidate: 3600 }
+                });
+                if (response && response.ok) {
+                    const data = await response.json();
+                    const docs = data.docs || [];
+                    
+                    for (const doc of docs) {
+                        const author = doc.author_name && doc.author_name.length > 0 ? doc.author_name[0] : "Unknown Author";
+                        const coverUrl = doc.cover_i 
+                            ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
+                            : "";
+                        results.push({
+                            title: doc.title,
+                            author,
+                            coverUrl,
+                            year: doc.first_publish_year || "Unknown Year"
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn("[API-FAILOVER] Open Library API Error:", e);
+            }
+        }
         
-        return docs.map((doc: any) => {
-            const author = doc.author_name && doc.author_name.length > 0 ? doc.author_name[0] : "Unknown Author";
-            const coverUrl = doc.cover_i 
-                ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
-                : "";
-            return {
-                title: doc.title,
-                author,
-                coverUrl,
-                year: doc.first_publish_year || "Unknown Year"
-            };
-        });
+        // 3. Failover: Google Books
+        if (results.length === 0) {
+            try {
+                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8`;
+                const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+                if (gRes && gRes.ok) {
+                    const data = await gRes.json();
+                    if (data.items) {
+                        for (const item of data.items) {
+                            const title = item.volumeInfo?.title || "";
+                            const author = item.volumeInfo?.authors?.[0] || "Unknown Author";
+                            let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || "";
+                            if (coverUrl) {
+                                coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "");
+                            }
+                            if (!title) continue;
+                            results.push({
+                                title,
+                                author,
+                                coverUrl,
+                                year: item.volumeInfo?.publishedDate ? item.volumeInfo.publishedDate.substring(0, 4) : "Unknown Year"
+                            });
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn("[API-FAILOVER] Google Books API Error:", e);
+            }
+        }
+        
+        return results;
     } catch (e) {
-        console.error("Open Library API Error:", e);
+        console.error("All metadata APIs failed:", e);
         return [];
     }
 }
@@ -5035,60 +5167,117 @@ export async function searchOpenLibrary(query: string) {
 export async function getSeriesBooksList(seriesTitle: string, author: string = "") {
     try {
         const query = author ? `${seriesTitle} ${author}` : seriesTitle;
-        const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
-            headers: { "Accept": "application/json" },
-            next: { revalidate: 3600 }
-        });
-        if (!response.ok) throw new Error("Series query failed");
-        
-        const data = await response.json();
-        const docs = data.docs || [];
-        
         const uniqueBooks: any[] = [];
         const seenTitles = new Set<string>();
         
-        for (const doc of docs) {
-            const normalizedTitle = doc.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-            const titleLower = doc.title.toLowerCase();
-            const isCompilation = titleLower.includes("box set") || 
-                                  titleLower.includes("boxed set") || 
-                                  titleLower.includes("collection") || 
-                                  titleLower.includes("series 1-") || 
-                                  titleLower.includes("pack") || 
-                                  titleLower.includes("omnibus") || 
-                                  titleLower.includes("bundle") ||
-                                  titleLower.includes("boxedset");
-                                  
-            if (isCompilation) continue;
-            
-            if (author && doc.author_name) {
-                const authorLower = author.toLowerCase();
-                const matchesAuthor = doc.author_name.some((name: string) => 
-                    name.toLowerCase().includes(authorLower)
-                );
-                if (!matchesAuthor) continue;
-            }
-            
-            if (!seenTitles.has(normalizedTitle)) {
-                seenTitles.add(normalizedTitle);
+        // 1. Primary: OpenLibrary (best for series compilations)
+        try {
+            const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
+                headers: { "Accept": "application/json" },
+                next: { revalidate: 3600 }
+            });
+            if (response && response.ok) {
+                const data = await response.json();
+                const docs = data.docs || [];
                 
-                const authorName = doc.author_name && doc.author_name.length > 0 
-                    ? doc.author_name[0] 
-                    : author || "Unknown Author";
+                for (const doc of docs) {
+                    const normalizedTitle = doc.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const titleLower = doc.title.toLowerCase();
+                    const isCompilation = titleLower.includes("box set") || 
+                                          titleLower.includes("boxed set") || 
+                                          titleLower.includes("collection") || 
+                                          titleLower.includes("series 1-") || 
+                                          titleLower.includes("pack") || 
+                                          titleLower.includes("omnibus") || 
+                                          titleLower.includes("bundle") ||
+                                          titleLower.includes("boxedset");
+                                          
+                    if (isCompilation) continue;
                     
-                const coverUrl = doc.cover_i 
-                    ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
-                    : "";
+                    if (author && doc.author_name) {
+                        const authorLower = author.toLowerCase();
+                        const matchesAuthor = doc.author_name.some((name: string) => 
+                            name.toLowerCase().includes(authorLower)
+                        );
+                        if (!matchesAuthor) continue;
+                    }
                     
-                uniqueBooks.push({
-                    title: doc.title,
-                    author: authorName,
-                    coverUrl,
-                    publishYear: doc.first_publish_year ? String(doc.first_publish_year) : ""
-                });
+                    if (!seenTitles.has(normalizedTitle)) {
+                        seenTitles.add(normalizedTitle);
+                        
+                        const authorName = doc.author_name && doc.author_name.length > 0 
+                            ? doc.author_name[0] 
+                            : author || "Unknown Author";
+                            
+                        const coverUrl = doc.cover_i 
+                            ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
+                            : "";
+                            
+                        uniqueBooks.push({
+                            title: doc.title,
+                            author: authorName,
+                            coverUrl,
+                            year: doc.first_publish_year || "Unknown Year"
+                        });
+                    }
+                }
             }
+        } catch (e) {
+            console.warn("[API-FAILOVER] OpenLibrary series search failed:", e);
         }
         
+        // 2. Failover: Google Books
+        if (uniqueBooks.length === 0) {
+            try {
+                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40`;
+                const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+                if (gRes && gRes.ok) {
+                    const data = await gRes.json();
+                    if (data.items) {
+                        for (const item of data.items) {
+                            const title = item.volumeInfo?.title || "";
+                            if (!title) continue;
+                            
+                            const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            const titleLower = title.toLowerCase();
+                            const isCompilation = titleLower.includes("box set") || 
+                                                  titleLower.includes("boxed set") || 
+                                                  titleLower.includes("collection") || 
+                                                  titleLower.includes("series 1-") || 
+                                                  titleLower.includes("pack") || 
+                                                  titleLower.includes("omnibus");
+                            if (isCompilation) continue;
+                            
+                            if (author && item.volumeInfo?.authors) {
+                                const authorLower = author.toLowerCase();
+                                const matchesAuthor = item.volumeInfo.authors.some((name: string) => 
+                                    name.toLowerCase().includes(authorLower)
+                                );
+                                if (!matchesAuthor) continue;
+                            }
+                            
+                            if (!seenTitles.has(normalizedTitle)) {
+                                seenTitles.add(normalizedTitle);
+                                const authorName = item.volumeInfo?.authors?.[0] || author || "Unknown Author";
+                                let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || "";
+                                if (coverUrl) {
+                                    coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "");
+                                }
+                                uniqueBooks.push({
+                                    title,
+                                    author: authorName,
+                                    coverUrl,
+                                    year: item.volumeInfo?.publishedDate ? item.volumeInfo.publishedDate.substring(0, 4) : "Unknown Year"
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn("[API-FAILOVER] Google Books series search failed:", e);
+            }
+        }
+
         return uniqueBooks;
     } catch (e) {
         console.error("Failed to fetch series books list:", e);
