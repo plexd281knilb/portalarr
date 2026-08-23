@@ -2886,6 +2886,55 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }
                 }
 
+                // ==== AUTO-ORGANIZE ALL ITEMS (NEW & EXISTING) ====
+                let orgTitle = "";
+                let orgAuthor = "";
+                if (existing) {
+                    orgTitle = existing.title || "";
+                    orgAuthor = existing.author || "";
+                }
+                
+                const cleanBaseCheckForOrg = getEffectiveBookBaseName(effectiveFilePath, file, ext);
+                const parsedMetaCheckForOrg = parseFilenameMetadata(cleanBaseCheckForOrg);
+                
+                if (!orgTitle || !orgAuthor || orgAuthor === "Unknown Author") {
+                    if (!orgTitle) orgTitle = parsedMetaCheckForOrg.title || cleanBaseCheckForOrg;
+                    if (!orgAuthor || orgAuthor === "Unknown Author") orgAuthor = parsedMetaCheckForOrg.author || "Unknown Author";
+                }
+
+                if (library.path && orgTitle) {
+                    try {
+                        const safeAuthor = (orgAuthor && orgAuthor !== "Unknown Author") 
+                            ? orgAuthor.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
+                            : "Unknown Author";
+                        const safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+                        const destFolder = path.join(library.path, safeAuthor, safeTitle);
+                        
+                        if (fullPath !== destFolder && path.dirname(fullPath) !== destFolder) {
+                            if (!fs.existsSync(destFolder)) {
+                                fs.mkdirSync(destFolder, { recursive: true });
+                            }
+                            const isDir = fs.statSync(fullPath).isDirectory();
+                            if (isDir) {
+                                await copyFolderRecursiveAsync(fullPath, destFolder);
+                                await setPermissionsRecursiveAsync(destFolder);
+                                removePathSafely(fullPath);
+                                fullPath = destFolder;
+                            } else {
+                                const destPath = path.join(destFolder, path.basename(fullPath));
+                                await fs.promises.copyFile(fullPath, destPath);
+                                await setPermissionsRecursiveAsync(destPath);
+                                removePathSafely(fullPath);
+                                fullPath = destPath;
+                            }
+                            console.log(`[SCANNER-AUTO-ORGANIZE] Moved loose/messy file to ${fullPath}`);
+                        }
+                    } catch (orgErr: any) {
+                        console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
+                    }
+                }
+                // ==== END AUTO-ORGANIZE ====
+
                 if (!existing) {
                     const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
                     const parsedMetaCheck = parseFilenameMetadata(cleanBaseCheck);
@@ -2969,41 +3018,6 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
                         ? stats.birthtime
                         : (stats.mtime || new Date());
-
-                    // Auto-organize new books and audiobooks into strict Author/Title folders before adding to DB
-                    if (library.path) {
-                        try {
-                            const safeAuthor = (author && author !== "Unknown Author") 
-                                ? author.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
-                                : "Unknown Author";
-                            const safeTitle = (title || cleanBase).replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
-                            const destFolder = path.join(library.path, safeAuthor, safeTitle);
-                            
-                            // Ensure we don't try to move something that is already correctly organized
-                            if (fullPath !== destFolder && path.dirname(fullPath) !== destFolder) {
-                                if (!fs.existsSync(destFolder)) {
-                                    fs.mkdirSync(destFolder, { recursive: true });
-                                }
-                                
-                                const isDir = fs.statSync(fullPath).isDirectory();
-                                if (isDir) {
-                                    await copyFolderRecursiveAsync(fullPath, destFolder);
-                                    await setPermissionsRecursiveAsync(destFolder);
-                                    removePathSafely(fullPath);
-                                    fullPath = destFolder;
-                                } else {
-                                    const destPath = path.join(destFolder, path.basename(fullPath));
-                                    await fs.promises.copyFile(fullPath, destPath);
-                                    await setPermissionsRecursiveAsync(destPath);
-                                    removePathSafely(fullPath);
-                                    fullPath = destPath;
-                                }
-                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved loose/messy file to ${fullPath}`);
-                            }
-                        } catch (orgErr: any) {
-                            console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
-                        }
-                    }
 
                     try {
                         let newBook = await prisma.book.findFirst({
