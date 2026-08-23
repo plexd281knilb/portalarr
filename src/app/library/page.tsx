@@ -1786,10 +1786,10 @@ function BookLibraryPageContent() {
       if (res.success && res.data) {
         setMissingBooksMap((prev) => ({ ...prev, [seriesName]: res.data }));
       } else {
-        alert("Failed to fetch missing books: " + res.error);
+        console.warn("Failed to fetch missing books: " + res.error);
       }
     } catch (e: any) {
-      alert("Error: " + e.message);
+      console.error("Error fetching missing books:", e.message);
     } finally {
       setLoadingMissingSeries((prev) => ({ ...prev, [seriesName]: false }));
     }
