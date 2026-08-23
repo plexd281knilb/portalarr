@@ -2673,93 +2673,50 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
         let finalMediaItems = foundMediaItems;
         if (isAudiobookLib) {
-            const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: fs.Stats }>();
+            const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: any }>();
+            for (const item of foundMediaItems) {
+                const parentDir = path.dirname(item.fullPath);
+                let groupFolder = item.fullPath; // default for loose files in root
 
-            for (const targetDir of pathsToScan) {
-                if (!targetDir || !fs.existsSync(targetDir)) continue;
-                try {
-                    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
-                    for (const entry of entries) {
-                        const fullP = path.join(targetDir, entry.name);
-                        if (entry.isDirectory()) {
-                            let totalSize = 0;
-                            let sampleFile = "";
-                            let sampleExt = ".mp3";
-
-                            function calcFolderSize(dir: string, depth = 0) {
-                                if (depth > 6) return;
-                                try {
-                                    const subEntries = fs.readdirSync(dir, { withFileTypes: true });
-                                    for (const sub of subEntries) {
-                                        const subP = path.join(dir, sub.name);
-                                        if (sub.isDirectory()) {
-                                            calcFolderSize(subP, depth + 1);
-                                        } else {
-                                            try {
-                                                const st = fs.statSync(subP);
-                                                totalSize += st.size;
-                                                const ext = path.extname(sub.name).toLowerCase();
-                                                const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".wav"];
-                                                if (!sampleFile || (!validAudioExts.includes(sampleExt) && validAudioExts.includes(ext))) {
-                                                    sampleFile = sub.name;
-                                                    sampleExt = ext || ".mp3";
-                                                }
-                                            } catch (e) {}
-                                        }
-                                    }
-                                } catch (e) {}
-                            }
-
-                            calcFolderSize(fullP);
-
-                            if (totalSize === 0) {
-                                try {
-                                    totalSize = fs.statSync(fullP).size || 1;
-                                } catch (e) {}
-                            }
-
-                            const folderLower = entry.name.toLowerCase();
-                            const isGenericRootFolder = folderLower === "books" || 
-                                                        folderLower === "audiobooks" || 
-                                                        folderLower === "userbooks" || 
-                                                        folderLower === "kidsbooks" || 
-                                                        folderLower === "kyrabooks" || 
-                                                        folderLower === "downloads" ||
-                                                        folderLower.includes("library") ||
-                                                        folderLower.includes("bookshelf");
-
-                            if (!isGenericRootFolder) {
-                                const folderKey = fullP.toLowerCase();
-                                if (!consolidatedMap.has(folderKey)) {
-                                    consolidatedMap.set(folderKey, {
-                                        fullPath: fullP,
-                                        file: sampleFile || entry.name,
-                                        ext: sampleExt || ".mp3",
-                                        stats: { size: totalSize } as any
-                                    });
-                                }
-                            }
-                        } else {
-                            const ext = path.extname(entry.name).toLowerCase();
-                            if (validExtensions.includes(ext)) {
-                                try {
-                                    const st = fs.statSync(fullP);
-                                    const fileKey = fullP.toLowerCase();
-                                    if (!consolidatedMap.has(fileKey)) {
-                                        consolidatedMap.set(fileKey, {
-                                            fullPath: fullP,
-                                            file: entry.name,
-                                            ext,
-                                            stats: st
-                                        });
-                                    }
-                                } catch (e) {}
-                            }
-                        }
+                if (parentDir !== scanPath) {
+                    const parentName = path.basename(parentDir);
+                    const isDiscFolder = /^(?:Disc|CD|Part|Vol|Volume|Track|Disk)\s*\d+$/i.test(parentName.trim());
+                    if (isDiscFolder && path.dirname(parentDir) !== scanPath) {
+                        groupFolder = path.dirname(parentDir);
+                    } else {
+                        groupFolder = parentDir;
                     }
-                } catch (e) {}
-            }
+                }
 
+                const folderKey = groupFolder.toLowerCase();
+                
+                const folderLower = path.basename(groupFolder).toLowerCase();
+                const isGenericRootFolder = folderLower === "books" || folderLower === "audiobooks" || folderLower === "userbooks" || folderLower === "kidsbooks" || folderLower === "kyrabooks" || folderLower === "downloads" || folderLower.includes("library") || folderLower.includes("bookshelf");
+                if (isGenericRootFolder && groupFolder !== item.fullPath) {
+                    // Fallback to grouping by file itself if the parent is a generic root
+                    groupFolder = item.fullPath;
+                }
+
+                if (!consolidatedMap.has(folderKey)) {
+                    consolidatedMap.set(folderKey, {
+                        fullPath: groupFolder,
+                        file: item.file,
+                        ext: item.ext,
+                        stats: { size: item.stats.size }
+                    });
+                } else {
+                    const existing = consolidatedMap.get(folderKey)!;
+                    existing.stats.size += item.stats.size;
+                    const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".wav"];
+                    if (!validAudioExts.includes(existing.ext) && validAudioExts.includes(item.ext)) {
+                        existing.file = item.file;
+                        existing.ext = item.ext;
+                    } else if (item.ext === ".m4b" && existing.ext !== ".m4b") {
+                        existing.file = item.file;
+                        existing.ext = item.ext;
+                    }
+                }
+            }
             finalMediaItems = Array.from(consolidatedMap.values());
         }
 
