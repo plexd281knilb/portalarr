@@ -4025,6 +4025,24 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
     return matches;
 }
 
+async function setPermissionsRecursiveAsync(target: string) {
+    if (!fs.existsSync(target)) return;
+    try {
+        const stat = await fs.promises.stat(target);
+        if (stat.isDirectory()) {
+            await fs.promises.chmod(target, 0o777);
+            const files = await fs.promises.readdir(target);
+            for (const file of files) {
+                await setPermissionsRecursiveAsync(path.join(target, file));
+            }
+        } else {
+            await fs.promises.chmod(target, 0o666);
+        }
+    } catch (e) {
+        // Ignore permission errors if not owned by the node process
+    }
+}
+
 async function copyFolderRecursiveAsync(source: string, target: string) {
     if (!fs.existsSync(target)) {
         await fs.promises.mkdir(target, { recursive: true });
@@ -4182,12 +4200,14 @@ export async function monitorAndRetryDownload(
                                 const destFolder = path.join(targetLib.path, folderName);
                                 console.log(`[AUTO-DOWNLOAD-MONITOR] Copying complete multi-disc/multi-track folder from ${rootBookFolder} to ${destFolder}`);
                                 await copyFolderRecursiveAsync(rootBookFolder, destFolder);
+                                await setPermissionsRecursiveAsync(destFolder);
                                 copySuccessful = true;
                                 finalDestPath = path.join(destFolder, path.basename(foundFilePath));
                             } else {
                                 const destPath = path.join(targetLib.path, path.basename(foundFilePath));
                                 console.log(`[AUTO-DOWNLOAD-MONITOR] Moving downloaded file from ${foundFilePath} to ${destPath}`);
                                 await fs.promises.copyFile(foundFilePath, destPath);
+                                await setPermissionsRecursiveAsync(destPath);
                                 copySuccessful = true;
                                 finalDestPath = destPath;
                             }
@@ -5711,10 +5731,12 @@ export async function importCompletedDownload(requestId: string) {
         const folderName = path.basename(rootBookFolder);
         const destFolder = path.join(targetLib.path, folderName);
         await copyFolderRecursiveAsync(rootBookFolder, destFolder);
+        await setPermissionsRecursiveAsync(destFolder);
         finalDestPath = path.join(destFolder, path.basename(foundFilePath));
     } else {
         const destPath = path.join(targetLib.path, path.basename(foundFilePath));
         await fs.promises.copyFile(foundFilePath, destPath);
+        await setPermissionsRecursiveAsync(destPath);
         finalDestPath = destPath;
     }
 
