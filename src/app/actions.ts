@@ -2521,8 +2521,25 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
         title = cleanParts[cleanParts.length - 1];
     } else if (cleanParts.length === 1) {
         if (!isTrackFilename) {
-            author = cleanParts[0];
-            title = parsedFile.title || rawBase;
+            const folder = cleanParts[0];
+            const fileTitle = parsedFile.title || rawBase;
+            const isExactMatch = folder.toLowerCase() === fileTitle.toLowerCase();
+            const isSubstring = fileTitle.toLowerCase().includes(folder.toLowerCase());
+
+            if (isExactMatch || isSubstring) {
+                author = "Unknown Author";
+                title = fileTitle;
+            } else {
+                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/;
+                if (authorPattern.test(folder)) {
+                    author = folder;
+                    title = fileTitle;
+                } else {
+                    // It was likely split by a previous buggy scan (e.g. folder="Harry Potter and the Half", file="Blood Prince")
+                    author = "Unknown Author";
+                    title = (folder + "-" + fileTitle).replace(/\s*-\s*/g, "-");
+                }
+            }
         } else {
             const parsedFolder = parseFilenameMetadata(cleanParts[0]);
             if (parsedFolder.author !== "Unknown Author") {
