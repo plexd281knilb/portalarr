@@ -209,6 +209,9 @@ if (!globalForScheduler.schedulerInitialized) {
     
     // Check every minute if periodic scan is due
     setInterval(async () => {
+      if ((global as any).__PORTALARR_SYNC_IN_PROGRESS) {
+        return;
+      }
       try {
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const intervalMinutes = settings?.autoSyncInterval || 5; // Default to 5 minutes
@@ -217,6 +220,7 @@ if (!globalForScheduler.schedulerInitialized) {
         const now = new Date();
         
         if (!lastSync || (now.getTime() - lastSync.getTime()) >= intervalMinutes * 60 * 1000) {
+          (global as any).__PORTALARR_SYNC_IN_PROGRESS = true;
           console.log(`[BACKGROUND-JOB] Starting scheduled library scan and Plex friends sync (Interval: ${intervalMinutes}m)...`);
           
           const { scanLibraryInternal, syncPlexFriendsInternal } = await import("../app/actions");
@@ -313,6 +317,8 @@ if (!globalForScheduler.schedulerInitialized) {
         }
       } catch (err: any) {
         console.error("[BACKGROUND-JOB] Error in scheduled job runner:", err.message || err);
+      } finally {
+        (global as any).__PORTALARR_SYNC_IN_PROGRESS = false;
       }
     }, 60 * 1000); // 1 minute check
   }, 10000); // Wait 10s after server starts
