@@ -5106,15 +5106,47 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
 export async function searchOpenLibrary(query: string) {
     if (!query || query.trim().length < 2) return [];
     try {
-        let results = [];
+        let results: any[] = [];
         
-        // 1. Primary: iTunes API
+        // 1. Audible API (Excellent for Audiobooks & Exclusives)
+        try {
+            const audUrl = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,contributors,product_desc&num_results=8&products_sort_by=Relevance`;
+            const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
+            const audData = audRes && audRes.ok ? await audRes.json() : null;
+            
+            if (audData && audData.products && audData.products.length > 0) {
+                for (const prod of audData.products) {
+                    const title = prod.title;
+                    if (!title) continue;
+                    
+                    let author = "Unknown Author";
+                    if (prod.authors && prod.authors.length > 0) {
+                        author = prod.authors[0].name;
+                    }
+                    
+                    let coverUrl = "";
+                    if (prod.product_images && prod.product_images["500"]) {
+                        coverUrl = prod.product_images["500"];
+                    }
+                    
+                    let year = "Unknown Year";
+                    if (prod.release_date) {
+                        year = prod.release_date.substring(0, 4);
+                    }
+                    
+                    results.push({ title, author, coverUrl, year });
+                }
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] Audible search failed:", e);
+        }
+
+        // 2. iTunes API
         try {
             let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=ebook&limit=8`;
             let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
             
-            // If no ebook found, try audiobook
             if (!data || !data.results || data.results.length === 0) {
                 iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=audiobook&limit=8`;
                 iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
@@ -5141,66 +5173,61 @@ export async function searchOpenLibrary(query: string) {
             console.warn("[API-FAILOVER] iTunes search failed:", e);
         }
 
-        // 2. Failover: Open Library
-        if (results.length === 0) {
-            try {
-                const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
-                    headers: { "Accept": "application/json" },
-                    next: { revalidate: 3600 }
-                });
-                if (response && response.ok) {
-                    const data = await response.json();
-                    const docs = data.docs || [];
-                    
-                    for (const doc of docs) {
-                        const author = doc.author_name && doc.author_name.length > 0 ? doc.author_name[0] : "Unknown Author";
-                        const coverUrl = doc.cover_i 
-                            ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
-                            : "";
+        // 3. Open Library
+        try {
+            const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
+                headers: { "Accept": "application/json" }
+            });
+            const data = response && response.ok ? await response.json() : null;
+            if (data && data.docs) {
+                for (const doc of data.docs) {
+                    if (doc.title) {
                         results.push({
                             title: doc.title,
-                            author,
-                            coverUrl,
-                            year: doc.first_publish_year || "Unknown Year"
+                            author: doc.author_name ? doc.author_name[0] : "Unknown Author",
+                            coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : "",
+                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year"
                         });
                     }
                 }
-            } catch (e) {
-                console.warn("[API-FAILOVER] Open Library API Error:", e);
             }
+        } catch (e) {
+            console.warn("[API-FAILOVER] OpenLibrary search failed:", e);
         }
-        
-        // 3. Failover: Google Books
-        if (results.length === 0) {
-            try {
-                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8`;
-                const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
-                if (gRes && gRes.ok) {
-                    const data = await gRes.json();
-                    if (data.items) {
-                        for (const item of data.items) {
-                            const title = item.volumeInfo?.title || "";
-                            const author = item.volumeInfo?.authors?.[0] || "Unknown Author";
-                            let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || "";
-                            if (coverUrl) {
-                                coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "");
-                            }
-                            if (!title) continue;
-                            results.push({
-                                title,
-                                author,
-                                coverUrl,
-                                year: item.volumeInfo?.publishedDate ? item.volumeInfo.publishedDate.substring(0, 4) : "Unknown Year"
-                            });
-                        }
+
+        // 4. Google Books
+        try {
+            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8`;
+            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+            const gData = gRes && gRes.ok ? await gRes.json() : null;
+            if (gData && gData.items) {
+                for (const item of gData.items) {
+                    const vol = item.volumeInfo;
+                    if (vol && vol.title) {
+                        results.push({
+                            title: vol.title,
+                            author: vol.authors ? vol.authors[0] : "Unknown Author",
+                            coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&zoom=1", "&zoom=0") : "",
+                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year"
+                        });
                     }
                 }
-            } catch(e) {
-                console.warn("[API-FAILOVER] Google Books API Error:", e);
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] Google Books API Error:", e);
+        }
+        
+        const uniqueResults = [];
+        const seenTitles = new Set();
+        for (const res of results) {
+            const normalized = (res.title + res.author).toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (!seenTitles.has(normalized)) {
+                seenTitles.add(normalized);
+                uniqueResults.push(res);
             }
         }
         
-        return results;
+        return uniqueResults;
     } catch (e) {
         console.error("All metadata APIs failed:", e);
         return [];
