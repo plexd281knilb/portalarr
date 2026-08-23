@@ -2970,8 +2970,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         ? stats.birthtime
                         : (stats.mtime || new Date());
 
-                    // Auto-organize new audiobooks into strict Author/Title folders before adding to DB
-                    if (isAudiobookLib && library.path) {
+                    // Auto-organize new books and audiobooks into strict Author/Title folders before adding to DB
+                    if (library.path) {
                         try {
                             const safeAuthor = (author && author !== "Unknown Author") 
                                 ? author.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
