@@ -3248,8 +3248,8 @@ export async function filterReleasesForMediaType(results: any[], mediaType: stri
                                 /\[(?:epub|pdf|mobi|azw3|kfx|cbz|cbr|html)\]/i.test(titleLower);
             if (isTextEbook) return false;
 
-            // Size: at least 15 MB up to 6 GB for Audiobooks
-            const isValidAudioSize = r.size >= 15 * 1024 * 1024 && r.size <= 6144 * 1024 * 1024;
+            // Size: at least 15 MB up to 25 GB for Audiobooks (allowing massive box sets)
+            const isValidAudioSize = r.size >= 15 * 1024 * 1024 && r.size <= 25600 * 1024 * 1024;
             if (!isValidAudioSize) return false;
 
             const categoryStr = r.categories ? JSON.stringify(r.categories) : (r.category ? String(r.category) : "");
