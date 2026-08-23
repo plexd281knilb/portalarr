@@ -2970,6 +2970,41 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         ? stats.birthtime
                         : (stats.mtime || new Date());
 
+                    // Auto-organize new audiobooks into strict Author/Title folders before adding to DB
+                    if (isAudiobookLib && library.path) {
+                        try {
+                            const safeAuthor = (author && author !== "Unknown Author") 
+                                ? author.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
+                                : "Unknown Author";
+                            const safeTitle = (title || cleanBase).replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+                            const destFolder = path.join(library.path, safeAuthor, safeTitle);
+                            
+                            // Ensure we don't try to move something that is already correctly organized
+                            if (fullPath !== destFolder && path.dirname(fullPath) !== destFolder) {
+                                if (!fs.existsSync(destFolder)) {
+                                    fs.mkdirSync(destFolder, { recursive: true });
+                                }
+                                
+                                const isDir = fs.statSync(fullPath).isDirectory();
+                                if (isDir) {
+                                    await copyFolderRecursiveAsync(fullPath, destFolder);
+                                    await setPermissionsRecursiveAsync(destFolder);
+                                    removePathSafely(fullPath);
+                                    fullPath = destFolder;
+                                } else {
+                                    const destPath = path.join(destFolder, path.basename(fullPath));
+                                    await fs.promises.copyFile(fullPath, destPath);
+                                    await setPermissionsRecursiveAsync(destPath);
+                                    removePathSafely(fullPath);
+                                    fullPath = destPath;
+                                }
+                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved loose/messy file to ${fullPath}`);
+                            }
+                        } catch (orgErr: any) {
+                            console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
+                        }
+                    }
+
                     try {
                         let newBook = await prisma.book.findFirst({
                             where: { filePath: fullPath }
