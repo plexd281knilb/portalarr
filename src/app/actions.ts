@@ -2910,37 +2910,41 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         const safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
                         const destFolder = path.join(library.path, safeAuthor, safeTitle);
                         
-                        if (fullPath !== destFolder && path.dirname(fullPath) !== destFolder) {
-                            if (!fs.existsSync(destFolder)) {
-                                fs.mkdirSync(destFolder, { recursive: true });
-                            }
-                            const isDir = fs.statSync(fullPath).isDirectory();
-                            if (isDir) {
+                        if (!fs.existsSync(destFolder)) {
+                            fs.mkdirSync(destFolder, { recursive: true });
+                        }
+                        const isDir = fs.statSync(fullPath).isDirectory();
+                        if (isDir) {
+                            if (fullPath !== destFolder) {
                                 try {
                                     await fs.promises.rename(fullPath, destFolder);
                                 } catch (err: any) {
-                                    if (err.code === 'EXDEV') {
+                                    if (err.code === 'EXDEV' || err.code === 'ENOTEMPTY' || err.code === 'EEXIST' || err.code === 'EPERM') {
                                         await copyFolderRecursiveAsync(fullPath, destFolder);
                                         removePathSafely(fullPath);
                                     } else throw err;
                                 }
                                 await setPermissionsRecursiveAsync(destFolder);
                                 fullPath = destFolder;
-                            } else {
-                                const destPath = path.join(destFolder, path.basename(fullPath));
+                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved folder to ${fullPath}`);
+                                logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Moved folder into pristine path -> "${destFolder}"`);
+                            }
+                        } else {
+                            const destPath = path.join(destFolder, `${safeTitle}${ext}`);
+                            if (fullPath !== destPath) {
                                 try {
                                     await fs.promises.rename(fullPath, destPath);
                                 } catch (err: any) {
-                                    if (err.code === 'EXDEV') {
+                                    if (err.code === 'EXDEV' || err.code === 'EEXIST' || err.code === 'EPERM') {
                                         await fs.promises.copyFile(fullPath, destPath);
                                         removePathSafely(fullPath);
                                     } else throw err;
                                 }
                                 await setPermissionsRecursiveAsync(destPath);
                                 fullPath = destPath;
+                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved/Renamed file to ${fullPath}`);
+                                logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Renamed & moved file into pristine path -> "${destPath}"`);
                             }
-                            console.log(`[SCANNER-AUTO-ORGANIZE] Moved loose/messy file to ${fullPath}`);
-                            logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Moved badly named file into pristine folder -> "${destFolder}"`);
                         }
                     } catch (orgErr: any) {
                         console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
