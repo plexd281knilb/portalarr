@@ -2263,7 +2263,9 @@ function BookLibraryPageContent() {
     let mounted = true;
 
     const fetchMissing = async () => {
-      const entries = Object.entries(seriesGroups);
+      // Only fetch missing books for the series currently visible on screen
+      // This massively improves performance and prevents iTunes/Gemini API rate limiting!
+      const entries = Object.entries(seriesGroups).slice(0, visibleCount);
       for (const [seriesName, sBooks] of entries) {
         if (!mounted) break;
         // Avoid refetching if already fetched or currently fetching
@@ -2290,7 +2292,7 @@ function BookLibraryPageContent() {
     return () => {
       mounted = false;
     };
-  }, [seriesGroups, groupBySeries]);
+  }, [seriesGroups, groupBySeries, visibleCount]);
 
   const eligibleRequestUsers = allUsers.filter((u) => {
     // 1. Has Kindle email configured
