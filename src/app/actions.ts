@@ -5019,12 +5019,22 @@ export async function testAiAgentConnection(sampleText?: string, tempProvider?: 
 export async function resolveBookWithAI(bookId: string) {
     try {
         await verifyAdmin();
-        const book = await prisma.book.findUnique({ where: { id: bookId } });
+        const book = await prisma.book.findUnique({ where: { id: bookId }, include: { library: true } });
         if (!book) return { success: false, error: "Book not found" };
 
         const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
-        const rawTarget = book.filePath ? path.basename(book.filePath) : book.title;
-        const cleanTarget = parseFilenameMetadata(rawTarget).title;
+        
+        let cleanTarget = book.title;
+        if (book.filePath && book.library) {
+            const ext = path.extname(book.filePath);
+            const file = path.basename(book.filePath);
+            const extracted = extractMetadataFromPath(book.filePath, file, ext, book.library.path);
+            cleanTarget = extracted.author !== "Unknown Author" ? `${extracted.author} - ${extracted.title}` : extracted.title;
+        } else {
+            const rawTarget = book.filePath ? path.basename(book.filePath) : book.title;
+            const parsed = parseFilenameMetadata(rawTarget);
+            cleanTarget = parsed.author !== "Unknown Author" ? `${parsed.author} - ${parsed.title}` : parsed.title;
+        }
         console.log(`[AI-SINGLE-RESOLVE] 🤖 Resolving AI metadata for book ID ${bookId} ("${book.title}")...`);
         const aiResult = await resolveMetadataWithAI(cleanTarget, book.mediaType || "ebook");
         console.log(`[AI-SINGLE-RESOLVE] ✨ Resolved: "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"}] via ${aiResult.providerUsed}`);
