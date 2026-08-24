@@ -12,6 +12,84 @@ export interface AIResolvedMetadata {
     providerUsed: string;
 }
 
+export async function assignVolumeNumbersWithAI(
+    seriesName: string,
+    author: string,
+    bookTitles: string[]
+): Promise<Record<string, string | null>> {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+    
+    const provider = settings?.aiProvider || "default";
+    const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
+    const modelName = settings?.aiModel || "gemini-1.5-flash";
+
+    if ((provider === "gemini" || provider === "google") && rawKey) {
+        return await callGeminiAIBulkVolumes(seriesName, author, bookTitles, rawKey, modelName);
+    }
+    return {};
+}
+
+async function callGeminiAIBulkVolumes(
+    seriesName: string,
+    author: string,
+    bookTitles: string[],
+    apiKey: string,
+    model: string
+): Promise<Record<string, string | null>> {
+    const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
+    const candidateModels = Array.from(new Set([
+        ...(model ? [model] : []),
+        ...dynamicModels,
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash-8b"
+    ]));
+
+    const systemPrompt = `You are an expert media server librarian AI agent.
+I have a list of book titles from the series "${seriesName}" by "${author}". Some of these titles do not contain volume numbers.
+Your job is to assign the correct volume/book number in the series for each title.
+
+Return ONLY a raw, unformatted JSON object mapping the exact title string to its volume number (as a string, e.g. "1", "2"). If a book is not part of the main numbered series (like a standalone short story or unnumbered graphic novel), map it to null.
+
+Example input:
+["Spy School", "Spy School Goes East", "Evil Spy School"]
+Example output:
+{
+  "Spy School": "1",
+  "Spy School Goes East": "11",
+  "Evil Spy School": "3"
+}`;
+
+    const prompt = JSON.stringify(bookTitles);
+
+    for (const m of candidateModels) {
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    system_instruction: { parts: [{ text: systemPrompt }] },
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+                })
+            });
+
+            if (!response.ok) continue;
+            const data = await response.json();
+            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (rawText) {
+                const cleanJson = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+                const parsed = JSON.parse(cleanJson);
+                return parsed;
+            }
+        } catch (e) {
+            continue;
+        }
+    }
+    return {};
+}
+
 export async function resolveMetadataWithAI(
     rawFilename: string,
     mediaType: string = "ebook"
