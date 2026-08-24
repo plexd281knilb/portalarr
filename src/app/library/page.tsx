@@ -191,8 +191,14 @@ function extractSeriesInfo(
           .replace(/^[:\-\s,#]+/, "")
           .trim();
 
-        if (!cleanBookTitle) {
-          cleanBookTitle = title;
+        if (!cleanBookTitle || /^(and|or|the|of|in|to|a|an)\s+/i.test(cleanBookTitle)) {
+          cleanBookTitle = title
+            .replace(/(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*\d+/gi, "")
+            .replace(/\(\s*\)/g, "")
+            .replace(/\[\s*\]/g, "")
+            .replace(/[:\-\s,#]+$/, "")
+            .replace(/^[:\-\s,#]+/, "")
+            .trim();
         }
 
         return {
