@@ -1710,50 +1710,77 @@ export async function updateBook(id: string, title: string, author: string, cove
 
 async function renameBookFileOnDisk(bookId: string): Promise<string> {
     try {
-        const book = await prisma.book.findUnique({ where: { id: bookId } });
-        if (!book) return "";
+        const book = await prisma.book.findUnique({ 
+            where: { id: bookId },
+            include: { library: true }
+        });
+        if (!book || !book.library) return "";
         if (!fs.existsSync(book.filePath)) return book.filePath;
 
         const ext = path.extname(book.filePath);
-        const dir = path.dirname(book.filePath);
+        const oldDir = path.dirname(book.filePath);
         
         let safeAuthor = (book.author && book.author !== "Unknown Author") 
-            ? book.author.replace(/[/\\?%*:|"<>]/g, "").trim()
+            ? book.author.replace(/[\/\\?%*:|"<>]/g, "").trim()
             : "";
-        let safeTitle = book.title.replace(/[/\\?%*:|"<>]/g, "").trim();
+        let safeTitle = book.title.replace(/[\/\\?%*:|"<>]/g, "").trim();
 
         if (safeTitle.length > 100) safeTitle = safeTitle.substring(0, 100).trim();
         if (safeAuthor.length > 50) safeAuthor = safeAuthor.substring(0, 50).trim();
 
-        let newFileName = "";
-        if (safeAuthor) {
-            newFileName = `${safeAuthor} - ${safeTitle}${ext}`;
-        } else {
-            newFileName = `${safeTitle}${ext}`;
+        let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitle}${ext}` : `${safeTitle}${ext}`;
+        
+        let currentFilePath = book.filePath;
+        const newDir = path.join(book.library.path, safeAuthor || "Unknown Author", safeTitle);
+        
+        // If the folder structure needs to change (e.g. Author was updated in UI)
+        if (oldDir !== newDir) {
+            if (!fs.existsSync(newDir)) {
+                fs.mkdirSync(newDir, { recursive: true });
+            }
+            // Safely move all files from oldDir to newDir
+            try {
+                const files = fs.readdirSync(oldDir);
+                for (const f of files) {
+                    const src = path.join(oldDir, f);
+                    const dst = path.join(newDir, f);
+                    if (fs.existsSync(src)) {
+                        fs.renameSync(src, dst);
+                        if (src === currentFilePath) {
+                            currentFilePath = dst; // Track the main file's new location
+                        }
+                    }
+                }
+                // Cleanup old dir if empty
+                const remaining = fs.readdirSync(oldDir);
+                if (remaining.length === 0) {
+                    fs.rmdirSync(oldDir);
+                }
+            } catch (moveErr: any) {
+                console.error(`[FILE-RENAME] Failed to move folder to ${newDir}:`, moveErr.message);
+            }
         }
 
-        const newPath = path.join(dir, newFileName);
-        if (book.filePath === newPath) return book.filePath;
-
-        let finalPath = newPath;
-        let counter = 1;
-        while (fs.existsSync(finalPath)) {
-            if (finalPath === book.filePath) break;
-            const baseWithoutExt = path.basename(newPath, ext);
-            finalPath = path.join(dir, `${baseWithoutExt}_${counter}${ext}`);
-            counter++;
-        }
-
-        if (book.filePath !== finalPath && fs.existsSync(book.filePath)) {
-            console.log(`[FILE-RENAME] Renaming on-disk file: ${book.filePath} -> ${finalPath}`);
-            fs.renameSync(book.filePath, finalPath);
+        const finalPath = path.join(newDir, newFileName);
+        
+        if (currentFilePath !== finalPath && fs.existsSync(currentFilePath)) {
+            console.log(`[FILE-RENAME] Renaming on-disk file: ${currentFilePath} -> ${finalPath}`);
+            fs.renameSync(currentFilePath, finalPath);
             
             await prisma.book.updateMany({
                 where: { id: bookId },
                 data: { filePath: finalPath }
             });
             return finalPath;
+        } else if (currentFilePath !== book.filePath) {
+            // Even if the filename didn't change, the folder did!
+            await prisma.book.updateMany({
+                where: { id: bookId },
+                data: { filePath: currentFilePath }
+            });
+            return currentFilePath;
         }
+        
         return book.filePath;
     } catch (err: any) {
         console.error(`[FILE-RENAME] Failed to rename file for book ${bookId}:`, err.message);
@@ -1761,6 +1788,7 @@ async function renameBookFileOnDisk(bookId: string): Promise<string> {
         return book ? book.filePath : "";
     }
 }
+
 
 export async function deleteBookRequest(id: string) {
     const session = await verifyUser();
