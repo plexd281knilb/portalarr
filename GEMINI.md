@@ -119,6 +119,10 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Audiobook Release Folder Parent Resolution:** When parsing audiobook titles from disk via `getEffectiveBookBaseName`, ensure you pass the `effectiveFilePath` (the path to a sample track file) rather than the parent directory path. Passing the directory path causes `path.dirname` to evaluate to the root `audiobooks/` library folder, incorrectly stripping all release metadata.
 - **Scanner Sub-Folder Size Calculation:** When validating folders, `calcFolderSize` must unconditionally sum `fs.statSync` size for *all* files. Do not gate size accumulation behind audio/book file extensions, or you will accidentally skip legacy release folders with non-standard files.
 - **Download Client Cleanup Race Conditions:** When `deleteDownload` successfully delegates file cleanup to the download client (e.g., SABnzbd/qBittorrent), strictly skip manual `fs.unlinkSync` and `fs.rmSync` operations in Node.js to avoid `EACCES` file locking collisions.
+- **Robust Folder Metadata Parsing:** When raw filenames lack author information (e.g. `Death Masks.epub`), `extractMetadataFromPath` falls back to parsing the folder hierarchy. It safeguards against misidentifying unhyphenated multi-word titles (like `Project Hail Mary`) as authors by explicitly substring-matching the folder name against the file title.
+- **UI Auto-Organizer & File Moving:** `updateBook` in `actions.ts` calls `renameBookFileOnDisk`, which does MORE than rename a file. If an admin edits a book's Author in the UI, `renameBookFileOnDisk` physically restructures the filesystem, safely migrating the entire contents of the original folder into a new `Library / Author / Title` directory structure, then cleaning up the empty directories behind it.
+- **Git Workflow Overrides:** Pushing to `stable` is strictly forbidden to protect production, *unless* the user explicitly commands it in the prompt, in which case the user's manual override takes precedence.
+
 
 ## Key Files
 - `prisma/schema.prisma`: The source of truth for the database schema.
