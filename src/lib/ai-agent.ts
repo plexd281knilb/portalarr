@@ -40,7 +40,7 @@ async function callGeminiAIBulkVolumes(
     const candidateModels = Array.from(new Set([
         ...(model ? [model] : []),
         "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
+        
         ...dynamicModels
     ])).slice(0, 3);
 
@@ -74,7 +74,10 @@ Example output:
                 })
             });
 
-            if (!response.ok) continue;
+            if (!response.ok) {
+                if (response.status === 429) throw new Error("Google Gemini API Rate Limit Exceeded (HTTP 429)");
+                continue;
+            }
             const data = await response.json();
             const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (rawText) {
@@ -210,7 +213,7 @@ async function callGeminiAI(
     const candidateModels = Array.from(new Set([
         ...(model ? [model] : []),
         "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
+        
         "gemini-1.5-pro",
         ...dynamicModels
     ])).slice(0, 3);
@@ -250,6 +253,7 @@ Return ONLY a raw, unformatted JSON object with this exact schema (do not wrap i
             }
         } catch (e: any) {
             lastError = e.message;
+            if (lastError.includes("429")) throw e;
         }
     }
 
@@ -356,7 +360,7 @@ async function callGeminiAIForChapters(
     const candidateModels = Array.from(new Set([
         ...(model ? [model] : []),
         "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
+        
         "gemini-1.5-pro",
         ...dynamicModels
     ])).slice(0, 3);
