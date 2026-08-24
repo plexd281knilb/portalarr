@@ -1710,50 +1710,77 @@ export async function updateBook(id: string, title: string, author: string, cove
 
 async function renameBookFileOnDisk(bookId: string): Promise<string> {
     try {
-        const book = await prisma.book.findUnique({ where: { id: bookId } });
-        if (!book) return "";
+        const book = await prisma.book.findUnique({ 
+            where: { id: bookId },
+            include: { library: true }
+        });
+        if (!book || !book.library) return "";
         if (!fs.existsSync(book.filePath)) return book.filePath;
 
         const ext = path.extname(book.filePath);
-        const dir = path.dirname(book.filePath);
+        const oldDir = path.dirname(book.filePath);
         
         let safeAuthor = (book.author && book.author !== "Unknown Author") 
-            ? book.author.replace(/[/\\?%*:|"<>]/g, "").trim()
+            ? book.author.replace(/[\/\\?%*:|"<>]/g, "").trim()
             : "";
-        let safeTitle = book.title.replace(/[/\\?%*:|"<>]/g, "").trim();
+        let safeTitle = book.title.replace(/[\/\\?%*:|"<>]/g, "").trim();
 
         if (safeTitle.length > 100) safeTitle = safeTitle.substring(0, 100).trim();
         if (safeAuthor.length > 50) safeAuthor = safeAuthor.substring(0, 50).trim();
 
-        let newFileName = "";
-        if (safeAuthor) {
-            newFileName = `${safeAuthor} - ${safeTitle}${ext}`;
-        } else {
-            newFileName = `${safeTitle}${ext}`;
+        let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitle}${ext}` : `${safeTitle}${ext}`;
+        
+        let currentFilePath = book.filePath;
+        const newDir = path.join(book.library.path, safeAuthor || "Unknown Author", safeTitle);
+        
+        // If the folder structure needs to change (e.g. Author was updated in UI)
+        if (oldDir !== newDir) {
+            if (!fs.existsSync(newDir)) {
+                fs.mkdirSync(newDir, { recursive: true });
+            }
+            // Safely move all files from oldDir to newDir
+            try {
+                const files = fs.readdirSync(oldDir);
+                for (const f of files) {
+                    const src = path.join(oldDir, f);
+                    const dst = path.join(newDir, f);
+                    if (fs.existsSync(src)) {
+                        fs.renameSync(src, dst);
+                        if (src === currentFilePath) {
+                            currentFilePath = dst; // Track the main file's new location
+                        }
+                    }
+                }
+                // Cleanup old dir if empty
+                const remaining = fs.readdirSync(oldDir);
+                if (remaining.length === 0) {
+                    fs.rmdirSync(oldDir);
+                }
+            } catch (moveErr: any) {
+                console.error(`[FILE-RENAME] Failed to move folder to ${newDir}:`, moveErr.message);
+            }
         }
 
-        const newPath = path.join(dir, newFileName);
-        if (book.filePath === newPath) return book.filePath;
-
-        let finalPath = newPath;
-        let counter = 1;
-        while (fs.existsSync(finalPath)) {
-            if (finalPath === book.filePath) break;
-            const baseWithoutExt = path.basename(newPath, ext);
-            finalPath = path.join(dir, `${baseWithoutExt}_${counter}${ext}`);
-            counter++;
-        }
-
-        if (book.filePath !== finalPath && fs.existsSync(book.filePath)) {
-            console.log(`[FILE-RENAME] Renaming on-disk file: ${book.filePath} -> ${finalPath}`);
-            fs.renameSync(book.filePath, finalPath);
+        const finalPath = path.join(newDir, newFileName);
+        
+        if (currentFilePath !== finalPath && fs.existsSync(currentFilePath)) {
+            console.log(`[FILE-RENAME] Renaming on-disk file: ${currentFilePath} -> ${finalPath}`);
+            fs.renameSync(currentFilePath, finalPath);
             
             await prisma.book.updateMany({
                 where: { id: bookId },
                 data: { filePath: finalPath }
             });
             return finalPath;
+        } else if (currentFilePath !== book.filePath) {
+            // Even if the filename didn't change, the folder did!
+            await prisma.book.updateMany({
+                where: { id: bookId },
+                data: { filePath: currentFilePath }
+            });
+            return currentFilePath;
         }
+        
         return book.filePath;
     } catch (err: any) {
         console.error(`[FILE-RENAME] Failed to rename file for book ${bookId}:`, err.message);
@@ -1761,6 +1788,7 @@ async function renameBookFileOnDisk(bookId: string): Promise<string> {
         return book ? book.filePath : "";
     }
 }
+
 
 export async function deleteBookRequest(id: string) {
     const session = await verifyUser();
@@ -2368,7 +2396,7 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
                 let partB = parts.slice(1).join(" - ");
                 partB = partB.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
 
-                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/i;
+                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/;
                 const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partB);
                 const isPartAAuthor = authorPattern.test(partA);
 
@@ -2486,6 +2514,80 @@ function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): 
     }
 
     return rawBase;
+}
+
+function extractMetadataFromPath(fullPath: string, file: string, ext: string, scanPath: string): { title: string, author: string, cleanQuery: string } {
+    const rawBase = path.basename(file, ext);
+    let title = rawBase;
+    let author = "Unknown Author";
+
+    const parsedFile = parseFilenameMetadata(rawBase);
+    if (parsedFile.author !== "Unknown Author") {
+        return { title: parsedFile.title, author: parsedFile.author, cleanQuery: parsedFile.cleanQuery };
+    }
+
+    const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Track|Disk)\s*\d+$/i;
+    const pureNumPattern = /^\d+$/;
+    const isTrackFilename = /^(?:\d{1,3}[\s._-]+)+/i.test(rawBase.trim()) || discPattern.test(rawBase.trim()) || pureNumPattern.test(rawBase.trim()) || rawBase.length <= 3;
+
+    const relPath = path.relative(scanPath, fullPath);
+    const parts = relPath.split(path.sep).filter(Boolean);
+
+    if (parts.length > 0 && parts[parts.length - 1] === file) {
+        parts.pop();
+    }
+
+    const cleanParts = parts.filter(p => {
+        const lower = p.toLowerCase();
+        if (lower === "unknown author" || lower === "unknown") return false;
+        if (/^(?:Disc|CD|Part|Vol|Volume|Track|Disk)\s*\d+$/i.test(lower)) return false;
+        return true;
+    });
+
+    if (cleanParts.length >= 2) {
+        author = cleanParts[cleanParts.length - 2];
+        title = cleanParts[cleanParts.length - 1];
+    } else if (cleanParts.length === 1) {
+        if (!isTrackFilename) {
+            const folder = cleanParts[0];
+            const fileTitle = parsedFile.title || rawBase;
+            const isExactMatch = folder.toLowerCase() === fileTitle.toLowerCase();
+            const isSubstring = fileTitle.toLowerCase().includes(folder.toLowerCase());
+
+            if (isExactMatch || isSubstring) {
+                author = "Unknown Author";
+                title = fileTitle;
+            } else {
+                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/;
+                if (authorPattern.test(folder)) {
+                    author = folder;
+                    title = fileTitle;
+                } else {
+                    // It was likely split by a previous buggy scan (e.g. folder="Harry Potter and the Half", file="Blood Prince")
+                    author = "Unknown Author";
+                    title = (folder + "-" + fileTitle).replace(/\s*-\s*/g, "-");
+                }
+            }
+        } else {
+            const parsedFolder = parseFilenameMetadata(cleanParts[0]);
+            if (parsedFolder.author !== "Unknown Author") {
+                author = parsedFolder.author;
+                title = parsedFolder.title;
+            } else {
+                title = parsedFolder.title || cleanParts[0];
+            }
+        }
+    } else {
+        title = parsedFile.title || rawBase;
+    }
+    
+    const finalParse = parseFilenameMetadata(title);
+    if (finalParse.author !== "Unknown Author" && author === "Unknown Author") {
+        author = finalParse.author;
+        title = finalParse.title;
+    }
+
+    return { title, author, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
 }
 
 export async function scanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
@@ -2673,93 +2775,50 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
         let finalMediaItems = foundMediaItems;
         if (isAudiobookLib) {
-            const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: fs.Stats }>();
+            const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: any }>();
+            for (const item of foundMediaItems) {
+                const parentDir = path.dirname(item.fullPath);
+                let groupFolder = item.fullPath; // default for loose files in root
 
-            for (const targetDir of pathsToScan) {
-                if (!targetDir || !fs.existsSync(targetDir)) continue;
-                try {
-                    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
-                    for (const entry of entries) {
-                        const fullP = path.join(targetDir, entry.name);
-                        if (entry.isDirectory()) {
-                            let totalSize = 0;
-                            let sampleFile = "";
-                            let sampleExt = ".mp3";
-
-                            function calcFolderSize(dir: string, depth = 0) {
-                                if (depth > 6) return;
-                                try {
-                                    const subEntries = fs.readdirSync(dir, { withFileTypes: true });
-                                    for (const sub of subEntries) {
-                                        const subP = path.join(dir, sub.name);
-                                        if (sub.isDirectory()) {
-                                            calcFolderSize(subP, depth + 1);
-                                        } else {
-                                            try {
-                                                const st = fs.statSync(subP);
-                                                totalSize += st.size;
-                                                const ext = path.extname(sub.name).toLowerCase();
-                                                const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".wav"];
-                                                if (!sampleFile || (!validAudioExts.includes(sampleExt) && validAudioExts.includes(ext))) {
-                                                    sampleFile = sub.name;
-                                                    sampleExt = ext || ".mp3";
-                                                }
-                                            } catch (e) {}
-                                        }
-                                    }
-                                } catch (e) {}
-                            }
-
-                            calcFolderSize(fullP);
-
-                            if (totalSize === 0) {
-                                try {
-                                    totalSize = fs.statSync(fullP).size || 1;
-                                } catch (e) {}
-                            }
-
-                            const folderLower = entry.name.toLowerCase();
-                            const isGenericRootFolder = folderLower === "books" || 
-                                                        folderLower === "audiobooks" || 
-                                                        folderLower === "userbooks" || 
-                                                        folderLower === "kidsbooks" || 
-                                                        folderLower === "kyrabooks" || 
-                                                        folderLower === "downloads" ||
-                                                        folderLower.includes("library") ||
-                                                        folderLower.includes("bookshelf");
-
-                            if (!isGenericRootFolder) {
-                                const folderKey = fullP.toLowerCase();
-                                if (!consolidatedMap.has(folderKey)) {
-                                    consolidatedMap.set(folderKey, {
-                                        fullPath: fullP,
-                                        file: sampleFile || entry.name,
-                                        ext: sampleExt || ".mp3",
-                                        stats: { size: totalSize } as any
-                                    });
-                                }
-                            }
-                        } else {
-                            const ext = path.extname(entry.name).toLowerCase();
-                            if (validExtensions.includes(ext)) {
-                                try {
-                                    const st = fs.statSync(fullP);
-                                    const fileKey = fullP.toLowerCase();
-                                    if (!consolidatedMap.has(fileKey)) {
-                                        consolidatedMap.set(fileKey, {
-                                            fullPath: fullP,
-                                            file: entry.name,
-                                            ext,
-                                            stats: st
-                                        });
-                                    }
-                                } catch (e) {}
-                            }
-                        }
+                if (parentDir !== scanPath) {
+                    const parentName = path.basename(parentDir);
+                    const isDiscFolder = /^(?:Disc|CD|Part|Vol|Volume|Track|Disk)\s*\d+$/i.test(parentName.trim());
+                    if (isDiscFolder && path.dirname(parentDir) !== scanPath) {
+                        groupFolder = path.dirname(parentDir);
+                    } else {
+                        groupFolder = parentDir;
                     }
-                } catch (e) {}
-            }
+                }
 
+                const folderKey = groupFolder.toLowerCase();
+                
+                const folderLower = path.basename(groupFolder).toLowerCase();
+                const isGenericRootFolder = folderLower === "books" || folderLower === "audiobooks" || folderLower === "userbooks" || folderLower === "kidsbooks" || folderLower === "kyrabooks" || folderLower === "downloads" || folderLower.includes("library") || folderLower.includes("bookshelf");
+                if (isGenericRootFolder && groupFolder !== item.fullPath) {
+                    // Fallback to grouping by file itself if the parent is a generic root
+                    groupFolder = item.fullPath;
+                }
+
+                if (!consolidatedMap.has(folderKey)) {
+                    consolidatedMap.set(folderKey, {
+                        fullPath: groupFolder,
+                        file: item.file,
+                        ext: item.ext,
+                        stats: { size: item.stats.size }
+                    });
+                } else {
+                    const existing = consolidatedMap.get(folderKey)!;
+                    existing.stats.size += item.stats.size;
+                    const validAudioExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".wav"];
+                    if (!validAudioExts.includes(existing.ext) && validAudioExts.includes(item.ext)) {
+                        existing.file = item.file;
+                        existing.ext = item.ext;
+                    } else if (item.ext === ".m4b" && existing.ext !== ".m4b") {
+                        existing.file = item.file;
+                        existing.ext = item.ext;
+                    }
+                }
+            }
             finalMediaItems = Array.from(consolidatedMap.values());
         }
 
@@ -2886,9 +2945,76 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }
                 }
 
+                // ==== AUTO-ORGANIZE ALL ITEMS (NEW & EXISTING) ====
+                let orgTitle = "";
+                let orgAuthor = "";
+                if (existing) {
+                    orgTitle = existing.title || "";
+                    orgAuthor = existing.author || "";
+                }
+                
+                const cleanBaseCheckForOrg = getEffectiveBookBaseName(effectiveFilePath, file, ext);
+                const parsedMetaCheckForOrg = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
+                
+                if (!orgTitle || !orgAuthor || orgAuthor === "Unknown Author") {
+                    if (!orgTitle) orgTitle = parsedMetaCheckForOrg.title || cleanBaseCheckForOrg;
+                    if (!orgAuthor || orgAuthor === "Unknown Author") orgAuthor = parsedMetaCheckForOrg.author || "Unknown Author";
+                }
+
+                if (library.path && orgTitle) {
+                    try {
+                        const safeAuthor = (orgAuthor && orgAuthor !== "Unknown Author") 
+                            ? orgAuthor.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
+                            : "Unknown Author";
+                        const safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+                        const destFolder = path.join(library.path, safeAuthor, safeTitle);
+                        
+                        if (!fs.existsSync(destFolder)) {
+                            fs.mkdirSync(destFolder, { recursive: true });
+                        }
+                        const isDir = fs.statSync(fullPath).isDirectory();
+                        if (isDir) {
+                            if (fullPath !== destFolder) {
+                                try {
+                                    await fs.promises.rename(fullPath, destFolder);
+                                } catch (err: any) {
+                                    if (err.code === 'EXDEV' || err.code === 'ENOTEMPTY' || err.code === 'EEXIST' || err.code === 'EPERM') {
+                                        await copyFolderRecursiveAsync(fullPath, destFolder);
+                                        removePathSafely(fullPath);
+                                    } else throw err;
+                                }
+                                await setPermissionsRecursiveAsync(destFolder);
+                                fullPath = destFolder;
+                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved folder to ${fullPath}`);
+                                logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Moved folder into pristine path -> "${destFolder}"`);
+                            }
+                        } else {
+                            const destPath = path.join(destFolder, `${safeTitle}${ext}`);
+                            if (fullPath !== destPath) {
+                                try {
+                                    await fs.promises.rename(fullPath, destPath);
+                                } catch (err: any) {
+                                    if (err.code === 'EXDEV' || err.code === 'EEXIST' || err.code === 'EPERM') {
+                                        await fs.promises.copyFile(fullPath, destPath);
+                                        removePathSafely(fullPath);
+                                    } else throw err;
+                                }
+                                await setPermissionsRecursiveAsync(destPath);
+                                fullPath = destPath;
+                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved/Renamed file to ${fullPath}`);
+                                logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Renamed & moved file into pristine path -> "${destPath}"`);
+                            }
+                        }
+                    } catch (orgErr: any) {
+                        console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
+                        logger.addLog("ERROR", "SCANNER", `❌ AUTO-ORGANIZE FAILED for "${fullPath}": ${orgErr.message}`);
+                    }
+                }
+                // ==== END AUTO-ORGANIZE ====
+
                 if (!existing) {
                     const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMetaCheck = parseFilenameMetadata(cleanBaseCheck);
+                    const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
                     const targetTitleNorm = getNormTitle(parsedMetaCheck.title || cleanBaseCheck);
 
                     if (targetTitleNorm.length > 3) {
@@ -2905,7 +3031,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                 if (!existing) {
                     const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMeta = parseFilenameMetadata(cleanBase);
+                    const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
                     let title = parsedMeta.title;
                     let author = parsedMeta.author;
                     let coverUrl = "";
@@ -3035,7 +3161,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         Object.assign(existing, updateData);
                     }
                     const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMeta = parseFilenameMetadata(cleanBase);
+                    const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
                     let parsedAuthor = parsedMeta.author;
                     let parsedTitle = parsedMeta.title;
 
@@ -5106,15 +5232,47 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
 export async function searchOpenLibrary(query: string) {
     if (!query || query.trim().length < 2) return [];
     try {
-        let results = [];
+        let results: any[] = [];
         
-        // 1. Primary: iTunes API
+        // 1. Audible API (Excellent for Audiobooks & Exclusives)
+        try {
+            const audUrl = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,contributors,product_desc&num_results=8&products_sort_by=Relevance`;
+            const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
+            const audData = audRes && audRes.ok ? await audRes.json() : null;
+            
+            if (audData && audData.products && audData.products.length > 0) {
+                for (const prod of audData.products) {
+                    const title = prod.title;
+                    if (!title) continue;
+                    
+                    let author = "Unknown Author";
+                    if (prod.authors && prod.authors.length > 0) {
+                        author = prod.authors[0].name;
+                    }
+                    
+                    let coverUrl = "";
+                    if (prod.product_images && prod.product_images["500"]) {
+                        coverUrl = prod.product_images["500"];
+                    }
+                    
+                    let year = "Unknown Year";
+                    if (prod.release_date) {
+                        year = prod.release_date.substring(0, 4);
+                    }
+                    
+                    results.push({ title, author, coverUrl, year });
+                }
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] Audible search failed:", e);
+        }
+
+        // 2. iTunes API
         try {
             let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=ebook&limit=8`;
             let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
             
-            // If no ebook found, try audiobook
             if (!data || !data.results || data.results.length === 0) {
                 iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=audiobook&limit=8`;
                 iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
@@ -5141,66 +5299,61 @@ export async function searchOpenLibrary(query: string) {
             console.warn("[API-FAILOVER] iTunes search failed:", e);
         }
 
-        // 2. Failover: Open Library
-        if (results.length === 0) {
-            try {
-                const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
-                    headers: { "Accept": "application/json" },
-                    next: { revalidate: 3600 }
-                });
-                if (response && response.ok) {
-                    const data = await response.json();
-                    const docs = data.docs || [];
-                    
-                    for (const doc of docs) {
-                        const author = doc.author_name && doc.author_name.length > 0 ? doc.author_name[0] : "Unknown Author";
-                        const coverUrl = doc.cover_i 
-                            ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
-                            : "";
+        // 3. Open Library
+        try {
+            const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
+                headers: { "Accept": "application/json" }
+            });
+            const data = response && response.ok ? await response.json() : null;
+            if (data && data.docs) {
+                for (const doc of data.docs) {
+                    if (doc.title) {
                         results.push({
                             title: doc.title,
-                            author,
-                            coverUrl,
-                            year: doc.first_publish_year || "Unknown Year"
+                            author: doc.author_name ? doc.author_name[0] : "Unknown Author",
+                            coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : "",
+                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year"
                         });
                     }
                 }
-            } catch (e) {
-                console.warn("[API-FAILOVER] Open Library API Error:", e);
             }
+        } catch (e) {
+            console.warn("[API-FAILOVER] OpenLibrary search failed:", e);
         }
-        
-        // 3. Failover: Google Books
-        if (results.length === 0) {
-            try {
-                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8`;
-                const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
-                if (gRes && gRes.ok) {
-                    const data = await gRes.json();
-                    if (data.items) {
-                        for (const item of data.items) {
-                            const title = item.volumeInfo?.title || "";
-                            const author = item.volumeInfo?.authors?.[0] || "Unknown Author";
-                            let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || "";
-                            if (coverUrl) {
-                                coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "");
-                            }
-                            if (!title) continue;
-                            results.push({
-                                title,
-                                author,
-                                coverUrl,
-                                year: item.volumeInfo?.publishedDate ? item.volumeInfo.publishedDate.substring(0, 4) : "Unknown Year"
-                            });
-                        }
+
+        // 4. Google Books
+        try {
+            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8`;
+            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+            const gData = gRes && gRes.ok ? await gRes.json() : null;
+            if (gData && gData.items) {
+                for (const item of gData.items) {
+                    const vol = item.volumeInfo;
+                    if (vol && vol.title) {
+                        results.push({
+                            title: vol.title,
+                            author: vol.authors ? vol.authors[0] : "Unknown Author",
+                            coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&zoom=1", "&zoom=0") : "",
+                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year"
+                        });
                     }
                 }
-            } catch(e) {
-                console.warn("[API-FAILOVER] Google Books API Error:", e);
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] Google Books API Error:", e);
+        }
+        
+        const uniqueResults = [];
+        const seenTitles = new Set();
+        for (const res of results) {
+            const normalized = (res.title + res.author).toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (!seenTitles.has(normalized)) {
+                seenTitles.add(normalized);
+                uniqueResults.push(res);
             }
         }
         
-        return results;
+        return uniqueResults;
     } catch (e) {
         console.error("All metadata APIs failed:", e);
         return [];
