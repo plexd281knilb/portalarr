@@ -2328,7 +2328,7 @@ async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortS
     return data;
 }
 
-function parseFilenameMetadata(rawBase: string): { title: string, author: string, cleanQuery: string } {
+function parseFilenameMetadata(rawBase: string): { title: string, author: string, series: string | null, volumeNumber: string | null, cleanQuery: string } {
     let clean = rawBase.replace(/[\r\n]+/g, " ").trim();
 
     // 1. Strip scene release tags, formats, group names and metadata garbage
@@ -2353,6 +2353,16 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     // Strip scene tags and trailing truncated parentheses often left by bad folder names
     clean = clean.replace(/\s*\([^)]*NMR[^)]*\)?/gi, "");
     clean = clean.replace(/\s*\([^)]*$/g, "");
+
+    let extractedSeries: string | null = null;
+    let extractedVolume: string | null = null;
+
+    // Extract bracketed series like [Mistborn 01] or [Lord of the Rings 02]
+    const bracketSeriesMatch = clean.match(/\[([a-zA-Z\s.,\'-]+?)\s*0*(\d{1,3}(?:\.\d+)?)\]/);
+    if (bracketSeriesMatch) {
+        extractedSeries = bracketSeriesMatch[1].trim();
+        extractedVolume = bracketSeriesMatch[2].trim();
+    }
 
     // Strip empty parentheses and brackets left behind, including ( 0)
     clean = clean.replace(/\[[^\]]+\]/g, " ");
@@ -2467,6 +2477,8 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     return {
         title: title || clean,
         author,
+        series: extractedSeries,
+        volumeNumber: extractedVolume,
         cleanQuery: `${title || clean} ${author !== "Unknown Author" ? author : ""}`.trim()
     };
 }
@@ -2527,14 +2539,14 @@ function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): 
     return rawBase;
 }
 
-function extractMetadataFromPath(fullPath: string, file: string, ext: string, scanPath: string): { title: string, author: string, cleanQuery: string } {
+function extractMetadataFromPath(fullPath: string, file: string, ext: string, scanPath: string): { title: string, author: string, series: string | null, volumeNumber: string | null, cleanQuery: string } {
     const rawBase = path.basename(file, ext);
     let title = rawBase;
     let author = "Unknown Author";
 
     const parsedFile = parseFilenameMetadata(rawBase);
     if (parsedFile.author !== "Unknown Author") {
-        return { title: parsedFile.title, author: parsedFile.author, cleanQuery: parsedFile.cleanQuery };
+        return { title: parsedFile.title, author: parsedFile.author, series: parsedFile.series, volumeNumber: parsedFile.volumeNumber, cleanQuery: parsedFile.cleanQuery };
     }
 
     const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Track|Disk)\s*\d+$/i;
@@ -2598,7 +2610,7 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
         title = finalParse.title;
     }
 
-    return { title, author, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
+    return { title, author, series: finalParse.series || parsedFile.series, volumeNumber: finalParse.volumeNumber || parsedFile.volumeNumber, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
 }
 
 export async function scanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
@@ -6556,4 +6568,9 @@ export async function dumpEntireDatabaseAction() {
     logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
     return { librariesCount: libraries.length, booksCount: books.length, usersCount: users.length };
 }
+
+
+
+
+
 
