@@ -2291,6 +2291,7 @@ export async function runAiLibraryScanAction(libraryId: string): Promise<{ succe
 
 function cleanSearchQuery(searchQuery: string): string {
     return searchQuery
+        .replace(/\s*\([^)]+\)\s*$/g, "") // Strip trailing parentheticals like (FunJungle #6)
         .replace(/'s\b/gi, "s") // Convert magician's -> magicians
         .replace(/\b([a-zA-Z]+)\s+s\b/gi, "$1s") // Merge isolated s (magician s -> magicians)
         .replace(/\b(?:v|vol|bk|book|part|no|#)\.?\s*\d+\b/gi, "") // Strip vol numbers like vol 1
@@ -3502,9 +3503,10 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
 
         const prowlarrUrl = cleanUrl(prowlarrApp.url);
         const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
-        const queryText = author ? `${title} ${author}` : title;
+        const cleanTitleBase = title.replace(/\s*\([^)]+\)\s*/g, " ").trim();
+        const queryText = author ? `${cleanTitleBase} ${author}` : cleanTitleBase;
         const cleanedQuery = cleanSearchQuery(queryText);
-        const cleanTitleOnly = cleanSearchQuery(title);
+        const cleanTitleOnly = cleanSearchQuery(cleanTitleBase);
 
         const catQuery = reqMediaType === "audiobook"
             ? "&categories=3030&categories=3000"
@@ -6568,6 +6570,8 @@ export async function dumpEntireDatabaseAction() {
     logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
     return { librariesCount: libraries.length, booksCount: books.length, usersCount: users.length };
 }
+
+
 
 
 
