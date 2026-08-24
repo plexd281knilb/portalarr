@@ -252,7 +252,8 @@ if (!globalForScheduler.schedulerInitialized) {
               where: {
                 OR: [
                   { status: { startsWith: "Failed" }, updatedAt: { lte: fiveDaysAgo } },
-                  { status: { in: ["Approved", "Downloading", "Searching"] }, updatedAt: { lte: twelveHoursAgo } }
+                  { status: { in: ["Downloading", "Searching"] }, updatedAt: { lte: twelveHoursAgo } },
+                    { status: "Approved", updatedAt: { lte: new Date(now.getTime() - 2 * 60 * 1000) } }
                 ]
               }
             });
@@ -264,10 +265,10 @@ if (!globalForScheduler.schedulerInitialized) {
                 try {
                   await prisma.bookRequest.update({
                     where: { id: req.id },
-                    data: { status: "Pending" }
-                  });
-                  
-                  autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
+                    data: { status: "Approved (Retrying)" }
+                    });
+                    
+                    autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
                     console.error(`[AUTO-DOWNLOAD-RETRY-BG] Failed for request "${req.title}":`, err.message || err);
                   });
                 } catch (reqErr: any) {
@@ -325,3 +326,5 @@ if (!globalForScheduler.schedulerInitialized) {
 }
 
 export default prisma;
+
+

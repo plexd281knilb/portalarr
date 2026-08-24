@@ -1811,27 +1811,51 @@ function BookLibraryPageContent() {
       );
 
       if (!req) {
-        const fd = new FormData();
-        fd.append("title", book.title);
-        fd.append("author", book.author || "");
-        if (book.publishYear)
-          fd.append("publishYear", String(book.publishYear));
-        if (book.coverUrl) fd.append("coverUrl", book.coverUrl);
-        fd.append("mediaType", detectedMediaType);
-        fd.append("type", "single");
-        if (selectedLibrary?.id) fd.append("libraryId", selectedLibrary.id);
-        fd.append("disableAutoDownload", "true");
+          req = {
+            id: "temp-" + Date.now(),
+            title: book.title,
+            author: book.author,
+            mediaType: detectedMediaType,
+            requestedBy: "system",
+            status: "Approved",
+          };
+          // Open the modal instantly with a temporary request to prevent UI freezing
+          setActiveRequestForSearch({ ...req });
+          setSearchingProwlarr(true);
 
-        await createBookRequest(fd);
-        const reqs = await getBookRequests();
-        setRequests(reqs || []);
-        req = reqs?.find(
-          (r: any) =>
-            (r.title.toLowerCase().includes(book.title.toLowerCase()) ||
-              book.title.toLowerCase().includes(r.title.toLowerCase())) &&
-            r.mediaType === detectedMediaType,
-        );
-      }
+          const fd = new FormData();
+          fd.append("title", book.title);
+          fd.append("author", book.author || "");
+          if (book.publishYear) fd.append("publishYear", String(book.publishYear));
+          if (book.coverUrl) fd.append("coverUrl", book.coverUrl);
+          fd.append("mediaType", detectedMediaType);
+          fd.append("type", "single");
+          if (selectedLibrary?.id) fd.append("libraryId", selectedLibrary.id);
+          fd.append("disableAutoDownload", "true");
+
+          createBookRequest(fd).then((res) => {
+             if (res && res.error) {
+                 showErrorModal(res.error, "Failed to prep request");
+                 setActiveRequestForSearch(null);
+                 return;
+             }
+             getBookRequests().then((reqs) => {
+                 setRequests(reqs || []);
+                 if (reqs) {
+                     const realReq = reqs.find((r: any) => 
+                         (r.title.toLowerCase().includes(book.title.toLowerCase()) || book.title.toLowerCase().includes(r.title.toLowerCase())) && 
+                         r.mediaType === detectedMediaType
+                     );
+                     if (realReq) {
+                         setActiveRequestForSearch((prev: any) => prev && prev.id && prev.id.startsWith("temp-") ? { ...prev, id: realReq.id } : prev);
+                     }
+                 }
+             });
+          }).catch(err => {
+              showErrorModal(err.message, "Failed to prep request");
+              setActiveRequestForSearch(null);
+          });
+        }
 
       if (!req) {
         req = {
@@ -1868,11 +1892,30 @@ function BookLibraryPageContent() {
       fd.append("type", "single");
       if (selectedLibrary?.id) fd.append("libraryId", selectedLibrary.id);
 
-      await createBookRequest(fd);
-      const reqs = await getBookRequests();
-      setRequests(reqs || []);
-      
-      alert(`Auto-download triggered for ${book.title}! Check the active queue.`);
+      createBookRequest(fd).then((res) => {
+             if (res && res.error) {
+                 showErrorModal(res.error, "Failed to prep request");
+                 setActiveRequestForSearch(null);
+                 return;
+             }
+             getBookRequests().then((reqs) => {
+                 setRequests(reqs || []);
+                 if (reqs) {
+                     const realReq = reqs.find((r: any) => 
+                         (r.title.toLowerCase().includes(book.title.toLowerCase()) || book.title.toLowerCase().includes(r.title.toLowerCase())) && 
+                         r.mediaType === detectedMediaType
+                     );
+                     if (realReq) {
+                         setActiveRequestForSearch((prev: any) => prev && prev.id && prev.id.startsWith("temp-") ? { ...prev, id: realReq.id } : prev);
+                     }
+                 }
+             });
+          }).catch(err => {
+              showErrorModal(err.message, "Failed to prep request");
+              setActiveRequestForSearch(null);
+          });
+        
+        alert(`Auto-download triggered for ${book.title}! Check the active queue in a moment.`);
     } catch (err: any) {
       alert(err.message || "Failed to trigger auto-download.");
     }
@@ -4772,11 +4815,11 @@ function BookLibraryPageContent() {
                       </div>
                       <Button
                         size="sm"
-                        disabled={pushingReleaseId === release.downloadUrl}
-                        onClick={() => handleSendRelease(release)}
-                        className="text-xs font-bold text-black shrink-0"
-                      >
-                        {pushingReleaseId === release.downloadUrl ? (
+                        disabled={pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-")}
+                          onClick={() => handleSendRelease(release)}
+                          className="text-xs font-bold text-black shrink-0"
+                        >
+                          {pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-") ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
                           <>
@@ -5441,3 +5484,9 @@ function BookLibraryPageContent() {
     </div>
   );
 }
+
+
+
+
+
+

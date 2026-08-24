@@ -22,7 +22,7 @@ async function fetchWithRetry(url: string, options: any, retries = 3) {
     for (let i = 0; i < retries; i++) {
         try {
             const res = await fetch(url, options);
-            if (res.ok) return res;
+            if (res.ok || res.status === 404 || res.status === 403) return res;
         } catch (e) {
             lastErr = e;
         }
@@ -1689,23 +1689,34 @@ export async function deleteBook(id: string) {
 
 export async function updateBook(id: string, title: string, author: string, coverUrl: string) {
     await verifyAdmin();
-    let finalCover = coverUrl;
-
-    if (!finalCover) {
-        const book = await prisma.book.findUnique({ where: { id } });
-        const mediaType = book?.mediaType || "ebook";
-        try {
-            const fetched = await fetchBookCover(title, author, mediaType);
-            if (fetched) finalCover = fetched;
-        } catch (e) {}
-    }
-
+    
+    // 1. Immediately save the new text metadata
     await prisma.book.updateMany({
         where: { id },
-        data: { title, author, coverUrl: finalCover }
+        data: { title, author, coverUrl }
     });
+    
+    // 2. Instantly reorganize the folder on disk
     await renameBookFileOnDisk(id);
+    
+    // 3. Revalidate UI immediately so it feels snappy
     revalidatePath("/library");
+
+    // 4. Fire-and-forget the heavy Cover Art API calls in the background!
+    if (!coverUrl) {
+        prisma.book.findUnique({ where: { id } }).then(book => {
+            if (book) {
+                fetchBookCover(title, author, book.mediaType || "ebook").then(fetched => {
+                    if (fetched) {
+                        prisma.book.updateMany({
+                            where: { id },
+                            data: { coverUrl: fetched }
+                        }).catch(()=>{});
+                    }
+                }).catch(()=>{});
+            }
+        }).catch(()=>{});
+    }
 }
 
 async function renameBookFileOnDisk(bookId: string): Promise<string> {
@@ -2280,6 +2291,7 @@ export async function runAiLibraryScanAction(libraryId: string): Promise<{ succe
 
 function cleanSearchQuery(searchQuery: string): string {
     return searchQuery
+        .replace(/\s*\([^)]+\)\s*$/g, "") // Strip trailing parentheticals like (FunJungle #6)
         .replace(/'s\b/gi, "s") // Convert magician's -> magicians
         .replace(/\b([a-zA-Z]+)\s+s\b/gi, "$1s") // Merge isolated s (magician s -> magicians)
         .replace(/\b(?:v|vol|bk|book|part|no|#)\.?\s*\d+\b/gi, "") // Strip vol numbers like vol 1
@@ -2317,7 +2329,7 @@ async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortS
     return data;
 }
 
-function parseFilenameMetadata(rawBase: string): { title: string, author: string, cleanQuery: string } {
+function parseFilenameMetadata(rawBase: string): { title: string, author: string, series: string | null, volumeNumber: string | null, cleanQuery: string } {
     let clean = rawBase.replace(/[\r\n]+/g, " ").trim();
 
     // 1. Strip scene release tags, formats, group names and metadata garbage
@@ -2342,6 +2354,16 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     // Strip scene tags and trailing truncated parentheses often left by bad folder names
     clean = clean.replace(/\s*\([^)]*NMR[^)]*\)?/gi, "");
     clean = clean.replace(/\s*\([^)]*$/g, "");
+
+    let extractedSeries: string | null = null;
+    let extractedVolume: string | null = null;
+
+    // Extract bracketed series like [Mistborn 01] or [Lord of the Rings 02]
+    const bracketSeriesMatch = clean.match(/\[([a-zA-Z\s.,\'-]+?)\s*0*(\d{1,3}(?:\.\d+)?)\]/);
+    if (bracketSeriesMatch) {
+        extractedSeries = bracketSeriesMatch[1].trim();
+        extractedVolume = bracketSeriesMatch[2].trim();
+    }
 
     // Strip empty parentheses and brackets left behind, including ( 0)
     clean = clean.replace(/\[[^\]]+\]/g, " ");
@@ -2456,6 +2478,8 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
     return {
         title: title || clean,
         author,
+        series: extractedSeries,
+        volumeNumber: extractedVolume,
         cleanQuery: `${title || clean} ${author !== "Unknown Author" ? author : ""}`.trim()
     };
 }
@@ -2516,14 +2540,14 @@ function getEffectiveBookBaseName(fullPath: string, file: string, ext: string): 
     return rawBase;
 }
 
-function extractMetadataFromPath(fullPath: string, file: string, ext: string, scanPath: string): { title: string, author: string, cleanQuery: string } {
+function extractMetadataFromPath(fullPath: string, file: string, ext: string, scanPath: string): { title: string, author: string, series: string | null, volumeNumber: string | null, cleanQuery: string } {
     const rawBase = path.basename(file, ext);
     let title = rawBase;
     let author = "Unknown Author";
 
     const parsedFile = parseFilenameMetadata(rawBase);
     if (parsedFile.author !== "Unknown Author") {
-        return { title: parsedFile.title, author: parsedFile.author, cleanQuery: parsedFile.cleanQuery };
+        return { title: parsedFile.title, author: parsedFile.author, series: parsedFile.series, volumeNumber: parsedFile.volumeNumber, cleanQuery: parsedFile.cleanQuery };
     }
 
     const discPattern = /^(?:Disc|CD|Part|Vol|Volume|Track|Disk)\s*\d+$/i;
@@ -2587,7 +2611,7 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
         title = finalParse.title;
     }
 
-    return { title, author, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
+    return { title, author, series: finalParse.series || parsedFile.series, volumeNumber: finalParse.volumeNumber || parsedFile.volumeNumber, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
 }
 
 export async function scanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
@@ -3479,9 +3503,10 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
 
         const prowlarrUrl = cleanUrl(prowlarrApp.url);
         const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
-        const queryText = author ? `${title} ${author}` : title;
+        const cleanTitleBase = title.replace(/\s*\([^)]+\)\s*/g, " ").trim();
+        const queryText = author ? `${cleanTitleBase} ${author}` : cleanTitleBase;
         const cleanedQuery = cleanSearchQuery(queryText);
-        const cleanTitleOnly = cleanSearchQuery(title);
+        const cleanTitleOnly = cleanSearchQuery(cleanTitleBase);
 
         const catQuery = reqMediaType === "audiobook"
             ? "&categories=3030&categories=3000"
@@ -6545,3 +6570,11 @@ export async function dumpEntireDatabaseAction() {
     logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
     return { librariesCount: libraries.length, booksCount: books.length, usersCount: users.length };
 }
+
+
+
+
+
+
+
+
