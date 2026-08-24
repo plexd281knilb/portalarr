@@ -185,7 +185,9 @@ function cleanUpEmptyFolder(folderPath: string) {
             f.endsWith('.md5') ||
             f.endsWith('.url') ||
             f.endsWith('.log') ||
-            f.endsWith('.srt')
+            f.endsWith('.srt') ||
+            f.endsWith('.diz') ||
+            f.endsWith('.sfv')
         );
         if (onlyIgnored) {
             fs.rmSync(folderPath, { recursive: true, force: true });
@@ -1760,7 +1762,7 @@ export async function updateBook(id: string, title: string, author: string, cove
     // Cover fetching removed to prevent Next.js from holding the HTTP connection open
 }
 
-async function renameBookFileOnDisk(bookId: string): Promise<string> {
+export async function renameBookFileOnDisk(bookId: string): Promise<string> {
     try {
         const book = await prisma.book.findUnique({ 
             where: { id: bookId },
