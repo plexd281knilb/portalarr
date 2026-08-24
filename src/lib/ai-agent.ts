@@ -39,9 +39,7 @@ async function callGeminiAIBulkVolumes(
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
         ...(model ? [model] : []),
-        "gemini-1.5-flash",
-        
-        ...dynamicModels
+        ...(dynamicModels.length > 0 ? dynamicModels : ["gemini-1.5-flash"])
     ])).slice(0, 3);
 
     const systemPrompt = `You are an expert media server librarian AI agent.
@@ -182,7 +180,8 @@ async function fetchGeminiContent(apiKey: string, modelName: string, systemPromp
                 body: JSON.stringify({
                     contents: [{
                         parts: [{ text: systemPrompt }]
-                    }]
+                    }],
+                    generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
                 })
             });
 
@@ -217,10 +216,7 @@ async function callGeminiAI(
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
         ...(model ? [model] : []),
-        "gemini-1.5-flash",
-        
-        "gemini-1.5-pro",
-        ...dynamicModels
+        ...(dynamicModels.length > 0 ? dynamicModels : ["gemini-1.5-flash", "gemini-1.5-pro"])
     ])).slice(0, 3);
 
     const systemPrompt = `You are an expert media server librarian AI agent specializing in book, audiobook, and series metadata normalization.
@@ -364,10 +360,7 @@ async function callGeminiAIForChapters(
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
         ...(model ? [model] : []),
-        "gemini-1.5-flash",
-        
-        "gemini-1.5-pro",
-        ...dynamicModels
+        ...(dynamicModels.length > 0 ? dynamicModels : ["gemini-1.5-flash", "gemini-1.5-pro"])
     ])).slice(0, 3);
 
     const systemPrompt = `You are an expert audiobook librarian AI agent specializing in audiobook track and chapter resolution.
