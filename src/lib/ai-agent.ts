@@ -502,6 +502,45 @@ export function callDefaultResolver(rawFilename: string, mediaType: string): AIR
         else if (lowerTitle.includes("hobbit")) { title = "The Hobbit"; series = "Middle-earth"; volumeNumber = "0"; }
     }
 
+
+    // Harry Potter Master Rules
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer")) {
+        author = "J. K. Rowling";
+        series = "Harry Potter";
+        if (lowerTitle.includes("chamber of secrets")) { title = "Harry Potter and the Chamber of Secrets"; volumeNumber = "2"; }
+        else if (lowerTitle.includes("prisoner of azkaban")) { title = "Harry Potter and the Prisoner of Azkaban"; volumeNumber = "3"; }
+        else if (lowerTitle.includes("goblet of fire")) { title = "Harry Potter and the Goblet of Fire"; volumeNumber = "4"; }
+        else if (lowerTitle.includes("order of the phoenix")) { title = "Harry Potter and the Order of the Phoenix"; volumeNumber = "5"; }
+        else if (lowerTitle.includes("half-blood prince") || lowerTitle.includes("half blood prince")) { title = "Harry Potter and the Half-Blood Prince"; volumeNumber = "6"; }
+        else if (lowerTitle.includes("deathly hallows")) { title = "Harry Potter and the Deathly Hallows"; volumeNumber = "7"; }
+        else if (lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer") || (lowerTitle.includes("harry potter") && (lowerTitle.includes("01") || lowerTitle.includes("bk 1") || lowerTitle.includes("book 1")))) { title = "Harry Potter and the Sorcerer\'s Stone"; volumeNumber = "1"; }
+    }
+
+    // Bridgerton Master Rules
+    if (lowerTitle.includes("bridgerton") || lowerTitle.includes("duke and i") || lowerTitle.includes("viscount who loved me") || lowerTitle.includes("offer from a gentleman") || lowerTitle.includes("romancing mister bridgerton") || lowerTitle.includes("to sir phillip") || lowerTitle.includes("when he was wicked") || lowerTitle.includes("its in his kiss") || lowerTitle.includes("it's in his kiss") || lowerTitle.includes("on the way to the wedding") || lowerTitle.includes("second epilogue")) {
+        author = "Julia Quinn";
+        series = "Bridgerton";
+        if (lowerTitle.includes("duke and i")) { title = "The Duke and I"; volumeNumber = "1"; }
+        else if (lowerTitle.includes("viscount who loved me")) { title = "The Viscount Who Loved Me"; volumeNumber = "2"; }
+        else if (lowerTitle.includes("offer from a gentleman")) { title = "An Offer From a Gentleman"; volumeNumber = "3"; }
+        else if (lowerTitle.includes("romancing mister bridgerton")) { title = "Romancing Mister Bridgerton"; volumeNumber = "4"; }
+        else if (lowerTitle.includes("to sir phillip")) { title = "To Sir Phillip, With Love"; volumeNumber = "5"; }
+        else if (lowerTitle.includes("when he was wicked")) { title = "When He Was Wicked"; volumeNumber = "6"; }
+        else if (lowerTitle.includes("its in his kiss") || lowerTitle.includes("it's in his kiss")) { title = "It's in His Kiss"; volumeNumber = "7"; }
+        else if (lowerTitle.includes("on the way to the wedding")) { title = "On the Way to the Wedding"; volumeNumber = "8"; }
+        else if (lowerTitle.includes("second epilogue")) { title = "The Bridgertons: Happily Ever After"; volumeNumber = "9"; }
+    }
+
+    // Spy School & FunJungle Master Rules
+    if (lowerTitle.includes("spy school") || lowerTitle.includes("spy camp") || lowerTitle.includes("evil spy") || lowerTitle.includes("spy ski") || lowerTitle.includes("secret service") || lowerTitle.includes("spy on history")) {
+        author = "Stuart Gibbs";
+        series = "Spy School";
+    }
+    if (lowerTitle.includes("funjungle") || lowerTitle.includes("belly up") || lowerTitle.includes("poached") || lowerTitle.includes("big game") || lowerTitle.includes("panda-monium") || lowerTitle.includes("lion down") || lowerTitle.includes("tyrannosaurus wrecks") || lowerTitle.includes("bear bottom") || lowerTitle.includes("whale done")) {
+        author = "Stuart Gibbs";
+        series = "FunJungle";
+    }
+
     return {
         title: title || clean,
         author,
