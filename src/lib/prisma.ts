@@ -265,10 +265,10 @@ if (!globalForScheduler.schedulerInitialized) {
                 try {
                   await prisma.bookRequest.update({
                     where: { id: req.id },
-                    data: { status: "Pending" }
-                  });
-                  
-                  autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
+                    data: { status: "Approved (Retrying)" }
+                    });
+                    
+                    autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
                     console.error(`[AUTO-DOWNLOAD-RETRY-BG] Failed for request "${req.title}":`, err.message || err);
                   });
                 } catch (reqErr: any) {
@@ -326,4 +326,5 @@ if (!globalForScheduler.schedulerInitialized) {
 }
 
 export default prisma;
+
 
