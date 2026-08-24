@@ -4930,55 +4930,66 @@ export async function resolveBookWithAI(bookId: string) {
     }
 }
 
+async function _backgroundAiScan() {
+    const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
+    const books = await prisma.book.findMany();
+    console.log(`[AI-BATCH-SCAN] 🚀 Starting AI Metadata Resolution Batch Job across all ${books.length} items in database...`);
+
+    let updatedCount = 0;
+    for (let i = 0; i < books.length; i++) {
+        const b = books[i];
+        const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
+        const cleanTarget = parseFilenameMetadata(rawTarget).title;
+        console.log(`[AI-BATCH-SCAN] 🤖 [${i + 1}/${books.length}] Analyzing "${b.title}" (Raw: ${rawTarget})...`);
+        
+        try {
+            const aiResult = await resolveMetadataWithAI(cleanTarget, b.mediaType || "ebook");
+            console.log(`[AI-BATCH-SCAN] ✨ Resolved "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"} #${aiResult.volumeNumber || "N/A"}] (Provider: ${aiResult.providerUsed})`);
+
+            let coverUrl = b.coverUrl;
+            if (!coverUrl || aiResult.title !== b.title) {
+                try {
+                    const hdCover = await fetchBookCover(aiResult.title, aiResult.author, b.mediaType || "ebook");
+                    if (hdCover) coverUrl = hdCover;
+                } catch (e) {}
+            }
+
+            await prisma.book.updateMany({
+                where: { id: b.id },
+                data: {
+                    title: aiResult.title || b.title,
+                    author: (aiResult.author && aiResult.author !== "Unknown Author") ? aiResult.author : b.author,
+                    series: aiResult.series || b.series,
+                    volumeNumber: aiResult.volumeNumber ? String(aiResult.volumeNumber) : b.volumeNumber,
+                    ...(coverUrl ? { coverUrl } : {})
+                }
+            }).catch(() => {});
+            await renameBookFileOnDisk(b.id);
+            updatedCount++;
+        } catch (err: any) {
+            console.warn(`[AI-BATCH-SCAN] ⚠️ Failed for "${b.title}":`, err.message || err);
+        }
+    }
+
+    console.log(`[AI-BATCH-SCAN] ✅ Completed AI Metadata Batch Job! ${updatedCount}/${books.length} books updated.`);
+    try {
+        revalidatePath("/library");
+    } catch (e) {}
+}
+
 export async function runAiBatchMetadataScanner() {
     try {
         await verifyAdmin();
-        const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
-        const books = await prisma.book.findMany();
-        console.log(`[AI-BATCH-SCAN] 🚀 Starting AI Metadata Resolution Batch Job across all ${books.length} items in database...`);
+        
+        // Detach from the Next.js request context so it doesn't timeout the HTTP response
+        setTimeout(() => {
+            _backgroundAiScan().catch(e => console.error("[AI-BATCH-SCAN-ERROR]: Background worker failed:", e));
+        }, 500);
 
-        let updatedCount = 0;
-        for (let i = 0; i < books.length; i++) {
-            const b = books[i];
-            const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
-            const cleanTarget = parseFilenameMetadata(rawTarget).title;
-            console.log(`[AI-BATCH-SCAN] 🤖 [${i + 1}/${books.length}] Analyzing "${b.title}" (Raw: ${rawTarget})...`);
-            
-            try {
-                const aiResult = await resolveMetadataWithAI(cleanTarget, b.mediaType || "ebook");
-                console.log(`[AI-BATCH-SCAN] ✨ Resolved "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"} #${aiResult.volumeNumber || "N/A"}] (Provider: ${aiResult.providerUsed})`);
-
-                let coverUrl = b.coverUrl;
-                if (!coverUrl || aiResult.title !== b.title) {
-                    try {
-                        const hdCover = await fetchBookCover(aiResult.title, aiResult.author, b.mediaType || "ebook");
-                        if (hdCover) coverUrl = hdCover;
-                    } catch (e) {}
-                }
-
-                await prisma.book.updateMany({
-                    where: { id: b.id },
-                    data: {
-                        title: aiResult.title || b.title,
-                        author: (aiResult.author && aiResult.author !== "Unknown Author") ? aiResult.author : b.author,
-                        series: aiResult.series || b.series,
-                        volumeNumber: aiResult.volumeNumber ? String(aiResult.volumeNumber) : b.volumeNumber,
-                        ...(coverUrl ? { coverUrl } : {})
-                    }
-                }).catch(() => {});
-                await renameBookFileOnDisk(b.id);
-                updatedCount++;
-            } catch (err: any) {
-                console.warn(`[AI-BATCH-SCAN] ⚠️ Failed for "${b.title}":`, err.message || err);
-            }
-        }
-
-        console.log(`[AI-BATCH-SCAN] ✅ Completed AI Metadata Batch Job! ${updatedCount}/${books.length} books updated.`);
-        revalidatePath("/library");
-        return { success: true, message: `Successfully batch processed ${updatedCount} books across all libraries with AI Agent!` };
+        return { success: true, message: `AI Batch Scan successfully started in the background! Please check the server console for live progress.` };
     } catch (e: any) {
         console.error("[AI-BATCH-SCAN-ERROR]:", e);
-        return { success: false, error: e.message || "Failed to run AI Batch Scanner" };
+        return { success: false, error: e.message || "Failed to start AI Batch Scanner" };
     }
 }
 
