@@ -167,6 +167,25 @@ async function fetchGoogleBooksCover(title: string, author: string): Promise<str
     return null;
 }
 
+function cleanUpEmptyFolder(folderPath: string) {
+    if (!folderPath || !fs.existsSync(folderPath)) return;
+    try {
+        const remaining = fs.readdirSync(folderPath);
+        const onlyIgnored = remaining.every(f => 
+            f === '.DS_Store' || 
+            f === 'Thumbs.db' || 
+            f === 'desktop.ini' || 
+            f === '.nomedia' ||
+            f.endsWith('.jpg') || // Often left behind covers
+            f.endsWith('.png') ||
+            f.endsWith('.nfo')
+        );
+        if (onlyIgnored) {
+            fs.rmSync(folderPath, { recursive: true, force: true });
+        }
+    } catch (e) {}
+}
+
 export async function findMissingBooksInSeries(seriesName: string, author: string) {
     try {
         const q = `${seriesName} ${author}`;
@@ -1758,10 +1777,7 @@ async function renameBookFileOnDisk(bookId: string): Promise<string> {
                     }
                 }
                 // Cleanup old dir if empty
-                const remaining = fs.readdirSync(oldDir);
-                if (remaining.length === 0) {
-                    fs.rmdirSync(oldDir);
-                }
+                cleanUpEmptyFolder(oldDir);
             } catch (moveErr: any) {
                 console.error(`[FILE-RENAME] Failed to move folder to ${newDir}:`, moveErr.message);
             }
@@ -3066,9 +3082,16 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                     } else throw err;
                                 }
                                 await setPermissionsRecursiveAsync(destPath);
+                                const oldDir = path.dirname(fullPath);
                                 fullPath = destPath;
                                 console.log(`[SCANNER-AUTO-ORGANIZE] Moved/Renamed file to ${fullPath}`);
                                 logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Renamed & moved file into pristine path -> "${destPath}"`);
+                                
+                                try {
+                                    if (fs.existsSync(oldDir)) {
+                                        cleanUpEmptyFolder(oldDir);
+                                    }
+                                } catch (e) {}
                             }
                         }
                     } catch (orgErr: any) {
