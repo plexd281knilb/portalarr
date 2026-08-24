@@ -297,6 +297,20 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         
         const uniqueBooks = Array.from(new Map(books.map(b => [b.title.toLowerCase(), b])).values());
         
+        // 4. Try Bulk AI Volume Assignment
+        try {
+            const { assignVolumeNumbersWithAI } = await import("@/lib/ai-agent");
+            const titles = uniqueBooks.map(b => b.title);
+            const volMap = await assignVolumeNumbersWithAI(seriesName, author, titles);
+            for (const b of uniqueBooks) {
+                if (volMap[b.title]) {
+                    (b as any).volumeNumber = String(volMap[b.title]);
+                }
+            }
+        } catch (e) {
+            console.warn("[AI-FAILOVER] Bulk AI Volume Assignment failed:", e);
+        }
+        
         return { success: true, data: uniqueBooks };
     } catch (e: any) {
         return { success: false, error: e.message };
