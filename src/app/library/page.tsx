@@ -2894,7 +2894,9 @@ function BookLibraryPageContent() {
                                   </h4>
                                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 opacity-60 grayscale hover:grayscale-0 transition-all duration-300">
                                     {actualMissing.map(
-                                      (book: any, i: number) => (
+                                      (book: any, i: number) => {
+                                        const extMissing = extractSeriesInfo(book.title, "", [seriesName]);
+                                        return (
                                         <div
                                           key={i}
                                           className="flex gap-4 border rounded-xl p-3 bg-card border-dashed"
@@ -2919,8 +2921,13 @@ function BookLibraryPageContent() {
                                                 className="font-bold text-sm truncate pr-2 text-primary"
                                                 title={book.title}
                                               >
-                                                {book.title}
+                                                {extMissing.bookTitle}
                                               </h4>
+                                              {extMissing.volume && (
+                                                <Badge variant="outline" className="text-[9px] h-4 px-1 py-0 bg-primary/10 text-primary border-primary/20">
+                                                  Vol {extMissing.volume}
+                                                </Badge>
+                                              )}
                                             </div>
                                             <p
                                               className="text-xs text-muted-foreground truncate mb-1"
@@ -2932,7 +2939,7 @@ function BookLibraryPageContent() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="w-full h-7 text-[10px]"
+                                                className="w-full h-7 text-[10px] bg-slate-900 border-slate-700 hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all"
                                                 onClick={() =>
                                                   handleAutoDownloadMissingBook(
                                                     {
@@ -2952,7 +2959,7 @@ function BookLibraryPageContent() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="w-full h-7 text-[10px]"
+                                                className="w-full h-7 text-[10px] bg-slate-900 border-slate-700 hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all"
                                                 onClick={() =>
                                                   handleSearchAndReplaceRelease(
                                                     {
@@ -2972,7 +2979,8 @@ function BookLibraryPageContent() {
                                             </div>
                                           </div>
                                         </div>
-                                      ),
+                                      );
+                                      },
                                     )}
                                   </div>
                                 </div>
