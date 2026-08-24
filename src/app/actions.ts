@@ -4514,6 +4514,29 @@ export async function monitorAndRetryDownload(
                 if (targetLib) {
                     try {
                         await scanLibraryInternal(targetLib.id, { enableAi: true });
+
+                    // Inherit series metadata from the original BookRequest
+                    try {
+                        if (currentReq.series) {
+                            const ingestedBooks = await prisma.book.findMany({
+                                where: {
+                                    libraryId: targetLib.id,
+                                    filePath: { startsWith: destFolder }
+                                }
+                            });
+                            for (const ib of ingestedBooks) {
+                                await prisma.book.update({
+                                    where: { id: ib.id },
+                                    data: {
+                                        series: currentReq.series,
+                                        volumeNumber: currentReq.volumeNumber || ib.volumeNumber
+                                    }
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Failed to inherit series metadata for imported download:", e);
+                    }
                     } catch (err) {
                         console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${targetLib.name}":`, err);
                     }
@@ -5981,6 +6004,29 @@ export async function importCompletedDownload(requestId: string) {
 
     // Auto-scan target library shelf so newly imported media is immediately available with AI resolution
     await scanLibraryInternal(targetLib.id, { enableAi: true });
+
+                    // Inherit series metadata from the original BookRequest
+                    try {
+                        if (currentReq.series) {
+                            const ingestedBooks = await prisma.book.findMany({
+                                where: {
+                                    libraryId: targetLib.id,
+                                    filePath: { startsWith: destFolder }
+                                }
+                            });
+                            for (const ib of ingestedBooks) {
+                                await prisma.book.update({
+                                    where: { id: ib.id },
+                                    data: {
+                                        series: currentReq.series,
+                                        volumeNumber: currentReq.volumeNumber || ib.volumeNumber
+                                    }
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Failed to inherit series metadata for imported download:", e);
+                    }
 
     await prisma.bookRequest.update({
         where: { id: requestId },
