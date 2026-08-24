@@ -2846,6 +2846,17 @@ function BookLibraryPageContent() {
                                 {loadingMissingSeries[seriesName] && (
                                   <Loader2 className="h-3 w-3 animate-spin text-muted-foreground ml-2" />
                                 )}
+                                {!missingBooksMap[seriesName] && !loadingMissingSeries[seriesName] && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-5 px-2 text-[10px] ml-auto hover:bg-primary/20 hover:text-primary"
+                                    onClick={() => handleFetchMissingBooks(seriesName, seriesBooks[0].author || "Unknown")}
+                                  >
+                                    <Search className="h-3 w-3 mr-1" />
+                                    Find Missing Books
+                                  </Button>
+                                )}
                               </h3>
                               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
                                 {seriesBooks.map((book) =>
