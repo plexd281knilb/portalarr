@@ -22,7 +22,7 @@ async function fetchWithRetry(url: string, options: any, retries = 3) {
     for (let i = 0; i < retries; i++) {
         try {
             const res = await fetch(url, options);
-            if (res.ok) return res;
+            if (res.ok || res.status === 404 || res.status === 403) return res;
         } catch (e) {
             lastErr = e;
         }
@@ -1689,23 +1689,34 @@ export async function deleteBook(id: string) {
 
 export async function updateBook(id: string, title: string, author: string, coverUrl: string) {
     await verifyAdmin();
-    let finalCover = coverUrl;
-
-    if (!finalCover) {
-        const book = await prisma.book.findUnique({ where: { id } });
-        const mediaType = book?.mediaType || "ebook";
-        try {
-            const fetched = await fetchBookCover(title, author, mediaType);
-            if (fetched) finalCover = fetched;
-        } catch (e) {}
-    }
-
+    
+    // 1. Immediately save the new text metadata
     await prisma.book.updateMany({
         where: { id },
-        data: { title, author, coverUrl: finalCover }
+        data: { title, author, coverUrl }
     });
+    
+    // 2. Instantly reorganize the folder on disk
     await renameBookFileOnDisk(id);
+    
+    // 3. Revalidate UI immediately so it feels snappy
     revalidatePath("/library");
+
+    // 4. Fire-and-forget the heavy Cover Art API calls in the background!
+    if (!coverUrl) {
+        prisma.book.findUnique({ where: { id } }).then(book => {
+            if (book) {
+                fetchBookCover(title, author, book.mediaType || "ebook").then(fetched => {
+                    if (fetched) {
+                        prisma.book.updateMany({
+                            where: { id },
+                            data: { coverUrl: fetched }
+                        }).catch(()=>{});
+                    }
+                }).catch(()=>{});
+            }
+        }).catch(()=>{});
+    }
 }
 
 async function renameBookFileOnDisk(bookId: string): Promise<string> {
@@ -6545,3 +6556,4 @@ export async function dumpEntireDatabaseAction() {
     logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
     return { librariesCount: libraries.length, booksCount: books.length, usersCount: users.length };
 }
+
