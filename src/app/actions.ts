@@ -178,7 +178,13 @@ function cleanUpEmptyFolder(folderPath: string) {
             f === '.nomedia' ||
             f.endsWith('.jpg') || // Often left behind covers
             f.endsWith('.png') ||
-            f.endsWith('.nfo')
+            f.endsWith('.nfo') ||
+            f.endsWith('.txt') ||
+            f.endsWith('.cue') ||
+            f.endsWith('.md5') ||
+            f.endsWith('.url') ||
+            f.endsWith('.log') ||
+            f.endsWith('.srt')
         );
         if (onlyIgnored) {
             fs.rmSync(folderPath, { recursive: true, force: true });
@@ -2382,6 +2388,10 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
 
     // Strip empty parentheses and brackets left behind, including ( 0)
     clean = clean.replace(/\[[^\]]+\]/g, " ");
+    
+    // Strip trailing unclosed brackets/parentheses caused by truncation
+    clean = clean.replace(/\[[^\]]*$/, "");
+    clean = clean.replace(/\([^)]*$/, "");
     clean = clean.replace(/\(\s*\)/g, "");
     clean = clean.replace(/\[\s*\]/g, "");
     clean = clean.replace(/\(\s*0\s*\)/g, "");
@@ -2656,6 +2666,49 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
     }
 
     return { title, author, series: finalParse.series || parsedFile.series, volumeNumber: finalParse.volumeNumber || parsedFile.volumeNumber, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
+}
+
+function purgeEmptyDirectories(dir: string) {
+    if (!fs.existsSync(dir)) return;
+    try {
+        const files = fs.readdirSync(dir);
+        let isEmpty = true;
+        
+        for (const file of files) {
+            const fullPath = path.join(dir, file);
+            const stat = fs.statSync(fullPath);
+            
+            if (stat.isDirectory()) {
+                purgeEmptyDirectories(fullPath);
+                if (fs.existsSync(fullPath)) {
+                    isEmpty = false;
+                }
+            } else {
+                const isIgnored = 
+                    file === '.DS_Store' || 
+                    file === 'Thumbs.db' || 
+                    file === 'desktop.ini' || 
+                    file === '.nomedia' ||
+                    file.endsWith('.jpg') ||
+                    file.endsWith('.png') ||
+                    file.endsWith('.nfo') ||
+                    file.endsWith('.txt') ||
+                    file.endsWith('.cue') ||
+                    file.endsWith('.md5') ||
+                    file.endsWith('.url') ||
+                    file.endsWith('.log') ||
+                    file.endsWith('.srt');
+                if (!isIgnored) {
+                    isEmpty = false;
+                }
+            }
+        }
+        
+        if (isEmpty) {
+            fs.rmSync(dir, { recursive: true, force: true });
+            console.log(`[CLEANUP] 🧹 Purged zombie directory: ${dir}`);
+        }
+    } catch (e) {}
 }
 
 export async function scanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
@@ -3387,6 +3440,20 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
             }
         } catch (dedupErr) {}
+
+        // 8. Clean up empty/zombie directories left behind by the organizer
+        if (scanPath && fs.existsSync(scanPath)) {
+            console.log(`[SCANNER] 🧹 Running zombie directory sweep on ${scanPath}...`);
+            try {
+                const topLevelDirs = fs.readdirSync(scanPath);
+                for (const d of topLevelDirs) {
+                    const fullD = path.join(scanPath, d);
+                    if (fs.statSync(fullD).isDirectory()) {
+                        purgeEmptyDirectories(fullD);
+                    }
+                }
+            } catch (e) {}
+        }
 
         try {
             revalidatePath("/library");
