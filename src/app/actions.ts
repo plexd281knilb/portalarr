@@ -2994,6 +2994,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         for (const item of finalMediaItems) {
             const { file, ext, stats } = item;
             let fullPath = item.fullPath;
+            if (!fs.existsSync(fullPath)) {
+                continue; // File was moved/deleted by a concurrent scan thread
+            }
 
                 // Check and handle foreign language ebooks in library folders
                 if (isForeignLanguage(file)) {
@@ -3192,6 +3195,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             }
                         }
                     } catch (orgErr: any) {
+                        if (orgErr.code === 'ENOENT') continue;
                         console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
                         logger.addLog("ERROR", "SCANNER", `❌ AUTO-ORGANIZE FAILED for "${fullPath}": ${orgErr.message}`);
                     }
