@@ -252,7 +252,8 @@ if (!globalForScheduler.schedulerInitialized) {
               where: {
                 OR: [
                   { status: { startsWith: "Failed" }, updatedAt: { lte: fiveDaysAgo } },
-                  { status: { in: ["Approved", "Downloading", "Searching"] }, updatedAt: { lte: twelveHoursAgo } }
+                  { status: { in: ["Downloading", "Searching"] }, updatedAt: { lte: twelveHoursAgo } },
+                    { status: "Approved", updatedAt: { lte: new Date(now.getTime() - 2 * 60 * 1000) } }
                 ]
               }
             });
@@ -325,3 +326,4 @@ if (!globalForScheduler.schedulerInitialized) {
 }
 
 export default prisma;
+
