@@ -2674,7 +2674,18 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
 
     if (cleanParts.length >= 2) {
         author = cleanParts[cleanParts.length - 2];
-        title = cleanParts[cleanParts.length - 1];
+        const folderTitle = cleanParts[cleanParts.length - 1];
+        if (isTrackFilename) {
+            title = folderTitle;
+        } else {
+            title = parsedFile.title || rawBase;
+            // Extract series info from the parent folder if the file lacked it
+            const folderMeta = parseFilenameMetadata(folderTitle);
+            if (folderMeta.series && !parsedFile.series) {
+                parsedFile.series = folderMeta.series;
+                parsedFile.volumeNumber = folderMeta.volumeNumber;
+            }
+        }
     } else if (cleanParts.length === 1) {
         if (!isTrackFilename) {
             const folder = cleanParts[0];
