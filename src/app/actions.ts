@@ -5007,7 +5007,7 @@ export async function testAiAgentConnection(sampleText?: string) {
         const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
         const targetSample = sampleText || "J.R.R.Tolkien-Lord.of.the.Rings.01-The.Hobbit.Rob.Inglis-PoF";
         console.log(`[AI-AGENT-TEST] 🤖 Testing AI Metadata Agent with query: "${targetSample}"...`);
-        const result = await resolveMetadataWithAI(targetSample, "audiobook");
+        const result = await resolveMetadataWithAI(targetSample, "audiobook", true);
         console.log(`[AI-AGENT-TEST] ✨ Test Result: "${result.title}" by "${result.author}" [Series: ${result.series || "N/A"} #${result.volumeNumber || "N/A"}] via ${result.providerUsed}`);
         return { success: true, result };
     } catch (e: any) {
@@ -6915,3 +6915,18 @@ export async function dumpEntireDatabaseAction() {
 
 
 
+
+export async function fetchAvailableAiModels(provider: string, apiKey: string) {
+    await verifyAdmin();
+    try {
+        const { getAvailableGeminiModels, getAvailableOpenAIModels } = await import("@/lib/ai-agent");
+        if (provider === "gemini" || provider === "google") {
+            return { success: true, data: await getAvailableGeminiModels(apiKey) };
+        } else if (provider === "openai") {
+            return { success: true, data: await getAvailableOpenAIModels(apiKey) };
+        }
+        return { success: true, data: [] };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}

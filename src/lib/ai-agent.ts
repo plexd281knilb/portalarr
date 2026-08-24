@@ -94,7 +94,8 @@ Example output:
 
 export async function resolveMetadataWithAI(
     rawFilename: string,
-    mediaType: string = "ebook"
+    mediaType: string = "ebook",
+    throwErrors: boolean = false
 ): Promise<AIResolvedMetadata> {
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
     
@@ -116,6 +117,7 @@ export async function resolveMetadataWithAI(
             }
         } catch (err: any) {
             console.warn(`[AI-AGENT-GEMINI] ⚠️ Error resolving "${rawFilename}": ${err.message}. Falling back to default resolver.`);
+            if (throwErrors) throw err;
         }
     }
 
@@ -129,6 +131,7 @@ export async function resolveMetadataWithAI(
             }
         } catch (err: any) {
             console.warn(`[AI-AGENT-OPENAI] ⚠️ Error resolving "${rawFilename}": ${err.message}. Falling back to default resolver.`);
+            if (throwErrors) throw err;
         }
     }
 
@@ -145,7 +148,7 @@ export async function resolveRequestMetadataWithAI(
     return resolveMetadataWithAI(userQuery, mediaType);
 }
 
-async function getAvailableGeminiModels(apiKey: string): Promise<string[]> {
+export async function getAvailableGeminiModels(apiKey: string): Promise<string[]> {
     const versions = ["v1beta", "v1"];
     for (const ver of versions) {
         try {
@@ -631,4 +634,19 @@ export function callDefaultResolver(rawFilename: string, mediaType: string): AIR
         confidence: 0.8,
         providerUsed: "Default Heuristic Resolver"
     };
+}
+
+export async function getAvailableOpenAIModels(apiKey: string): Promise<string[]> {
+    try {
+        const res = await fetch("https://api.openai.com/v1/models", {
+            headers: { "Authorization": `Bearer ${apiKey}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data && Array.isArray(data.data)) {
+                return data.data.map((m: any) => m.id).filter((id: string) => id.includes("gpt") || id.includes("o1")).sort();
+            }
+        }
+    } catch (e) {}
+    return [];
 }
