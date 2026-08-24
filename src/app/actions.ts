@@ -3009,9 +3009,13 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 // ==== AUTO-ORGANIZE ALL ITEMS (NEW & EXISTING) ====
                 let orgTitle = "";
                 let orgAuthor = "";
+                let orgSeries = "";
+                let orgVolume = "";
                 if (existing) {
                     orgTitle = existing.title || "";
                     orgAuthor = existing.author || "";
+                    orgSeries = existing.series || "";
+                    orgVolume = existing.volumeNumber || "";
                 }
                 
                 const cleanBaseCheckForOrg = getEffectiveBookBaseName(effectiveFilePath, file, ext);
@@ -3020,15 +3024,30 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 if (!orgTitle || !orgAuthor || orgAuthor === "Unknown Author") {
                     if (!orgTitle) orgTitle = parsedMetaCheckForOrg.title || cleanBaseCheckForOrg;
                     if (!orgAuthor || orgAuthor === "Unknown Author") orgAuthor = parsedMetaCheckForOrg.author || "Unknown Author";
+                    if (!orgSeries) orgSeries = parsedMetaCheckForOrg.series || "";
+                    if (!orgVolume) orgVolume = parsedMetaCheckForOrg.volumeNumber || "";
                 }
 
                 if (library.path && orgTitle) {
                     try {
+                        let seriesTag = "";
+                        if (orgSeries) {
+                            let safeSeries = orgSeries.replace(/[\\/\\\\?%*:|"\[\]<>]/g, "").trim();
+                            let vol = orgVolume ? orgVolume.replace(/[^a-zA-Z0-9.\\-]/g, "").trim() : "01";
+                            if (vol.length === 1) vol = "0" + vol;
+                            seriesTag = `[${safeSeries} ${vol}] `;
+                        }
+
                         const safeAuthor = (orgAuthor && orgAuthor !== "Unknown Author") 
                             ? orgAuthor.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
                             : "Unknown Author";
-                        const safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
-                        const destFolder = path.join(library.path, safeAuthor, safeTitle);
+                            
+                        let safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+                        let safeTitleWithSeries = `${seriesTag}${safeTitle}`;
+                        if (safeTitleWithSeries.length > 100) safeTitleWithSeries = safeTitleWithSeries.substring(0, 100).trim();
+
+                        const destFolder = path.join(library.path, safeAuthor, safeTitleWithSeries);
+                        safeTitle = safeTitleWithSeries; // Reassign safeTitle so the file itself gets the tag too!
                         
                         if (!fs.existsSync(destFolder)) {
                             fs.mkdirSync(destFolder, { recursive: true });
