@@ -39,11 +39,10 @@ async function callGeminiAIBulkVolumes(
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
         ...(model ? [model] : []),
-        ...dynamicModels,
         "gemini-1.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash-8b"
-    ]));
+        "gemini-1.5-flash-8b",
+        ...dynamicModels
+    ])).slice(0, 3);
 
     const systemPrompt = `You are an expert media server librarian AI agent.
 I have a list of book titles from the series "${seriesName}" by "${author}". Some of these titles do not contain volume numbers.
@@ -210,12 +209,11 @@ async function callGeminiAI(
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
         ...(model ? [model] : []),
-        ...dynamicModels,
         "gemini-1.5-flash",
-        "gemini-2.0-flash",
         "gemini-1.5-flash-8b",
-        "gemini-1.5-pro"
-    ]));
+        "gemini-1.5-pro",
+        ...dynamicModels
+    ])).slice(0, 3);
 
     const systemPrompt = `You are an expert media server librarian AI agent specializing in book, audiobook, and series metadata normalization.
 Analyze this raw release filename, directory path, or request search query: "${rawFilename}" (${mediaType}).
@@ -357,12 +355,11 @@ async function callGeminiAIForChapters(
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
         ...(model ? [model] : []),
-        ...dynamicModels,
         "gemini-1.5-flash",
-        "gemini-2.0-flash",
         "gemini-1.5-flash-8b",
-        "gemini-1.5-pro"
-    ]));
+        "gemini-1.5-pro",
+        ...dynamicModels
+    ])).slice(0, 3);
 
     const systemPrompt = `You are an expert audiobook librarian AI agent specializing in audiobook track and chapter resolution.
 Book Title: "${bookTitle}"
