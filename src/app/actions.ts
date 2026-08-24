@@ -1734,16 +1734,25 @@ async function renameBookFileOnDisk(bookId: string): Promise<string> {
         let safeAuthor = (book.author && book.author !== "Unknown Author") 
             ? book.author.replace(/[\/\\?%*:|"<>]/g, "").trim()
             : "";
-        let safeTitle = book.title.replace(/[\/\\?%*:|"<>]/g, "").trim();
+        let safeTitle = book.title.replace(/[\\/\\\\?%*:|"<>]/g, "").trim();
 
-        if (safeTitle.length > 100) safeTitle = safeTitle.substring(0, 100).trim();
+        let seriesTag = "";
+        if (book.series) {
+            let safeSeries = book.series.replace(/[\\/\\\\?%*:|"\[\]<>]/g, "").trim();
+            let vol = book.volumeNumber ? book.volumeNumber.replace(/[^a-zA-Z0-9.\-]/g, "").trim() : "01";
+            if (vol.length === 1) vol = "0" + vol;
+            seriesTag = `[${safeSeries} ${vol}] `;
+        }
+
+        let safeTitleWithSeries = `${seriesTag}${safeTitle}`;
+
+        if (safeTitleWithSeries.length > 100) safeTitleWithSeries = safeTitleWithSeries.substring(0, 100).trim();
         if (safeAuthor.length > 50) safeAuthor = safeAuthor.substring(0, 50).trim();
 
-        let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitle}${ext}` : `${safeTitle}${ext}`;
+        let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitleWithSeries}${ext}` : `${safeTitleWithSeries}${ext}`;
         
         let currentFilePath = book.filePath;
-        const newDir = path.join(book.library.path, safeAuthor || "Unknown Author", safeTitle);
-        
+        const newDir = path.join(book.library.path, safeAuthor || "Unknown Author", safeTitleWithSeries);
         // If the folder structure needs to change (e.g. Author was updated in UI)
         if (oldDir !== newDir) {
             if (!fs.existsSync(newDir)) {
@@ -2271,6 +2280,8 @@ export async function runAiLibraryScanAction(libraryId: string): Promise<{ succe
                         where: { id: b.id },
                         data: updateData
                     });
+
+                    await renameBookFileOnDisk(b.id);
                     resolvedCount++;
                 }
             } catch (err: any) {
@@ -3172,6 +3183,10 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         }
                         
                         matchedDbBookIds.add(newBook.id);
+                        
+                        if (options?.enableAi) {
+                            await renameBookFileOnDisk(newBook.id);
+                        }
 
                         // Fetch cover artwork asynchronously in background
                         (async () => {
@@ -4796,6 +4811,7 @@ export async function resolveBookWithAI(bookId: string) {
                 ...(coverUrl ? { coverUrl } : {})
             }
         });
+        await renameBookFileOnDisk(bookId);
 
         revalidatePath("/library");
         return { success: true, message: `Successfully resolved metadata via ${aiResult.providerUsed}!`, result: aiResult };
@@ -4840,6 +4856,7 @@ export async function runAiBatchMetadataScanner() {
                         ...(coverUrl ? { coverUrl } : {})
                     }
                 }).catch(() => {});
+                await renameBookFileOnDisk(b.id);
                 updatedCount++;
             } catch (err: any) {
                 console.warn(`[AI-BATCH-SCAN] ⚠️ Failed for "${b.title}":`, err.message || err);
