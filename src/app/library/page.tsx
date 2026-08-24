@@ -1833,7 +1833,12 @@ function BookLibraryPageContent() {
           if (selectedLibrary?.id) fd.append("libraryId", selectedLibrary.id);
           fd.append("disableAutoDownload", "true");
 
-          createBookRequest(fd).then(() => {
+          createBookRequest(fd).then((res) => {
+             if (res && res.error) {
+                 showErrorModal(res.error, "Failed to prep request");
+                 setActiveRequestForSearch(null);
+                 return;
+             }
              getBookRequests().then((reqs) => {
                  setRequests(reqs || []);
                  if (reqs) {
@@ -1846,6 +1851,9 @@ function BookLibraryPageContent() {
                      }
                  }
              });
+          }).catch(err => {
+              showErrorModal(err.message, "Failed to prep request");
+              setActiveRequestForSearch(null);
           });
         }
 
@@ -1884,7 +1892,12 @@ function BookLibraryPageContent() {
       fd.append("type", "single");
       if (selectedLibrary?.id) fd.append("libraryId", selectedLibrary.id);
 
-      createBookRequest(fd).then(() => {
+      createBookRequest(fd).then((res) => {
+             if (res && res.error) {
+                 showErrorModal(res.error, "Failed to prep request");
+                 setActiveRequestForSearch(null);
+                 return;
+             }
              getBookRequests().then((reqs) => {
                  setRequests(reqs || []);
                  if (reqs) {
@@ -1897,6 +1910,9 @@ function BookLibraryPageContent() {
                      }
                  }
              });
+          }).catch(err => {
+              showErrorModal(err.message, "Failed to prep request");
+              setActiveRequestForSearch(null);
           });
         
         alert(`Auto-download triggered for ${book.title}! Check the active queue in a moment.`);
@@ -4799,11 +4815,11 @@ function BookLibraryPageContent() {
                       </div>
                       <Button
                         size="sm"
-                        disabled={pushingReleaseId === release.downloadUrl}
-                        onClick={() => handleSendRelease(release)}
-                        className="text-xs font-bold text-black shrink-0"
-                      >
-                        {pushingReleaseId === release.downloadUrl ? (
+                        disabled={pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-")}
+                          onClick={() => handleSendRelease(release)}
+                          className="text-xs font-bold text-black shrink-0"
+                        >
+                          {pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-") ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
                           <>
@@ -5468,6 +5484,9 @@ function BookLibraryPageContent() {
     </div>
   );
 }
+
+
+
 
 
 
