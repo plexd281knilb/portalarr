@@ -3389,7 +3389,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             }
 
         for (const dbBook of dbBooks) {
-            if (!matchedDbBookIds.has(dbBook.id)) {
+            if (!matchedDbBookIds.has(dbBook.id) && dbBook.fileType !== 'missing') {
                 try {
                     logger.addLog("WARN", "DATABASE", `🗑️ DB-DELETE: Purged missing book "${dbBook.title}" (ID: ${dbBook.id}) from SQLite.`);
                     await prisma.book.deleteMany({
@@ -3716,6 +3716,10 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                                 await prisma.book.update({ 
                                     where: { id: newBook.id }, 
                                     data: { coverUrl: `/api/cover?id=${newBook.id}` } 
+                                });
+                                await prisma.bookRequest.update({
+                                    where: { id: requestId },
+                                    data: { coverUrl: `/api/cover?id=${newBook.id}` }
                                 });
                             }
                         } catch (e) {}
