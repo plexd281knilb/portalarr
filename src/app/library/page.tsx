@@ -2257,42 +2257,7 @@ function BookLibraryPageContent() {
     };
   }, [books, searchQuery, sortBy, requests, groupBySeries]);
 
-  useEffect(() => {
-    if (!groupBySeries || Object.keys(seriesGroups).length === 0) return;
 
-    let mounted = true;
-
-    const fetchMissing = async () => {
-      // Only fetch missing books for the series currently visible on screen
-      // This massively improves performance and prevents iTunes/Gemini API rate limiting!
-      const entries = Object.entries(seriesGroups).slice(0, visibleCount);
-      for (const [seriesName, sBooks] of entries) {
-        if (!mounted) break;
-        // Avoid refetching if already fetched or currently fetching
-        if (
-          missingBooksMap[seriesName] !== undefined ||
-          loadingMissingSeries[seriesName]
-        )
-          continue;
-
-        // Fire off fetch via handleFetchMissingBooks
-        // Wait, handleFetchMissingBooks uses setState directly
-        await handleFetchMissingBooks(
-          seriesName,
-          sBooks[0].author || "Unknown",
-        );
-
-        // Sleep to avoid hammering Open Library
-        if (mounted) await new Promise((r) => setTimeout(r, 800));
-      }
-    };
-
-    fetchMissing();
-
-    return () => {
-      mounted = false;
-    };
-  }, [seriesGroups, groupBySeries, visibleCount]);
 
   const eligibleRequestUsers = allUsers.filter((u) => {
     // 1. Has Kindle email configured
