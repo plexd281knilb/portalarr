@@ -1740,6 +1740,7 @@ async function renameBookFileOnDisk(bookId: string): Promise<string> {
             ? book.author.replace(/[\/\\?%*:|"<>]/g, "").trim()
             : "";
         let safeTitle = book.title.replace(/[\\/\\\\?%*:|"<>]/g, "").trim();
+        safeTitle = parseFilenameMetadata(safeTitle).title; // Strip any baked-in tags to prevent exponential duplication
 
         let seriesTag = "";
         if (book.series) {
@@ -2267,7 +2268,8 @@ export async function runAiLibraryScanAction(libraryId: string): Promise<{ succe
         for (const b of books) {
             try {
                 const cleanBase = b.filePath ? path.basename(b.filePath) : b.title;
-                const aiMeta = await resolveMetadataWithAI(cleanBase, lib.mediaType || "ebook");
+                const cleanTarget = parseFilenameMetadata(cleanBase).title;
+                const aiMeta = await resolveMetadataWithAI(cleanTarget, lib.mediaType || "ebook");
                 if (aiMeta) {
                     const updateData: any = {};
                     if (aiMeta.title) updateData.title = aiMeta.title;
@@ -2647,6 +2649,9 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
     const finalParse = parseFilenameMetadata(title);
     if (finalParse.author !== "Unknown Author" && author === "Unknown Author") {
         author = finalParse.author;
+    }
+    // ALWAYS clean the title to prevent exponential bracket duplication!
+    if (finalParse.title) {
         title = finalParse.title;
     }
 
@@ -3045,6 +3050,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             : "Unknown Author";
                             
                         let safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+                        safeTitle = parseFilenameMetadata(safeTitle).title; // Strip any baked-in tags
                         let safeTitleWithSeries = `${seriesTag}${safeTitle}`;
                         if (safeTitleWithSeries.length > 100) safeTitleWithSeries = safeTitleWithSeries.substring(0, 100).trim();
 
@@ -4817,8 +4823,9 @@ export async function resolveBookWithAI(bookId: string) {
 
         const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
         const rawTarget = book.filePath ? path.basename(book.filePath) : book.title;
+        const cleanTarget = parseFilenameMetadata(rawTarget).title;
         console.log(`[AI-SINGLE-RESOLVE] 🤖 Resolving AI metadata for book ID ${bookId} ("${book.title}")...`);
-        const aiResult = await resolveMetadataWithAI(rawTarget, book.mediaType || "ebook");
+        const aiResult = await resolveMetadataWithAI(cleanTarget, book.mediaType || "ebook");
         console.log(`[AI-SINGLE-RESOLVE] ✨ Resolved: "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"}] via ${aiResult.providerUsed}`);
 
         let coverUrl = book.coverUrl;
@@ -4860,10 +4867,11 @@ export async function runAiBatchMetadataScanner() {
         for (let i = 0; i < books.length; i++) {
             const b = books[i];
             const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
+            const cleanTarget = parseFilenameMetadata(rawTarget).title;
             console.log(`[AI-BATCH-SCAN] 🤖 [${i + 1}/${books.length}] Analyzing "${b.title}" (Raw: ${rawTarget})...`);
             
             try {
-                const aiResult = await resolveMetadataWithAI(rawTarget, b.mediaType || "ebook");
+                const aiResult = await resolveMetadataWithAI(cleanTarget, b.mediaType || "ebook");
                 console.log(`[AI-BATCH-SCAN] ✨ Resolved "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"} #${aiResult.volumeNumber || "N/A"}] (Provider: ${aiResult.providerUsed})`);
 
                 let coverUrl = b.coverUrl;
