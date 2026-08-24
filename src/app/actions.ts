@@ -3198,7 +3198,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Moved folder into pristine path -> "${destFolder}"`);
                             }
                         } else {
-                            const destPath = path.join(destFolder, `${safeTitle}${ext}`);
+                            const newFileName = safeAuthor ? `${safeAuthor} - ${safeTitle}${ext}` : `${safeTitle}${ext}`;
+                            const destPath = path.join(destFolder, newFileName);
                             if (fullPath !== destPath) {
                                 try {
                                     await fs.promises.rename(fullPath, destPath);
