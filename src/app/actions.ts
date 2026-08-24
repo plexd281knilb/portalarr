@@ -4521,7 +4521,7 @@ export async function monitorAndRetryDownload(
                             const ingestedBooks = await prisma.book.findMany({
                                 where: {
                                     libraryId: targetLib.id,
-                                    filePath: { startsWith: destFolder }
+                                    filePath: { startsWith: path.dirname(finalDestPath) }
                                 }
                             });
                             for (const ib of ingestedBooks) {
@@ -6011,7 +6011,7 @@ export async function importCompletedDownload(requestId: string) {
                             const ingestedBooks = await prisma.book.findMany({
                                 where: {
                                     libraryId: targetLib.id,
-                                    filePath: { startsWith: destFolder }
+                                    filePath: { startsWith: path.dirname(finalDestPath) }
                                 }
                             });
                             for (const ib of ingestedBooks) {
