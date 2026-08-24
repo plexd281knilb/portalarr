@@ -664,7 +664,7 @@ function BookLibraryPageContent() {
             <img
               src={book.coverUrl}
               alt={book.title}
-              className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+              className={`object-cover w-full h-full transition-transform duration-300 group-hover:scale-105 ${book.fileType === "missing" ? "opacity-40 grayscale" : ""}`}
             />
             <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
               <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
@@ -921,7 +921,7 @@ function BookLibraryPageContent() {
             <img
               src={book.coverUrl}
               alt={book.title}
-              className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+              className={`object-cover w-full h-full transition-transform duration-300 group-hover:scale-105 ${book.fileType === "missing" ? "opacity-40 grayscale" : ""}`}
             />
           ) : (
             <div className="flex flex-col items-center justify-center p-4 text-center space-y-2">

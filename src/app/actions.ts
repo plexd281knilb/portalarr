@@ -176,6 +176,7 @@ function cleanUpEmptyFolder(folderPath: string) {
             f === 'Thumbs.db' || 
             f === 'desktop.ini' || 
             f === '.nomedia' ||
+            f === '.portalarr-missing' ||
             f.endsWith('.jpg') || // Often left behind covers
             f.endsWith('.png') ||
             f.endsWith('.nfo') ||
@@ -355,73 +356,102 @@ async function fetchITunesCover(title: string, author: string, mediaType: string
     return null;
 }
 
-async function fetchBookCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
+async function fetchBookCover(title: string, author: string, mediaType: string = "ebook", bookFolder?: string): Promise<string | null> {
     console.log(`[COVER-ENGINE] 🖼️ Resolving cover artwork for "${title}" by "${author}" (MediaType: ${mediaType})...`);
+
+    if (bookFolder) {
+        if (fs.existsSync(path.join(bookFolder, "cover.jpg"))) return "local";
+        if (fs.existsSync(path.join(bookFolder, "cover.png"))) return "local";
+    }
+
+    let resolvedUrl: string | null = null;
 
     // Tier 1: iTunes HD API (600x600)
     try {
         const iTunesCover = await fetchITunesCover(title, author, mediaType);
         if (iTunesCover) {
             console.log(`[COVER-ENGINE] ✅ TIER 1 SUCCESS (iTunes HD): ${iTunesCover}`);
-            return iTunesCover;
+            resolvedUrl = iTunesCover;
         }
     } catch (e: any) {
         console.warn(`[COVER-ENGINE] ⚠️ Tier 1 (iTunes) failed: ${e.message || e}`);
     }
 
-    // Tier 2: Open Library API (Title + Author)
-    try {
-        const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
-        const cleanedQuery = cleanSearchQuery(query);
-        const res = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
-            headers: { "Accept": "application/json" }
-        });
-        if (res.ok) {
-            const data = await res.json();
-            const docWithCover = data?.docs?.find((d: any) => d.cover_i);
-            if (docWithCover?.cover_i) {
-                const olCover = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
-                console.log(`[COVER-ENGINE] ✅ TIER 2 SUCCESS (Open Library): ${olCover}`);
-                return olCover;
+    // Tier 2: Open Library API
+    if (!resolvedUrl) {
+        try {
+            const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
+            const cleanedQuery = cleanSearchQuery(query);
+            const res = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
+                headers: { "Accept": "application/json" }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const docWithCover = data?.docs?.find((d: any) => d.cover_i);
+                if (docWithCover?.cover_i) {
+                    resolvedUrl = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
+                    console.log(`[COVER-ENGINE] ✅ TIER 2 SUCCESS (Open Library): ${resolvedUrl}`);
+                }
             }
+        } catch (e: any) {
+            console.warn(`[COVER-ENGINE] ⚠️ Tier 2 (Open Library) failed: ${e.message || e}`);
         }
-    } catch (e: any) {
-        console.warn(`[COVER-ENGINE] ⚠️ Tier 2 (Open Library) failed: ${e.message || e}`);
     }
 
     // Tier 3: Google Books API
-    try {
-        const googleCover = await fetchGoogleBooksCover(title, author);
-        if (googleCover) {
-            const finalGoogleCover = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
-            console.log(`[COVER-ENGINE] ✅ TIER 3 SUCCESS (Google Books): ${finalGoogleCover}`);
-            return finalGoogleCover;
+    if (!resolvedUrl) {
+        try {
+            const googleCover = await fetchGoogleBooksCover(title, author);
+            if (googleCover) {
+                resolvedUrl = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
+                console.log(`[COVER-ENGINE] ✅ TIER 3 SUCCESS (Google Books): ${resolvedUrl}`);
+            }
+        } catch (e: any) {
+            console.warn(`[COVER-ENGINE] ⚠️ Tier 3 (Google Books) failed: ${e.message || e}`);
         }
-    } catch (e: any) {
-        console.warn(`[COVER-ENGINE] ⚠️ Tier 3 (Google Books) failed: ${e.message || e}`);
     }
 
     // Tier 4: Open Library Title-Only Fallback
-    try {
-        const cleanTitleOnly = cleanSearchQuery(title);
-        const resTitleOnly = await fetchWithRetry(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
-            headers: { "Accept": "application/json" }
-        });
-        if (resTitleOnly.ok) {
-            const dataTitle = await resTitleOnly.json();
-            const doc = dataTitle?.docs?.find((d: any) => d.cover_i);
-            if (doc?.cover_i) {
-                const titleOnlyCover = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
-                console.log(`[COVER-ENGINE] ✅ TIER 4 FALLBACK SUCCESS (Open Library Title Search): ${titleOnlyCover}`);
-                return titleOnlyCover;
+    if (!resolvedUrl) {
+        try {
+            const cleanTitleOnly = cleanSearchQuery(title);
+            const resTitleOnly = await fetchWithRetry(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
+                headers: { "Accept": "application/json" }
+            });
+            if (resTitleOnly.ok) {
+                const dataTitle = await resTitleOnly.json();
+                const doc = dataTitle?.docs?.find((d: any) => d.cover_i);
+                if (doc?.cover_i) {
+                    resolvedUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
+                    console.log(`[COVER-ENGINE] ✅ TIER 4 FALLBACK SUCCESS (Open Library Title Search): ${resolvedUrl}`);
+                }
             }
+        } catch (e: any) {
+            console.warn(`[COVER-ENGINE] ⚠️ Tier 4 (Title Fallback) failed: ${e.message || e}`);
         }
-    } catch (e: any) {
-        console.warn(`[COVER-ENGINE] ⚠️ Tier 4 (Title Fallback) failed: ${e.message || e}`);
     }
 
-    console.log(`[COVER-ENGINE] ℹ️ All cover artwork tiers exhausted for "${title}". Returning default placeholder.`);
-    return null;
+    if (resolvedUrl && bookFolder) {
+        try {
+            if (!fs.existsSync(bookFolder)) {
+                fs.mkdirSync(bookFolder, { recursive: true });
+            }
+            const imgRes = await fetch(resolvedUrl);
+            if (imgRes.ok) {
+                const buffer = await imgRes.arrayBuffer();
+                fs.writeFileSync(path.join(bookFolder, "cover.jpg"), Buffer.from(buffer));
+                console.log(`[COVER-ENGINE] 💾 Downloaded cover to ${path.join(bookFolder, "cover.jpg")}`);
+                return "local";
+            }
+        } catch (e) {
+            console.warn("[COVER-ENGINE] Failed to download cover to disk:", e);
+        }
+    }
+
+    if (!resolvedUrl) {
+        console.log(`[COVER-ENGINE] ℹ️ All cover artwork tiers exhausted for "${title}". Returning default placeholder.`);
+    }
+    return resolvedUrl;
 }
 
 // ============================================================================
@@ -2696,6 +2726,7 @@ function purgeEmptyDirectories(dir: string) {
                     file === 'Thumbs.db' || 
                     file === 'desktop.ini' || 
                     file === '.nomedia' ||
+                    file === '.portalarr-missing' ||
                     file.endsWith('.jpg') ||
                     file.endsWith('.png') ||
                     file.endsWith('.nfo') ||
@@ -3634,6 +3665,64 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                     data: { status: "Downloaded" }
                 });
                 return;
+            }
+        }
+        
+        // ------------------------------------------------------------------------------------------
+        // PORTALARR-RADARR HYBRID: Create "Missing" Book Stub in Library immediately upon approval
+        // ------------------------------------------------------------------------------------------
+        if (targetLib && resolvedLibId) {
+            try {
+                const sanitize = (str: string) => str.replace(/[<>:"/\|?*\x00-\x1F]/g, "").trim();
+                const seriesTag = req?.series ? `[${sanitize(req.series)}${req.volumeNumber ? ' ' + String(req.volumeNumber).padStart(2, '0') : ''}] ` : "";
+                const cleanAuthorStr = sanitize(author || "Unknown Author");
+                const cleanTitleStr = sanitize(title);
+                
+                const folderPath = path.join(targetLib.path, cleanAuthorStr, `${seriesTag}${cleanTitleStr}`);
+                
+                if (!fs.existsSync(folderPath)) {
+                    fs.mkdirSync(folderPath, { recursive: true });
+                }
+                
+                // Add immunity marker for zombie sweeper
+                fs.writeFileSync(path.join(folderPath, '.portalarr-missing'), '');
+
+                // Only create DB stub if not already exists (just in case)
+                const existingStub = await prisma.book.findFirst({
+                    where: { filePath: folderPath }
+                });
+
+                if (!existingStub) {
+                    const newBook = await prisma.book.create({
+                        data: {
+                            title: title,
+                            author: author || "Unknown Author",
+                            series: req?.series || null,
+                            volumeNumber: req?.volumeNumber ? String(req.volumeNumber) : null,
+                            filePath: folderPath,
+                            fileType: 'missing',
+                            fileSize: 0,
+                            mediaType: reqMediaType,
+                            libraryId: resolvedLibId,
+                            coverUrl: req?.coverUrl || null
+                        }
+                    });
+
+                    // Fire off background cover fetcher for the missing stub
+                    (async () => {
+                        try {
+                            const localCov = await fetchBookCover(title, author || "Unknown Author", reqMediaType, folderPath);
+                            if (localCov === "local") {
+                                await prisma.book.update({ 
+                                    where: { id: newBook.id }, 
+                                    data: { coverUrl: `/api/cover?id=${newBook.id}` } 
+                                });
+                            }
+                        } catch (e) {}
+                    })();
+                }
+            } catch (stubErr) {
+                console.warn("[AUTO-DOWNLOAD] Failed to generate missing book stub:", stubErr);
             }
         }
         
