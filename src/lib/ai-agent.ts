@@ -107,6 +107,8 @@ export async function resolveMetadataWithAI(
     // 1. Google Gemini Provider
     if ((provider === "gemini" || provider === "google") && rawKey) {
         try {
+            // Apply a natural 4-second delay for Gemini Free Tier to avoid hitting the 15 Requests Per Minute limit during bulk scans
+            await new Promise(r => setTimeout(r, 4000));
             const aiRes = await callGeminiAI(rawFilename, mediaType, rawKey, modelName);
             if (aiRes) {
                 console.log(`[AI-AGENT] ✨ Gemini AI Resolved "${aiRes.title}" by "${aiRes.author}" [Series: ${aiRes.series || "N/A"} #${aiRes.volumeNumber || "N/A"}] (Model: ${aiRes.providerUsed})`);
