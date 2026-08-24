@@ -1702,21 +1702,7 @@ export async function updateBook(id: string, title: string, author: string, cove
     // 3. Revalidate UI immediately so it feels snappy
     revalidatePath("/library");
 
-    // 4. Fire-and-forget the heavy Cover Art API calls in the background!
-    if (!coverUrl) {
-        prisma.book.findUnique({ where: { id } }).then(book => {
-            if (book) {
-                fetchBookCover(title, author, book.mediaType || "ebook").then(fetched => {
-                    if (fetched) {
-                        prisma.book.updateMany({
-                            where: { id },
-                            data: { coverUrl: fetched }
-                        }).catch(()=>{});
-                    }
-                }).catch(()=>{});
-            }
-        }).catch(()=>{});
-    }
+    // Cover fetching removed to prevent Next.js from holding the HTTP connection open
 }
 
 async function renameBookFileOnDisk(bookId: string): Promise<string> {
