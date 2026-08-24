@@ -272,8 +272,10 @@ function SettingsPageContent() {
         setTestAiLoading(true);
         setTestAiResult(null);
         setTestAiErr("");
+        const keyInput = document.querySelector('input[name="aiApiKey"]') as HTMLInputElement;
+        const key = keyInput ? keyInput.value : "";
         try {
-            const res = await testAiAgentConnection();
+            const res = await testAiAgentConnection(undefined, aiProviderSelect, key, aiModelInput);
             if (res.success && res.result) {
                 setTestAiResult(res.result);
             } else {

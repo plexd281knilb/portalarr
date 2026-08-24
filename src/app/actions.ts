@@ -5001,13 +5001,13 @@ export async function saveAiAgentSettings(formData: FormData) {
     }
 }
 
-export async function testAiAgentConnection(sampleText?: string) {
+export async function testAiAgentConnection(sampleText?: string, tempProvider?: string, tempKey?: string, tempModel?: string) {
     try {
         await verifyAdmin();
         const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
         const targetSample = sampleText || "J.R.R.Tolkien-Lord.of.the.Rings.01-The.Hobbit.Rob.Inglis-PoF";
         console.log(`[AI-AGENT-TEST] 🤖 Testing AI Metadata Agent with query: "${targetSample}"...`);
-        const result = await resolveMetadataWithAI(targetSample, "audiobook", true);
+        const result = await resolveMetadataWithAI(targetSample, "audiobook", true, tempProvider, tempKey, tempModel);
         console.log(`[AI-AGENT-TEST] ✨ Test Result: "${result.title}" by "${result.author}" [Series: ${result.series || "N/A"} #${result.volumeNumber || "N/A"}] via ${result.providerUsed}`);
         return { success: true, result };
     } catch (e: any) {

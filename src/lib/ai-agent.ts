@@ -93,13 +93,16 @@ Example output:
 export async function resolveMetadataWithAI(
     rawFilename: string,
     mediaType: string = "ebook",
-    throwErrors: boolean = false
+    throwErrors: boolean = false,
+    overrideProvider?: string,
+    overrideKey?: string,
+    overrideModel?: string
 ): Promise<AIResolvedMetadata> {
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
     
-    const provider = settings?.aiProvider || "default";
-    const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
-    const modelName = settings?.aiModel || "gemini-1.5-flash";
+    const provider = overrideProvider || settings?.aiProvider || "default";
+    const rawKey = overrideKey !== undefined ? overrideKey : (settings?.aiApiKey ? decryptData(settings.aiApiKey) : "");
+    const modelName = overrideModel || settings?.aiModel || "gemini-1.5-flash";
 
     console.log(`[AI-AGENT] 🤖 Querying AI Metadata Engine for "${rawFilename}" (Type: ${mediaType}, Engine: ${provider})...`);
 
