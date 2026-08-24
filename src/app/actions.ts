@@ -4071,6 +4071,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req.coverUrl);
     const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
     
+    let downloadId = "";
     if (protocol === "usenet") {
         const sabApp = await prisma.mediaApp.findFirst({
             where: { type: "sabnzbd" }
@@ -4093,6 +4094,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
         if (json.status === false) {
             throw new Error(json.error || "SABnzbd failed to accept the NZB file");
         }
+        downloadId = json.nzo_ids?.[0] || "";
     } else {
         const qbitApp = await prisma.mediaApp.findFirst({
             where: { type: "qbittorrent" }
@@ -4146,11 +4148,11 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     
     await prisma.bookRequest.update({
         where: { id: requestId },
-        data: { status: "Approved" }
+        data: { status: "Downloading" }
     });
 
-    // Auto-launch monitoring and importing for the newly grabbed release
-    autoDownloadBookRequest(requestId, req.title, req.author || "").catch(err => {
+    // Launch background downloader polling for the manually grabbed release
+    monitorAndRetryDownload(requestId, [{ title: title, protocol: protocol, downloadUrl: downloadUrl }], 0, downloadId).catch(err => {
         console.error("[RE-GRAB] Auto download monitor failed:", err);
     });
 
@@ -4247,7 +4249,8 @@ async function checkQbitStatus(qbitUrl: string, releaseTitle: string): Promise<{
 
 async function deleteDownload(protocol: string, downloadId: string, title: string): Promise<boolean> {
     try {
-        if (protocol === "usenet") {
+        let downloadId = "";
+    if (protocol === "usenet") {
             const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
             if (sabApp) {
                 const sabUrl = cleanUrl(sabApp.url);
