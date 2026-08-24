@@ -2524,6 +2524,13 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
 
     if (!title || !title.trim()) {
         title = clean || rawBase.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
+        // The fallback might contain unclosed brackets from truncation, which causes exponential loops. Strip them.
+        title = title.replace(/\[[^\]]*$/, "").replace(/\([^)]*$/, "").trim();
+        // Aggressively strip complete brackets from the fallback too, to prevent series loops
+        title = title.replace(/\[[^\]]+\]/g, "").trim();
+    }
+    if (!title || !title.trim()) {
+        title = "Unknown Title";
     }
 
     return {
