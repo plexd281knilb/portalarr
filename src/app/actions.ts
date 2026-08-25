@@ -2489,7 +2489,7 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
                 let partB = parts.slice(1).join(" - ");
                 partB = partB.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
 
-                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/;
+                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z'-]+|[A-Z][a-z]+(?:\s+(?:[A-Z]\.?|[A-Z][a-z]+)){1,3})$/;
                 const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partB);
                 const isPartAAuthor = authorPattern.test(partA);
 
@@ -2697,7 +2697,7 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
                 author = "Unknown Author";
                 title = fileTitle;
             } else {
-                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/;
+                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z'-]+|[A-Z][a-z]+(?:\s+(?:[A-Z]\.?|[A-Z][a-z]+)){1,3})$/;
                 if (authorPattern.test(folder)) {
                     author = folder;
                     title = fileTitle;
@@ -3133,6 +3133,18 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         existing = crossMatch;
                     }
                 }
+                
+                if (existing && matchedDbBookIds.has(existing.id)) {
+                    const rowIsEpub = (existing.filePath || "").toLowerCase().endsWith(".epub");
+                    const newIsEpub = ext === ".epub";
+                    if (rowIsEpub && !newIsEpub) {
+                        continue; // Skip worse duplicate file
+                    } else if (newIsEpub && !rowIsEpub) {
+                        // Allow stealing the row
+                    } else if (stats.size <= (existing.fileSize || 0)) {
+                        continue; // Skip smaller/equal duplicate file
+                    }
+                }
 
                 // ==== AUTO-ORGANIZE ALL ITEMS (NEW & EXISTING) ====
                 let orgTitle = "";
@@ -3238,11 +3250,19 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     if (targetTitleNorm.length > 3) {
                         const targetMediaType = library.mediaType || "ebook";
                         existing = dbBooks.find(b => {
-                            if (matchedDbBookIds.has(b.id)) return false;
                             const dbMediaType = b.mediaType || "ebook";
                             if (dbMediaType !== targetMediaType) return false;
                             const dbTitleNorm = getNormTitle(b.title || "");
-                            return dbTitleNorm === targetTitleNorm;
+                            if (dbTitleNorm !== targetTitleNorm) return false;
+                            
+                            if (matchedDbBookIds.has(b.id)) {
+                                const rowIsEpub = (b.filePath || "").toLowerCase().endsWith(".epub");
+                                const newIsEpub = ext === ".epub";
+                                if (rowIsEpub && !newIsEpub) return false;
+                                if (newIsEpub && !rowIsEpub) return true;
+                                if (stats.size <= (b.fileSize || 0)) return false;
+                            }
+                            return true;
                         });
                     }
                 }

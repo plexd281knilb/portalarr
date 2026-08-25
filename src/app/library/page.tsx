@@ -2854,7 +2854,7 @@ function BookLibraryPageContent() {
                                     onClick={() => handleFetchMissingBooks(seriesName, seriesBooks[0].author || "Unknown")}
                                   >
                                     <Search className="h-3 w-3 mr-1" />
-                                    Find Missing Books
+                                    Show Missing Books
                                   </Button>
                                 )}
                               </h3>
