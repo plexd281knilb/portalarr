@@ -535,8 +535,17 @@ function SettingsPageContent() {
                                         <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort || ""} placeholder="587"/></div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2"><Label>User / Email</Label><Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/></div>
-                                        <div className="space-y-2"><Label>Password</Label><Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass || ""}/></div>
+                                        <div className="space-y-2">
+                                            <Label>User / Email</Label>
+                                            <Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Password</Label>
+                                            <Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass || ""}/>
+                                            <p className="text-[10px] text-muted-foreground leading-tight">
+                                                For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
+                                            </p>
+                                        </div>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Sender Email Address (From)</Label>
@@ -566,6 +575,9 @@ function SettingsPageContent() {
                                             defaultValue={systemSettings.mainPlexToken || ""} 
                                             placeholder="xxxxxxxxxxxxxxxxxxxx" 
                                         />
+                                        <p className="text-[10px] text-muted-foreground mt-1">
+                                            Sign in to Plex Web, open the XML for any media item, and copy the <code>X-Plex-Token</code> from the URL. <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" className="text-primary hover:underline">Read the official guide</a>.
+                                        </p>
                                     </div>
 
                                     <div className="flex flex-wrap gap-2 pt-2">
@@ -781,7 +793,11 @@ function SettingsPageContent() {
                                                 placeholder="AIzaSy..."
                                                 className="bg-black/50 border-white/10 text-white placeholder:text-gray-500"
                                             />
-                                            <p className="text-xs text-gray-500">Leaving this blank will fall back to the `GOOGLE_BOOKS_API_KEY` environment variable, or anonymous IP rate limits.</p>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                To get a key, <a href="https://console.cloud.google.com/apis/library/books.googleapis.com" target="_blank" className="text-primary hover:underline">enable the Books API</a> in Google Cloud Console and create an API Key under Credentials.
+                                                <br />
+                                                Leaving this blank will fall back to the `GOOGLE_BOOKS_API_KEY` environment variable, or anonymous IP rate limits.
+                                            </p>
                                         </div>
                                         <Button type="submit" size="sm">Save Settings</Button>
                                     </form>
@@ -870,6 +886,13 @@ function SettingsPageContent() {
                                                         defaultValue={aiSettings.aiApiKey || ""}
                                                         placeholder={aiProviderSelect === "gemini" ? "AIzaSy..." : "sk-..."}
                                                     />
+                                                    <p className="text-[10px] text-muted-foreground leading-tight mt-1">
+                                                        {aiProviderSelect === "gemini" ? (
+                                                            <>Get a free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-primary hover:underline">Google AI Studio</a>.</>
+                                                        ) : (
+                                                            <>Get an OpenAI API key from the <a href="https://platform.openai.com/api-keys" target="_blank" className="text-primary hover:underline">OpenAI Platform dashboard</a>.</>
+                                                        )}
+                                                    </p>
                                                 </div>
 
                                                 <div className="space-y-2">
@@ -1075,7 +1098,10 @@ function SettingsPageContent() {
                                     <div className="grid gap-2">
                                         <Input name="name" placeholder="Friendly Name (e.g. Main Plex)" required className="h-9 text-sm" defaultValue={editingTautulli?.name} />
                                         <Input name="url" placeholder="URL (http://192.168.1.50:8181)" required className="h-9 text-sm font-mono" defaultValue={editingTautulli?.url} />
-                                        <Input name="apiKey" placeholder="Tautulli API Key" required className="h-9 text-sm font-mono" defaultValue={editingTautulli?.apiKey} />
+                                        <div>
+                                            <Input name="apiKey" placeholder="Tautulli API Key" required className="h-9 text-sm font-mono" defaultValue={editingTautulli?.apiKey} />
+                                            <p className="text-[10px] text-muted-foreground mt-1">Found in Tautulli Settings → Web Interface → API.</p>
+                                        </div>
                                     </div>
                                     <div className="flex gap-2 mt-2">
                                         <Button type="submit" size="sm" className="flex-1 font-semibold">{editingTautulli ? "Save Changes" : "Add Tautulli Instance"}</Button>
@@ -1256,7 +1282,10 @@ function SettingsPageContent() {
                                             <Input name="externalUrl" placeholder="https://app.com" className="h-9 text-sm font-mono" defaultValue={editingApp?.externalUrl} />
                                         </div>
                                     </div>
-                                    <Input name="apiKey" placeholder="API Key / Password" className="h-9 text-sm font-mono" defaultValue={editingApp?.apiKey} />
+                                    <div>
+                                        <Input name="apiKey" placeholder="API Key / Password" className="h-9 text-sm font-mono" defaultValue={editingApp?.apiKey} />
+                                        <p className="text-[10px] text-muted-foreground mt-1">Found in the app's Settings → General (or Settings → Security) tab.</p>
+                                    </div>
                                     
                                     <div className="space-y-2 border-t pt-3 mt-3">
                                         <div className="flex items-center space-x-2">
