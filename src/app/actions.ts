@@ -5076,9 +5076,17 @@ async function _backgroundAiScan() {
     let updatedCount = 0;
     for (let i = 0; i < books.length; i++) {
         const b = books[i];
-        const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
-        const cleanTarget = parseFilenameMetadata(rawTarget).title;
-        console.log(`[AI-BATCH-SCAN] 🤖 [${i + 1}/${books.length}] Analyzing "${b.title}" (Raw: ${rawTarget})...`);
+        let cleanTarget = b.title;
+        if (b.filePath) {
+            const ext = path.extname(b.filePath);
+            const file = path.basename(b.filePath);
+            const lib = await prisma.library.findUnique({ where: { id: b.libraryId } });
+            if (lib) {
+                const extracted = extractMetadataFromPath(b.filePath, file, ext, lib.path);
+                cleanTarget = extracted.author !== "Unknown Author" ? `${extracted.author} - ${extracted.title}` : extracted.title;
+            }
+        }
+        console.log(`[AI-BATCH-SCAN] 🤖 [${i + 1}/${books.length}] Analyzing "${b.title}" (Query: ${cleanTarget})...`);
         
         try {
             const aiResult = await resolveMetadataWithAI(cleanTarget, b.mediaType || "ebook");
