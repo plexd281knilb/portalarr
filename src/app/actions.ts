@@ -430,6 +430,18 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
             const googleCover = await fetchGoogleBooksCover(title, author);
             if (googleCover) {
                 const c = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
+                
+                try {
+                    const headRes = await fetch(c, { method: "HEAD" });
+                    if (headRes.ok) {
+                        const len = headRes.headers.get("content-length");
+                        if (len === "9103" || len === "9102") {
+                            console.log(`[COVER-ENGINE] ⚠️ REJECTED (Google Books): Image is the generic 'Not Available' placeholder.`);
+                            return null;
+                        }
+                    }
+                } catch (e) {}
+
                 console.log(`[COVER-ENGINE] ✅ SUCCESS (Google Books): ${c}`);
                 return c;
             }
