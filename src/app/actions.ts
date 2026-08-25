@@ -5038,7 +5038,7 @@ export async function resolveBookWithAI(bookId: string) {
         }
         console.log(`[AI-SINGLE-RESOLVE] 🤖 Resolving AI metadata for book ID ${bookId} ("${book.title}")...`);
         const aiResult = await resolveMetadataWithAI(cleanTarget, book.mediaType || "ebook");
-        console.log(`[AI-SINGLE-RESOLVE] ✨ Resolved: "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"}] via ${aiResult.providerUsed}`);
+        console.log(`[AI-SINGLE-RESOLVE] ✨ Resolved: "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || book.series || "N/A"}] via ${aiResult.providerUsed}`);
 
         let coverUrl = book.coverUrl;
         if (aiResult.coverQuery || aiResult.title) {
