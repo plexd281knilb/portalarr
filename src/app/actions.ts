@@ -321,7 +321,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
 async function fetchAudibleCover(title: string, author: string): Promise<string | null> {
     try {
         const query = `${title} ${author && author !== "Unknown Author" ? author : ""}`.trim();
-        const url = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,product_extended_attrs,product_desc,media,contributors&num_results=3`;
+        const url = `https://api.audible.com/1.0/catalog/products?keywords=${encodeURIComponent(query)}&response_groups=product_attrs,product_extended_attrs,product_desc,media,contributors&num_results=3`;
         const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
         if (res && res.ok) {
             const data = await res.json();
