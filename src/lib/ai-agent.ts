@@ -24,6 +24,7 @@ export async function assignVolumeNumbersWithAI(
     const modelName = settings?.aiModel || "gemini-1.5-flash";
 
     if ((provider === "gemini" || provider === "google") && rawKey) {
+        await new Promise(r => setTimeout(r, 4000));
         return await callGeminiAIBulkVolumes(seriesName, author, bookTitles, rawKey, modelName);
     }
     return {};
@@ -334,6 +335,7 @@ export async function analyzeAudiobookChaptersWithAI(
 
     if ((provider === "gemini" || provider === "google") && rawKey) {
         try {
+            await new Promise(r => setTimeout(r, 4000));
             const aiRes = await callGeminiAIForChapters(bookTitle, bookAuthor, fileList, rawKey, modelName);
             if (aiRes && aiRes.length > 0) return aiRes;
         } catch (e: any) {
