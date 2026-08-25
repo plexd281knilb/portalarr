@@ -1812,18 +1812,18 @@ export async function renameBookFileOnDisk(bookId: string): Promise<string> {
         if (!book || !book.library) return "";
         if (!fs.existsSync(book.filePath)) return book.filePath;
 
-        const ext = path.extname(book.filePath);
-        const oldDir = path.dirname(book.filePath);
+        const isDir = fs.statSync(book.filePath).isDirectory();
+        const ext = isDir ? "" : path.extname(book.filePath);
         
         let safeAuthor = (book.author && book.author !== "Unknown Author") 
             ? book.author.replace(/[\/\\?%*:|"<>]/g, "").trim()
             : "";
-        let safeTitle = book.title.replace(/[\\/\\\\?%*:|"<>]/g, "").trim();
+        let safeTitle = book.title.replace(/[\/\\?%*:|"<>]/g, "").trim();
         safeTitle = parseFilenameMetadata(safeTitle).title; // Strip any baked-in tags to prevent exponential duplication
 
         let seriesTag = "";
         if (book.series) {
-            let safeSeries = book.series.replace(/[\\/\\\\?%*:|"\[\]<>]/g, "").trim();
+            let safeSeries = book.series.replace(/[\/\\?%*:|"\\[\\]<>]/g, "").trim();
             let vol = book.volumeNumber ? book.volumeNumber.replace(/[^a-zA-Z0-9.\-]/g, "").trim() : "01";
             if (vol.length === 1) vol = "0" + vol;
             seriesTag = `[${safeSeries} ${vol}] `;
@@ -1834,60 +1834,82 @@ export async function renameBookFileOnDisk(bookId: string): Promise<string> {
         if (safeTitleWithSeries.length > 100) safeTitleWithSeries = safeTitleWithSeries.substring(0, 100).trim();
         if (safeAuthor.length > 50) safeAuthor = safeAuthor.substring(0, 50).trim();
 
-        let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitleWithSeries}${ext}` : `${safeTitleWithSeries}${ext}`;
-        
-        let currentFilePath = book.filePath;
         const newDir = path.join(book.library.path, safeAuthor || "Unknown Author", safeTitleWithSeries);
-        // If the folder structure needs to change (e.g. Author was updated in UI)
-        if (oldDir !== newDir) {
-            if (!fs.existsSync(newDir)) {
-                fs.mkdirSync(newDir, { recursive: true });
+        let currentFilePath = book.filePath;
+
+        if (isDir) {
+            // Audiobook grouped folder
+            if (currentFilePath !== newDir) {
+                if (!fs.existsSync(newDir)) {
+                    fs.mkdirSync(path.dirname(newDir), { recursive: true });
+                }
+                try {
+                    fs.renameSync(currentFilePath, newDir);
+                    currentFilePath = newDir;
+                } catch (e: any) {
+                    console.error(`[FILE-RENAME] Failed to rename audiobook directory to ${newDir}:`, e.message);
+                }
             }
-            // Safely move all files from oldDir to newDir
-            try {
-                const files = fs.readdirSync(oldDir);
-                for (const f of files) {
-                    const src = path.join(oldDir, f);
-                    const dst = path.join(newDir, f);
-                    if (fs.existsSync(src)) {
-                        fs.renameSync(src, dst);
-                        if (src === currentFilePath) {
-                            currentFilePath = dst; // Track the main file's new location
+            
+            if (currentFilePath !== book.filePath) {
+                await prisma.book.updateMany({
+                    where: { id: bookId },
+                    data: { filePath: currentFilePath }
+                });
+            }
+            return currentFilePath;
+
+        } else {
+            // eBook single file
+            const oldDir = path.dirname(book.filePath);
+            let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitleWithSeries}${ext}` : `${safeTitleWithSeries}${ext}`;
+            
+            if (oldDir !== newDir) {
+                if (!fs.existsSync(newDir)) {
+                    fs.mkdirSync(newDir, { recursive: true });
+                }
+                try {
+                    const files = fs.readdirSync(oldDir);
+                    for (const f of files) {
+                        const src = path.join(oldDir, f);
+                        const dst = path.join(newDir, f);
+                        if (fs.existsSync(src)) {
+                            fs.renameSync(src, dst);
+                            if (src === currentFilePath) {
+                                currentFilePath = dst;
+                            }
                         }
                     }
+                    cleanUpEmptyFolder(oldDir);
+                } catch (moveErr: any) {
+                    console.error(`[FILE-RENAME] Failed to move folder to ${newDir}:`, moveErr.message);
                 }
-                // Cleanup old dir if empty
-                cleanUpEmptyFolder(oldDir);
-            } catch (moveErr: any) {
-                console.error(`[FILE-RENAME] Failed to move folder to ${newDir}:`, moveErr.message);
             }
-        }
 
-        const finalPath = path.join(newDir, newFileName);
-        
-        if (currentFilePath !== finalPath && fs.existsSync(currentFilePath)) {
-            console.log(`[FILE-RENAME] Renaming on-disk file: ${currentFilePath} -> ${finalPath}`);
-            fs.renameSync(currentFilePath, finalPath);
+            const finalPath = path.join(newDir, newFileName);
             
-            await prisma.book.updateMany({
-                where: { id: bookId },
-                data: { filePath: finalPath }
-            });
+            if (currentFilePath !== finalPath && fs.existsSync(currentFilePath)) {
+                console.log(`[FILE-RENAME] Renaming on-disk file: ${currentFilePath} -> ${finalPath}`);
+                fs.renameSync(currentFilePath, finalPath);
+                
+                await prisma.book.updateMany({
+                    where: { id: bookId },
+                    data: { filePath: finalPath }
+                });
+                return finalPath;
+            } else if (currentFilePath !== book.filePath) {
+                await prisma.book.updateMany({
+                    where: { id: bookId },
+                    data: { filePath: currentFilePath }
+                });
+                return currentFilePath;
+            }
+            
             return finalPath;
-        } else if (currentFilePath !== book.filePath) {
-            // Even if the filename didn't change, the folder did!
-            await prisma.book.updateMany({
-                where: { id: bookId },
-                data: { filePath: currentFilePath }
-            });
-            return currentFilePath;
         }
-        
-        return book.filePath;
-    } catch (err: any) {
-        console.error(`[FILE-RENAME] Failed to rename file for book ${bookId}:`, err.message);
-        const book = await prisma.book.findUnique({ where: { id: bookId } });
-        return book ? book.filePath : "";
+    } catch (error: any) {
+        console.error("[FILE-RENAME] Failed to process rename:", error);
+        return "";
     }
 }
 
