@@ -226,6 +226,7 @@ function SettingsPageContent() {
     };
 
     // AI Agent States
+    const [googleBooksKey, setGoogleBooksKey] = useState<string>("");
     const [aiSettings, setAiSettings] = useState<any>({
         aiProvider: "default",
         aiApiKey: "",
@@ -329,6 +330,7 @@ function SettingsPageContent() {
             setUsers(u || []);
             setSystemSettings(s || {});
             setInputDownloadsPath(s?.downloadsPath || "/downloads");
+            setGoogleBooksKey(s?.googleBooksApiKey || "");
             setTautulli(t || []);
             setGlances(g || []);
             setMediaApps(m || []);
@@ -752,6 +754,36 @@ function SettingsPageContent() {
                                         <Button type="submit" variant="secondary" className="w-full font-semibold">
                                             Save Automation Settings
                                         </Button>
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Google Books API</CardTitle>
+                                    <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <form onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        const formData = new FormData(e.currentTarget);
+                                        const res = await saveJobSettings(formData);
+                                        setSaveAiMsg("Google Books settings saved successfully!");
+                                        setTimeout(() => setSaveAiMsg(""), 4000);
+                                    }} className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label>API Key</Label>
+                                            <Input 
+                                                name="googleBooksApiKey"
+                                                type="password"
+                                                value={googleBooksKey}
+                                                onChange={(e) => setGoogleBooksKey(e.target.value)}
+                                                placeholder="AIzaSy..."
+                                                className="bg-black/50 border-white/10 text-white placeholder:text-gray-500"
+                                            />
+                                            <p className="text-xs text-gray-500">Leaving this blank will fall back to the `GOOGLE_BOOKS_API_KEY` environment variable, or anonymous IP rate limits.</p>
+                                        </div>
+                                        <Button type="submit" size="sm">Save Settings</Button>
                                     </form>
                                 </CardContent>
                             </Card>

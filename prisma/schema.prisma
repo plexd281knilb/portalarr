@@ -30,6 +30,7 @@ model Settings {
   aiApiKey           String?
   aiModel            String?   @default("gemini-2.5-flash")
   aiAutoResolve      Boolean   @default(true)
+  googleBooksApiKey  String?
 }
 
 model TautulliInstance {

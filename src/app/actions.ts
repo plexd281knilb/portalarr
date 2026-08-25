@@ -148,10 +148,13 @@ async function mobiBounceEpub(filePath: string): Promise<boolean> {
 }
 
 async function fetchGoogleBooksCover(title: string, author: string): Promise<string | null> {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    const dbKey = settings?.googleBooksApiKey;
+    const activeKey = dbKey || process.env.GOOGLE_BOOKS_API_KEY;
+    const gbKey = activeKey ? `&key=${activeKey}` : "";
     try {
         const rawQuery = `${title} ${author}`;
         const query = cleanSearchQuery(rawQuery);
-        const gbKey = process.env.GOOGLE_BOOKS_API_KEY ? `&key=${process.env.GOOGLE_BOOKS_API_KEY}` : "";
         const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=1${gbKey}`;
         const res = await fetch(url, { headers: { "Accept": "application/json" } });
         if (res.ok) {
@@ -270,7 +273,9 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         // 3. Failover: Google Books
         if (books.length === 0) {
             try {
-                const gbKey = process.env.GOOGLE_BOOKS_API_KEY ? `&key=${process.env.GOOGLE_BOOKS_API_KEY}` : "";
+                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
+                const gbKey = activeKey ? `&key=${activeKey}` : "";
                 const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=15${gbKey}`;
                 const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
                 if (gRes && gRes.ok) {
@@ -543,11 +548,15 @@ export async function saveJobSettings(formData: FormData) {
   await verifyAdmin();
   const autoSyncInterval = Number(formData.get("autoSyncInterval"));
   const downloadsPath = formData.get("downloadsPath") as string || "/downloads";
+  const googleBooksApiKey = (formData.get("googleBooksApiKey") as string) || null;
   
+  const updateData: any = { autoSyncInterval, downloadsPath };
+  if (googleBooksApiKey !== null) updateData.googleBooksApiKey = googleBooksApiKey;
+
   await prisma.settings.upsert({
     where: { id: "global" },
-    update: { autoSyncInterval, downloadsPath },
-    create: { id: "global", autoSyncInterval, downloadsPath },
+    update: updateData,
+    create: { id: "global", autoSyncInterval, downloadsPath, googleBooksApiKey: googleBooksApiKey || "" },
   });
   revalidatePath("/settings");
 }
