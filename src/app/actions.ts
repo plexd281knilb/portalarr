@@ -317,6 +317,25 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
     }
 }
 
+
+async function fetchAudibleCover(title: string, author: string): Promise<string | null> {
+    try {
+        const query = `${title} ${author && author !== "Unknown Author" ? author : ""}`.trim();
+        const url = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,product_extended_attrs,product_desc,media,contributors&num_results=3`;
+        const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
+        if (res && res.ok) {
+            const data = await res.json();
+            if (data && data.products && data.products.length > 0) {
+                const img = data.products[0]?.product_images?.[500];
+                if (img) {
+                    return img.replace("_SL500_", "_SL1000_");
+                }
+            }
+        }
+    } catch (e: any) {}
+    return null;
+}
+
 async function fetchITunesCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
     try {
         const cleanAuthor = author && author !== "Unknown Author" ? author : "";
@@ -342,7 +361,7 @@ async function fetchITunesCover(title: string, author: string, mediaType: string
             cleanTitle
         ];
 
-        const entities = mediaType === "audiobook" ? ["audiobook", "ebook"] : ["ebook", "audiobook"];
+        const entities = [mediaType === "audiobook" ? "audiobook" : "ebook"];
 
         for (const entity of entities) {
             for (const query of queries) {
@@ -376,79 +395,88 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
     console.log(`[COVER-ENGINE] 🖼️ Resolving cover artwork for "${title}" by "${author}" (MediaType: ${mediaType})...`);
 
     if (bookFolder) {
-        if (fs.existsSync(path.join(bookFolder, "cover.jpg"))) return "local";
-        if (fs.existsSync(path.join(bookFolder, "cover.png"))) return "local";
+        if (fs.existsSync(require("path").join(bookFolder, "cover.jpg"))) return "local";
+        if (fs.existsSync(require("path").join(bookFolder, "cover.png"))) return "local";
     }
 
     let resolvedUrl: string | null = null;
+    const isAudiobook = mediaType === "audiobook";
 
-    // Tier 1: iTunes HD API (600x600)
-    try {
-        const iTunesCover = await fetchITunesCover(title, author, mediaType);
-        if (iTunesCover) {
-            console.log(`[COVER-ENGINE] ✅ TIER 1 SUCCESS (iTunes HD): ${iTunesCover}`);
-            resolvedUrl = iTunesCover;
-        }
-    } catch (e: any) {
-        console.warn(`[COVER-ENGINE] ⚠️ Tier 1 (iTunes) failed: ${e.message || e}`);
-    }
-
-    // Tier 2: Open Library API
-    if (!resolvedUrl) {
+    // Reusable fetchers
+    const tryITunes = async () => {
         try {
-            const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
+            const iTunesCover = await fetchITunesCover(title, author, mediaType);
+            if (iTunesCover) {
+                console.log(`[COVER-ENGINE] ✅ SUCCESS (iTunes HD): ${iTunesCover}`);
+                return iTunesCover;
+            }
+        } catch (e: any) {}
+        return null;
+    };
+
+    const tryGoogleBooks = async () => {
+        try {
+            const googleCover = await fetchGoogleBooksCover(title, author);
+            if (googleCover) {
+                const c = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
+                console.log(`[COVER-ENGINE] ✅ SUCCESS (Google Books): ${c}`);
+                return c;
+            }
+        } catch (e: any) {}
+        return null;
+    };
+
+    const tryOpenLibrary = async (titleOnly: boolean = false) => {
+        try {
+            const query = !titleOnly && author && author !== "Unknown Author" ? `${title} ${author}` : title;
             const cleanedQuery = cleanSearchQuery(query);
-            const res = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
-                headers: { "Accept": "application/json" }
-            });
+            const url = titleOnly 
+                ? `https://openlibrary.org/search.json?title=${encodeURIComponent(cleanedQuery)}&limit=3&fields=cover_i`
+                : `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`;
+            
+            const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
             if (res.ok) {
                 const data = await res.json();
                 const docWithCover = data?.docs?.find((d: any) => d.cover_i);
                 if (docWithCover?.cover_i) {
-                    resolvedUrl = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
-                    console.log(`[COVER-ENGINE] ✅ TIER 2 SUCCESS (Open Library): ${resolvedUrl}`);
+                    const c = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
+                    console.log(`[COVER-ENGINE] ✅ SUCCESS (Open Library${titleOnly ? ' Fallback' : ''}): ${c}`);
+                    return c;
                 }
             }
-        } catch (e: any) {
-            console.warn(`[COVER-ENGINE] ⚠️ Tier 2 (Open Library) failed: ${e.message || e}`);
-        }
-    }
+        } catch (e: any) {}
+        return null;
+    };
 
-    // Tier 3: Google Books API
-    if (!resolvedUrl) {
+    const tryAudible = async () => {
         try {
-            const googleCover = await fetchGoogleBooksCover(title, author);
-            if (googleCover) {
-                resolvedUrl = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
-                console.log(`[COVER-ENGINE] ✅ TIER 3 SUCCESS (Google Books): ${resolvedUrl}`);
+            const c = await fetchAudibleCover(title, author);
+            if (c) {
+                console.log(`[COVER-ENGINE] ✅ SUCCESS (Audible): ${c}`);
+                return c;
             }
-        } catch (e: any) {
-            console.warn(`[COVER-ENGINE] ⚠️ Tier 3 (Google Books) failed: ${e.message || e}`);
-        }
-    }
+        } catch (e: any) {}
+        return null;
+    };
 
-    // Tier 4: Open Library Title-Only Fallback
-    if (!resolvedUrl) {
-        try {
-            const cleanTitleOnly = cleanSearchQuery(title);
-            const resTitleOnly = await fetchWithRetry(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
-                headers: { "Accept": "application/json" }
-            });
-            if (resTitleOnly.ok) {
-                const dataTitle = await resTitleOnly.json();
-                const doc = dataTitle?.docs?.find((d: any) => d.cover_i);
-                if (doc?.cover_i) {
-                    resolvedUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
-                    console.log(`[COVER-ENGINE] ✅ TIER 4 FALLBACK SUCCESS (Open Library Title Search): ${resolvedUrl}`);
-                }
-            }
-        } catch (e: any) {
-            console.warn(`[COVER-ENGINE] ⚠️ Tier 4 (Title Fallback) failed: ${e.message || e}`);
-        }
+    // Execution Order
+    if (isAudiobook) {
+        resolvedUrl = await tryAudible();
+        if (!resolvedUrl) resolvedUrl = await tryITunes();
+        if (!resolvedUrl) resolvedUrl = await tryGoogleBooks();
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(false);
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(true);
+    } else {
+        resolvedUrl = await tryGoogleBooks();
+        if (!resolvedUrl) resolvedUrl = await tryITunes();
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(false);
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(true);
     }
 
     if (resolvedUrl && bookFolder) {
         try {
+            const fs = require("fs");
+            const path = require("path");
             if (!fs.existsSync(bookFolder)) {
                 fs.mkdirSync(bookFolder, { recursive: true });
             }
@@ -459,14 +487,9 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
                 console.log(`[COVER-ENGINE] 💾 Downloaded cover to ${path.join(bookFolder, "cover.jpg")}`);
                 return "local";
             }
-        } catch (e) {
-            console.warn("[COVER-ENGINE] Failed to download cover to disk:", e);
-        }
+        } catch (e: any) {}
     }
 
-    if (!resolvedUrl) {
-        console.log(`[COVER-ENGINE] ℹ️ All cover artwork tiers exhausted for "${title}". Returning default placeholder.`);
-    }
     return resolvedUrl;
 }
 
