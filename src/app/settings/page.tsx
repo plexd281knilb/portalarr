@@ -237,6 +237,11 @@ function SettingsPageContent() {
     const [aiModelInput, setAiModelInput] = useState("gemini-1.5-flash");
     const [aiAutoResolveSwitch, setAiAutoResolveSwitch] = useState(true);
     const [showAiKey, setShowAiKey] = useState(false);
+    const [showPlexKey, setShowPlexKey] = useState(false);
+    const [showSmtpKey, setShowSmtpKey] = useState(false);
+    const [showGoogleBooksKey, setShowGoogleBooksKey] = useState(false);
+    const [showTautulliKey, setShowTautulliKey] = useState(false);
+    const [showMediaAppKey, setShowMediaAppKey] = useState(false);
     const [testAiLoading, setTestAiLoading] = useState(false);
     const [testAiResult, setTestAiResult] = useState<any>(null);
     const [testAiErr, setTestAiErr] = useState("");
@@ -541,7 +546,23 @@ function SettingsPageContent() {
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Password</Label>
-                                            <Input name="smtpPass" type="password" defaultValue={systemSettings.smtpPass || ""}/>
+                                            <div className="relative">
+                                                <Input 
+                                                    name="smtpPass" 
+                                                    type={showSmtpKey ? "text" : "password"} 
+                                                    defaultValue={systemSettings.smtpPass || ""} 
+                                                    className="pr-8"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setShowSmtpKey(!showSmtpKey)}
+                                                >
+                                                    {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
                                             <p className="text-[10px] text-muted-foreground leading-tight">
                                                 For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
                                             </p>
@@ -568,13 +589,25 @@ function SettingsPageContent() {
                                                 </span>
                                             )}
                                         </div>
-                                        <Input 
-                                            id="mainPlexToken" 
-                                            name="mainPlexToken" 
-                                            type="password" 
-                                            defaultValue={systemSettings.mainPlexToken || ""} 
-                                            placeholder="xxxxxxxxxxxxxxxxxxxx" 
-                                        />
+                                        <div className="relative">
+                                            <Input 
+                                                id="mainPlexToken" 
+                                                name="mainPlexToken" 
+                                                type={showPlexKey ? "text" : "password"} 
+                                                defaultValue={systemSettings.mainPlexToken || ""} 
+                                                placeholder="xxxxxxxxxxxxxxxxxxxx" 
+                                                className="pr-8"
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                onClick={() => setShowPlexKey(!showPlexKey)}
+                                            >
+                                                {showPlexKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                            </Button>
+                                        </div>
                                         <p className="text-[10px] text-muted-foreground mt-1">
                                             Sign in to Plex Web, open the XML for any media item, and copy the <code>X-Plex-Token</code> from the URL. <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" className="text-primary hover:underline">Read the official guide</a>.
                                         </p>
@@ -785,14 +818,25 @@ function SettingsPageContent() {
                                     }} className="space-y-4">
                                         <div className="space-y-2">
                                             <Label>API Key</Label>
-                                            <Input 
-                                                name="googleBooksApiKey"
-                                                type="password"
-                                                value={googleBooksKey}
-                                                onChange={(e) => setGoogleBooksKey(e.target.value)}
-                                                placeholder="AIzaSy..."
-                                                className="bg-black/50 border-white/10 text-white placeholder:text-gray-500"
-                                            />
+                                            <div className="relative">
+                                                <Input 
+                                                    name="googleBooksApiKey"
+                                                    type={showGoogleBooksKey ? "text" : "password"}
+                                                    value={googleBooksKey}
+                                                    onChange={(e) => setGoogleBooksKey(e.target.value)}
+                                                    placeholder="AIzaSy..."
+                                                    className="bg-black/50 border-white/10 text-white placeholder:text-gray-500 pr-8"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setShowGoogleBooksKey(!showGoogleBooksKey)}
+                                                >
+                                                    {showGoogleBooksKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
                                             <p className="text-xs text-gray-500 mt-1">
                                                 To get a key, <a href="https://console.cloud.google.com/apis/library/books.googleapis.com" target="_blank" className="text-primary hover:underline">enable the Books API</a> in Google Cloud Console and create an API Key under Credentials.
                                                 <br />
@@ -1099,7 +1143,18 @@ function SettingsPageContent() {
                                         <Input name="name" placeholder="Friendly Name (e.g. Main Plex)" required className="h-9 text-sm" defaultValue={editingTautulli?.name} />
                                         <Input name="url" placeholder="URL (http://192.168.1.50:8181)" required className="h-9 text-sm font-mono" defaultValue={editingTautulli?.url} />
                                         <div>
-                                            <Input name="apiKey" placeholder="Tautulli API Key" required className="h-9 text-sm font-mono" defaultValue={editingTautulli?.apiKey} />
+                                            <div className="relative">
+                                                <Input name="apiKey" type={showTautulliKey ? "text" : "password"} placeholder="Tautulli API Key" required className="h-9 text-sm font-mono pr-8" defaultValue={editingTautulli?.apiKey} />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setShowTautulliKey(!showTautulliKey)}
+                                                >
+                                                    {showTautulliKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
                                             <p className="text-[10px] text-muted-foreground mt-1">Found in Tautulli Settings → Web Interface → API.</p>
                                         </div>
                                     </div>
@@ -1283,7 +1338,18 @@ function SettingsPageContent() {
                                         </div>
                                     </div>
                                     <div>
-                                        <Input name="apiKey" placeholder="API Key / Password" className="h-9 text-sm font-mono" defaultValue={editingApp?.apiKey} />
+                                        <div className="relative">
+                                            <Input name="apiKey" type={showMediaAppKey ? "text" : "password"} placeholder="API Key / Password" className="h-9 text-sm font-mono pr-8" defaultValue={editingApp?.apiKey} />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                onClick={() => setShowMediaAppKey(!showMediaAppKey)}
+                                            >
+                                                {showMediaAppKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                            </Button>
+                                        </div>
                                         <p className="text-[10px] text-muted-foreground mt-1">Found in the app's Settings → General (or Settings → Security) tab.</p>
                                     </div>
                                     
