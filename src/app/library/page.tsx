@@ -191,8 +191,14 @@ function extractSeriesInfo(
           .replace(/^[:\-\s,#]+/, "")
           .trim();
 
-        if (!cleanBookTitle) {
-          cleanBookTitle = title;
+        if (!cleanBookTitle || /^(and|or|the|of|in|to|a|an)\s+/i.test(cleanBookTitle)) {
+          cleanBookTitle = title
+            .replace(/(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*\d+/gi, "")
+            .replace(/\(\s*\)/g, "")
+            .replace(/\[\s*\]/g, "")
+            .replace(/[:\-\s,#]+$/, "")
+            .replace(/^[:\-\s,#]+/, "")
+            .trim();
         }
 
         return {
@@ -664,7 +670,7 @@ function BookLibraryPageContent() {
             <img
               src={book.coverUrl}
               alt={book.title}
-              className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+              className={`object-cover w-full h-full transition-transform duration-300 group-hover:scale-105 ${book.fileType === "missing" ? "opacity-40 grayscale" : ""}`}
             />
             <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
               <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
@@ -921,7 +927,7 @@ function BookLibraryPageContent() {
             <img
               src={book.coverUrl}
               alt={book.title}
-              className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+              className={`object-cover w-full h-full transition-transform duration-300 group-hover:scale-105 ${book.fileType === "missing" ? "opacity-40 grayscale" : ""}`}
             />
           ) : (
             <div className="flex flex-col items-center justify-center p-4 text-center space-y-2">
@@ -2251,40 +2257,7 @@ function BookLibraryPageContent() {
     };
   }, [books, searchQuery, sortBy, requests, groupBySeries]);
 
-  useEffect(() => {
-    if (!groupBySeries || Object.keys(seriesGroups).length === 0) return;
 
-    let mounted = true;
-
-    const fetchMissing = async () => {
-      const entries = Object.entries(seriesGroups);
-      for (const [seriesName, sBooks] of entries) {
-        if (!mounted) break;
-        // Avoid refetching if already fetched or currently fetching
-        if (
-          missingBooksMap[seriesName] !== undefined ||
-          loadingMissingSeries[seriesName]
-        )
-          continue;
-
-        // Fire off fetch via handleFetchMissingBooks
-        // Wait, handleFetchMissingBooks uses setState directly
-        await handleFetchMissingBooks(
-          seriesName,
-          sBooks[0].author || "Unknown",
-        );
-
-        // Sleep to avoid hammering Open Library
-        if (mounted) await new Promise((r) => setTimeout(r, 800));
-      }
-    };
-
-    fetchMissing();
-
-    return () => {
-      mounted = false;
-    };
-  }, [seriesGroups, groupBySeries]);
 
   const eligibleRequestUsers = allUsers.filter((u) => {
     // 1. Has Kindle email configured
@@ -2873,6 +2846,17 @@ function BookLibraryPageContent() {
                                 {loadingMissingSeries[seriesName] && (
                                   <Loader2 className="h-3 w-3 animate-spin text-muted-foreground ml-2" />
                                 )}
+                                {!missingBooksMap[seriesName] && !loadingMissingSeries[seriesName] && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-5 px-2 text-[10px] ml-auto hover:bg-primary/20 hover:text-primary"
+                                    onClick={() => handleFetchMissingBooks(seriesName, seriesBooks[0].author || "Unknown")}
+                                  >
+                                    <Search className="h-3 w-3 mr-1" />
+                                    Show Missing Books
+                                  </Button>
+                                )}
                               </h3>
                               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
                                 {seriesBooks.map((book) =>
@@ -2888,7 +2872,9 @@ function BookLibraryPageContent() {
                                   </h4>
                                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 opacity-60 grayscale hover:grayscale-0 transition-all duration-300">
                                     {actualMissing.map(
-                                      (book: any, i: number) => (
+                                      (book: any, i: number) => {
+                                        const extMissing = extractSeriesInfo(book.title, "", [seriesName]);
+                                        return (
                                         <div
                                           key={i}
                                           className="flex gap-4 border rounded-xl p-3 bg-card border-dashed"
@@ -2913,8 +2899,13 @@ function BookLibraryPageContent() {
                                                 className="font-bold text-sm truncate pr-2 text-primary"
                                                 title={book.title}
                                               >
-                                                {book.title}
+                                                {extMissing.bookTitle}
                                               </h4>
+                                              {extMissing.volume && (
+                                                <Badge variant="outline" className="text-[9px] h-4 px-1 py-0 bg-primary/10 text-primary border-primary/20">
+                                                  Vol {extMissing.volume}
+                                                </Badge>
+                                              )}
                                             </div>
                                             <p
                                               className="text-xs text-muted-foreground truncate mb-1"
@@ -2926,7 +2917,7 @@ function BookLibraryPageContent() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="w-full h-7 text-[10px]"
+                                                className="w-full h-7 text-[10px] bg-slate-900 border-slate-700 hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all"
                                                 onClick={() =>
                                                   handleAutoDownloadMissingBook(
                                                     {
@@ -2946,7 +2937,7 @@ function BookLibraryPageContent() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="w-full h-7 text-[10px]"
+                                                className="w-full h-7 text-[10px] bg-slate-900 border-slate-700 hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all"
                                                 onClick={() =>
                                                   handleSearchAndReplaceRelease(
                                                     {
@@ -2966,7 +2957,8 @@ function BookLibraryPageContent() {
                                             </div>
                                           </div>
                                         </div>
-                                      ),
+                                      );
+                                      },
                                     )}
                                   </div>
                                 </div>
@@ -3707,7 +3699,7 @@ function BookLibraryPageContent() {
                                   />
                                 )}
                                 {req.coverUrl &&
-                                req.coverUrl.startsWith("http") ? (
+                                req.coverUrl.length > 3 ? (
                                   <img
                                     src={req.coverUrl}
                                     alt={req.title}
@@ -3985,41 +3977,7 @@ function BookLibraryPageContent() {
                                       Mark Downloaded
                                     </Button>
                                   )}
-                                {req.status.startsWith("Failed") && (
-                                  <div className="flex gap-1.5 items-center flex-wrap">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold"
-                                      onClick={async () => {
-                                        try {
-                                          await retryBookRequest(req.id);
-                                          alert(
-                                            "Auto-retry search successfully queued in the background!",
-                                          );
-                                          const reqs = await getBookRequests();
-                                          setRequests(reqs || []);
-                                        } catch (err: any) {
-                                          alert(
-                                            err.message ||
-                                              "Failed to retry request.",
-                                          );
-                                        }
-                                      }}
-                                    >
-                                      Auto-Retry
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px] flex-1 min-w-[100px]"
-                                      onClick={() => triggerProwlarrSearch(req)}
-                                    >
-                                      <Search className="h-3 w-3 mr-1" /> Search
-                                      Release
-                                    </Button>
-                                  </div>
-                                )}
+
                               </div>
                             </div>
                           );

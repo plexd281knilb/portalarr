@@ -13,7 +13,7 @@ import {
     getRoadmapText, updateRoadmapText,
     getAlertBanner, updateAlertBanner,
     testAppConnectionAction, testTautulliConnectionAction, testGlancesConnectionAction, validateDownloadsPathAction,
-    getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI, runAiBatchMetadataScanner, testFolderPermissions
+    getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI, runAiBatchMetadataScanner, testFolderPermissions, fetchAvailableAiModels
 } from "@/app/actions";
 import { testArrConfig } from "@/app/arr-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -241,12 +241,41 @@ function SettingsPageContent() {
     const [testAiErr, setTestAiErr] = useState("");
     const [saveAiMsg, setSaveAiMsg] = useState("");
 
+
+    const [dynamicModels, setDynamicModels] = useState<string[]>([]);
+    const [loadingModels, setLoadingModels] = useState(false);
+
+    const handleLoadModels = async () => {
+        const keyInput = document.querySelector('input[name="aiApiKey"]') as HTMLInputElement;
+        const key = keyInput ? keyInput.value : "";
+        if (!key && aiProviderSelect !== "default") return;
+        
+        setLoadingModels(true);
+        try {
+            const res = await fetchAvailableAiModels(aiProviderSelect, key);
+            if (res.success && res.data && res.data.length > 0) {
+                setDynamicModels(res.data);
+                // Auto-select first if current not in list
+                if (!res.data.includes(aiModelInput)) {
+                    setAiModelInput(res.data[0]);
+                }
+            } else {
+                setDynamicModels([]);
+            }
+        } catch(e) {
+            setDynamicModels([]);
+        }
+        setLoadingModels(false);
+    };
+
     const handleTestAiAgent = async () => {
         setTestAiLoading(true);
         setTestAiResult(null);
         setTestAiErr("");
+        const keyInput = document.querySelector('input[name="aiApiKey"]') as HTMLInputElement;
+        const key = keyInput ? keyInput.value : "";
         try {
-            const res = await testAiAgentConnection();
+            const res = await testAiAgentConnection(undefined, aiProviderSelect, key, aiModelInput);
             if (res.success && res.result) {
                 setTestAiResult(res.result);
             } else {
@@ -812,9 +841,22 @@ function SettingsPageContent() {
                                                 </div>
 
                                                 <div className="space-y-2">
-                                                    <Label>Model Name</Label>
+                                                    <div className="flex items-center justify-between">
+                                                        <Label>Model Name</Label>
+                                                        <Button 
+                                                            type="button" 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-6 text-xs px-2"
+                                                            onClick={handleLoadModels}
+                                                            disabled={loadingModels}
+                                                        >
+                                                            {loadingModels ? "Loading..." : "Fetch Available Models"}
+                                                        </Button>
+                                                    </div>
                                                     <Select 
                                                         value={
+                                                            dynamicModels.includes(aiModelInput) ||
                                                             (aiProviderSelect === "gemini" && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
                                                             (aiProviderSelect === "openai" && ["gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"].includes(aiModelInput))
                                                                 ? aiModelInput
@@ -832,7 +874,14 @@ function SettingsPageContent() {
                                                             <SelectValue placeholder="Select AI Model..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {aiProviderSelect === "gemini" ? (
+                                                            {dynamicModels.length > 0 ? (
+                                                                <>
+                                                                    {dynamicModels.map(m => (
+                                                                        <SelectItem key={m} value={m}>{m}</SelectItem>
+                                                                    ))}
+                                                                    <SelectItem value="custom">✏️ Custom Model Name...</SelectItem>
+                                                                </>
+                                                            ) : aiProviderSelect === "gemini" ? (
                                                                 <>
                                                                     <SelectItem value="gemini-2.5-flash">gemini-2.5-flash (Recommended)</SelectItem>
                                                                     <SelectItem value="gemini-2.5-pro">gemini-2.5-pro (High Performance)</SelectItem>
@@ -854,7 +903,7 @@ function SettingsPageContent() {
                                                         </SelectContent>
                                                     </Select>
 
-                                                    {(![
+                                                    {(!dynamicModels.includes(aiModelInput) && ![
                                                         "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b",
                                                         "gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"
                                                     ].includes(aiModelInput)) && (

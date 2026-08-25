@@ -167,6 +167,34 @@ async function fetchGoogleBooksCover(title: string, author: string): Promise<str
     return null;
 }
 
+function cleanUpEmptyFolder(folderPath: string) {
+    if (!folderPath || !fs.existsSync(folderPath)) return;
+    try {
+        const remaining = fs.readdirSync(folderPath);
+        const onlyIgnored = remaining.every(f => 
+            f === '.DS_Store' || 
+            f === 'Thumbs.db' || 
+            f === 'desktop.ini' || 
+            f === '.nomedia' ||
+            f === '.portalarr-missing' ||
+            f.endsWith('.jpg') || // Often left behind covers
+            f.endsWith('.png') ||
+            f.endsWith('.nfo') ||
+            f.endsWith('.txt') ||
+            f.endsWith('.cue') ||
+            f.endsWith('.md5') ||
+            f.endsWith('.url') ||
+            f.endsWith('.log') ||
+            f.endsWith('.srt') ||
+            f.endsWith('.diz') ||
+            f.endsWith('.sfv')
+        );
+        if (onlyIgnored) {
+            fs.rmSync(folderPath, { recursive: true, force: true });
+        }
+    } catch (e) {}
+}
+
 export async function findMissingBooksInSeries(seriesName: string, author: string) {
     try {
         const q = `${seriesName} ${author}`;
@@ -269,6 +297,20 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         
         const uniqueBooks = Array.from(new Map(books.map(b => [b.title.toLowerCase(), b])).values());
         
+        // 4. Try Bulk AI Volume Assignment
+        try {
+            const { assignVolumeNumbersWithAI } = await import("@/lib/ai-agent");
+            const titles = uniqueBooks.map(b => b.title);
+            const volMap = await assignVolumeNumbersWithAI(seriesName, author, titles);
+            for (const b of uniqueBooks) {
+                if (volMap[b.title]) {
+                    (b as any).volumeNumber = String(volMap[b.title]);
+                }
+            }
+        } catch (e) {
+            console.warn("[AI-FAILOVER] Bulk AI Volume Assignment failed:", e);
+        }
+        
         return { success: true, data: uniqueBooks };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -330,73 +372,102 @@ async function fetchITunesCover(title: string, author: string, mediaType: string
     return null;
 }
 
-async function fetchBookCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
+async function fetchBookCover(title: string, author: string, mediaType: string = "ebook", bookFolder?: string): Promise<string | null> {
     console.log(`[COVER-ENGINE] 🖼️ Resolving cover artwork for "${title}" by "${author}" (MediaType: ${mediaType})...`);
+
+    if (bookFolder) {
+        if (fs.existsSync(path.join(bookFolder, "cover.jpg"))) return "local";
+        if (fs.existsSync(path.join(bookFolder, "cover.png"))) return "local";
+    }
+
+    let resolvedUrl: string | null = null;
 
     // Tier 1: iTunes HD API (600x600)
     try {
         const iTunesCover = await fetchITunesCover(title, author, mediaType);
         if (iTunesCover) {
             console.log(`[COVER-ENGINE] ✅ TIER 1 SUCCESS (iTunes HD): ${iTunesCover}`);
-            return iTunesCover;
+            resolvedUrl = iTunesCover;
         }
     } catch (e: any) {
         console.warn(`[COVER-ENGINE] ⚠️ Tier 1 (iTunes) failed: ${e.message || e}`);
     }
 
-    // Tier 2: Open Library API (Title + Author)
-    try {
-        const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
-        const cleanedQuery = cleanSearchQuery(query);
-        const res = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
-            headers: { "Accept": "application/json" }
-        });
-        if (res.ok) {
-            const data = await res.json();
-            const docWithCover = data?.docs?.find((d: any) => d.cover_i);
-            if (docWithCover?.cover_i) {
-                const olCover = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
-                console.log(`[COVER-ENGINE] ✅ TIER 2 SUCCESS (Open Library): ${olCover}`);
-                return olCover;
+    // Tier 2: Open Library API
+    if (!resolvedUrl) {
+        try {
+            const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
+            const cleanedQuery = cleanSearchQuery(query);
+            const res = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
+                headers: { "Accept": "application/json" }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const docWithCover = data?.docs?.find((d: any) => d.cover_i);
+                if (docWithCover?.cover_i) {
+                    resolvedUrl = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
+                    console.log(`[COVER-ENGINE] ✅ TIER 2 SUCCESS (Open Library): ${resolvedUrl}`);
+                }
             }
+        } catch (e: any) {
+            console.warn(`[COVER-ENGINE] ⚠️ Tier 2 (Open Library) failed: ${e.message || e}`);
         }
-    } catch (e: any) {
-        console.warn(`[COVER-ENGINE] ⚠️ Tier 2 (Open Library) failed: ${e.message || e}`);
     }
 
     // Tier 3: Google Books API
-    try {
-        const googleCover = await fetchGoogleBooksCover(title, author);
-        if (googleCover) {
-            const finalGoogleCover = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
-            console.log(`[COVER-ENGINE] ✅ TIER 3 SUCCESS (Google Books): ${finalGoogleCover}`);
-            return finalGoogleCover;
+    if (!resolvedUrl) {
+        try {
+            const googleCover = await fetchGoogleBooksCover(title, author);
+            if (googleCover) {
+                resolvedUrl = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
+                console.log(`[COVER-ENGINE] ✅ TIER 3 SUCCESS (Google Books): ${resolvedUrl}`);
+            }
+        } catch (e: any) {
+            console.warn(`[COVER-ENGINE] ⚠️ Tier 3 (Google Books) failed: ${e.message || e}`);
         }
-    } catch (e: any) {
-        console.warn(`[COVER-ENGINE] ⚠️ Tier 3 (Google Books) failed: ${e.message || e}`);
     }
 
     // Tier 4: Open Library Title-Only Fallback
-    try {
-        const cleanTitleOnly = cleanSearchQuery(title);
-        const resTitleOnly = await fetchWithRetry(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
-            headers: { "Accept": "application/json" }
-        });
-        if (resTitleOnly.ok) {
-            const dataTitle = await resTitleOnly.json();
-            const doc = dataTitle?.docs?.find((d: any) => d.cover_i);
-            if (doc?.cover_i) {
-                const titleOnlyCover = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
-                console.log(`[COVER-ENGINE] ✅ TIER 4 FALLBACK SUCCESS (Open Library Title Search): ${titleOnlyCover}`);
-                return titleOnlyCover;
+    if (!resolvedUrl) {
+        try {
+            const cleanTitleOnly = cleanSearchQuery(title);
+            const resTitleOnly = await fetchWithRetry(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
+                headers: { "Accept": "application/json" }
+            });
+            if (resTitleOnly.ok) {
+                const dataTitle = await resTitleOnly.json();
+                const doc = dataTitle?.docs?.find((d: any) => d.cover_i);
+                if (doc?.cover_i) {
+                    resolvedUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
+                    console.log(`[COVER-ENGINE] ✅ TIER 4 FALLBACK SUCCESS (Open Library Title Search): ${resolvedUrl}`);
+                }
             }
+        } catch (e: any) {
+            console.warn(`[COVER-ENGINE] ⚠️ Tier 4 (Title Fallback) failed: ${e.message || e}`);
         }
-    } catch (e: any) {
-        console.warn(`[COVER-ENGINE] ⚠️ Tier 4 (Title Fallback) failed: ${e.message || e}`);
     }
 
-    console.log(`[COVER-ENGINE] ℹ️ All cover artwork tiers exhausted for "${title}". Returning default placeholder.`);
-    return null;
+    if (resolvedUrl && bookFolder) {
+        try {
+            if (!fs.existsSync(bookFolder)) {
+                fs.mkdirSync(bookFolder, { recursive: true });
+            }
+            const imgRes = await fetch(resolvedUrl);
+            if (imgRes.ok) {
+                const buffer = await imgRes.arrayBuffer();
+                fs.writeFileSync(path.join(bookFolder, "cover.jpg"), Buffer.from(buffer));
+                console.log(`[COVER-ENGINE] 💾 Downloaded cover to ${path.join(bookFolder, "cover.jpg")}`);
+                return "local";
+            }
+        } catch (e) {
+            console.warn("[COVER-ENGINE] Failed to download cover to disk:", e);
+        }
+    }
+
+    if (!resolvedUrl) {
+        console.log(`[COVER-ENGINE] ℹ️ All cover artwork tiers exhausted for "${title}". Returning default placeholder.`);
+    }
+    return resolvedUrl;
 }
 
 // ============================================================================
@@ -1702,24 +1773,10 @@ export async function updateBook(id: string, title: string, author: string, cove
     // 3. Revalidate UI immediately so it feels snappy
     revalidatePath("/library");
 
-    // 4. Fire-and-forget the heavy Cover Art API calls in the background!
-    if (!coverUrl) {
-        prisma.book.findUnique({ where: { id } }).then(book => {
-            if (book) {
-                fetchBookCover(title, author, book.mediaType || "ebook").then(fetched => {
-                    if (fetched) {
-                        prisma.book.updateMany({
-                            where: { id },
-                            data: { coverUrl: fetched }
-                        }).catch(()=>{});
-                    }
-                }).catch(()=>{});
-            }
-        }).catch(()=>{});
-    }
+    // Cover fetching removed to prevent Next.js from holding the HTTP connection open
 }
 
-async function renameBookFileOnDisk(bookId: string): Promise<string> {
+export async function renameBookFileOnDisk(bookId: string): Promise<string> {
     try {
         const book = await prisma.book.findUnique({ 
             where: { id: bookId },
@@ -1734,16 +1791,26 @@ async function renameBookFileOnDisk(bookId: string): Promise<string> {
         let safeAuthor = (book.author && book.author !== "Unknown Author") 
             ? book.author.replace(/[\/\\?%*:|"<>]/g, "").trim()
             : "";
-        let safeTitle = book.title.replace(/[\/\\?%*:|"<>]/g, "").trim();
+        let safeTitle = book.title.replace(/[\\/\\\\?%*:|"<>]/g, "").trim();
+        safeTitle = parseFilenameMetadata(safeTitle).title; // Strip any baked-in tags to prevent exponential duplication
 
-        if (safeTitle.length > 100) safeTitle = safeTitle.substring(0, 100).trim();
+        let seriesTag = "";
+        if (book.series) {
+            let safeSeries = book.series.replace(/[\\/\\\\?%*:|"\[\]<>]/g, "").trim();
+            let vol = book.volumeNumber ? book.volumeNumber.replace(/[^a-zA-Z0-9.\-]/g, "").trim() : "01";
+            if (vol.length === 1) vol = "0" + vol;
+            seriesTag = `[${safeSeries} ${vol}] `;
+        }
+
+        let safeTitleWithSeries = `${seriesTag}${safeTitle}`;
+
+        if (safeTitleWithSeries.length > 100) safeTitleWithSeries = safeTitleWithSeries.substring(0, 100).trim();
         if (safeAuthor.length > 50) safeAuthor = safeAuthor.substring(0, 50).trim();
 
-        let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitle}${ext}` : `${safeTitle}${ext}`;
+        let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitleWithSeries}${ext}` : `${safeTitleWithSeries}${ext}`;
         
         let currentFilePath = book.filePath;
-        const newDir = path.join(book.library.path, safeAuthor || "Unknown Author", safeTitle);
-        
+        const newDir = path.join(book.library.path, safeAuthor || "Unknown Author", safeTitleWithSeries);
         // If the folder structure needs to change (e.g. Author was updated in UI)
         if (oldDir !== newDir) {
             if (!fs.existsSync(newDir)) {
@@ -1763,10 +1830,7 @@ async function renameBookFileOnDisk(bookId: string): Promise<string> {
                     }
                 }
                 // Cleanup old dir if empty
-                const remaining = fs.readdirSync(oldDir);
-                if (remaining.length === 0) {
-                    fs.rmdirSync(oldDir);
-                }
+                cleanUpEmptyFolder(oldDir);
             } catch (moveErr: any) {
                 console.error(`[FILE-RENAME] Failed to move folder to ${newDir}:`, moveErr.message);
             }
@@ -2256,7 +2320,8 @@ export async function runAiLibraryScanAction(libraryId: string): Promise<{ succe
         for (const b of books) {
             try {
                 const cleanBase = b.filePath ? path.basename(b.filePath) : b.title;
-                const aiMeta = await resolveMetadataWithAI(cleanBase, lib.mediaType || "ebook");
+                const cleanTarget = parseFilenameMetadata(cleanBase).title;
+                const aiMeta = await resolveMetadataWithAI(cleanTarget, lib.mediaType || "ebook");
                 if (aiMeta) {
                     const updateData: any = {};
                     if (aiMeta.title) updateData.title = aiMeta.title;
@@ -2271,6 +2336,8 @@ export async function runAiLibraryScanAction(libraryId: string): Promise<{ succe
                         where: { id: b.id },
                         data: updateData
                     });
+
+                    await renameBookFileOnDisk(b.id);
                     resolvedCount++;
                 }
             } catch (err: any) {
@@ -2367,6 +2434,10 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
 
     // Strip empty parentheses and brackets left behind, including ( 0)
     clean = clean.replace(/\[[^\]]+\]/g, " ");
+    
+    // Strip trailing unclosed brackets/parentheses caused by truncation
+    clean = clean.replace(/\[[^\]]*$/, "");
+    clean = clean.replace(/\([^)]*$/, "");
     clean = clean.replace(/\(\s*\)/g, "");
     clean = clean.replace(/\[\s*\]/g, "");
     clean = clean.replace(/\(\s*0\s*\)/g, "");
@@ -2418,7 +2489,7 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
                 let partB = parts.slice(1).join(" - ");
                 partB = partB.replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*\d{1,2}\s*-\s*/i, "").trim();
 
-                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/;
+                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z'-]+|[A-Z][a-z]+(?:\s+(?:[A-Z]\.?|[A-Z][a-z]+)){1,3})$/;
                 const isPartBAuthor = /\b(?:N\.?\s*Chino|Robert\s+Jackson\s+Bennett|Genki\s+Kawamura|Jacques\s+Martin)\b/i.test(partB);
                 const isPartAAuthor = authorPattern.test(partA);
 
@@ -2460,6 +2531,32 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
         else title = "The Lord of the Rings";
     }
 
+    
+    // Bridgerton Master Rules
+    if (lowerTitle.includes("bridgerton") || lowerTitle.includes("duke and i") || lowerTitle.includes("viscount who loved me") || lowerTitle.includes("offer from a gentleman") || lowerTitle.includes("romancing mister bridgerton") || lowerTitle.includes("to sir phillip") || lowerTitle.includes("when he was wicked") || lowerTitle.includes("its in his kiss") || lowerTitle.includes("it's in his kiss") || lowerTitle.includes("on the way to the wedding") || lowerTitle.includes("second epilogue")) {
+        author = "Julia Quinn";
+        extractedSeries = "Bridgerton";
+        if (lowerTitle.includes("duke and i")) { title = "The Duke and I"; extractedVolume = "1"; }
+        else if (lowerTitle.includes("viscount who loved me")) { title = "The Viscount Who Loved Me"; extractedVolume = "2"; }
+        else if (lowerTitle.includes("offer from a gentleman")) { title = "An Offer From a Gentleman"; extractedVolume = "3"; }
+        else if (lowerTitle.includes("romancing mister bridgerton")) { title = "Romancing Mister Bridgerton"; extractedVolume = "4"; }
+        else if (lowerTitle.includes("to sir phillip")) { title = "To Sir Phillip, With Love"; extractedVolume = "5"; }
+        else if (lowerTitle.includes("when he was wicked")) { title = "When He Was Wicked"; extractedVolume = "6"; }
+        else if (lowerTitle.includes("its in his kiss") || lowerTitle.includes("it\'s in his kiss")) { title = "It's in His Kiss"; extractedVolume = "7"; }
+        else if (lowerTitle.includes("on the way to the wedding")) { title = "On the Way to the Wedding"; extractedVolume = "8"; }
+        else if (lowerTitle.includes("second epilogue")) { title = "The Bridgertons: Happily Ever After"; extractedVolume = "9"; }
+    }
+
+    // Spy School & FunJungle Master Rules
+    if (lowerTitle.includes("spy school") || lowerTitle.includes("spy camp") || lowerTitle.includes("evil spy") || lowerTitle.includes("spy ski") || lowerTitle.includes("secret service") || lowerTitle.includes("spy on history")) {
+        author = "Stuart Gibbs";
+        extractedSeries = "Spy School";
+    }
+    if (lowerTitle.includes("funjungle") || lowerTitle.includes("belly up") || lowerTitle.includes("poached") || lowerTitle.includes("big game") || lowerTitle.includes("panda-monium") || lowerTitle.includes("lion down") || lowerTitle.includes("tyrannosaurus wrecks") || lowerTitle.includes("bear bottom") || lowerTitle.includes("whale done")) {
+        author = "Stuart Gibbs";
+        extractedSeries = "FunJungle";
+    }
+
     if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher") || lowerTitle.includes("sorcerer")) {
         author = "J. K. Rowling";
         if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
@@ -2473,6 +2570,13 @@ function parseFilenameMetadata(rawBase: string): { title: string, author: string
 
     if (!title || !title.trim()) {
         title = clean || rawBase.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
+        // The fallback might contain unclosed brackets from truncation, which causes exponential loops. Strip them.
+        title = title.replace(/\[[^\]]*$/, "").replace(/\([^)]*$/, "").trim();
+        // Aggressively strip complete brackets from the fallback too, to prevent series loops
+        title = title.replace(/\[[^\]]+\]/g, "").trim();
+    }
+    if (!title || !title.trim()) {
+        title = "Unknown Title";
     }
 
     return {
@@ -2570,7 +2674,18 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
 
     if (cleanParts.length >= 2) {
         author = cleanParts[cleanParts.length - 2];
-        title = cleanParts[cleanParts.length - 1];
+        const folderTitle = cleanParts[cleanParts.length - 1];
+        if (isTrackFilename) {
+            title = folderTitle;
+        } else {
+            title = parsedFile.title || rawBase;
+            // Extract series info from the parent folder if the file lacked it
+            const folderMeta = parseFilenameMetadata(folderTitle);
+            if (folderMeta.series && !parsedFile.series) {
+                parsedFile.series = folderMeta.series;
+                parsedFile.volumeNumber = folderMeta.volumeNumber;
+            }
+        }
     } else if (cleanParts.length === 1) {
         if (!isTrackFilename) {
             const folder = cleanParts[0];
@@ -2582,7 +2697,7 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
                 author = "Unknown Author";
                 title = fileTitle;
             } else {
-                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z\-']+|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/;
+                const authorPattern = /^(?:[A-Z]\.?(?:\s*[A-Z]\.?)*\s+[A-Za-z'-]+|[A-Z][a-z]+(?:\s+(?:[A-Z]\.?|[A-Z][a-z]+)){1,3})$/;
                 if (authorPattern.test(folder)) {
                     author = folder;
                     title = fileTitle;
@@ -2608,10 +2723,57 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
     const finalParse = parseFilenameMetadata(title);
     if (finalParse.author !== "Unknown Author" && author === "Unknown Author") {
         author = finalParse.author;
+    }
+    // ALWAYS clean the title to prevent exponential bracket duplication!
+    if (finalParse.title) {
         title = finalParse.title;
     }
 
     return { title, author, series: finalParse.series || parsedFile.series, volumeNumber: finalParse.volumeNumber || parsedFile.volumeNumber, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
+}
+
+function purgeEmptyDirectories(dir: string) {
+    if (!fs.existsSync(dir)) return;
+    try {
+        const files = fs.readdirSync(dir);
+        let isEmpty = true;
+        
+        for (const file of files) {
+            const fullPath = path.join(dir, file);
+            const stat = fs.statSync(fullPath);
+            
+            if (stat.isDirectory()) {
+                purgeEmptyDirectories(fullPath);
+                if (fs.existsSync(fullPath)) {
+                    isEmpty = false;
+                }
+            } else {
+                const isIgnored = 
+                    file === '.DS_Store' || 
+                    file === 'Thumbs.db' || 
+                    file === 'desktop.ini' || 
+                    file === '.nomedia' ||
+                    file === '.portalarr-missing' ||
+                    file.endsWith('.jpg') ||
+                    file.endsWith('.png') ||
+                    file.endsWith('.nfo') ||
+                    file.endsWith('.txt') ||
+                    file.endsWith('.cue') ||
+                    file.endsWith('.md5') ||
+                    file.endsWith('.url') ||
+                    file.endsWith('.log') ||
+                    file.endsWith('.srt');
+                if (!isIgnored) {
+                    isEmpty = false;
+                }
+            }
+        }
+        
+        if (isEmpty) {
+            fs.rmSync(dir, { recursive: true, force: true });
+            console.log(`[CLEANUP] 🧹 Purged zombie directory: ${dir}`);
+        }
+    } catch (e) {}
 }
 
 export async function scanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
@@ -2859,6 +3021,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         for (const item of finalMediaItems) {
             const { file, ext, stats } = item;
             let fullPath = item.fullPath;
+            if (!fs.existsSync(fullPath)) {
+                continue; // File was moved/deleted by a concurrent scan thread
+            }
 
                 // Check and handle foreign language ebooks in library folders
                 if (isForeignLanguage(file)) {
@@ -2968,13 +3133,29 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         existing = crossMatch;
                     }
                 }
+                
+                if (existing && matchedDbBookIds.has(existing.id)) {
+                    const rowIsEpub = (existing.filePath || "").toLowerCase().endsWith(".epub");
+                    const newIsEpub = ext === ".epub";
+                    if (rowIsEpub && !newIsEpub) {
+                        continue; // Skip worse duplicate file
+                    } else if (newIsEpub && !rowIsEpub) {
+                        // Allow stealing the row
+                    } else if (stats.size <= (existing.fileSize || 0)) {
+                        continue; // Skip smaller/equal duplicate file
+                    }
+                }
 
                 // ==== AUTO-ORGANIZE ALL ITEMS (NEW & EXISTING) ====
                 let orgTitle = "";
                 let orgAuthor = "";
+                let orgSeries = "";
+                let orgVolume = "";
                 if (existing) {
                     orgTitle = existing.title || "";
                     orgAuthor = existing.author || "";
+                    orgSeries = existing.series || "";
+                    orgVolume = existing.volumeNumber || "";
                 }
                 
                 const cleanBaseCheckForOrg = getEffectiveBookBaseName(effectiveFilePath, file, ext);
@@ -2983,15 +3164,31 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 if (!orgTitle || !orgAuthor || orgAuthor === "Unknown Author") {
                     if (!orgTitle) orgTitle = parsedMetaCheckForOrg.title || cleanBaseCheckForOrg;
                     if (!orgAuthor || orgAuthor === "Unknown Author") orgAuthor = parsedMetaCheckForOrg.author || "Unknown Author";
+                    if (!orgSeries) orgSeries = parsedMetaCheckForOrg.series || "";
+                    if (!orgVolume) orgVolume = parsedMetaCheckForOrg.volumeNumber || "";
                 }
 
                 if (library.path && orgTitle) {
                     try {
+                        let seriesTag = "";
+                        if (orgSeries) {
+                            let safeSeries = orgSeries.replace(/[\\/\\\\?%*:|"\[\]<>]/g, "").trim();
+                            let vol = orgVolume ? orgVolume.replace(/[^a-zA-Z0-9.\\-]/g, "").trim() : "01";
+                            if (vol.length === 1) vol = "0" + vol;
+                            seriesTag = `[${safeSeries} ${vol}] `;
+                        }
+
                         const safeAuthor = (orgAuthor && orgAuthor !== "Unknown Author") 
                             ? orgAuthor.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
                             : "Unknown Author";
-                        const safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
-                        const destFolder = path.join(library.path, safeAuthor, safeTitle);
+                            
+                        let safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+                        safeTitle = parseFilenameMetadata(safeTitle).title; // Strip any baked-in tags
+                        let safeTitleWithSeries = `${seriesTag}${safeTitle}`;
+                        if (safeTitleWithSeries.length > 100) safeTitleWithSeries = safeTitleWithSeries.substring(0, 100).trim();
+
+                        const destFolder = path.join(library.path, safeAuthor, safeTitleWithSeries);
+                        safeTitle = safeTitleWithSeries; // Reassign safeTitle so the file itself gets the tag too!
                         
                         if (!fs.existsSync(destFolder)) {
                             fs.mkdirSync(destFolder, { recursive: true });
@@ -3013,7 +3210,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Moved folder into pristine path -> "${destFolder}"`);
                             }
                         } else {
-                            const destPath = path.join(destFolder, `${safeTitle}${ext}`);
+                            const newFileName = safeAuthor ? `${safeAuthor} - ${safeTitle}${ext}` : `${safeTitle}${ext}`;
+                            const destPath = path.join(destFolder, newFileName);
                             if (fullPath !== destPath) {
                                 try {
                                     await fs.promises.rename(fullPath, destPath);
@@ -3024,12 +3222,20 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                     } else throw err;
                                 }
                                 await setPermissionsRecursiveAsync(destPath);
+                                const oldDir = path.dirname(fullPath);
                                 fullPath = destPath;
                                 console.log(`[SCANNER-AUTO-ORGANIZE] Moved/Renamed file to ${fullPath}`);
                                 logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Renamed & moved file into pristine path -> "${destPath}"`);
+                                
+                                try {
+                                    if (fs.existsSync(oldDir)) {
+                                        cleanUpEmptyFolder(oldDir);
+                                    }
+                                } catch (e) {}
                             }
                         }
                     } catch (orgErr: any) {
+                        if (orgErr.code === 'ENOENT') continue;
                         console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
                         logger.addLog("ERROR", "SCANNER", `❌ AUTO-ORGANIZE FAILED for "${fullPath}": ${orgErr.message}`);
                     }
@@ -3044,11 +3250,19 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     if (targetTitleNorm.length > 3) {
                         const targetMediaType = library.mediaType || "ebook";
                         existing = dbBooks.find(b => {
-                            if (matchedDbBookIds.has(b.id)) return false;
                             const dbMediaType = b.mediaType || "ebook";
                             if (dbMediaType !== targetMediaType) return false;
                             const dbTitleNorm = getNormTitle(b.title || "");
-                            return dbTitleNorm === targetTitleNorm;
+                            if (dbTitleNorm !== targetTitleNorm) return false;
+                            
+                            if (matchedDbBookIds.has(b.id)) {
+                                const rowIsEpub = (b.filePath || "").toLowerCase().endsWith(".epub");
+                                const newIsEpub = ext === ".epub";
+                                if (rowIsEpub && !newIsEpub) return false;
+                                if (newIsEpub && !rowIsEpub) return true;
+                                if (stats.size <= (b.fileSize || 0)) return false;
+                            }
+                            return true;
                         });
                     }
                 }
@@ -3146,6 +3360,10 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         }
                         
                         matchedDbBookIds.add(newBook.id);
+                        
+                        if (options?.enableAi) {
+                            await renameBookFileOnDisk(newBook.id);
+                        }
 
                         // Fetch cover artwork asynchronously in background
                         (async () => {
@@ -3223,7 +3441,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             }
 
         for (const dbBook of dbBooks) {
-            if (!matchedDbBookIds.has(dbBook.id)) {
+            if (!matchedDbBookIds.has(dbBook.id) && dbBook.fileType !== 'missing') {
                 try {
                     logger.addLog("WARN", "DATABASE", `🗑️ DB-DELETE: Purged missing book "${dbBook.title}" (ID: ${dbBook.id}) from SQLite.`);
                     await prisma.book.deleteMany({
@@ -3312,6 +3530,20 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
             }
         } catch (dedupErr) {}
+
+        // 8. Clean up empty/zombie directories left behind by the organizer
+        if (scanPath && fs.existsSync(scanPath)) {
+            console.log(`[SCANNER] 🧹 Running zombie directory sweep on ${scanPath}...`);
+            try {
+                const topLevelDirs = fs.readdirSync(scanPath);
+                for (const d of topLevelDirs) {
+                    const fullD = path.join(scanPath, d);
+                    if (fs.statSync(fullD).isDirectory()) {
+                        purgeEmptyDirectories(fullD);
+                    }
+                }
+            } catch (e) {}
+        }
 
         try {
             revalidatePath("/library");
@@ -3485,6 +3717,68 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                     data: { status: "Downloaded" }
                 });
                 return;
+            }
+        }
+        
+        // ------------------------------------------------------------------------------------------
+        // PORTALARR-RADARR HYBRID: Create "Missing" Book Stub in Library immediately upon approval
+        // ------------------------------------------------------------------------------------------
+        if (targetLib && resolvedLibId) {
+            try {
+                const sanitize = (str: string) => str.replace(/[<>:"/\|?*\x00-\x1F]/g, "").trim();
+                const seriesTag = req?.series ? `[${sanitize(req.series)}${req.volumeNumber ? ' ' + String(req.volumeNumber).padStart(2, '0') : ''}] ` : "";
+                const cleanAuthorStr = sanitize(author || "Unknown Author");
+                const cleanTitleStr = sanitize(title);
+                
+                const folderPath = path.join(targetLib.path, cleanAuthorStr, `${seriesTag}${cleanTitleStr}`);
+                
+                if (!fs.existsSync(folderPath)) {
+                    fs.mkdirSync(folderPath, { recursive: true });
+                }
+                
+                // Add immunity marker for zombie sweeper
+                fs.writeFileSync(path.join(folderPath, '.portalarr-missing'), '');
+
+                // Only create DB stub if not already exists (just in case)
+                const existingStub = await prisma.book.findFirst({
+                    where: { filePath: folderPath }
+                });
+
+                if (!existingStub) {
+                    const newBook = await prisma.book.create({
+                        data: {
+                            title: title,
+                            author: author || "Unknown Author",
+                            series: req?.series || null,
+                            volumeNumber: req?.volumeNumber ? String(req.volumeNumber) : null,
+                            filePath: folderPath,
+                            fileType: 'missing',
+                            fileSize: 0,
+                            mediaType: reqMediaType,
+                            libraryId: resolvedLibId,
+                            coverUrl: req?.coverUrl || null
+                        }
+                    });
+
+                    // Fire off background cover fetcher for the missing stub
+                    (async () => {
+                        try {
+                            const localCov = await fetchBookCover(title, author || "Unknown Author", reqMediaType, folderPath);
+                            if (localCov === "local") {
+                                await prisma.book.update({ 
+                                    where: { id: newBook.id }, 
+                                    data: { coverUrl: `/api/cover?id=${newBook.id}` } 
+                                });
+                                await prisma.bookRequest.update({
+                                    where: { id: requestId },
+                                    data: { coverUrl: `/api/cover?id=${newBook.id}` }
+                                });
+                            }
+                        } catch (e) {}
+                    })();
+                }
+            } catch (stubErr) {
+                console.warn("[AUTO-DOWNLOAD] Failed to generate missing book stub:", stubErr);
             }
         }
         
@@ -3798,6 +4092,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req.coverUrl);
     const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
     
+    let downloadId = "";
     if (protocol === "usenet") {
         const sabApp = await prisma.mediaApp.findFirst({
             where: { type: "sabnzbd" }
@@ -3820,6 +4115,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
         if (json.status === false) {
             throw new Error(json.error || "SABnzbd failed to accept the NZB file");
         }
+        downloadId = json.nzo_ids?.[0] || "";
     } else {
         const qbitApp = await prisma.mediaApp.findFirst({
             where: { type: "qbittorrent" }
@@ -3873,11 +4169,11 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     
     await prisma.bookRequest.update({
         where: { id: requestId },
-        data: { status: "Approved" }
+        data: { status: "Downloading" }
     });
 
-    // Auto-launch monitoring and importing for the newly grabbed release
-    autoDownloadBookRequest(requestId, req.title, req.author || "").catch(err => {
+    // Launch background downloader polling for the manually grabbed release
+    monitorAndRetryDownload(requestId, [{ title: title, protocol: protocol, downloadUrl: downloadUrl }], 0, downloadId).catch(err => {
         console.error("[RE-GRAB] Auto download monitor failed:", err);
     });
 
@@ -3974,7 +4270,8 @@ async function checkQbitStatus(qbitUrl: string, releaseTitle: string): Promise<{
 
 async function deleteDownload(protocol: string, downloadId: string, title: string): Promise<boolean> {
     try {
-        if (protocol === "usenet") {
+        let downloadId = "";
+    if (protocol === "usenet") {
             const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
             if (sabApp) {
                 const sabUrl = cleanUrl(sabApp.url);
@@ -4488,6 +4785,29 @@ export async function monitorAndRetryDownload(
                 if (targetLib) {
                     try {
                         await scanLibraryInternal(targetLib.id, { enableAi: true });
+
+                    // Inherit series metadata from the original BookRequest
+                    try {
+                        if (currentReq.series) {
+                            const ingestedBooks = await prisma.book.findMany({
+                                where: {
+                                    libraryId: targetLib.id,
+                                    filePath: { startsWith: path.dirname(finalDestPath) }
+                                }
+                            });
+                            for (const ib of ingestedBooks) {
+                                await prisma.book.update({
+                                    where: { id: ib.id },
+                                    data: {
+                                        series: currentReq.series,
+                                        volumeNumber: currentReq.volumeNumber || ib.volumeNumber
+                                    }
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Failed to inherit series metadata for imported download:", e);
+                    }
                     } catch (err) {
                         console.error(`[AUTO-DOWNLOAD-MONITOR] Library auto-scan failed for "${targetLib.name}":`, err);
                     }
@@ -4702,13 +5022,13 @@ export async function saveAiAgentSettings(formData: FormData) {
     }
 }
 
-export async function testAiAgentConnection(sampleText?: string) {
+export async function testAiAgentConnection(sampleText?: string, tempProvider?: string, tempKey?: string, tempModel?: string) {
     try {
         await verifyAdmin();
         const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
         const targetSample = sampleText || "J.R.R.Tolkien-Lord.of.the.Rings.01-The.Hobbit.Rob.Inglis-PoF";
         console.log(`[AI-AGENT-TEST] 🤖 Testing AI Metadata Agent with query: "${targetSample}"...`);
-        const result = await resolveMetadataWithAI(targetSample, "audiobook");
+        const result = await resolveMetadataWithAI(targetSample, "audiobook", true, tempProvider, tempKey, tempModel);
         console.log(`[AI-AGENT-TEST] ✨ Test Result: "${result.title}" by "${result.author}" [Series: ${result.series || "N/A"} #${result.volumeNumber || "N/A"}] via ${result.providerUsed}`);
         return { success: true, result };
     } catch (e: any) {
@@ -4720,14 +5040,25 @@ export async function testAiAgentConnection(sampleText?: string) {
 export async function resolveBookWithAI(bookId: string) {
     try {
         await verifyAdmin();
-        const book = await prisma.book.findUnique({ where: { id: bookId } });
+        const book = await prisma.book.findUnique({ where: { id: bookId }, include: { library: true } });
         if (!book) return { success: false, error: "Book not found" };
 
         const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
-        const rawTarget = book.filePath ? path.basename(book.filePath) : book.title;
+        
+        let cleanTarget = book.title;
+        if (book.filePath && book.library) {
+            const ext = path.extname(book.filePath);
+            const file = path.basename(book.filePath);
+            const extracted = extractMetadataFromPath(book.filePath, file, ext, book.library.path);
+            cleanTarget = extracted.author !== "Unknown Author" ? `${extracted.author} - ${extracted.title}` : extracted.title;
+        } else {
+            const rawTarget = book.filePath ? path.basename(book.filePath) : book.title;
+            const parsed = parseFilenameMetadata(rawTarget);
+            cleanTarget = parsed.author !== "Unknown Author" ? `${parsed.author} - ${parsed.title}` : parsed.title;
+        }
         console.log(`[AI-SINGLE-RESOLVE] 🤖 Resolving AI metadata for book ID ${bookId} ("${book.title}")...`);
-        const aiResult = await resolveMetadataWithAI(rawTarget, book.mediaType || "ebook");
-        console.log(`[AI-SINGLE-RESOLVE] ✨ Resolved: "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"}] via ${aiResult.providerUsed}`);
+        const aiResult = await resolveMetadataWithAI(cleanTarget, book.mediaType || "ebook");
+        console.log(`[AI-SINGLE-RESOLVE] ✨ Resolved: "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || book.series || "N/A"}] via ${aiResult.providerUsed}`);
 
         let coverUrl = book.coverUrl;
         if (aiResult.coverQuery || aiResult.title) {
@@ -4747,6 +5078,7 @@ export async function resolveBookWithAI(bookId: string) {
                 ...(coverUrl ? { coverUrl } : {})
             }
         });
+        await renameBookFileOnDisk(bookId);
 
         revalidatePath("/library");
         return { success: true, message: `Successfully resolved metadata via ${aiResult.providerUsed}!`, result: aiResult };
@@ -4756,53 +5088,74 @@ export async function resolveBookWithAI(bookId: string) {
     }
 }
 
+async function _backgroundAiScan() {
+    const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
+    const books = await prisma.book.findMany();
+    console.log(`[AI-BATCH-SCAN] 🚀 Starting AI Metadata Resolution Batch Job across all ${books.length} items in database...`);
+
+    let updatedCount = 0;
+    for (let i = 0; i < books.length; i++) {
+        const b = books[i];
+        let cleanTarget = b.title;
+        if (b.filePath) {
+            const ext = path.extname(b.filePath);
+            const file = path.basename(b.filePath);
+            const lib = await prisma.library.findUnique({ where: { id: b.libraryId } });
+            if (lib) {
+                const extracted = extractMetadataFromPath(b.filePath, file, ext, lib.path);
+                cleanTarget = extracted.author !== "Unknown Author" ? `${extracted.author} - ${extracted.title}` : extracted.title;
+            }
+        }
+        console.log(`[AI-BATCH-SCAN] 🤖 [${i + 1}/${books.length}] Analyzing "${b.title}" (Query: ${cleanTarget})...`);
+        
+        try {
+            const aiResult = await resolveMetadataWithAI(cleanTarget, b.mediaType || "ebook");
+            console.log(`[AI-BATCH-SCAN] ✨ Resolved "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"} #${aiResult.volumeNumber || "N/A"}] (Provider: ${aiResult.providerUsed})`);
+
+            let coverUrl = b.coverUrl;
+            if (!coverUrl || aiResult.title !== b.title) {
+                try {
+                    const hdCover = await fetchBookCover(aiResult.title, aiResult.author, b.mediaType || "ebook");
+                    if (hdCover) coverUrl = hdCover;
+                } catch (e) {}
+            }
+
+            await prisma.book.updateMany({
+                where: { id: b.id },
+                data: {
+                    title: aiResult.title || b.title,
+                    author: (aiResult.author && aiResult.author !== "Unknown Author") ? aiResult.author : b.author,
+                    series: aiResult.series || b.series,
+                    volumeNumber: aiResult.volumeNumber ? String(aiResult.volumeNumber) : b.volumeNumber,
+                    ...(coverUrl ? { coverUrl } : {})
+                }
+            }).catch(() => {});
+            await renameBookFileOnDisk(b.id);
+            updatedCount++;
+        } catch (err: any) {
+            console.warn(`[AI-BATCH-SCAN] ⚠️ Failed for "${b.title}":`, err.message || err);
+        }
+    }
+
+    console.log(`[AI-BATCH-SCAN] ✅ Completed AI Metadata Batch Job! ${updatedCount}/${books.length} books updated.`);
+    try {
+        revalidatePath("/library");
+    } catch (e) {}
+}
+
 export async function runAiBatchMetadataScanner() {
     try {
         await verifyAdmin();
-        const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
-        const books = await prisma.book.findMany();
-        console.log(`[AI-BATCH-SCAN] 🚀 Starting AI Metadata Resolution Batch Job across all ${books.length} items in database...`);
+        
+        // Detach from the Next.js request context so it doesn't timeout the HTTP response
+        setTimeout(() => {
+            _backgroundAiScan().catch(e => console.error("[AI-BATCH-SCAN-ERROR]: Background worker failed:", e));
+        }, 500);
 
-        let updatedCount = 0;
-        for (let i = 0; i < books.length; i++) {
-            const b = books[i];
-            const rawTarget = b.filePath ? path.basename(b.filePath) : b.title;
-            console.log(`[AI-BATCH-SCAN] 🤖 [${i + 1}/${books.length}] Analyzing "${b.title}" (Raw: ${rawTarget})...`);
-            
-            try {
-                const aiResult = await resolveMetadataWithAI(rawTarget, b.mediaType || "ebook");
-                console.log(`[AI-BATCH-SCAN] ✨ Resolved "${aiResult.title}" by "${aiResult.author}" [Series: ${aiResult.series || "N/A"} #${aiResult.volumeNumber || "N/A"}] (Provider: ${aiResult.providerUsed})`);
-
-                let coverUrl = b.coverUrl;
-                if (!coverUrl || aiResult.title !== b.title) {
-                    try {
-                        const hdCover = await fetchBookCover(aiResult.title, aiResult.author, b.mediaType || "ebook");
-                        if (hdCover) coverUrl = hdCover;
-                    } catch (e) {}
-                }
-
-                await prisma.book.updateMany({
-                    where: { id: b.id },
-                    data: {
-                        title: aiResult.title || b.title,
-                        author: (aiResult.author && aiResult.author !== "Unknown Author") ? aiResult.author : b.author,
-                        series: aiResult.series || b.series,
-                        volumeNumber: aiResult.volumeNumber ? String(aiResult.volumeNumber) : b.volumeNumber,
-                        ...(coverUrl ? { coverUrl } : {})
-                    }
-                }).catch(() => {});
-                updatedCount++;
-            } catch (err: any) {
-                console.warn(`[AI-BATCH-SCAN] ⚠️ Failed for "${b.title}":`, err.message || err);
-            }
-        }
-
-        console.log(`[AI-BATCH-SCAN] ✅ Completed AI Metadata Batch Job! ${updatedCount}/${books.length} books updated.`);
-        revalidatePath("/library");
-        return { success: true, message: `Successfully batch processed ${updatedCount} books across all libraries with AI Agent!` };
+        return { success: true, message: `AI Batch Scan successfully started in the background! Please check the server console for live progress.` };
     } catch (e: any) {
         console.error("[AI-BATCH-SCAN-ERROR]:", e);
-        return { success: false, error: e.message || "Failed to run AI Batch Scanner" };
+        return { success: false, error: e.message || "Failed to start AI Batch Scanner" };
     }
 }
 
@@ -5956,6 +6309,29 @@ export async function importCompletedDownload(requestId: string) {
     // Auto-scan target library shelf so newly imported media is immediately available with AI resolution
     await scanLibraryInternal(targetLib.id, { enableAi: true });
 
+                    // Inherit series metadata from the original BookRequest
+                    try {
+                        if (currentReq.series) {
+                            const ingestedBooks = await prisma.book.findMany({
+                                where: {
+                                    libraryId: targetLib.id,
+                                    filePath: { startsWith: path.dirname(finalDestPath) }
+                                }
+                            });
+                            for (const ib of ingestedBooks) {
+                                await prisma.book.update({
+                                    where: { id: ib.id },
+                                    data: {
+                                        series: currentReq.series,
+                                        volumeNumber: currentReq.volumeNumber || ib.volumeNumber
+                                    }
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Failed to inherit series metadata for imported download:", e);
+                    }
+
     await prisma.bookRequest.update({
         where: { id: requestId },
         data: { status: "Downloaded" }
@@ -6578,3 +6954,18 @@ export async function dumpEntireDatabaseAction() {
 
 
 
+
+export async function fetchAvailableAiModels(provider: string, apiKey: string) {
+    await verifyAdmin();
+    try {
+        const { getAvailableGeminiModels, getAvailableOpenAIModels } = await import("@/lib/ai-agent");
+        if (provider === "gemini" || provider === "google") {
+            return { success: true, data: await getAvailableGeminiModels(apiKey) };
+        } else if (provider === "openai") {
+            return { success: true, data: await getAvailableOpenAIModels(apiKey) };
+        }
+        return { success: true, data: [] };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
