@@ -17,7 +17,11 @@ import { logger } from "@/lib/logger";
 // --- SECURITY LAYER ---
 // ============================================================================
 
-async function fetchWithRetry(url: string, options: any, retries = 3) {
+async function fetchWithRetry(url: string, options: any = {}, retries = 3) {
+    if (!options.headers) options.headers = {};
+    if (!options.headers["User-Agent"]) {
+        options.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    }
     let lastErr;
     for (let i = 0; i < retries; i++) {
         try {
@@ -144,10 +148,14 @@ async function mobiBounceEpub(filePath: string): Promise<boolean> {
 }
 
 async function fetchGoogleBooksCover(title: string, author: string): Promise<string | null> {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    const dbKey = settings?.googleBooksApiKey;
+    const activeKey = dbKey || process.env.GOOGLE_BOOKS_API_KEY;
+    const gbKey = activeKey ? `&key=${activeKey}` : "";
     try {
         const rawQuery = `${title} ${author}`;
         const query = cleanSearchQuery(rawQuery);
-        const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=1`;
+        const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=1${gbKey}`;
         const res = await fetch(url, { headers: { "Accept": "application/json" } });
         if (res.ok) {
             const data = await res.json();
@@ -265,7 +273,10 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         // 3. Failover: Google Books
         if (books.length === 0) {
             try {
-                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=15`;
+                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
+                const gbKey = activeKey ? `&key=${activeKey}` : "";
+                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=15${gbKey}`;
                 const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
                 if (gRes && gRes.ok) {
                     const data = await gRes.json();
@@ -317,6 +328,25 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
     }
 }
 
+
+async function fetchAudibleCover(title: string, author: string): Promise<string | null> {
+    try {
+        const query = `${title} ${author && author !== "Unknown Author" ? author : ""}`.trim();
+        const url = `https://api.audible.com/1.0/catalog/products?keywords=${encodeURIComponent(query)}&response_groups=product_attrs,product_extended_attrs,product_desc,media,contributors&num_results=3`;
+        const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
+        if (res && res.ok) {
+            const data = await res.json();
+            if (data && data.products && data.products.length > 0) {
+                const img = data.products[0]?.product_images?.[500];
+                if (img) {
+                    return img.replace("_SL500_", "_SL1000_");
+                }
+            }
+        }
+    } catch (e: any) {}
+    return null;
+}
+
 async function fetchITunesCover(title: string, author: string, mediaType: string = "ebook"): Promise<string | null> {
     try {
         const cleanAuthor = author && author !== "Unknown Author" ? author : "";
@@ -342,7 +372,7 @@ async function fetchITunesCover(title: string, author: string, mediaType: string
             cleanTitle
         ];
 
-        const entities = mediaType === "audiobook" ? ["audiobook", "ebook"] : ["ebook", "audiobook"];
+        const entities = [mediaType === "audiobook" ? "audiobook" : "ebook"];
 
         for (const entity of entities) {
             for (const query of queries) {
@@ -376,79 +406,88 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
     console.log(`[COVER-ENGINE] 🖼️ Resolving cover artwork for "${title}" by "${author}" (MediaType: ${mediaType})...`);
 
     if (bookFolder) {
-        if (fs.existsSync(path.join(bookFolder, "cover.jpg"))) return "local";
-        if (fs.existsSync(path.join(bookFolder, "cover.png"))) return "local";
+        if (fs.existsSync(require("path").join(bookFolder, "cover.jpg"))) return "local";
+        if (fs.existsSync(require("path").join(bookFolder, "cover.png"))) return "local";
     }
 
     let resolvedUrl: string | null = null;
+    const isAudiobook = mediaType === "audiobook";
 
-    // Tier 1: iTunes HD API (600x600)
-    try {
-        const iTunesCover = await fetchITunesCover(title, author, mediaType);
-        if (iTunesCover) {
-            console.log(`[COVER-ENGINE] ✅ TIER 1 SUCCESS (iTunes HD): ${iTunesCover}`);
-            resolvedUrl = iTunesCover;
-        }
-    } catch (e: any) {
-        console.warn(`[COVER-ENGINE] ⚠️ Tier 1 (iTunes) failed: ${e.message || e}`);
-    }
-
-    // Tier 2: Open Library API
-    if (!resolvedUrl) {
+    // Reusable fetchers
+    const tryITunes = async () => {
         try {
-            const query = author && author !== "Unknown Author" ? `${title} ${author}` : title;
+            const iTunesCover = await fetchITunesCover(title, author, mediaType);
+            if (iTunesCover) {
+                console.log(`[COVER-ENGINE] ✅ SUCCESS (iTunes HD): ${iTunesCover}`);
+                return iTunesCover;
+            }
+        } catch (e: any) {}
+        return null;
+    };
+
+    const tryGoogleBooks = async () => {
+        try {
+            const googleCover = await fetchGoogleBooksCover(title, author);
+            if (googleCover) {
+                const c = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
+                console.log(`[COVER-ENGINE] ✅ SUCCESS (Google Books): ${c}`);
+                return c;
+            }
+        } catch (e: any) {}
+        return null;
+    };
+
+    const tryOpenLibrary = async (titleOnly: boolean = false) => {
+        try {
+            const query = !titleOnly && author && author !== "Unknown Author" ? `${title} ${author}` : title;
             const cleanedQuery = cleanSearchQuery(query);
-            const res = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`, {
-                headers: { "Accept": "application/json" }
-            });
+            const url = titleOnly 
+                ? `https://openlibrary.org/search.json?title=${encodeURIComponent(cleanedQuery)}&limit=3&fields=cover_i`
+                : `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=5&fields=cover_i`;
+            
+            const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
             if (res.ok) {
                 const data = await res.json();
                 const docWithCover = data?.docs?.find((d: any) => d.cover_i);
                 if (docWithCover?.cover_i) {
-                    resolvedUrl = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
-                    console.log(`[COVER-ENGINE] ✅ TIER 2 SUCCESS (Open Library): ${resolvedUrl}`);
+                    const c = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
+                    console.log(`[COVER-ENGINE] ✅ SUCCESS (Open Library${titleOnly ? ' Fallback' : ''}): ${c}`);
+                    return c;
                 }
             }
-        } catch (e: any) {
-            console.warn(`[COVER-ENGINE] ⚠️ Tier 2 (Open Library) failed: ${e.message || e}`);
-        }
-    }
+        } catch (e: any) {}
+        return null;
+    };
 
-    // Tier 3: Google Books API
-    if (!resolvedUrl) {
+    const tryAudible = async () => {
         try {
-            const googleCover = await fetchGoogleBooksCover(title, author);
-            if (googleCover) {
-                resolvedUrl = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
-                console.log(`[COVER-ENGINE] ✅ TIER 3 SUCCESS (Google Books): ${resolvedUrl}`);
+            const c = await fetchAudibleCover(title, author);
+            if (c) {
+                console.log(`[COVER-ENGINE] ✅ SUCCESS (Audible): ${c}`);
+                return c;
             }
-        } catch (e: any) {
-            console.warn(`[COVER-ENGINE] ⚠️ Tier 3 (Google Books) failed: ${e.message || e}`);
-        }
-    }
+        } catch (e: any) {}
+        return null;
+    };
 
-    // Tier 4: Open Library Title-Only Fallback
-    if (!resolvedUrl) {
-        try {
-            const cleanTitleOnly = cleanSearchQuery(title);
-            const resTitleOnly = await fetchWithRetry(`https://openlibrary.org/search.json?title=${encodeURIComponent(cleanTitleOnly)}&limit=3&fields=cover_i`, {
-                headers: { "Accept": "application/json" }
-            });
-            if (resTitleOnly.ok) {
-                const dataTitle = await resTitleOnly.json();
-                const doc = dataTitle?.docs?.find((d: any) => d.cover_i);
-                if (doc?.cover_i) {
-                    resolvedUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
-                    console.log(`[COVER-ENGINE] ✅ TIER 4 FALLBACK SUCCESS (Open Library Title Search): ${resolvedUrl}`);
-                }
-            }
-        } catch (e: any) {
-            console.warn(`[COVER-ENGINE] ⚠️ Tier 4 (Title Fallback) failed: ${e.message || e}`);
-        }
+    // Execution Order
+    if (isAudiobook) {
+        resolvedUrl = await tryAudible();
+        if (!resolvedUrl) resolvedUrl = await tryITunes();
+        if (!resolvedUrl) resolvedUrl = await tryGoogleBooks();
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(false);
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(true);
+    } else {
+        resolvedUrl = await tryGoogleBooks();
+        if (!resolvedUrl) resolvedUrl = await tryITunes();
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(false);
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(true);
     }
 
     if (resolvedUrl && bookFolder) {
         try {
+            const fs = require("fs");
+            const path = require("path");
             if (!fs.existsSync(bookFolder)) {
                 fs.mkdirSync(bookFolder, { recursive: true });
             }
@@ -459,14 +498,9 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
                 console.log(`[COVER-ENGINE] 💾 Downloaded cover to ${path.join(bookFolder, "cover.jpg")}`);
                 return "local";
             }
-        } catch (e) {
-            console.warn("[COVER-ENGINE] Failed to download cover to disk:", e);
-        }
+        } catch (e: any) {}
     }
 
-    if (!resolvedUrl) {
-        console.log(`[COVER-ENGINE] ℹ️ All cover artwork tiers exhausted for "${title}". Returning default placeholder.`);
-    }
     return resolvedUrl;
 }
 
@@ -514,11 +548,15 @@ export async function saveJobSettings(formData: FormData) {
   await verifyAdmin();
   const autoSyncInterval = Number(formData.get("autoSyncInterval"));
   const downloadsPath = formData.get("downloadsPath") as string || "/downloads";
+  const googleBooksApiKey = (formData.get("googleBooksApiKey") as string) || null;
   
+  const updateData: any = { autoSyncInterval, downloadsPath };
+  if (googleBooksApiKey !== null) updateData.googleBooksApiKey = googleBooksApiKey;
+
   await prisma.settings.upsert({
     where: { id: "global" },
-    update: { autoSyncInterval, downloadsPath },
-    create: { id: "global", autoSyncInterval, downloadsPath },
+    update: updateData,
+    create: { id: "global", autoSyncInterval, downloadsPath, googleBooksApiKey: googleBooksApiKey || "" },
   });
   revalidatePath("/settings");
 }
@@ -1785,18 +1823,18 @@ export async function renameBookFileOnDisk(bookId: string): Promise<string> {
         if (!book || !book.library) return "";
         if (!fs.existsSync(book.filePath)) return book.filePath;
 
-        const ext = path.extname(book.filePath);
-        const oldDir = path.dirname(book.filePath);
+        const isDir = fs.statSync(book.filePath).isDirectory();
+        const ext = isDir ? "" : path.extname(book.filePath);
         
         let safeAuthor = (book.author && book.author !== "Unknown Author") 
             ? book.author.replace(/[\/\\?%*:|"<>]/g, "").trim()
             : "";
-        let safeTitle = book.title.replace(/[\\/\\\\?%*:|"<>]/g, "").trim();
+        let safeTitle = book.title.replace(/[\/\\?%*:|"<>]/g, "").trim();
         safeTitle = parseFilenameMetadata(safeTitle).title; // Strip any baked-in tags to prevent exponential duplication
 
         let seriesTag = "";
         if (book.series) {
-            let safeSeries = book.series.replace(/[\\/\\\\?%*:|"\[\]<>]/g, "").trim();
+            let safeSeries = book.series.replace(/[\/\\?%*:|"\\[\\]<>]/g, "").trim();
             let vol = book.volumeNumber ? book.volumeNumber.replace(/[^a-zA-Z0-9.\-]/g, "").trim() : "01";
             if (vol.length === 1) vol = "0" + vol;
             seriesTag = `[${safeSeries} ${vol}] `;
@@ -1807,60 +1845,82 @@ export async function renameBookFileOnDisk(bookId: string): Promise<string> {
         if (safeTitleWithSeries.length > 100) safeTitleWithSeries = safeTitleWithSeries.substring(0, 100).trim();
         if (safeAuthor.length > 50) safeAuthor = safeAuthor.substring(0, 50).trim();
 
-        let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitleWithSeries}${ext}` : `${safeTitleWithSeries}${ext}`;
-        
-        let currentFilePath = book.filePath;
         const newDir = path.join(book.library.path, safeAuthor || "Unknown Author", safeTitleWithSeries);
-        // If the folder structure needs to change (e.g. Author was updated in UI)
-        if (oldDir !== newDir) {
-            if (!fs.existsSync(newDir)) {
-                fs.mkdirSync(newDir, { recursive: true });
+        let currentFilePath = book.filePath;
+
+        if (isDir) {
+            // Audiobook grouped folder
+            if (currentFilePath !== newDir) {
+                if (!fs.existsSync(newDir)) {
+                    fs.mkdirSync(path.dirname(newDir), { recursive: true });
+                }
+                try {
+                    fs.renameSync(currentFilePath, newDir);
+                    currentFilePath = newDir;
+                } catch (e: any) {
+                    console.error(`[FILE-RENAME] Failed to rename audiobook directory to ${newDir}:`, e.message);
+                }
             }
-            // Safely move all files from oldDir to newDir
-            try {
-                const files = fs.readdirSync(oldDir);
-                for (const f of files) {
-                    const src = path.join(oldDir, f);
-                    const dst = path.join(newDir, f);
-                    if (fs.existsSync(src)) {
-                        fs.renameSync(src, dst);
-                        if (src === currentFilePath) {
-                            currentFilePath = dst; // Track the main file's new location
+            
+            if (currentFilePath !== book.filePath) {
+                await prisma.book.updateMany({
+                    where: { id: bookId },
+                    data: { filePath: currentFilePath }
+                });
+            }
+            return currentFilePath;
+
+        } else {
+            // eBook single file
+            const oldDir = path.dirname(book.filePath);
+            let newFileName = safeAuthor ? `${safeAuthor} - ${safeTitleWithSeries}${ext}` : `${safeTitleWithSeries}${ext}`;
+            
+            if (oldDir !== newDir) {
+                if (!fs.existsSync(newDir)) {
+                    fs.mkdirSync(newDir, { recursive: true });
+                }
+                try {
+                    const files = fs.readdirSync(oldDir);
+                    for (const f of files) {
+                        const src = path.join(oldDir, f);
+                        const dst = path.join(newDir, f);
+                        if (fs.existsSync(src)) {
+                            fs.renameSync(src, dst);
+                            if (src === currentFilePath) {
+                                currentFilePath = dst;
+                            }
                         }
                     }
+                    cleanUpEmptyFolder(oldDir);
+                } catch (moveErr: any) {
+                    console.error(`[FILE-RENAME] Failed to move folder to ${newDir}:`, moveErr.message);
                 }
-                // Cleanup old dir if empty
-                cleanUpEmptyFolder(oldDir);
-            } catch (moveErr: any) {
-                console.error(`[FILE-RENAME] Failed to move folder to ${newDir}:`, moveErr.message);
             }
-        }
 
-        const finalPath = path.join(newDir, newFileName);
-        
-        if (currentFilePath !== finalPath && fs.existsSync(currentFilePath)) {
-            console.log(`[FILE-RENAME] Renaming on-disk file: ${currentFilePath} -> ${finalPath}`);
-            fs.renameSync(currentFilePath, finalPath);
+            const finalPath = path.join(newDir, newFileName);
             
-            await prisma.book.updateMany({
-                where: { id: bookId },
-                data: { filePath: finalPath }
-            });
+            if (currentFilePath !== finalPath && fs.existsSync(currentFilePath)) {
+                console.log(`[FILE-RENAME] Renaming on-disk file: ${currentFilePath} -> ${finalPath}`);
+                fs.renameSync(currentFilePath, finalPath);
+                
+                await prisma.book.updateMany({
+                    where: { id: bookId },
+                    data: { filePath: finalPath }
+                });
+                return finalPath;
+            } else if (currentFilePath !== book.filePath) {
+                await prisma.book.updateMany({
+                    where: { id: bookId },
+                    data: { filePath: currentFilePath }
+                });
+                return currentFilePath;
+            }
+            
             return finalPath;
-        } else if (currentFilePath !== book.filePath) {
-            // Even if the filename didn't change, the folder did!
-            await prisma.book.updateMany({
-                where: { id: bookId },
-                data: { filePath: currentFilePath }
-            });
-            return currentFilePath;
         }
-        
-        return book.filePath;
-    } catch (err: any) {
-        console.error(`[FILE-RENAME] Failed to rename file for book ${bookId}:`, err.message);
-        const book = await prisma.book.findUnique({ where: { id: bookId } });
-        return book ? book.filePath : "";
+    } catch (error: any) {
+        console.error("[FILE-RENAME] Failed to process rename:", error);
+        return "";
     }
 }
 
