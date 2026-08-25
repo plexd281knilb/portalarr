@@ -17,7 +17,11 @@ import { logger } from "@/lib/logger";
 // --- SECURITY LAYER ---
 // ============================================================================
 
-async function fetchWithRetry(url: string, options: any, retries = 3) {
+async function fetchWithRetry(url: string, options: any = {}, retries = 3) {
+    if (!options.headers) options.headers = {};
+    if (!options.headers["User-Agent"]) {
+        options.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    }
     let lastErr;
     for (let i = 0; i < retries; i++) {
         try {
