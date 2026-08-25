@@ -151,7 +151,8 @@ async function fetchGoogleBooksCover(title: string, author: string): Promise<str
     try {
         const rawQuery = `${title} ${author}`;
         const query = cleanSearchQuery(rawQuery);
-        const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=1`;
+        const gbKey = process.env.GOOGLE_BOOKS_API_KEY ? `&key=${process.env.GOOGLE_BOOKS_API_KEY}` : "";
+        const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=1${gbKey}`;
         const res = await fetch(url, { headers: { "Accept": "application/json" } });
         if (res.ok) {
             const data = await res.json();
@@ -269,7 +270,8 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         // 3. Failover: Google Books
         if (books.length === 0) {
             try {
-                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=15`;
+                const gbKey = process.env.GOOGLE_BOOKS_API_KEY ? `&key=${process.env.GOOGLE_BOOKS_API_KEY}` : "";
+                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=15${gbKey}`;
                 const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
                 if (gRes && gRes.ok) {
                     const data = await gRes.json();
