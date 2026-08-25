@@ -2901,9 +2901,9 @@ function BookLibraryPageContent() {
                                               >
                                                 {extMissing.bookTitle}
                                               </h4>
-                                              {extMissing.volume && (
+                                              {(book.volumeNumber || extMissing.volume) && (
                                                 <Badge variant="outline" className="text-[9px] h-4 px-1 py-0 bg-primary/10 text-primary border-primary/20">
-                                                  Vol {extMissing.volume}
+                                                  Vol {book.volumeNumber || extMissing.volume}
                                                 </Badge>
                                               )}
                                             </div>
