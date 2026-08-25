@@ -817,7 +817,14 @@ function SettingsPageContent() {
                                         setTimeout(() => setSaveAiMsg(""), 4000);
                                     }} className="space-y-4">
                                         <div className="space-y-2">
-                                            <Label>API Key</Label>
+                                            <div className="flex justify-between items-center">
+                                                <Label>API Key</Label>
+                                                {systemSettings?.googleBooksApiKey && (
+                                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                        <CheckCircle2 className="h-3 w-3" /> Saved
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <Input 
                                                     name="googleBooksApiKey"
@@ -914,15 +921,22 @@ function SettingsPageContent() {
                                                 <div className="space-y-2">
                                                     <div className="flex items-center justify-between">
                                                         <Label>API Key</Label>
-                                                        <Button 
-                                                            type="button" 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                                                            onClick={() => setShowAiKey(!showAiKey)}
-                                                        >
-                                                            {showAiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                                        </Button>
+                                                        <div className="flex items-center gap-2">
+                                                            {aiSettings?.aiApiKey && (
+                                                                <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                                    <CheckCircle2 className="h-3 w-3" /> Encrypted & Saved
+                                                                </span>
+                                                            )}
+                                                            <Button 
+                                                                type="button" 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                                                onClick={() => setShowAiKey(!showAiKey)}
+                                                            >
+                                                                {showAiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                            </Button>
+                                                        </div>
                                                     </div>
                                                     <Input 
                                                         name="aiApiKey" 
