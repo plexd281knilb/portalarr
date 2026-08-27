@@ -4069,8 +4069,14 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
     const prowlarrUrl = cleanUrl(prowlarrApp.url);
     const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
     
+    const cleanedQuery = cleanSearchQuery(query);
+    
     try {
         let results = await executeProwlarrSearch(query, mediaType, prowlarrUrl, prowlarrKey);
+
+        const catQuery = mediaType === "audiobook"
+            ? "&categories=3030&categories=3000"
+            : "&categories=7000&categories=7010&categories=7020&categories=3040";
 
         // If searching for audiobook and initial query produced few audiobooks, append "audiobook" to query
         if (mediaType === "audiobook") {
