@@ -3810,6 +3810,11 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                 return;
             }
         }
+        // Update status to Searching while Prowlarr fetches
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { status: "Searching" }
+        });
         
         // ------------------------------------------------------------------------------------------
         // PORTALARR-RADARR HYBRID: Create "Missing" Book Stub in Library immediately upon approval
@@ -4052,6 +4057,22 @@ async function executeProwlarrSearch(query: string, mediaType: string, prowlarrU
         }
     }
     
+    // If searching for audiobook and initial query produced few audiobooks, append "audiobook" to query
+    if (mediaType === "audiobook") {
+        const initialFiltered = await filterReleasesForMediaType(results, mediaType);
+        if (initialFiltered.length < 3 && !cleanedQuery.toLowerCase().includes("audiobook")) {
+            console.log(`[PROWLARR] Initial audiobook query "${query}" yielded few results. Retrying with 'audiobook' appended...`);
+            const audioQueryUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery + " audiobook")}${catQuery}&apikey=${prowlarrKey}`;
+            const audioRes = await fetch(audioQueryUrl, { cache: "no-store" });
+            if (audioRes.ok) {
+                const audioResults = await audioRes.json();
+                if (Array.isArray(audioResults)) {
+                    results = [...results, ...audioResults];
+                }
+            }
+        }
+    }
+
     return results;
 }
 
@@ -4069,30 +4090,9 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
     const prowlarrUrl = cleanUrl(prowlarrApp.url);
     const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
     
-    const cleanedQuery = cleanSearchQuery(query);
-    
     try {
         let results = await executeProwlarrSearch(query, mediaType, prowlarrUrl, prowlarrKey);
 
-        const catQuery = mediaType === "audiobook"
-            ? "&categories=3030&categories=3000"
-            : "&categories=7000&categories=7010&categories=7020&categories=3040";
-
-        // If searching for audiobook and initial query produced few audiobooks, append "audiobook" to query
-        if (mediaType === "audiobook") {
-            const initialFiltered = await filterReleasesForMediaType(results, mediaType);
-            if (initialFiltered.length < 3 && !cleanedQuery.toLowerCase().includes("audiobook")) {
-                const audioQueryUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery + " audiobook")}${catQuery}&apikey=${prowlarrKey}`;
-                const audioRes = await fetch(audioQueryUrl, { cache: "no-store" });
-                if (audioRes.ok) {
-                    const audioResults = await audioRes.json();
-                    if (Array.isArray(audioResults)) {
-                        results = [...results, ...audioResults];
-                    }
-                }
-            }
-        }
-        
         const filtered = await filterReleasesForMediaType(results, mediaType);
         
         const seen = new Set<string>();
