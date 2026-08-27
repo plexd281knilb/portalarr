@@ -1737,14 +1737,17 @@ function BookLibraryPageContent() {
     setSearchingProwlarr(true);
     setProwlarrResults([]);
     setSearchProwlarrError("");
+
+    // Clean the title by removing text inside parentheses (like "Enhanced Edition")
+    const cleanTitle = (req.title || "").replace(/\s*\([^)]+\)\s*/g, " ").trim();
     
     // Set the initial custom query if not already typing
     if (!customQuery && !customSearchQuery) {
-        setCustomSearchQuery(req.author ? `${req.title} ${req.author}` : req.title);
+        setCustomSearchQuery(req.author ? `${cleanTitle} ${req.author}` : cleanTitle);
     }
     
     try {
-      const queryText = customQuery || customSearchQuery || (req.author ? `${req.title} ${req.author}` : req.title);
+      const queryText = customQuery || customSearchQuery || (req.author ? `${cleanTitle} ${req.author}` : cleanTitle);
       const res = await searchProwlarrIndexers(queryText, targetMediaType);
       setProwlarrResults(res || []);
     } catch (e: any) {
