@@ -5696,55 +5696,52 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
     }
 }
 
-export async function searchOpenLibrary(query: string) {
+export async function searchOpenLibrary(query: string, mediaType: "ebook" | "audiobook" = "ebook") {
     if (!query || query.trim().length < 2) return [];
     try {
         let results: any[] = [];
         
-        // 1. Audible API (Excellent for Audiobooks & Exclusives)
-        try {
-            const audUrl = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,contributors,product_desc&num_results=8&products_sort_by=Relevance`;
-            const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
-            const audData = audRes && audRes.ok ? await audRes.json() : null;
-            
-            if (audData && audData.products && audData.products.length > 0) {
-                for (const prod of audData.products) {
-                    const title = prod.title;
-                    if (!title) continue;
-                    
-                    let author = "Unknown Author";
-                    if (prod.authors && prod.authors.length > 0) {
-                        author = prod.authors[0].name;
+        // 1. Audible API (Only for Audiobooks)
+        if (mediaType === "audiobook") {
+            try {
+                const audUrl = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,contributors,product_desc&num_results=8&products_sort_by=Relevance`;
+                const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
+                const audData = audRes && audRes.ok ? await audRes.json() : null;
+                
+                if (audData && audData.products && audData.products.length > 0) {
+                    for (const prod of audData.products) {
+                        const title = prod.title;
+                        if (!title) continue;
+                        
+                        let author = "Unknown Author";
+                        if (prod.authors && prod.authors.length > 0) {
+                            author = prod.authors[0].name;
+                        }
+                        
+                        let coverUrl = "";
+                        if (prod.product_images && prod.product_images["500"]) {
+                            coverUrl = prod.product_images["500"];
+                        }
+                        
+                        let year = "Unknown Year";
+                        if (prod.release_date) {
+                            year = prod.release_date.substring(0, 4);
+                        }
+                        
+                        results.push({ title, author, coverUrl, year });
                     }
-                    
-                    let coverUrl = "";
-                    if (prod.product_images && prod.product_images["500"]) {
-                        coverUrl = prod.product_images["500"];
-                    }
-                    
-                    let year = "Unknown Year";
-                    if (prod.release_date) {
-                        year = prod.release_date.substring(0, 4);
-                    }
-                    
-                    results.push({ title, author, coverUrl, year });
                 }
+            } catch (e) {
+                console.warn("[API-FAILOVER] Audible search failed:", e);
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] Audible search failed:", e);
         }
 
         // 2. iTunes API
         try {
-            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=ebook&limit=8`;
+            const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
+            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${entity}&limit=8`;
             let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
-            
-            if (!data || !data.results || data.results.length === 0) {
-                iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=audiobook&limit=8`;
-                iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
-                data = iRes && iRes.ok ? await iRes.json() : null;
-            }
             
             if (data && data.results && data.results.length > 0) {
                 for (const item of data.results) {

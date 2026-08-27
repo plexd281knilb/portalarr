@@ -1265,7 +1265,7 @@ function BookLibraryPageContent() {
     const delayDebounceFn = setTimeout(async () => {
       setSearchingRegistry(true);
       try {
-        const results = await searchOpenLibrary(reqTitle);
+        const results = await searchOpenLibrary(reqTitle, reqMediaType);
         setOpenLibrarySuggestions(results || []);
       } catch (e) {
         console.error("Autocomplete search error:", e);
@@ -1275,7 +1275,7 @@ function BookLibraryPageContent() {
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [reqTitle]);
+  }, [reqTitle, reqMediaType]);
 
   useEffect(() => {
     if (selectedLibrary) {
@@ -1741,13 +1741,13 @@ function BookLibraryPageContent() {
     // Clean the title by removing text inside parentheses (like "Enhanced Edition")
     const cleanTitle = (req.title || "").replace(/\s*\([^)]+\)\s*/g, " ").trim();
     
-    // Set the initial custom query if not already typing
+    // Set the initial custom query if not already typing (Title-only is best for Torznab)
     if (!customQuery && !customSearchQuery) {
-        setCustomSearchQuery(req.author ? `${cleanTitle} ${req.author}` : cleanTitle);
+        setCustomSearchQuery(cleanTitle);
     }
     
     try {
-      const queryText = customQuery || customSearchQuery || (req.author ? `${cleanTitle} ${req.author}` : cleanTitle);
+      const queryText = customQuery || customSearchQuery || cleanTitle;
       const res = await searchProwlarrIndexers(queryText, targetMediaType);
       setProwlarrResults(res || []);
     } catch (e: any) {
