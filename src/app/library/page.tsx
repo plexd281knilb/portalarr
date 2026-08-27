@@ -2822,6 +2822,7 @@ function BookLibraryPageContent() {
                           ).filter((mBook: any) => {
                             const mTitle = mBook.title.toLowerCase();
                             return !seriesBooks.some((b: any) => {
+                              if (b.fileType === "missing") return false;
                               const bTitle = (
                                 b.cleanSeriesTitle || b.title
                               ).toLowerCase();
