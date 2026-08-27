@@ -2185,7 +2185,9 @@ export async function createBookRequest(formData: FormData) {
         
         const libraryId = formData.get("libraryId") as string;
         if (libraryId) {
-            finalCover = finalCover ? `${finalCover}?lib=${libraryId}` : `?lib=${libraryId}`;
+            finalCover = finalCover 
+                ? (finalCover.includes("?") ? `${finalCover}&lib=${libraryId}` : `${finalCover}?lib=${libraryId}`) 
+                : `?lib=${libraryId}`;
         }
 
         if (type === "series") {
@@ -2321,7 +2323,9 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                     : "";
                 
                 if (libraryId) {
-                    coverUrl = coverUrl ? `${coverUrl}?lib=${libraryId}` : `?lib=${libraryId}`;
+                    coverUrl = coverUrl 
+                        ? (coverUrl.includes("?") ? `${coverUrl}&lib=${libraryId}` : `${coverUrl}?lib=${libraryId}`) 
+                        : `?lib=${libraryId}`;
                 }
                     
                 uniqueBooks.push({
@@ -3673,8 +3677,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
 async function getTargetLibraryForUser(username: string, mediaType: string = "ebook", coverUrl?: string | null) {
     try {
-        if (coverUrl && coverUrl.includes("?lib=")) {
-            const parsedLibId = coverUrl.split("?lib=")[1].split("&")[0];
+        if (coverUrl && /[\?&]lib=/.test(coverUrl)) {
+            const parsedLibId = coverUrl.split(/[\?&]lib=/)[1].split("&")[0];
             const explicitLib = await prisma.library.findUnique({ where: { id: parsedLibId } });
             if (explicitLib) return explicitLib;
         }
@@ -6028,7 +6032,9 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
         for (const book of booksList) {
             let finalCover = book.coverUrl;
             if (libraryId) {
-                finalCover = finalCover ? `${finalCover}?lib=${libraryId}` : `?lib=${libraryId}`;
+                finalCover = finalCover 
+                    ? (finalCover.includes("?") ? `${finalCover}&lib=${libraryId}` : `${finalCover}?lib=${libraryId}`) 
+                    : `?lib=${libraryId}`;
             }
             
             const request = await prisma.bookRequest.create({

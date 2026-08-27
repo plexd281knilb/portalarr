@@ -3702,9 +3702,9 @@ function BookLibraryPageContent() {
                                   />
                                 )}
                                 {req.coverUrl &&
-                                req.coverUrl.length > 3 ? (
+                                req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").length > 3 ? (
                                   <img
-                                    src={req.coverUrl}
+                                    src={req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "")}
                                     alt={req.title}
                                     className="w-10 h-14 object-cover rounded bg-muted/20 border border-muted/50 shrink-0"
                                   />

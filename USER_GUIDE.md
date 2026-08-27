@@ -34,7 +34,10 @@ Portalarr organizes your media into dedicated tabs:
 
 ### 📖 Ebooks Tab
 - Browse & Search: Filter by library shelves, search by title or author, and sort by date or title.
-- Series Grouping: Toggle Group by Series to view books neatly organized by their book series.
+- Series Grouping: Toggle Group by Series to view books neatly organized by their book series with volume numbers.
+- 🔍 Show Missing Books: Click the **Show Missing Books** button on any series group to discover unacquired books in that series.
+- ⚡ 1-Click Auto-Grab: In the Missing Books view, click **Auto-Grab** on any missing installment (or grab the entire series) to immediately auto-request and download it.
+- 🌫️ Missing Book Cards: Missing books display on your shelf with a grayscale poster, "MISSING" badge, and 0 MB indicator. You can click **Re-Grab Release** directly from the book card modal to search indexers anytime.
 - 1-Click Kindle Send (`📧`): Click the Kindle button on any book card to wirelessly dispatch the EPUB/MOBI file directly to your e-reader.
 - Direct Download (`⬇️`): Click the Download button to download EPUB or PDF files directly to your phone, tablet, or computer.
 
@@ -62,10 +65,11 @@ Click the `+ Request Ebook / Audiobook` button on the Library page.
 
 ### Step 4: Submit & Track Progress
 Click Submit Request. You can track its live progress under the Requests tab:
-- ⏳ Pending / Approved: Request is auto-approved and queued for processing.
-- 🔍 Searching: System is searching indexers for the best quality release.
+- ⏳ Pending / Approved: Request is auto-approved and queued for background processing.
+- 🔍 Searching: Multi-tier search engine is querying connected indexers for the best quality release.
 - 📥 Downloading: Download active in SABnzbd or qBittorrent.
-- ✅ Downloaded: Download complete! The book is automatically added to the library shelf for instant reading or streaming.
+- ✅ Downloaded: Download complete! The book is automatically moved to your library shelf and ready for reading/listening. (The system continuously validates that the physical media file exists on disk).
+- ❌ Failed / Failed (Missing): If a grab fails or the file is removed, the request displays in red with actionable retry buttons.
 
 ## 🛠️ 5. Troubleshooting, Release Selection & 1-Click Import
 
@@ -84,8 +88,8 @@ Click Submit Request. You can track its live progress under the Requests tab:
 ### 📥 1-Click Download Import (`Import Download`)
 - If SABnzbd or qBittorrent finished downloading a file but it hasn't appeared yet, click `📥 Import Download` on your request card. Portalarr will scan all completed download directories, copy the files to your shelf, auto-consolidate multi-track audiobooks, and mark the status as `Downloaded`.
 
-### 🔄 Retrying Failed Downloads
-- If a request shows Failed, click `Retry Search` to trigger an automated background re-search.
+### 🔄 Retrying Failed Downloads (`Auto-Retry`)
+- If a request shows `Failed` or `Failed (Missing)`, click **Auto-Retry** to trigger an immediate automated background search using all fallback queries.
 
 ## ❓ 6. Need Help or Technical Support?
 
