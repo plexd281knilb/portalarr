@@ -3797,6 +3797,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                 where: { mediaType: reqMediaType, libraryId: resolvedLibId }
             });
             const existingBook = allBooks.find(b => {
+                if (b.fileType === "missing") return false;
                 const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 return normB === normTitleReq || (normTitleReq.length > 5 && normB.includes(normTitleReq));
             });
