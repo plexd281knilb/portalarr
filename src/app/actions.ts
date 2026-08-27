@@ -4949,6 +4949,8 @@ export async function monitorAndRetryDownload(
                 const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 
                 const matchedBook = allBooks.find(b => {
+                    if (b.fileType === "missing") return false;
+                    
                     const bPathClean = b.filePath.toLowerCase().replace(/[^a-z0-9]/g, "");
                     // 1. Direct file path match (safest and most accurate)
                     if (finalPathClean && finalPathClean.length > 5 && bPathClean === finalPathClean) return true;
@@ -5527,6 +5529,11 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
     }
     if (!fs.existsSync(book.filePath)) {
         console.error(`[AUTO-KINDLE] Book file not found on disk: ${book.filePath}`);
+        return;
+    }
+    const stat = fs.statSync(book.filePath);
+    if (!stat.isFile()) {
+        console.error(`[AUTO-KINDLE] Book path is not a file (likely a directory stub): ${book.filePath}`);
         return;
     }
 
