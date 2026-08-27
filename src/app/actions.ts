@@ -210,13 +210,13 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         
         // 1. Primary: iTunes API (Fastest and most reliable for commercial books)
         try {
-            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&limit=15`;
+            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&lang=en_us&limit=15`;
             let iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
             
             // If no ebook found, try audiobook
             if (!data || !data.results || data.results.length === 0) {
-                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&limit=15`;
+                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&lang=en_us&limit=15`;
                 iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
                 data = iRes && iRes.ok ? await iRes.json() : null;
             }
@@ -243,7 +243,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         // 2. Failover: OpenLibrary
         if (books.length === 0) {
             try {
-                const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=15`;
+                const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=15`;
                 const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
                 
                 if (res && res.ok) {
@@ -276,7 +276,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                 const settings = await prisma.settings.findUnique({ where: { id: "global" } });
                 const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
                 const gbKey = activeKey ? `&key=${activeKey}` : "";
-                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=15${gbKey}`;
+                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=en&maxResults=15${gbKey}`;
                 const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
                 if (gRes && gRes.ok) {
                     const data = await gRes.json();
@@ -286,7 +286,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                             const bookAuthor = item.volumeInfo?.authors?.[0] || author;
                             let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || null;
                             if (coverUrl) {
-                                coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "");
+                                coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0");
                             }
                             if (!title) continue;
                             books.push({
@@ -306,7 +306,24 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
             return { success: false, error: "Failed to query all metadata APIs (iTunes, OpenLibrary, Google Books)" };
         }
         
-        const uniqueBooks = Array.from(new Map(books.map(b => [b.title.toLowerCase(), b])).values());
+        const filteredBooks = books.filter(b => {
+            const t = b.title.toLowerCase();
+            if (isForeignLanguage(b.title)) return false;
+            // Filter omnibuses/boxsets
+            if (t.includes("collection") || t.includes("box set") || t.includes("boxed set") || t.includes("omnibus") || /\b\d+\s*-\s*\d+\b/.test(t) || /\b(?:vol|volumes|books)\s*\d+\s*(?:to|-|and)\s*\d+\b/.test(t)) return false;
+            // Filter non-series companions
+            if (t.includes("a history") || t.includes("the journey") || t.includes("the making of") || t.includes("official guide") || t.includes("playscript") || t.includes("script") || t.includes("companion")) return false;
+            // Foreign conjunctions common in translations
+            if (/\b(?:y la|y el|og|e a|e o|und der|und die|und das|et le|et la|il prigioniero|la piedra|la cámara|el prisionero)\b/.test(t)) return false;
+            return true;
+        }).map(b => {
+            return {
+                ...b,
+                title: b.title.replace(/\s*\([^)]+\)\s*/g, " ").replace(/\s*\[[^\]]+\]\s*/g, " ").split(/ - (?:Part|Book)s? /i)[0].trim()
+            };
+        });
+
+        const uniqueBooks = Array.from(new Map(filteredBooks.map(b => [b.title.toLowerCase(), b])).values());
         
         // 4. Try Bulk AI Volume Assignment
         try {
@@ -435,6 +452,7 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
                     const headRes = await fetch(c, { method: "HEAD" });
                     if (headRes.ok) {
                         const len = headRes.headers.get("content-length");
+                        // Reject known generic "No Cover" placeholders (usually ~9KB)
                         if (len === "9103" || len === "9102") {
                             console.log(`[COVER-ENGINE] ⚠️ REJECTED (Google Books): Image is the generic 'Not Available' placeholder.`);
                             return null;
@@ -486,14 +504,14 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
     if (isAudiobook) {
         resolvedUrl = await tryAudible();
         if (!resolvedUrl) resolvedUrl = await tryITunes();
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(false);
+        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(true);
         if (!resolvedUrl) resolvedUrl = await tryGoogleBooks();
-        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(false);
-        if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(true);
     } else {
-        resolvedUrl = await tryGoogleBooks();
-        if (!resolvedUrl) resolvedUrl = await tryITunes();
+        resolvedUrl = await tryITunes();
         if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(false);
         if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(true);
+        if (!resolvedUrl) resolvedUrl = await tryGoogleBooks();
     }
 
     if (resolvedUrl && bookFolder) {
@@ -1963,12 +1981,18 @@ export async function getBookRequests() {
         const pendingReqs = await prisma.bookRequest.findMany({
             where: { status: { in: ["Pending", "Searching", "Approved"] } }
         });
-        if (pendingReqs.length > 0) {
+        const downloadedReqs = await prisma.bookRequest.findMany({
+            where: { status: "Downloaded" }
+        });
+        
+        if (pendingReqs.length > 0 || downloadedReqs.length > 0) {
             const allBooks = await prisma.book.findMany();
+            
             for (const req of pendingReqs) {
                 const normReq = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 const reqMedia = req.mediaType || "ebook";
                 const isFound = allBooks.some(b => {
+                    if (b.fileType === "missing") return false;
                     const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                     const bMedia = b.mediaType || "ebook";
                     return bMedia === reqMedia && (normB === normReq || (normReq.length > 5 && normB.includes(normReq)));
@@ -1977,6 +2001,23 @@ export async function getBookRequests() {
                     await prisma.bookRequest.update({
                         where: { id: req.id },
                         data: { status: "Downloaded" }
+                    });
+                }
+            }
+            
+            for (const req of downloadedReqs) {
+                const normReq = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const reqMedia = req.mediaType || "ebook";
+                const isFound = allBooks.some(b => {
+                    if (b.fileType === "missing") return false;
+                    const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const bMedia = b.mediaType || "ebook";
+                    return bMedia === reqMedia && (normB === normReq || (normReq.length > 5 && normB.includes(normReq)));
+                });
+                if (!isFound) {
+                    await prisma.bookRequest.update({
+                        where: { id: req.id },
+                        data: { status: "Failed (Missing)" }
                     });
                 }
             }
@@ -2409,7 +2450,8 @@ export async function runAiLibraryScanAction(libraryId: string): Promise<{ succe
                         data: updateData
                     });
 
-                    await renameBookFileOnDisk(b.id);
+                    // CRITICAL: Do NOT automatically restructure/rename files on disk during scans
+                    // This prevents infinite scan-rename loops and filesystem race conditions if AI hallucinated.
                     resolvedCount++;
                 }
             } catch (err: any) {
@@ -2825,7 +2867,6 @@ function purgeEmptyDirectories(dir: string) {
                     file === 'Thumbs.db' || 
                     file === 'desktop.ini' || 
                     file === '.nomedia' ||
-                    file === '.portalarr-missing' ||
                     file.endsWith('.jpg') ||
                     file.endsWith('.png') ||
                     file.endsWith('.nfo') ||
@@ -2835,7 +2876,10 @@ function purgeEmptyDirectories(dir: string) {
                     file.endsWith('.url') ||
                     file.endsWith('.log') ||
                     file.endsWith('.srt');
-                if (!isIgnored) {
+                    
+                if (file === '.portalarr-missing') {
+                    isEmpty = false;
+                } else if (!isIgnored) {
                     isEmpty = false;
                 }
             }
@@ -3778,6 +3822,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                 where: { mediaType: reqMediaType, libraryId: resolvedLibId }
             });
             const existingBook = allBooks.find(b => {
+                if (b.fileType === "missing") return false;
                 const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 return normB === normTitleReq || (normTitleReq.length > 5 && normB.includes(normTitleReq));
             });
@@ -3791,6 +3836,11 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                 return;
             }
         }
+        // Update status to Searching while Prowlarr fetches
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { status: "Searching" }
+        });
         
         // ------------------------------------------------------------------------------------------
         // PORTALARR-RADARR HYBRID: Create "Missing" Book Stub in Library immediately upon approval
@@ -3871,39 +3921,16 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
         const cleanTitleBase = title.replace(/\s*\([^)]+\)\s*/g, " ").trim();
         const queryText = author ? `${cleanTitleBase} ${author}` : cleanTitleBase;
-        const cleanedQuery = cleanSearchQuery(queryText);
-        const cleanTitleOnly = cleanSearchQuery(cleanTitleBase);
 
-        const catQuery = reqMediaType === "audiobook"
-            ? "&categories=3030&categories=3000"
-            : "&categories=7000&categories=7010&categories=7020&categories=3040";
-
-        // Tier 1: Title + Author in category
-        let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
-        let res = await fetch(searchUrl, { cache: "no-store" });
-        let results = res.ok ? await res.json() : [];
+        // Tier 1: Title + Author (using executeProwlarrSearch for 4-tier literal Torznab fallbacks)
+        let results = await executeProwlarrSearch(queryText, reqMediaType, prowlarrUrl, prowlarrKey);
         let candidates = await filterReleasesForMediaType(results, reqMediaType);
 
-        // Tier 2: Title Only in category if Title + Author returned 0 candidates
-        if (candidates.length === 0 && cleanTitleOnly && cleanTitleOnly !== cleanedQuery) {
-            console.log(`[AUTO-DOWNLOAD] Tier 1 search yielded 0 candidates. Retrying with Title-only query: "${cleanTitleOnly}"`);
-            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanTitleOnly)}${catQuery}&apikey=${prowlarrKey}`;
-            res = await fetch(searchUrl, { cache: "no-store" });
-            if (res.ok) {
-                results = await res.json();
-                candidates = await filterReleasesForMediaType(results, reqMediaType);
-            }
-        }
-
-        // Tier 3: Title Only without category filters if initial categories returned 0 candidates
-        if (candidates.length === 0 && cleanTitleOnly) {
-            console.log(`[AUTO-DOWNLOAD] Tier 2 search yielded 0 candidates. Retrying without category filter for: "${cleanTitleOnly}"`);
-            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanTitleOnly)}&apikey=${prowlarrKey}`;
-            res = await fetch(searchUrl, { cache: "no-store" });
-            if (res.ok) {
-                results = await res.json();
-                candidates = await filterReleasesForMediaType(results, reqMediaType);
-            }
+        // Tier 2: Title Only (using executeProwlarrSearch for 4-tier literal Torznab fallbacks)
+        if (candidates.length === 0 && cleanTitleBase && cleanTitleBase !== queryText) {
+            console.log(`[AUTO-DOWNLOAD] Tier 1 search yielded 0 candidates. Retrying with Title-only query: "${cleanTitleBase}"`);
+            results = await executeProwlarrSearch(cleanTitleBase, reqMediaType, prowlarrUrl, prowlarrKey);
+            candidates = await filterReleasesForMediaType(results, reqMediaType);
         }
 
         if (candidates.length === 0) {
@@ -4001,6 +4028,80 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
     }
 }
 
+async function executeProwlarrSearch(query: string, mediaType: string, prowlarrUrl: string, prowlarrKey: string): Promise<any[]> {
+    const cleanedQuery = cleanSearchQuery(query);
+    const catQuery = mediaType === "audiobook"
+        ? "&categories=3030&categories=3000"
+        : "&categories=7000&categories=7010&categories=7020&categories=3040";
+
+    // Try raw literal query first
+    let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(query.trim())}${catQuery}&apikey=${prowlarrKey}`;
+    let res = await fetch(searchUrl, { cache: "no-store" });
+    let results: any[] = [];
+    if (res.ok) {
+        results = await res.json();
+    }
+
+    // If literal query fails, fallback to cleaned query
+    if (results.length === 0 && cleanedQuery && cleanedQuery !== query.trim()) {
+        searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
+        res = await fetch(searchUrl, { cache: "no-store" });
+        if (res.ok) {
+            results = await res.json();
+        }
+    }
+    
+    // UK Harry Potter Fallback (Sorcerer's -> Philosopher's)
+    if (results.length === 0) {
+        const ukQuery = query.toLowerCase().replace(/sorcerer'?s?\s*stone/, "philosopher's stone");
+        if (ukQuery !== query.toLowerCase()) {
+            const cleanUkQuery = cleanSearchQuery(ukQuery);
+            // Try literal UK query
+            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(ukQuery)}${catQuery}&apikey=${prowlarrKey}`;
+            res = await fetch(searchUrl, { cache: "no-store" });
+            if (res.ok) {
+                results = await res.json();
+            }
+            
+            // Fallback to cleaned UK query if 0
+            if (results.length === 0 && cleanUkQuery !== ukQuery) {
+                searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanUkQuery)}${catQuery}&apikey=${prowlarrKey}`;
+                res = await fetch(searchUrl, { cache: "no-store" });
+                if (res.ok) {
+                    results = await res.json();
+                }
+            }
+        }
+    }
+
+    // Final Fallback: Category-less search (Indexers sometimes categorize books broadly)
+    if (results.length === 0) {
+        searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}&apikey=${prowlarrKey}`;
+        res = await fetch(searchUrl, { cache: "no-store" });
+        if (res.ok) {
+            results = await res.json();
+        }
+    }
+    
+    // If searching for audiobook and initial query produced few audiobooks, append "audiobook" to query
+    if (mediaType === "audiobook") {
+        const initialFiltered = await filterReleasesForMediaType(results, mediaType);
+        if (initialFiltered.length < 3 && !cleanedQuery.toLowerCase().includes("audiobook")) {
+            console.log(`[PROWLARR] Initial audiobook query "${query}" yielded few results. Retrying with 'audiobook' appended...`);
+            const audioQueryUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery + " audiobook")}${catQuery}&apikey=${prowlarrKey}`;
+            const audioRes = await fetch(audioQueryUrl, { cache: "no-store" });
+            if (audioRes.ok) {
+                const audioResults = await audioRes.json();
+                if (Array.isArray(audioResults)) {
+                    results = [...results, ...audioResults];
+                }
+            }
+        }
+    }
+
+    return results;
+}
+
 export async function searchProwlarrIndexers(query: string, mediaType: string = "ebook") {
     await verifyUser();
     
@@ -4014,35 +4115,10 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
     
     const prowlarrUrl = cleanUrl(prowlarrApp.url);
     const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
-    const cleanedQuery = cleanSearchQuery(query);
     
     try {
-        const catQuery = mediaType === "audiobook"
-            ? "&categories=3030&categories=3000"
-            : "&categories=7000&categories=7010&categories=7020&categories=3040";
+        let results = await executeProwlarrSearch(query, mediaType, prowlarrUrl, prowlarrKey);
 
-        let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
-        let res = await fetch(searchUrl, { cache: "no-store" });
-        let results: any[] = [];
-        if (res.ok) {
-            results = await res.json();
-        }
-
-        // If searching for audiobook and initial query produced few audiobooks, append "audiobook" to query
-        if (mediaType === "audiobook") {
-            const initialFiltered = await filterReleasesForMediaType(results, mediaType);
-            if (initialFiltered.length < 3 && !cleanedQuery.toLowerCase().includes("audiobook")) {
-                const audioQueryUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery + " audiobook")}${catQuery}&apikey=${prowlarrKey}`;
-                const audioRes = await fetch(audioQueryUrl, { cache: "no-store" });
-                if (audioRes.ok) {
-                    const audioResults = await audioRes.json();
-                    if (Array.isArray(audioResults)) {
-                        results = [...results, ...audioResults];
-                    }
-                }
-            }
-        }
-        
         const filtered = await filterReleasesForMediaType(results, mediaType);
         
         const seen = new Set<string>();
@@ -4457,9 +4533,9 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
         .split(/[^a-z0-9]/)
         .filter(w => w.length > 2 && !stopWords.has(w));
         
-    let finalTitleWords = titleWords;
+    let finalTitleWords = Array.from(new Set(titleWords));
     if (finalTitleWords.length === 0) {
-        finalTitleWords = searchTitle.split(/[^a-z0-9]/).filter(w => w.length > 0);
+        finalTitleWords = Array.from(new Set(searchTitle.split(/[^a-z0-9]/).filter(w => w.length > 0)));
     }
     
     const validExtensions = mediaType === "audiobook"
@@ -4494,7 +4570,7 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                             matchCount++;
                         }
                     }
-                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
+                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.75));
                     if (matchCount >= requiredMatches) {
                         isDirectoryTitleMatch = true;
                     }
@@ -4532,7 +4608,7 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                         }
                     }
                     
-                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
+                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.75));
                     if (finalTitleWords.length > 0 && matchCount >= requiredMatches) {
                         matches.push(fullPath);
                     }
@@ -4899,6 +4975,8 @@ export async function monitorAndRetryDownload(
                 const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 
                 const matchedBook = allBooks.find(b => {
+                    if (b.fileType === "missing") return false;
+                    
                     const bPathClean = b.filePath.toLowerCase().replace(/[^a-z0-9]/g, "");
                     // 1. Direct file path match (safest and most accurate)
                     if (finalPathClean && finalPathClean.length > 5 && bPathClean === finalPathClean) return true;
@@ -5150,7 +5228,9 @@ export async function resolveBookWithAI(bookId: string) {
                 ...(coverUrl ? { coverUrl } : {})
             }
         });
-        await renameBookFileOnDisk(bookId);
+        
+        // Do NOT automatically rename files on disk based on AI guesses.
+        // Let the admin manually verify and save via updateBook if they want to restructure.
 
         revalidatePath("/library");
         return { success: true, message: `Successfully resolved metadata via ${aiResult.providerUsed}!`, result: aiResult };
@@ -5202,7 +5282,8 @@ async function _backgroundAiScan() {
                     ...(coverUrl ? { coverUrl } : {})
                 }
             }).catch(() => {});
-            await renameBookFileOnDisk(b.id);
+            
+            // CRITICAL: Do NOT automatically restructure/rename files on disk during background batch scans
             updatedCount++;
         } catch (err: any) {
             console.warn(`[AI-BATCH-SCAN] ⚠️ Failed for "${b.title}":`, err.message || err);
@@ -5476,6 +5557,11 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         console.error(`[AUTO-KINDLE] Book file not found on disk: ${book.filePath}`);
         return;
     }
+    const stat = fs.statSync(book.filePath);
+    if (!stat.isFile()) {
+        console.error(`[AUTO-KINDLE] Book path is not a file (likely a directory stub): ${book.filePath}`);
+        return;
+    }
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
     if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
@@ -5679,55 +5765,52 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
     }
 }
 
-export async function searchOpenLibrary(query: string) {
+export async function searchOpenLibrary(query: string, mediaType: "ebook" | "audiobook" = "ebook") {
     if (!query || query.trim().length < 2) return [];
     try {
         let results: any[] = [];
         
-        // 1. Audible API (Excellent for Audiobooks & Exclusives)
-        try {
-            const audUrl = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,contributors,product_desc&num_results=8&products_sort_by=Relevance`;
-            const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
-            const audData = audRes && audRes.ok ? await audRes.json() : null;
-            
-            if (audData && audData.products && audData.products.length > 0) {
-                for (const prod of audData.products) {
-                    const title = prod.title;
-                    if (!title) continue;
-                    
-                    let author = "Unknown Author";
-                    if (prod.authors && prod.authors.length > 0) {
-                        author = prod.authors[0].name;
+        // 1. Audible API (Only for Audiobooks)
+        if (mediaType === "audiobook") {
+            try {
+                const audUrl = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,contributors,product_desc&num_results=8&products_sort_by=Relevance`;
+                const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
+                const audData = audRes && audRes.ok ? await audRes.json() : null;
+                
+                if (audData && audData.products && audData.products.length > 0) {
+                    for (const prod of audData.products) {
+                        const title = prod.title;
+                        if (!title) continue;
+                        
+                        let author = "Unknown Author";
+                        if (prod.authors && prod.authors.length > 0) {
+                            author = prod.authors[0].name;
+                        }
+                        
+                        let coverUrl = "";
+                        if (prod.product_images && prod.product_images["500"]) {
+                            coverUrl = prod.product_images["500"];
+                        }
+                        
+                        let year = "Unknown Year";
+                        if (prod.release_date) {
+                            year = prod.release_date.substring(0, 4);
+                        }
+                        
+                        results.push({ title, author, coverUrl, year });
                     }
-                    
-                    let coverUrl = "";
-                    if (prod.product_images && prod.product_images["500"]) {
-                        coverUrl = prod.product_images["500"];
-                    }
-                    
-                    let year = "Unknown Year";
-                    if (prod.release_date) {
-                        year = prod.release_date.substring(0, 4);
-                    }
-                    
-                    results.push({ title, author, coverUrl, year });
                 }
+            } catch (e) {
+                console.warn("[API-FAILOVER] Audible search failed:", e);
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] Audible search failed:", e);
         }
 
         // 2. iTunes API
         try {
-            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=ebook&limit=8`;
+            const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
+            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${entity}&limit=8`;
             let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
-            
-            if (!data || !data.results || data.results.length === 0) {
-                iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=audiobook&limit=8`;
-                iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
-                data = iRes && iRes.ok ? await iRes.json() : null;
-            }
             
             if (data && data.results && data.results.length > 0) {
                 for (const item of data.results) {
@@ -5783,7 +5866,7 @@ export async function searchOpenLibrary(query: string) {
                         results.push({
                             title: vol.title,
                             author: vol.authors ? vol.authors[0] : "Unknown Author",
-                            coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&zoom=1", "&zoom=0") : "",
+                            coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") : "",
                             year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year"
                         });
                     }

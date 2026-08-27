@@ -701,7 +701,7 @@ function BookLibraryPageContent() {
 
         <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
           <div className="space-y-1">
-            <h3 className="font-bold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2 h-10 flex items-center">
+            <h3 className="font-bold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-3 h-[60px]">
               {displayTitle}
             </h3>
             <p className="text-xs text-muted-foreground truncate">
@@ -946,7 +946,7 @@ function BookLibraryPageContent() {
 
         <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
           <div className="space-y-1">
-            <h3 className="font-bold text-sm leading-snug group-hover:text-amber-400 transition-colors line-clamp-2 h-10 flex items-center">
+            <h3 className="font-bold text-sm leading-snug group-hover:text-amber-400 transition-colors line-clamp-3 h-[60px]">
               {displayTitle}
             </h3>
             <p className="text-xs text-muted-foreground truncate">
@@ -1265,7 +1265,7 @@ function BookLibraryPageContent() {
     const delayDebounceFn = setTimeout(async () => {
       setSearchingRegistry(true);
       try {
-        const results = await searchOpenLibrary(reqTitle);
+        const results = await searchOpenLibrary(reqTitle, reqMediaType);
         setOpenLibrarySuggestions(results || []);
       } catch (e) {
         console.error("Autocomplete search error:", e);
@@ -1275,7 +1275,7 @@ function BookLibraryPageContent() {
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [reqTitle]);
+  }, [reqTitle, reqMediaType]);
 
   useEffect(() => {
     if (selectedLibrary) {
@@ -1737,14 +1737,17 @@ function BookLibraryPageContent() {
     setSearchingProwlarr(true);
     setProwlarrResults([]);
     setSearchProwlarrError("");
+
+    // Clean the title by removing text inside parentheses (like "Enhanced Edition")
+    const cleanTitle = (req.title || "").replace(/\s*\([^)]+\)\s*/g, " ").trim();
     
-    // Set the initial custom query if not already typing
+    // Set the initial custom query if not already typing (Title-only is best for Torznab)
     if (!customQuery && !customSearchQuery) {
-        setCustomSearchQuery(req.author ? `${req.title} ${req.author}` : req.title);
+        setCustomSearchQuery(cleanTitle);
     }
     
     try {
-      const queryText = customQuery || customSearchQuery || (req.author ? `${req.title} ${req.author}` : req.title);
+      const queryText = customQuery || customSearchQuery || cleanTitle;
       const res = await searchProwlarrIndexers(queryText, targetMediaType);
       setProwlarrResults(res || []);
     } catch (e: any) {
