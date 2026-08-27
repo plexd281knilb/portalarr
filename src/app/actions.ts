@@ -2867,7 +2867,6 @@ function purgeEmptyDirectories(dir: string) {
                     file === 'Thumbs.db' || 
                     file === 'desktop.ini' || 
                     file === '.nomedia' ||
-                    file === '.portalarr-missing' ||
                     file.endsWith('.jpg') ||
                     file.endsWith('.png') ||
                     file.endsWith('.nfo') ||
@@ -2877,7 +2876,10 @@ function purgeEmptyDirectories(dir: string) {
                     file.endsWith('.url') ||
                     file.endsWith('.log') ||
                     file.endsWith('.srt');
-                if (!isIgnored) {
+                    
+                if (file === '.portalarr-missing') {
+                    isEmpty = false;
+                } else if (!isIgnored) {
                     isEmpty = false;
                 }
             }
@@ -4531,9 +4533,9 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
         .split(/[^a-z0-9]/)
         .filter(w => w.length > 2 && !stopWords.has(w));
         
-    let finalTitleWords = titleWords;
+    let finalTitleWords = Array.from(new Set(titleWords));
     if (finalTitleWords.length === 0) {
-        finalTitleWords = searchTitle.split(/[^a-z0-9]/).filter(w => w.length > 0);
+        finalTitleWords = Array.from(new Set(searchTitle.split(/[^a-z0-9]/).filter(w => w.length > 0)));
     }
     
     const validExtensions = mediaType === "audiobook"
@@ -4568,7 +4570,7 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                             matchCount++;
                         }
                     }
-                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
+                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.75));
                     if (matchCount >= requiredMatches) {
                         isDirectoryTitleMatch = true;
                     }
@@ -4606,7 +4608,7 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                         }
                     }
                     
-                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.65));
+                    const requiredMatches = Math.max(1, Math.ceil(finalTitleWords.length * 0.75));
                     if (finalTitleWords.length > 0 && matchCount >= requiredMatches) {
                         matches.push(fullPath);
                     }
