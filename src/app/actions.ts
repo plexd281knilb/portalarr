@@ -2427,7 +2427,8 @@ export async function runAiLibraryScanAction(libraryId: string): Promise<{ succe
                         data: updateData
                     });
 
-                    await renameBookFileOnDisk(b.id);
+                    // CRITICAL: Do NOT automatically restructure/rename files on disk during scans
+                    // This prevents infinite scan-rename loops and filesystem race conditions if AI hallucinated.
                     resolvedCount++;
                 }
             } catch (err: any) {
@@ -5210,7 +5211,9 @@ export async function resolveBookWithAI(bookId: string) {
                 ...(coverUrl ? { coverUrl } : {})
             }
         });
-        await renameBookFileOnDisk(bookId);
+        
+        // Do NOT automatically rename files on disk based on AI guesses.
+        // Let the admin manually verify and save via updateBook if they want to restructure.
 
         revalidatePath("/library");
         return { success: true, message: `Successfully resolved metadata via ${aiResult.providerUsed}!`, result: aiResult };
@@ -5262,7 +5265,8 @@ async function _backgroundAiScan() {
                     ...(coverUrl ? { coverUrl } : {})
                 }
             }).catch(() => {});
-            await renameBookFileOnDisk(b.id);
+            
+            // CRITICAL: Do NOT automatically restructure/rename files on disk during background batch scans
             updatedCount++;
         } catch (err: any) {
             console.warn(`[AI-BATCH-SCAN] ⚠️ Failed for "${b.title}":`, err.message || err);
