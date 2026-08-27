@@ -701,7 +701,7 @@ function BookLibraryPageContent() {
 
         <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
           <div className="space-y-1">
-            <h3 className="font-bold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2 h-10 flex items-center">
+            <h3 className="font-bold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-3 h-[60px]">
               {displayTitle}
             </h3>
             <p className="text-xs text-muted-foreground truncate">
@@ -946,7 +946,7 @@ function BookLibraryPageContent() {
 
         <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
           <div className="space-y-1">
-            <h3 className="font-bold text-sm leading-snug group-hover:text-amber-400 transition-colors line-clamp-2 h-10 flex items-center">
+            <h3 className="font-bold text-sm leading-snug group-hover:text-amber-400 transition-colors line-clamp-3 h-[60px]">
               {displayTitle}
             </h3>
             <p className="text-xs text-muted-foreground truncate">
