@@ -4038,11 +4038,53 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
             ? "&categories=3030&categories=3000"
             : "&categories=7000&categories=7010&categories=7020&categories=3040";
 
-        let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
+        // Try raw literal query first
+        let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(query.trim())}${catQuery}&apikey=${prowlarrKey}`;
         let res = await fetch(searchUrl, { cache: "no-store" });
         let results: any[] = [];
         if (res.ok) {
             results = await res.json();
+        }
+
+        // If literal query fails, fallback to cleaned query
+        if (results.length === 0 && cleanedQuery && cleanedQuery !== query.trim()) {
+            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
+            res = await fetch(searchUrl, { cache: "no-store" });
+            if (res.ok) {
+                results = await res.json();
+            }
+        }
+        
+        // UK Harry Potter Fallback (Sorcerer's -> Philosopher's)
+        if (results.length === 0) {
+            const ukQuery = query.toLowerCase().replace(/sorcerer'?s?\s*stone/, "philosopher's stone");
+            if (ukQuery !== query.toLowerCase()) {
+                const cleanUkQuery = cleanSearchQuery(ukQuery);
+                // Try literal UK query
+                searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(ukQuery)}${catQuery}&apikey=${prowlarrKey}`;
+                res = await fetch(searchUrl, { cache: "no-store" });
+                if (res.ok) {
+                    results = await res.json();
+                }
+                
+                // Fallback to cleaned UK query if 0
+                if (results.length === 0 && cleanUkQuery !== ukQuery) {
+                    searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanUkQuery)}${catQuery}&apikey=${prowlarrKey}`;
+                    res = await fetch(searchUrl, { cache: "no-store" });
+                    if (res.ok) {
+                        results = await res.json();
+                    }
+                }
+            }
+        }
+
+        // Final Fallback: Category-less search (Indexers sometimes categorize books broadly)
+        if (results.length === 0) {
+            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}&apikey=${prowlarrKey}`;
+            res = await fetch(searchUrl, { cache: "no-store" });
+            if (res.ok) {
+                results = await res.json();
+            }
         }
 
         // If searching for audiobook and initial query produced few audiobooks, append "audiobook" to query
