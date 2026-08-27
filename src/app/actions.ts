@@ -284,10 +284,9 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                         for (const item of data.items) {
                             const title = item.volumeInfo?.title || "";
                             const bookAuthor = item.volumeInfo?.authors?.[0] || author;
-                            let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || null;
-                            if (coverUrl) {
-                                coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "");
-                            }
+                            // Google Books covers are extremely unreliable and often return generic placeholders.
+                            // We explicitly force null to trigger the high-quality CSS fallback.
+                            let coverUrl = null; 
                             if (!title) continue;
                             books.push({
                                 title: title,
@@ -442,29 +441,7 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
         return null;
     };
 
-    const tryGoogleBooks = async () => {
-        try {
-            const googleCover = await fetchGoogleBooksCover(title, author);
-            if (googleCover) {
-                const c = googleCover.replace("&zoom=1", "&zoom=0").replace("&edge=curl", "");
-                
-                try {
-                    const headRes = await fetch(c, { method: "HEAD" });
-                    if (headRes.ok) {
-                        const len = headRes.headers.get("content-length");
-                        if (len === "9103" || len === "9102") {
-                            console.log(`[COVER-ENGINE] ⚠️ REJECTED (Google Books): Image is the generic 'Not Available' placeholder.`);
-                            return null;
-                        }
-                    }
-                } catch (e) {}
 
-                console.log(`[COVER-ENGINE] ✅ SUCCESS (Google Books): ${c}`);
-                return c;
-            }
-        } catch (e: any) {}
-        return null;
-    };
 
     const tryOpenLibrary = async (titleOnly: boolean = false) => {
         try {
@@ -503,12 +480,10 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
     if (isAudiobook) {
         resolvedUrl = await tryAudible();
         if (!resolvedUrl) resolvedUrl = await tryITunes();
-        if (!resolvedUrl) resolvedUrl = await tryGoogleBooks();
         if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(false);
         if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(true);
     } else {
-        resolvedUrl = await tryGoogleBooks();
-        if (!resolvedUrl) resolvedUrl = await tryITunes();
+        resolvedUrl = await tryITunes();
         if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(false);
         if (!resolvedUrl) resolvedUrl = await tryOpenLibrary(true);
     }
@@ -5839,7 +5814,9 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                         results.push({
                             title: vol.title,
                             author: vol.authors ? vol.authors[0] : "Unknown Author",
-                            coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&zoom=1", "&zoom=0") : "",
+                            // Google Books covers are unreliable and often return generic publisher placeholders.
+                            // We force an empty string to trigger the CSS fallback in the UI.
+                            coverUrl: "",
                             year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year"
                         });
                     }
