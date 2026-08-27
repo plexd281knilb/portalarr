@@ -1981,12 +1981,18 @@ export async function getBookRequests() {
         const pendingReqs = await prisma.bookRequest.findMany({
             where: { status: { in: ["Pending", "Searching", "Approved"] } }
         });
-        if (pendingReqs.length > 0) {
+        const downloadedReqs = await prisma.bookRequest.findMany({
+            where: { status: "Downloaded" }
+        });
+        
+        if (pendingReqs.length > 0 || downloadedReqs.length > 0) {
             const allBooks = await prisma.book.findMany();
+            
             for (const req of pendingReqs) {
                 const normReq = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 const reqMedia = req.mediaType || "ebook";
                 const isFound = allBooks.some(b => {
+                    if (b.fileType === "missing") return false;
                     const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                     const bMedia = b.mediaType || "ebook";
                     return bMedia === reqMedia && (normB === normReq || (normReq.length > 5 && normB.includes(normReq)));
@@ -1995,6 +2001,23 @@ export async function getBookRequests() {
                     await prisma.bookRequest.update({
                         where: { id: req.id },
                         data: { status: "Downloaded" }
+                    });
+                }
+            }
+            
+            for (const req of downloadedReqs) {
+                const normReq = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const reqMedia = req.mediaType || "ebook";
+                const isFound = allBooks.some(b => {
+                    if (b.fileType === "missing") return false;
+                    const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const bMedia = b.mediaType || "ebook";
+                    return bMedia === reqMedia && (normB === normReq || (normReq.length > 5 && normB.includes(normReq)));
+                });
+                if (!isFound) {
+                    await prisma.bookRequest.update({
+                        where: { id: req.id },
+                        data: { status: "Failed (Missing)" }
                     });
                 }
             }
