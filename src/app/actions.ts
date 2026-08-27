@@ -3890,39 +3890,16 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
         const cleanTitleBase = title.replace(/\s*\([^)]+\)\s*/g, " ").trim();
         const queryText = author ? `${cleanTitleBase} ${author}` : cleanTitleBase;
-        const cleanedQuery = cleanSearchQuery(queryText);
-        const cleanTitleOnly = cleanSearchQuery(cleanTitleBase);
 
-        const catQuery = reqMediaType === "audiobook"
-            ? "&categories=3030&categories=3000"
-            : "&categories=7000&categories=7010&categories=7020&categories=3040";
-
-        // Tier 1: Title + Author in category
-        let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
-        let res = await fetch(searchUrl, { cache: "no-store" });
-        let results = res.ok ? await res.json() : [];
+        // Tier 1: Title + Author (using executeProwlarrSearch for 4-tier literal Torznab fallbacks)
+        let results = await executeProwlarrSearch(queryText, reqMediaType, prowlarrUrl, prowlarrKey);
         let candidates = await filterReleasesForMediaType(results, reqMediaType);
 
-        // Tier 2: Title Only in category if Title + Author returned 0 candidates
-        if (candidates.length === 0 && cleanTitleOnly && cleanTitleOnly !== cleanedQuery) {
-            console.log(`[AUTO-DOWNLOAD] Tier 1 search yielded 0 candidates. Retrying with Title-only query: "${cleanTitleOnly}"`);
-            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanTitleOnly)}${catQuery}&apikey=${prowlarrKey}`;
-            res = await fetch(searchUrl, { cache: "no-store" });
-            if (res.ok) {
-                results = await res.json();
-                candidates = await filterReleasesForMediaType(results, reqMediaType);
-            }
-        }
-
-        // Tier 3: Title Only without category filters if initial categories returned 0 candidates
-        if (candidates.length === 0 && cleanTitleOnly) {
-            console.log(`[AUTO-DOWNLOAD] Tier 2 search yielded 0 candidates. Retrying without category filter for: "${cleanTitleOnly}"`);
-            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanTitleOnly)}&apikey=${prowlarrKey}`;
-            res = await fetch(searchUrl, { cache: "no-store" });
-            if (res.ok) {
-                results = await res.json();
-                candidates = await filterReleasesForMediaType(results, reqMediaType);
-            }
+        // Tier 2: Title Only (using executeProwlarrSearch for 4-tier literal Torznab fallbacks)
+        if (candidates.length === 0 && cleanTitleBase && cleanTitleBase !== queryText) {
+            console.log(`[AUTO-DOWNLOAD] Tier 1 search yielded 0 candidates. Retrying with Title-only query: "${cleanTitleBase}"`);
+            results = await executeProwlarrSearch(cleanTitleBase, reqMediaType, prowlarrUrl, prowlarrKey);
+            candidates = await filterReleasesForMediaType(results, reqMediaType);
         }
 
         if (candidates.length === 0) {
@@ -4020,6 +3997,64 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
     }
 }
 
+async function executeProwlarrSearch(query: string, mediaType: string, prowlarrUrl: string, prowlarrKey: string): Promise<any[]> {
+    const cleanedQuery = cleanSearchQuery(query);
+    const catQuery = mediaType === "audiobook"
+        ? "&categories=3030&categories=3000"
+        : "&categories=7000&categories=7010&categories=7020&categories=3040";
+
+    // Try raw literal query first
+    let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(query.trim())}${catQuery}&apikey=${prowlarrKey}`;
+    let res = await fetch(searchUrl, { cache: "no-store" });
+    let results: any[] = [];
+    if (res.ok) {
+        results = await res.json();
+    }
+
+    // If literal query fails, fallback to cleaned query
+    if (results.length === 0 && cleanedQuery && cleanedQuery !== query.trim()) {
+        searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
+        res = await fetch(searchUrl, { cache: "no-store" });
+        if (res.ok) {
+            results = await res.json();
+        }
+    }
+    
+    // UK Harry Potter Fallback (Sorcerer's -> Philosopher's)
+    if (results.length === 0) {
+        const ukQuery = query.toLowerCase().replace(/sorcerer'?s?\s*stone/, "philosopher's stone");
+        if (ukQuery !== query.toLowerCase()) {
+            const cleanUkQuery = cleanSearchQuery(ukQuery);
+            // Try literal UK query
+            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(ukQuery)}${catQuery}&apikey=${prowlarrKey}`;
+            res = await fetch(searchUrl, { cache: "no-store" });
+            if (res.ok) {
+                results = await res.json();
+            }
+            
+            // Fallback to cleaned UK query if 0
+            if (results.length === 0 && cleanUkQuery !== ukQuery) {
+                searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanUkQuery)}${catQuery}&apikey=${prowlarrKey}`;
+                res = await fetch(searchUrl, { cache: "no-store" });
+                if (res.ok) {
+                    results = await res.json();
+                }
+            }
+        }
+    }
+
+    // Final Fallback: Category-less search (Indexers sometimes categorize books broadly)
+    if (results.length === 0) {
+        searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}&apikey=${prowlarrKey}`;
+        res = await fetch(searchUrl, { cache: "no-store" });
+        if (res.ok) {
+            results = await res.json();
+        }
+    }
+    
+    return results;
+}
+
 export async function searchProwlarrIndexers(query: string, mediaType: string = "ebook") {
     await verifyUser();
     
@@ -4033,61 +4068,9 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
     
     const prowlarrUrl = cleanUrl(prowlarrApp.url);
     const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
-    const cleanedQuery = cleanSearchQuery(query);
     
     try {
-        const catQuery = mediaType === "audiobook"
-            ? "&categories=3030&categories=3000"
-            : "&categories=7000&categories=7010&categories=7020&categories=3040";
-
-        // Try raw literal query first
-        let searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(query.trim())}${catQuery}&apikey=${prowlarrKey}`;
-        let res = await fetch(searchUrl, { cache: "no-store" });
-        let results: any[] = [];
-        if (res.ok) {
-            results = await res.json();
-        }
-
-        // If literal query fails, fallback to cleaned query
-        if (results.length === 0 && cleanedQuery && cleanedQuery !== query.trim()) {
-            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}${catQuery}&apikey=${prowlarrKey}`;
-            res = await fetch(searchUrl, { cache: "no-store" });
-            if (res.ok) {
-                results = await res.json();
-            }
-        }
-        
-        // UK Harry Potter Fallback (Sorcerer's -> Philosopher's)
-        if (results.length === 0) {
-            const ukQuery = query.toLowerCase().replace(/sorcerer'?s?\s*stone/, "philosopher's stone");
-            if (ukQuery !== query.toLowerCase()) {
-                const cleanUkQuery = cleanSearchQuery(ukQuery);
-                // Try literal UK query
-                searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(ukQuery)}${catQuery}&apikey=${prowlarrKey}`;
-                res = await fetch(searchUrl, { cache: "no-store" });
-                if (res.ok) {
-                    results = await res.json();
-                }
-                
-                // Fallback to cleaned UK query if 0
-                if (results.length === 0 && cleanUkQuery !== ukQuery) {
-                    searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanUkQuery)}${catQuery}&apikey=${prowlarrKey}`;
-                    res = await fetch(searchUrl, { cache: "no-store" });
-                    if (res.ok) {
-                        results = await res.json();
-                    }
-                }
-            }
-        }
-
-        // Final Fallback: Category-less search (Indexers sometimes categorize books broadly)
-        if (results.length === 0) {
-            searchUrl = `${prowlarrUrl}/api/v1/search?query=${encodeURIComponent(cleanedQuery)}&apikey=${prowlarrKey}`;
-            res = await fetch(searchUrl, { cache: "no-store" });
-            if (res.ok) {
-                results = await res.json();
-            }
-        }
+        let results = await executeProwlarrSearch(query, mediaType, prowlarrUrl, prowlarrKey);
 
         // If searching for audiobook and initial query produced few audiobooks, append "audiobook" to query
         if (mediaType === "audiobook") {
