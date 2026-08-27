@@ -210,13 +210,13 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         
         // 1. Primary: iTunes API (Fastest and most reliable for commercial books)
         try {
-            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&limit=15`;
+            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&lang=en_us&limit=15`;
             let iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
             
             // If no ebook found, try audiobook
             if (!data || !data.results || data.results.length === 0) {
-                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&limit=15`;
+                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&lang=en_us&limit=15`;
                 iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
                 data = iRes && iRes.ok ? await iRes.json() : null;
             }
@@ -243,7 +243,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         // 2. Failover: OpenLibrary
         if (books.length === 0) {
             try {
-                const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=15`;
+                const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=15`;
                 const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
                 
                 if (res && res.ok) {
@@ -276,7 +276,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                 const settings = await prisma.settings.findUnique({ where: { id: "global" } });
                 const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
                 const gbKey = activeKey ? `&key=${activeKey}` : "";
-                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=15${gbKey}`;
+                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=en&maxResults=15${gbKey}`;
                 const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
                 if (gRes && gRes.ok) {
                     const data = await gRes.json();
@@ -306,7 +306,24 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
             return { success: false, error: "Failed to query all metadata APIs (iTunes, OpenLibrary, Google Books)" };
         }
         
-        const uniqueBooks = Array.from(new Map(books.map(b => [b.title.toLowerCase(), b])).values());
+        const filteredBooks = books.filter(b => {
+            const t = b.title.toLowerCase();
+            if (isForeignLanguage(b.title)) return false;
+            // Filter omnibuses/boxsets
+            if (t.includes("collection") || t.includes("box set") || t.includes("boxed set") || t.includes("omnibus") || /\b\d+\s*-\s*\d+\b/.test(t) || /\b(?:vol|volumes|books)\s*\d+\s*(?:to|-|and)\s*\d+\b/.test(t)) return false;
+            // Filter non-series companions
+            if (t.includes("a history") || t.includes("the journey") || t.includes("the making of") || t.includes("official guide") || t.includes("playscript") || t.includes("script") || t.includes("companion")) return false;
+            // Foreign conjunctions common in translations
+            if (/\b(?:y la|y el|og|e a|e o|und der|und die|und das|et le|et la|il prigioniero|la piedra|la cámara|el prisionero)\b/.test(t)) return false;
+            return true;
+        }).map(b => {
+            return {
+                ...b,
+                title: b.title.replace(/\s*\([^)]+\)\s*/g, " ").replace(/\s*\[[^\]]+\]\s*/g, " ").split(/ - (?:Part|Book)s? /i)[0].trim()
+            };
+        });
+
+        const uniqueBooks = Array.from(new Map(filteredBooks.map(b => [b.title.toLowerCase(), b])).values());
         
         // 4. Try Bulk AI Volume Assignment
         try {
