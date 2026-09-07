@@ -3587,7 +3587,7 @@ function BookLibraryPageContent() {
                             openLibrarySuggestions.map((book, idx) => (
                               <div
                                 key={idx}
-                                className="p-2 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
+                                className="p-2.5 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
                                 onMouseDown={async (e) => {
                                   e.preventDefault();
                                   setReqTitle(book.title);
@@ -3663,59 +3663,6 @@ function BookLibraryPageContent() {
                                     </p>
                                   </div>
                                 </div>
-
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className={`h-7 px-2.5 text-[10px] font-semibold opacity-90 group-hover:opacity-100 shrink-0 gap-1 ${
-                                    reqMediaType === "audiobook"
-                                      ? "border-amber-400/30 hover:bg-amber-400 hover:text-black text-amber-400"
-                                      : "border-primary/30 hover:bg-primary hover:text-black text-primary"
-                                  }`}
-                                  onMouseDown={async (e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    setShowSuggestions(false);
-                                    setShowAuthorSuggestions(false);
-
-                                    setIsSubmittingRequest(true);
-                                    try {
-                                      const formData = new FormData();
-                                      formData.append("title", book.title.trim());
-                                      formData.append("author", book.author.trim());
-                                      formData.append("type", reqType);
-                                      formData.append("mediaType", reqMediaType);
-                                      formData.append("coverUrl", book.coverUrl || "");
-                                      formData.append("publishYear", book.year ? String(book.year) : "");
-                                      if (requestedFor) {
-                                        formData.append("requestedFor", requestedFor);
-                                      }
-                                      if (selectedLibrary?.id) {
-                                        formData.append("libraryId", selectedLibrary.id);
-                                      }
-                                      const res = await createBookRequest(formData);
-                                      if (res && res.error) {
-                                        showErrorModal(res.error, "Request Submission Error");
-                                      } else {
-                                        setReqTitle("");
-                                        setReqAuthor("");
-                                        setReqCoverUrl("");
-                                        setReqPublishYear("");
-                                        setIsSelectedFromRegistry(false);
-                                        const reqs = await getBookRequests();
-                                        setRequests(reqs || []);
-                                      }
-                                    } catch (err: any) {
-                                      showErrorModal(err.message || "Failed to submit request.", "Request Error");
-                                    } finally {
-                                      setIsSubmittingRequest(false);
-                                    }
-                                  }}
-                                >
-                                  <Download className="h-3 w-3" />
-                                  Download
-                                </Button>
                               </div>
                             ))
                           )}
@@ -3777,7 +3724,7 @@ function BookLibraryPageContent() {
                               Available Books by {reqAuthor}
                             </span>
                             <span className="text-[9px] lowercase font-normal opacity-80">
-                              click to download
+                              click to select
                             </span>
                           </div>
                           {searchingAuthorRegistry ? (
@@ -3793,7 +3740,7 @@ function BookLibraryPageContent() {
                             authorSuggestions.map((book, idx) => (
                               <div
                                 key={idx}
-                                className="p-2 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
+                                className="p-2.5 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
                                 onMouseDown={async (e) => {
                                   e.preventDefault();
                                   setReqTitle(book.title);
@@ -3870,59 +3817,6 @@ function BookLibraryPageContent() {
                                     </p>
                                   </div>
                                 </div>
-
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className={`h-7 px-2.5 text-[10px] font-semibold opacity-90 group-hover:opacity-100 shrink-0 gap-1 ${
-                                    reqMediaType === "audiobook"
-                                      ? "border-amber-400/30 hover:bg-amber-400 hover:text-black text-amber-400"
-                                      : "border-primary/30 hover:bg-primary hover:text-black text-primary"
-                                  }`}
-                                  onMouseDown={async (e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    setShowAuthorSuggestions(false);
-                                    setShowSuggestions(false);
-
-                                    setIsSubmittingRequest(true);
-                                    try {
-                                      const formData = new FormData();
-                                      formData.append("title", book.title.trim());
-                                      formData.append("author", book.author.trim());
-                                      formData.append("type", reqType);
-                                      formData.append("mediaType", reqMediaType);
-                                      formData.append("coverUrl", book.coverUrl || "");
-                                      formData.append("publishYear", book.year ? String(book.year) : "");
-                                      if (requestedFor) {
-                                        formData.append("requestedFor", requestedFor);
-                                      }
-                                      if (selectedLibrary?.id) {
-                                        formData.append("libraryId", selectedLibrary.id);
-                                      }
-                                      const res = await createBookRequest(formData);
-                                      if (res && res.error) {
-                                        showErrorModal(res.error, "Request Submission Error");
-                                      } else {
-                                        setReqTitle("");
-                                        setReqAuthor("");
-                                        setReqCoverUrl("");
-                                        setReqPublishYear("");
-                                        setIsSelectedFromRegistry(false);
-                                        const reqs = await getBookRequests();
-                                        setRequests(reqs || []);
-                                      }
-                                    } catch (err: any) {
-                                      showErrorModal(err.message || "Failed to submit request.", "Request Error");
-                                    } finally {
-                                      setIsSubmittingRequest(false);
-                                    }
-                                  }}
-                                >
-                                  <Download className="h-3 w-3" />
-                                  Download
-                                </Button>
                               </div>
                             ))
                           )}
