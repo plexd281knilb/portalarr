@@ -126,12 +126,12 @@ export default async function UserLandingPage() {
         {/* ROADMAP CARD */}
         <div className="w-full">
             <Card className="bg-[#121218]/80 border-primary/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
-                <CardHeader>
+                <CardHeader className="pb-2">
                     <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-primary">
                         🗺️ Roadmap & New Features
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden pb-4">
+                <CardContent className="prose prose-neutral dark:prose-invert max-w-none text-sm sm:text-base leading-relaxed break-words overflow-hidden pb-6 prose-headings:font-bold prose-h3:text-lg prose-h3:text-foreground prose-h3:mt-5 prose-h3:mb-3 prose-h4:text-xs prose-h4:font-semibold prose-h4:text-muted-foreground prose-h4:uppercase prose-h4:tracking-wider prose-h4:mt-4 prose-h4:mb-2 prose-ul:my-2 prose-ul:space-y-2.5 prose-li:my-1.5 prose-li:leading-relaxed prose-hr:my-5 prose-hr:border-border/40">
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                         {roadmapText}
                     </ReactMarkdown>
@@ -142,18 +142,18 @@ export default async function UserLandingPage() {
         {/* BETA TESTING CARD */}
         <div className="w-full">
             <Card className="bg-[#121218]/80 border-purple-500/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
-                <CardHeader>
+                <CardHeader className="pb-2">
                     <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-purple-400">
                         🧪 Beta Testing & Additional Services
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden pb-4">
+                <CardContent className="prose prose-neutral dark:prose-invert max-w-none text-sm sm:text-base leading-relaxed break-words overflow-hidden pb-4 prose-headings:font-bold prose-h3:text-lg prose-h3:text-foreground prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-li:leading-relaxed">
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                         {betaText}
                     </ReactMarkdown>
                 </CardContent>
-                <CardContent>
-                    <Button asChild size="lg" className="mt-2 font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all duration-200 hover:ring-2 hover:ring-purple-400/50 hover:shadow-lg active:scale-98">
+                <CardContent className="pt-0 pb-6">
+                    <Button asChild size="lg" className="font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all duration-200 hover:ring-2 hover:ring-purple-400/50 hover:shadow-lg active:scale-98">
                         <Link href="/beta">View Beta Services</Link>
                     </Button>
                 </CardContent>

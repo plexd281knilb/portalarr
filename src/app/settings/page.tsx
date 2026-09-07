@@ -1476,13 +1476,13 @@ function SettingsPageContent() {
                                             name="text" 
                                             value={roadmapText} 
                                             onChange={(e) => setRoadmapText(e.target.value)}
-                                            rows={8} 
-                                            className="font-mono text-sm"
-                                            placeholder="### 🚀 Upcoming Features..."
+                                            rows={12} 
+                                            className="font-mono text-sm leading-relaxed"
+                                            placeholder="### ✨ Recently Released..."
                                             required
                                         />
                                     </TabsContent>
-                                    <TabsContent value="preview" className="border rounded-md p-4 min-h-[212px] bg-muted/10 prose prose-invert max-w-none text-sm overflow-y-auto">
+                                    <TabsContent value="preview" className="border rounded-md p-5 min-h-[290px] bg-muted/10 prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed overflow-y-auto prose-headings:font-bold prose-h3:text-base prose-h3:text-foreground prose-h3:mt-3 prose-h3:mb-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-hr:my-4">
                                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{roadmapText || "*No content*"}</ReactMarkdown>
                                     </TabsContent>
                                 </Tabs>
