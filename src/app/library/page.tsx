@@ -39,6 +39,8 @@ import {
   analyzeAudiobookChaptersAction,
   resolveBookWithAI,
   runAiLibraryScanAction,
+  getEbooksUserGuide,
+  saveEbooksUserGuide,
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { BookReaderModal } from "@/components/book-reader-modal";
@@ -92,7 +94,10 @@ import {
   Bot,
   Wand2,
   Library,
+  HelpCircle,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function isServerActionMismatch(err: any): boolean {
   const msg = String(err?.message || err || "").toLowerCase();
@@ -477,6 +482,13 @@ function BookLibraryPageContent() {
   const [refreshingCoverId, setRefreshingCoverId] = useState<string | null>(
     null,
   );
+
+  // User Guide states
+  const [guideMarkdown, setGuideMarkdown] = useState("");
+  const [guideLoading, setGuideLoading] = useState(false);
+  const [isEditingGuide, setIsEditingGuide] = useState(false);
+  const [editGuideText, setEditGuideText] = useState("");
+  const [savingGuide, setSavingGuide] = useState(false);
 
   const handleRefreshCover = async (bookId: string) => {
     setRefreshingCoverId(bookId);
@@ -1303,6 +1315,16 @@ function BookLibraryPageContent() {
           } catch (e) {}
         }
         setAllUsers(ulist || []);
+
+        try {
+          const guide = await getEbooksUserGuide();
+          if (guide) {
+            setGuideMarkdown(guide);
+            setEditGuideText(guide);
+          }
+        } catch (e) {
+          console.warn("Failed to load user guide:", e);
+        }
       } catch (e) {
         console.error("Failed to load initial library data:", e);
       } finally {
@@ -2661,7 +2683,7 @@ function BookLibraryPageContent() {
         onValueChange={handleTabChange}
         className="w-full space-y-6"
       >
-        <TabsList className="flex flex-wrap sm:flex-nowrap w-full max-w-3xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
+        <TabsList className="flex flex-wrap sm:flex-nowrap w-full max-w-4xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger
             value="libs"
             className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
@@ -2694,6 +2716,13 @@ function BookLibraryPageContent() {
           >
             <Mail className="h-4 w-4 text-primary data-[state=active]:text-slate-950 shrink-0" />{" "}
             <span>Kindle</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="help"
+            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+          >
+            <HelpCircle className="h-4 w-4 text-primary data-[state=active]:text-slate-950 shrink-0" />{" "}
+            <span>Help & Guide</span>
           </TabsTrigger>
         </TabsList>
 
@@ -5027,6 +5056,145 @@ function BookLibraryPageContent() {
               </Card>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="help" className="space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-muted/50">
+            <div>
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <HelpCircle className="h-6 w-6 text-primary" /> Ebooks & Audiobooks User Guide
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Comprehensive guide to in-browser reading, Send-to-Kindle delivery, chapter management, requests, and series tracking.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1.5 h-8"
+                onClick={async () => {
+                  setGuideLoading(true);
+                  try {
+                    const fresh = await getEbooksUserGuide();
+                    setGuideMarkdown(fresh);
+                    setEditGuideText(fresh);
+                  } catch (e) {
+                    console.error("Failed to reload user guide:", e);
+                  } finally {
+                    setGuideLoading(false);
+                  }
+                }}
+                disabled={guideLoading}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${guideLoading ? "animate-spin" : ""}`} />
+                Refresh Guide
+              </Button>
+              {isAdmin && (
+                <Button
+                  variant={isEditingGuide ? "secondary" : "outline"}
+                  size="sm"
+                  className="text-xs gap-1.5 h-8"
+                  onClick={() => setIsEditingGuide(!isEditingGuide)}
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                  {isEditingGuide ? "Preview Guide" : "Edit Guide"}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {isEditingGuide && isAdmin ? (
+            <Card className="border-primary/40 bg-slate-950/60 shadow-xl">
+              <CardHeader className="py-3 px-5 border-b border-muted/40 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Edit3 className="h-4 w-4 text-primary" /> Edit User Guide Markdown
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Changes are saved directly to <code>user_guide_ebooks.md</code>.
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => {
+                      setEditGuideText(guideMarkdown);
+                      setIsEditingGuide(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="text-xs font-semibold text-black gap-1.5 h-8 bg-primary hover:bg-primary/90"
+                    disabled={savingGuide}
+                    onClick={async () => {
+                      setSavingGuide(true);
+                      try {
+                        const res = await saveEbooksUserGuide(editGuideText);
+                        if (res && res.success) {
+                          setGuideMarkdown(editGuideText);
+                          setIsEditingGuide(false);
+                        } else {
+                          showErrorModal(res?.error || "Failed to save guide.", "Save Error");
+                        }
+                      } catch (err: any) {
+                        showErrorModal(err.message || "Failed to save guide.", "Save Error");
+                      } finally {
+                        setSavingGuide(false);
+                      }
+                    }}
+                  >
+                    {savingGuide ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Save className="h-3.5 w-3.5" />
+                    )}
+                    Save Changes
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4">
+                <textarea
+                  value={editGuideText}
+                  onChange={(e) => setEditGuideText(e.target.value)}
+                  className="w-full h-[600px] font-mono text-xs bg-slate-900/90 text-slate-100 p-4 rounded-lg border border-slate-800 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed resize-y"
+                  placeholder="# Write markdown guide content here..."
+                />
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-muted/60 bg-slate-950/40 shadow-xl overflow-hidden">
+              <CardContent className="p-6 md:p-8">
+                {guideLoading ? (
+                  <div className="py-16 text-center text-muted-foreground flex flex-col items-center justify-center gap-3">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-xs">Loading User Guide...</p>
+                  </div>
+                ) : (
+                  <div className="prose prose-invert prose-emerald max-w-none text-slate-200 text-sm leading-relaxed 
+                    [&>h1]:text-2xl [&>h1]:font-extrabold [&>h1]:text-white [&>h1]:border-b [&>h1]:border-muted/50 [&>h1]:pb-3 [&>h1]:mb-6
+                    [&>h2]:text-lg [&>h2]:font-bold [&>h2]:text-primary [&>h2]:mt-8 [&>h2]:mb-3 [&>h2]:border-b [&>h2]:border-muted/30 [&>h2]:pb-1.5
+                    [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:text-amber-400 [&>h3]:mt-4 [&>h3]:mb-2
+                    [&>p]:my-2.5 [&>p]:leading-relaxed
+                    [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-2.5 [&>ul>li]:my-1
+                    [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-2.5 [&>ol>li]:my-1
+                    [&>blockquote]:border-l-2 [&>blockquote]:border-primary [&>blockquote]:pl-4 [&>blockquote]:py-1 [&>blockquote]:my-4 [&>blockquote]:bg-primary/5 [&>blockquote]:rounded-r
+                    [&_code]:bg-muted/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-primary [&_code]:text-xs [&_code]:font-mono
+                    [&_pre]:bg-slate-900 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:border [&_pre]:border-slate-800
+                    [&_hr]:border-muted/40 [&_hr]:my-6
+                    [&_a]:text-primary [&_a]:underline [&_a]:hover:text-primary/80">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {guideMarkdown || "*No guide content found. Click 'Refresh Guide' to load content.*"}
+                    </ReactMarkdown>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 

@@ -1453,6 +1453,39 @@ export async function updateRoadmapText(formData: FormData) {
 }
 
 // ============================================================================
+// --- USER GUIDE ACTIONS ---
+// ============================================================================
+
+export async function getEbooksUserGuide(): Promise<string> {
+    try {
+        const guidePath = path.join(process.cwd(), "user_guide_ebooks.md");
+        if (fs.existsSync(guidePath)) {
+            return fs.readFileSync(guidePath, "utf-8");
+        }
+        const rootGuidePath = path.join(process.cwd(), "USER_GUIDE.md");
+        if (fs.existsSync(rootGuidePath)) {
+            return fs.readFileSync(rootGuidePath, "utf-8");
+        }
+    } catch (e) {
+        console.warn("Failed to read user_guide_ebooks.md from disk:", e);
+    }
+    return "# 📖 Portalarr Ebooks & Audiobooks User Guide\n\nWelcome to Portalarr!";
+}
+
+export async function saveEbooksUserGuide(content: string) {
+    await verifyAdmin();
+    try {
+        const guidePath = path.join(process.cwd(), "user_guide_ebooks.md");
+        fs.writeFileSync(guidePath, content, "utf-8");
+        revalidatePath("/library");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to write user_guide_ebooks.md:", e);
+        return { success: false, error: e.message || "Failed to save user guide." };
+    }
+}
+
+// ============================================================================
 // --- ALERT BANNER ACTIONS ---
 // ============================================================================
 
