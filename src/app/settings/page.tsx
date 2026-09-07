@@ -431,25 +431,25 @@ function SettingsPageContent() {
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1 max-w-5xl bg-muted/40 border border-muted/60 rounded-xl">
-                    <TabsTrigger value="general" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
-                        <Sliders className="h-4 w-4 text-primary shrink-0" />
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1.5 max-w-5xl bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+                    <TabsTrigger value="general" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80">
+                        <Sliders className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>General & Email</span>
                     </TabsTrigger>
-                    <TabsTrigger value="access" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
-                        <Shield className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <TabsTrigger value="access" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                        <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Access Control</span>
                     </TabsTrigger>
-                    <TabsTrigger value="monitoring" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
-                        <Activity className="h-4 w-4 text-sky-400 shrink-0" />
+                    <TabsTrigger value="monitoring" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80">
+                        <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Monitoring & Apps</span>
                     </TabsTrigger>
-                    <TabsTrigger value="beta" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
-                        <Beaker className="h-4 w-4 text-purple-400 shrink-0" />
+                    <TabsTrigger value="beta" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
+                        <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Beta & Announcements</span>
                     </TabsTrigger>
-                    <TabsTrigger value="logs" className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer">
-                        <Terminal className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <TabsTrigger value="logs" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                        <Terminal className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Live System Logs</span>
                     </TabsTrigger>
                 </TabsList>

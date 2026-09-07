@@ -2714,42 +2714,42 @@ function BookLibraryPageContent() {
         <TabsList className="flex flex-wrap sm:flex-nowrap w-full max-w-4xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger
             value="libs"
-            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(255,255,255,0.22)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <BookOpen className="h-4 w-4 shrink-0" /> <span>Ebooks</span>
+            <BookOpen className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Ebooks</span>
           </TabsTrigger>
           <TabsTrigger
             value="audiobooks"
-            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Headphones className="h-4 w-4 shrink-0" /> <span>Audiobooks</span>
+            <Headphones className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-amber-400 data-[state=active]:text-slate-950" /> <span>Audiobooks</span>
           </TabsTrigger>
           <TabsTrigger
             value="requests"
-            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-blue-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(96,165,250,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Send className="h-4 w-4 shrink-0" /> <span>Requests</span>
+            <Send className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Requests</span>
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger
               value="manage"
-              className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+              className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
             >
-              <Plus className="h-4 w-4 shrink-0" /> <span>Manage</span>
+              <Plus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Manage</span>
             </TabsTrigger>
           )}
           <TabsTrigger
             value="kindle"
-            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-cyan-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Mail className="h-4 w-4 text-primary data-[state=active]:text-slate-950 shrink-0" />{" "}
+            <Mail className="h-4 w-4 text-cyan-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
             <span>Kindle</span>
           </TabsTrigger>
           <TabsTrigger
             value="help"
-            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(192,132,252,0.35)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <HelpCircle className="h-4 w-4 text-primary data-[state=active]:text-slate-950 shrink-0" />{" "}
+            <HelpCircle className="h-4 w-4 text-purple-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
             <span>Help & Guide</span>
           </TabsTrigger>
         </TabsList>
@@ -2777,10 +2777,10 @@ function BookLibraryPageContent() {
                         <button
                           key={lib.id}
                           onClick={() => setSelectedLibrary(lib)}
-                          className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border ${
+                          className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border cursor-pointer ${
                             isSelected
                               ? "bg-slate-900 border-primary/80 shadow-md ring-1 ring-primary/30 text-primary"
-                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/60 hover:text-white"
+                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/80 hover:border-primary/60 hover:ring-2 hover:ring-primary/40 hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] hover:text-white"
                           }`}
                         >
                           <span className="font-bold text-sm truncate">
@@ -3304,10 +3304,10 @@ function BookLibraryPageContent() {
                         <button
                           key={lib.id}
                           onClick={() => setSelectedLibrary(lib)}
-                          className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border ${
+                          className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border cursor-pointer ${
                             isSelected
-                              ? "bg-slate-900 border-primary/80 shadow-md ring-1 ring-primary/30 text-primary font-bold"
-                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/60 hover:text-white"
+                              ? "bg-slate-900 border-amber-400/80 shadow-md ring-1 ring-amber-400/30 text-amber-400 font-bold"
+                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/80 hover:border-amber-400/60 hover:ring-2 hover:ring-amber-400/40 hover:shadow-[0_0_12px_rgba(251,191,36,0.2)] hover:text-white"
                           }`}
                         >
                           <span className="font-bold text-sm truncate">
