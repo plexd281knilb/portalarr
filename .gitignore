@@ -41,6 +41,10 @@ yarn-error.log*
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
+prisma/prisma/
+bad*.jpg
+good*.jpg
 
 # vercel
 .vercel

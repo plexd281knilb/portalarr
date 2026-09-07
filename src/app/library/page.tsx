@@ -22,6 +22,7 @@ import {
   getPublicSmtpFromEmail,
   getAppUsers,
   searchOpenLibrary,
+  searchOpenLibraryByAuthor,
   deleteBookRequest,
   getSeriesBooksList,
   createMultipleBookRequests,
@@ -29,6 +30,7 @@ import {
   submitSupportTicket,
   retryBookRequest,
   refreshBookCover,
+  refreshRequestCover,
   findMissingBooksInSeries,
   seedDefaultLibraries,
   importCompletedDownload,
@@ -37,8 +39,21 @@ import {
   analyzeAudiobookChaptersAction,
   resolveBookWithAI,
   runAiLibraryScanAction,
+  getEbooksUserGuide,
+  saveEbooksUserGuide,
+  getKindleDeliveryLogs,
+  retryKindleDelivery,
+  clearKindleDeliveryLogs,
+  diagnoseKindleHealth,
+  getServicesHealthPulse,
+  fulfillRequestWithUpload,
+  toggleMonitorSeries,
+  getBlocklistedReleases,
+  unblocklistRelease,
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
+import { BookReaderModal } from "@/components/book-reader-modal";
+import ErrorTicketModal from "@/components/error-ticket-modal";
 import {
   Card,
   CardHeader,
@@ -89,7 +104,18 @@ import {
   Bot,
   Wand2,
   Library,
+  HelpCircle,
+  Activity,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
+  FileUp,
+  Clock,
+  Zap,
+  Ban,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function isServerActionMismatch(err: any): boolean {
   const msg = String(err?.message || err || "").toLowerCase();
@@ -337,6 +363,10 @@ function BookLibraryPageContent() {
       );
       if (topAudio) setSelectedLibrary(topAudio);
       setReqMediaType("audiobook");
+    } else if (val === "kindle") {
+      loadKindleLogs();
+    } else if (val === "requests") {
+      loadServicesPulse();
     }
   };
 
@@ -366,6 +396,8 @@ function BookLibraryPageContent() {
   const [scanning, setScanning] = useState(false);
   const [resolvingAiId, setResolvingAiId] = useState<string | null>(null);
   const [activeAudiobook, setActiveAudiobook] = useState<any>(null);
+  const [activeReadingBook, setActiveReadingBook] = useState<any>(null);
+  const [readingProgressMap, setReadingProgressMap] = useState<Record<string, any>>({});
   const [chaptersModalBook, setChaptersModalBook] = useState<any>(null);
   const [chaptersList, setChaptersList] = useState<any[]>([]);
   const [loadingChapters, setLoadingChapters] = useState(false);
@@ -444,6 +476,11 @@ function BookLibraryPageContent() {
   );
   const [searchingRegistry, setSearchingRegistry] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Author Autocomplete states
+  const [authorSuggestions, setAuthorSuggestions] = useState<any[]>([]);
+  const [searchingAuthorRegistry, setSearchingAuthorRegistry] = useState(false);
+  const [showAuthorSuggestions, setShowAuthorSuggestions] = useState(false);
   const [reqType, setReqType] = useState("book"); // "book" or "series"
   const [reqCoverUrl, setReqCoverUrl] = useState("");
   const [reqPublishYear, setReqPublishYear] = useState("");
@@ -468,6 +505,178 @@ function BookLibraryPageContent() {
     null,
   );
 
+  // User Guide states
+  const [guideMarkdown, setGuideMarkdown] = useState("");
+  const [guideLoading, setGuideLoading] = useState(false);
+  const [isEditingGuide, setIsEditingGuide] = useState(false);
+  const [editGuideText, setEditGuideText] = useState("");
+  const [savingGuide, setSavingGuide] = useState(false);
+
+  // Kindle Delivery Tracking & Diagnostics States
+  const [kindleLogs, setKindleLogs] = useState<any[]>([]);
+  const [loadingKindleLogs, setLoadingKindleLogs] = useState(false);
+  const [kindleDiagnostics, setKindleDiagnostics] = useState<{
+    ready: boolean;
+    senderEmail: string;
+    userKindleEmail: string;
+    checks: Array<{ name: string; status: "pass" | "warn" | "fail"; message: string }>;
+  } | null>(null);
+  const [runningDiagnostics, setRunningDiagnostics] = useState(false);
+  const [retryingLogId, setRetryingLogId] = useState<string | null>(null);
+  const [clearingKindleLogs, setClearingKindleLogs] = useState(false);
+
+  // Services Health Pulse State
+  const [servicesPulse, setServicesPulse] = useState<any>(null);
+  const [loadingPulse, setLoadingPulse] = useState(false);
+
+  // Request File Upload & Monitoring
+  const [uploadingFulfillId, setUploadingFulfillId] = useState<string | null>(null);
+  const [togglingMonitorId, setTogglingMonitorId] = useState<string | null>(null);
+
+  // Blocklisted Releases State
+  const [blocklistedReleases, setBlocklistedReleases] = useState<any[]>([]);
+  const [loadingBlocklist, setLoadingBlocklist] = useState(false);
+  const [unblocklistingGuid, setUnblocklistingGuid] = useState<string | null>(null);
+
+  const loadKindleLogs = useCallback(async () => {
+    setLoadingKindleLogs(true);
+    try {
+      const logs = await getKindleDeliveryLogs();
+      setKindleLogs(logs || []);
+    } catch (e) {
+      console.error("Failed to load Kindle delivery logs:", e);
+    } finally {
+      setLoadingKindleLogs(false);
+    }
+  }, []);
+
+  const handleRunKindleDiagnostics = async () => {
+    setRunningDiagnostics(true);
+    try {
+      const diag = await diagnoseKindleHealth(userKindleEmail);
+      setKindleDiagnostics(diag);
+    } catch (e: any) {
+      alert(e.message || "Failed to run Kindle diagnostics.");
+    } finally {
+      setRunningDiagnostics(false);
+    }
+  };
+
+  const handleRetryDelivery = async (logId: string) => {
+    setRetryingLogId(logId);
+    try {
+      const res = await retryKindleDelivery(logId);
+      if (res.success) {
+        alert((res as any).message || "Book successfully resent to Kindle!");
+        loadKindleLogs();
+      } else {
+        showErrorModal(res.error || "Retry delivery failed.", "Kindle Retry Error");
+      }
+    } catch (e: any) {
+      showErrorModal(e.message || "Failed to retry delivery.", "Kindle Retry Error");
+    } finally {
+      setRetryingLogId(null);
+    }
+  };
+
+  const handleClearDeliveryLogs = async () => {
+    if (!confirm("Are you sure you want to clear your Kindle delivery history?")) return;
+    setClearingKindleLogs(true);
+    try {
+      await clearKindleDeliveryLogs();
+      setKindleLogs([]);
+    } catch (e: any) {
+      alert(e.message || "Failed to clear delivery logs.");
+    } finally {
+      setClearingKindleLogs(false);
+    }
+  };
+
+  const loadServicesPulse = useCallback(async () => {
+    setLoadingPulse(true);
+    try {
+      const pulse = await getServicesHealthPulse();
+      setServicesPulse(pulse);
+    } catch (e) {
+      console.error("Failed to check services health pulse:", e);
+    } finally {
+      setLoadingPulse(false);
+    }
+  }, []);
+
+  const handleFulfillWithUpload = async (requestId: string, file: File) => {
+    setUploadingFulfillId(requestId);
+    try {
+      const formData = new FormData();
+      formData.append("requestId", requestId);
+      formData.append("file", file);
+      const res = await fulfillRequestWithUpload(formData);
+      if (res.success) {
+        alert(res.message || "File uploaded and processed successfully!");
+        const reqs = await getBookRequests();
+        setRequests(reqs || []);
+        if (selectedLibrary?.id) {
+          const freshBooks = await getLibraryBooks(selectedLibrary.id);
+          setBooks(freshBooks || []);
+        }
+      } else {
+        showErrorModal(res.error || "Failed to fulfill request with uploaded file.", "Upload Fulfillment Error");
+      }
+    } catch (e: any) {
+      showErrorModal(e.message || "Failed to upload file.", "Upload Error");
+    } finally {
+      setUploadingFulfillId(null);
+    }
+  };
+
+  const handleToggleSeriesMonitoring = async (requestId: string) => {
+    setTogglingMonitorId(requestId);
+    try {
+      const res = await toggleMonitorSeries(requestId);
+      if (res.success) {
+        setRequests((prev) =>
+          prev.map((r) =>
+            r.id === requestId ? { ...r, monitorSeries: res.monitorSeries } : r
+          )
+        );
+      } else {
+        alert(res.error || "Failed to update series monitoring.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to toggle series monitoring.");
+    } finally {
+      setTogglingMonitorId(null);
+    }
+  };
+
+  const loadBlocklist = useCallback(async () => {
+    setLoadingBlocklist(true);
+    try {
+      const list = await getBlocklistedReleases();
+      setBlocklistedReleases(list || []);
+    } catch (e) {
+      console.error("Failed to load blocklisted releases:", e);
+    } finally {
+      setLoadingBlocklist(false);
+    }
+  }, []);
+
+  const handleUnblocklist = async (guid: string) => {
+    setUnblocklistingGuid(guid);
+    try {
+      const res = await unblocklistRelease(guid);
+      if (res.success) {
+        setBlocklistedReleases((prev) => prev.filter((r) => r.guid !== guid));
+      } else {
+        alert(res.error || "Failed to remove blocklist entry.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to unblocklist release.");
+    } finally {
+      setUnblocklistingGuid(null);
+    }
+  };
+
   const handleRefreshCover = async (bookId: string) => {
     setRefreshingCoverId(bookId);
     try {
@@ -487,9 +696,69 @@ function BookLibraryPageContent() {
     }
   };
 
+  const [refreshingRequestCoverId, setRefreshingRequestCoverId] = useState<string | null>(null);
+
+  const handleRefreshRequestCover = async (requestId: string) => {
+    setRefreshingRequestCoverId(requestId);
+    try {
+      const res = await refreshRequestCover(requestId);
+      if (res.success && res.coverUrl) {
+        setRequests((prev) =>
+          prev.map((r) =>
+            r.id === requestId ? { ...r, coverUrl: res.coverUrl } : r
+          )
+        );
+      } else {
+        alert(res.error || "Could not fetch cover artwork.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to refresh request cover.");
+    } finally {
+      setRefreshingRequestCoverId(null);
+    }
+  };
+
   // Sort states
   const [sortBy, setSortBy] = useState("recent");
   const [groupBySeries, setGroupBySeries] = useState(false);
+
+  const refreshReadingProgress = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const map: Record<string, any> = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("portalarr-reading-progress-")) {
+          const bookId = key.replace("portalarr-reading-progress-", "");
+          try {
+            map[bookId] = JSON.parse(localStorage.getItem(key) || "{}");
+          } catch (e) {}
+        } else if (key && key.startsWith("portalarr-epub-loc-")) {
+          const bookId = key.replace("portalarr-epub-loc-", "");
+          if (!map[bookId]) {
+            map[bookId] = {
+              bookId,
+              format: "epub",
+              cfi: localStorage.getItem(key),
+              percentage: 1,
+            };
+          }
+        } else if (key && key.startsWith("portalarr-comic-page-")) {
+          const bookId = key.replace("portalarr-comic-page-", "");
+          if (!map[bookId]) {
+            const page = parseInt(localStorage.getItem(key) || "1", 10);
+            map[bookId] = {
+              bookId,
+              format: "comic",
+              page,
+              percentage: 1,
+            };
+          }
+        }
+      }
+    } catch (e) {}
+    setReadingProgressMap(map);
+  }, []);
 
   useEffect(() => {
     const savedSort = localStorage.getItem("book-library-sort");
@@ -505,7 +774,21 @@ function BookLibraryPageContent() {
     if (savedSkip) {
       setSkippedKindleGate(true);
     }
-  }, []);
+
+    refreshReadingProgress();
+
+    const handleProgressUpdate = (e: any) => {
+      if (e?.detail?.bookId) {
+        setReadingProgressMap((prev) => ({
+          ...prev,
+          [e.detail.bookId]: e.detail,
+        }));
+      }
+    };
+
+    window.addEventListener("portalarr-progress-updated", handleProgressUpdate);
+    return () => window.removeEventListener("portalarr-progress-updated", handleProgressUpdate);
+  }, [refreshReadingProgress]);
 
   const handleSortChange = (value: string) => {
     setSortBy(value);
@@ -708,6 +991,32 @@ function BookLibraryPageContent() {
               {displayAuthor}
             </p>
           </div>
+          {(() => {
+            const progress = readingProgressMap[book.id];
+            const hasProgress = progress && (
+              (typeof progress.percentage === "number" && progress.percentage > 0) ||
+              progress.cfi ||
+              (typeof progress.page === "number" && progress.page > 0)
+            );
+            const displayPercentage = hasProgress ? Math.max(1, progress.percentage || 1) : 0;
+
+            if (!hasProgress) return null;
+
+            return (
+              <div className="space-y-1 bg-primary/10 border border-primary/20 p-2 rounded select-none">
+                <div className="flex justify-between items-center text-[10px] font-bold text-primary">
+                  <span>Reading Progress</span>
+                  <span>{displayPercentage}%</span>
+                </div>
+                <div className="w-full bg-slate-900/80 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-primary h-full transition-all duration-300 rounded-full"
+                    style={{ width: `${Math.min(displayPercentage, 100)}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
           <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
             <span>
               Size:{" "}
@@ -718,83 +1027,109 @@ function BookLibraryPageContent() {
           </div>
         </div>
         <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
-          <div className="flex gap-2 w-full">
-            <Button
-              variant="default"
-              size="sm"
-              className="flex-1 text-xs font-semibold text-black"
-              onClick={() => setActiveBook(book)}
-            >
-              <BookOpen className="h-3 w-3 mr-1" /> Read
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 text-xs border-primary/20 text-primary hover:bg-primary/10 font-semibold"
-              title="Send to Kindle"
-              disabled={sendingToKindleId !== null}
-              onClick={() => handleSendToKindle(book.id)}
-            >
-              {sendingToKindleId === book.id ? (
-                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-              ) : (
-                <Send className="h-3 w-3 mr-1" />
-              )}
-              Kindle
-            </Button>
-          </div>
-          {user?.role === "ADMIN" && allUsers.length > 0 && (
-            <div className="w-full flex gap-1 items-center mt-1">
-              <select
-                id={`send-to-user-${book.id}`}
-                className="flex-1 h-7 text-[10px] rounded border border-[#2d2d34] bg-[#111115] px-2 py-0.5 text-muted-foreground focus:outline-none cursor-pointer"
-                defaultValue=""
-                onChange={async (e) => {
-                  const targetUsername = e.target.value;
-                  if (!targetUsername) return;
-
-                  const confirmSend = window.confirm(
-                    `Are you sure you want to send this book to ${targetUsername}'s Kindle?`,
-                  );
-                  if (!confirmSend) {
-                    e.target.value = "";
-                    return;
-                  }
-
-                  // Reset value of select
-                  e.target.value = "";
-
-                  setSendingToKindleId(book.id);
-                  try {
-                    const res = await sendBookToKindle(book.id, targetUsername);
-                    if (res && !res.success) {
-                      alert(
-                        res.error ||
-                          `Delivery to ${targetUsername}'s Kindle failed.`,
-                      );
-                    } else {
-                      alert(
-                        `Ebook successfully sent to ${targetUsername}'s Kindle!`,
-                      );
+          {(() => {
+            const isComic = book.fileType === "cbr" || book.fileType === "cbz" || (book.filePath && /\.(?:cbr|cbz)$/i.test(book.filePath));
+            const progress = readingProgressMap[book.id];
+            const hasProgress = progress && (
+              (typeof progress.percentage === "number" && progress.percentage > 0) ||
+              progress.cfi ||
+              (typeof progress.page === "number" && progress.page > 0)
+            );
+            const displayPercentage = hasProgress ? Math.max(1, progress.percentage || 1) : 0;
+            return (
+              <>
+                <div className="flex gap-2 w-full">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="flex-1 text-xs font-semibold text-black"
+                    onClick={() => setActiveReadingBook(book)}
+                  >
+                    <BookOpen className="h-3 w-3 mr-1" />
+                    {hasProgress ? `Resume (${displayPercentage}%)` : "Read"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`flex-1 text-xs border-primary/20 text-primary font-semibold ${
+                      isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-primary/10"
+                    }`}
+                    title={
+                      isComic
+                        ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle. Please use Read or Direct Download."
+                        : "Send to Kindle"
                     }
-                  } catch (err: any) {
-                    alert(err.message || `Delivery failed.`);
-                  } finally {
-                    setSendingToKindleId(null);
-                  }
-                }}
-              >
-                <option value="">Send to User's Kindle...</option>
-                {allUsers
-                  .filter((u) => u.kindleEmail)
-                  .map((u) => (
-                    <option key={u.id} value={u.username}>
-                      {u.username} ({u.kindleEmail})
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
+                    disabled={sendingToKindleId !== null || isComic}
+                    onClick={() => !isComic && handleSendToKindle(book.id)}
+                  >
+                    {sendingToKindleId === book.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : (
+                      <Send className="h-3 w-3 mr-1" />
+                    )}
+                    Kindle
+                  </Button>
+                </div>
+                {user?.role === "ADMIN" && allUsers.length > 0 && (
+                  <div className="w-full flex gap-1 items-center mt-1">
+                    <select
+                      id={`send-to-user-${book.id}`}
+                      className={`flex-1 h-7 text-[10px] rounded border border-[#2d2d34] bg-[#111115] px-2 py-0.5 text-muted-foreground focus:outline-none ${
+                        isComic ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
+                      }`}
+                      defaultValue=""
+                      disabled={isComic}
+                      title={isComic ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle." : "Send to User's Kindle"}
+                      onChange={async (e) => {
+                        const targetUsername = e.target.value;
+                        if (!targetUsername || isComic) return;
+
+                        const confirmSend = window.confirm(
+                          `Are you sure you want to send this book to ${targetUsername}'s Kindle?`,
+                        );
+                        if (!confirmSend) {
+                          e.target.value = "";
+                          return;
+                        }
+
+                        // Reset value of select
+                        e.target.value = "";
+
+                        setSendingToKindleId(book.id);
+                        try {
+                          const res = await sendBookToKindle(book.id, targetUsername);
+                          if (res && !res.success) {
+                            alert(
+                              res.error ||
+                                `Delivery to ${targetUsername}'s Kindle failed.`,
+                            );
+                          } else {
+                            alert(
+                              `Ebook successfully sent to ${targetUsername}'s Kindle!`,
+                            );
+                          }
+                        } catch (err: any) {
+                          alert(err.message || `Delivery failed.`);
+                        } finally {
+                          setSendingToKindleId(null);
+                        }
+                      }}
+                    >
+                      <option value="">{isComic ? "Kindle Unsupported for Comic" : "Send to User's Kindle..."}</option>
+                      {!isComic &&
+                        allUsers
+                          .filter((u) => u.kindleEmail)
+                          .map((u) => (
+                            <option key={u.id} value={u.username}>
+                              {u.username} ({u.kindleEmail})
+                            </option>
+                          ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
             <Button
               variant="outline"
@@ -1084,6 +1419,7 @@ function BookLibraryPageContent() {
   // Request Form states
   const [reqTitle, setReqTitle] = useState("");
   const [reqAuthor, setReqAuthor] = useState("");
+  const [isSelectedFromRegistry, setIsSelectedFromRegistry] = useState(false);
 
   // Reader state
   const [activeBook, setActiveBook] = useState<any>(null);
@@ -1167,6 +1503,19 @@ function BookLibraryPageContent() {
           } catch (e) {}
         }
         setAllUsers(ulist || []);
+
+        try {
+          const guide = await getEbooksUserGuide();
+          if (guide) {
+            setGuideMarkdown(guide);
+            setEditGuideText(guide);
+          }
+        } catch (e) {
+          console.warn("Failed to load user guide:", e);
+        }
+
+        getServicesHealthPulse().then((p) => setServicesPulse(p)).catch(() => {});
+        getKindleDeliveryLogs().then((l) => setKindleLogs(l || [])).catch(() => {});
       } catch (e) {
         console.error("Failed to load initial library data:", e);
       } finally {
@@ -1276,6 +1625,27 @@ function BookLibraryPageContent() {
 
     return () => clearTimeout(delayDebounceFn);
   }, [reqTitle, reqMediaType]);
+
+  useEffect(() => {
+    if (!reqAuthor || reqAuthor.trim().length < 2) {
+      setAuthorSuggestions([]);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setSearchingAuthorRegistry(true);
+      try {
+        const results = await searchOpenLibraryByAuthor(reqAuthor, reqMediaType);
+        setAuthorSuggestions(results || []);
+      } catch (e) {
+        console.error("Author autocomplete search error:", e);
+      } finally {
+        setSearchingAuthorRegistry(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [reqAuthor, reqMediaType]);
 
   useEffect(() => {
     if (selectedLibrary) {
@@ -1727,6 +2097,8 @@ function BookLibraryPageContent() {
     }
   }
 
+  const [releaseFilter, setReleaseFilter] = useState<"all" | "matches">("matches");
+
   async function triggerProwlarrSearch(req: any, overrideMediaType?: string, customQuery?: string) {
     const targetMediaType =
       overrideMediaType ||
@@ -1738,18 +2110,25 @@ function BookLibraryPageContent() {
     setProwlarrResults([]);
     setSearchProwlarrError("");
 
-    // Clean the title by removing text inside parentheses (like "Enhanced Edition")
+    // Clean the title and author for smart search
     const cleanTitle = (req.title || "").replace(/\s*\([^)]+\)\s*/g, " ").trim();
-    
-    // Set the initial custom query if not already typing (Title-only is best for Torznab)
-    if (!customQuery && !customSearchQuery) {
-        setCustomSearchQuery(cleanTitle);
+    const cleanAuthor = (req.author && req.author !== "Unknown Author" ? req.author : "").trim();
+    const defaultQuery = cleanAuthor ? `${cleanTitle} ${cleanAuthor}` : cleanTitle;
+    const queryText = customQuery !== undefined ? customQuery : (customSearchQuery || defaultQuery);
+
+    if (customQuery !== undefined) {
+      setCustomSearchQuery(customQuery);
+    } else if (!customSearchQuery) {
+      setCustomSearchQuery(defaultQuery);
     }
     
     try {
-      const queryText = customQuery || customSearchQuery || cleanTitle;
-      const res = await searchProwlarrIndexers(queryText, targetMediaType);
-      setProwlarrResults(res || []);
+      const res = await searchProwlarrIndexers(queryText, targetMediaType, req.title, req.author);
+      const resultsList = res || [];
+      setProwlarrResults(resultsList);
+      
+      const hasExactOrGoodMatches = resultsList.some((r: any) => r.matchQuality !== "mismatch");
+      setReleaseFilter(hasExactOrGoodMatches ? "matches" : "all");
     } catch (e: any) {
       setSearchProwlarrError(e.message || "Failed to search indexers.");
     } finally {
@@ -1940,6 +2319,14 @@ function BookLibraryPageContent() {
       return;
     }
 
+    if (reqType !== "series" && !isSelectedFromRegistry) {
+      showErrorModal(
+        "Please select a verified book from the auto-populated search results dropdown. Selecting from the registry ensures complete book details, author formatting, and official cover artwork.",
+        "Registry Selection Required",
+      );
+      return;
+    }
+
     setIsSubmittingRequest(true);
     try {
       let res: any;
@@ -1960,9 +2347,27 @@ function BookLibraryPageContent() {
           selectedLibrary?.id,
         );
       } else {
+        let sendTitle = reqTitle.trim();
+        let sendAuthor = reqAuthor.trim();
+        if (!sendAuthor) {
+          if (/\s+by\s+/i.test(sendTitle)) {
+            const parts = sendTitle.split(/\s+by\s+/i);
+            sendTitle = parts[0].trim();
+            sendAuthor = parts.slice(1).join(" by ").trim();
+          } else if (sendTitle.includes(" - ")) {
+            const parts = sendTitle.split(" - ");
+            sendTitle = parts[0].trim();
+            sendAuthor = parts.slice(1).join(" - ").trim();
+          } else if (sendTitle.includes(": ")) {
+            const parts = sendTitle.split(": ");
+            sendTitle = parts[0].trim();
+            sendAuthor = parts.slice(1).join(": ").trim();
+          }
+        }
+
         const formData = new FormData();
-        formData.append("title", reqTitle.trim());
-        formData.append("author", reqAuthor.trim());
+        formData.append("title", sendTitle);
+        formData.append("author", sendAuthor);
         formData.append("type", reqType);
         formData.append("mediaType", reqMediaType);
         formData.append("coverUrl", reqCoverUrl);
@@ -1989,6 +2394,7 @@ function BookLibraryPageContent() {
       setReqMediaType(activeTab === "audiobooks" ? "audiobook" : "ebook");
       setRequestedFor("");
       setSeriesBooksChecklist([]);
+      setIsSelectedFromRegistry(false);
       const reqs = await getBookRequests();
       setRequests(reqs || []);
     } catch (e: any) {
@@ -2495,39 +2901,46 @@ function BookLibraryPageContent() {
         onValueChange={handleTabChange}
         className="w-full space-y-6"
       >
-        <TabsList className="flex flex-wrap sm:flex-nowrap w-full max-w-3xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
+        <TabsList className="flex flex-wrap sm:flex-nowrap w-full max-w-4xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger
             value="libs"
-            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(255,255,255,0.22)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <BookOpen className="h-4 w-4 shrink-0" /> <span>Ebooks</span>
+            <BookOpen className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Ebooks</span>
           </TabsTrigger>
           <TabsTrigger
             value="audiobooks"
-            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Headphones className="h-4 w-4 shrink-0" /> <span>Audiobooks</span>
+            <Headphones className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-amber-400 data-[state=active]:text-slate-950" /> <span>Audiobooks</span>
           </TabsTrigger>
           <TabsTrigger
             value="requests"
-            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-blue-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(96,165,250,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Send className="h-4 w-4 shrink-0" /> <span>Requests</span>
+            <Send className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Requests</span>
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger
               value="manage"
-              className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+              className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
             >
-              <Plus className="h-4 w-4 shrink-0" /> <span>Manage</span>
+              <Plus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Manage</span>
             </TabsTrigger>
           )}
           <TabsTrigger
             value="kindle"
-            className="py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-cyan-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Mail className="h-4 w-4 text-primary data-[state=active]:text-slate-950 shrink-0" />{" "}
+            <Mail className="h-4 w-4 text-cyan-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
             <span>Kindle</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="help"
+            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(192,132,252,0.35)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+          >
+            <HelpCircle className="h-4 w-4 text-purple-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
+            <span>Help & Guide</span>
           </TabsTrigger>
         </TabsList>
 
@@ -2554,10 +2967,10 @@ function BookLibraryPageContent() {
                         <button
                           key={lib.id}
                           onClick={() => setSelectedLibrary(lib)}
-                          className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border ${
+                          className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border cursor-pointer ${
                             isSelected
                               ? "bg-slate-900 border-primary/80 shadow-md ring-1 ring-primary/30 text-primary"
-                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/60 hover:text-white"
+                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/80 hover:border-primary/60 hover:ring-2 hover:ring-primary/40 hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] hover:text-white"
                           }`}
                         >
                           <span className="font-bold text-sm truncate">
@@ -3081,10 +3494,10 @@ function BookLibraryPageContent() {
                         <button
                           key={lib.id}
                           onClick={() => setSelectedLibrary(lib)}
-                          className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border ${
+                          className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-2 border cursor-pointer ${
                             isSelected
-                              ? "bg-slate-900 border-primary/80 shadow-md ring-1 ring-primary/30 text-primary font-bold"
-                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/60 hover:text-white"
+                              ? "bg-slate-900 border-amber-400/80 shadow-md ring-1 ring-amber-400/30 text-amber-400 font-bold"
+                              : "bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900/80 hover:border-amber-400/60 hover:ring-2 hover:ring-amber-400/40 hover:shadow-[0_0_12px_rgba(251,191,36,0.2)] hover:text-white"
                           }`}
                         >
                           <span className="font-bold text-sm truncate">
@@ -3254,6 +3667,53 @@ function BookLibraryPageContent() {
         </TabsContent>
 
         <TabsContent value="requests" className="space-y-6">
+          {/* Services Health Pulse & Indexer Status Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-muted/50 bg-[#16161c]/80 backdrop-blur-sm shadow-sm">
+            <div className="flex items-center gap-4 flex-wrap">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                <Activity className="h-3.5 w-3.5 text-primary" /> Pipeline Pulse:
+              </span>
+              
+              {/* Prowlarr */}
+              <div className="flex items-center gap-1.5 text-xs font-medium">
+                <span className={`h-2 w-2 rounded-full ${servicesPulse?.prowlarr?.online ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-red-400"}`} />
+                <span className="text-muted-foreground">Prowlarr:</span>
+                <span className={servicesPulse?.prowlarr?.online ? "text-emerald-400 font-semibold" : servicesPulse?.prowlarr?.configured === false ? "text-muted-foreground" : "text-red-400 font-semibold"}>
+                  {servicesPulse?.prowlarr?.online ? `Online (${servicesPulse.prowlarr.indexersCount || 0} indexers)` : servicesPulse?.prowlarr?.configured === false ? "Not Configured" : "Offline"}
+                </span>
+              </div>
+
+              {/* SABnzbd */}
+              <div className="flex items-center gap-1.5 text-xs font-medium">
+                <span className={`h-2 w-2 rounded-full ${servicesPulse?.sabnzbd?.online ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : servicesPulse?.sabnzbd?.configured ? "bg-red-400" : "bg-muted-foreground/40"}`} />
+                <span className="text-muted-foreground">Usenet (SABnzbd):</span>
+                <span className={servicesPulse?.sabnzbd?.online ? "text-emerald-400 font-semibold" : servicesPulse?.sabnzbd?.configured ? "text-red-400 font-semibold" : "text-muted-foreground"}>
+                  {servicesPulse?.sabnzbd?.online ? "Active" : servicesPulse?.sabnzbd?.configured ? "Offline" : "Disabled"}
+                </span>
+              </div>
+
+              {/* qBittorrent */}
+              <div className="flex items-center gap-1.5 text-xs font-medium">
+                <span className={`h-2 w-2 rounded-full ${servicesPulse?.qbittorrent?.online ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : servicesPulse?.qbittorrent?.configured ? "bg-red-400" : "bg-muted-foreground/40"}`} />
+                <span className="text-muted-foreground">Torrent (qBittorrent):</span>
+                <span className={servicesPulse?.qbittorrent?.online ? "text-emerald-400 font-semibold" : servicesPulse?.qbittorrent?.configured ? "text-red-400 font-semibold" : "text-muted-foreground"}>
+                  {servicesPulse?.qbittorrent?.online ? "Active" : servicesPulse?.qbittorrent?.configured ? "Offline" : "Disabled"}
+                </span>
+              </div>
+            </div>
+
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px] text-muted-foreground hover:text-foreground gap-1 px-2"
+              disabled={loadingPulse}
+              onClick={loadServicesPulse}
+            >
+              {loadingPulse ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
+              Refresh Pulse
+            </Button>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1">
               <Card className="border-muted/60 bg-muted/10 sticky top-6">
@@ -3290,7 +3750,10 @@ function BookLibraryPageContent() {
                             reqMediaType === "ebook" ? "default" : "outline"
                           }
                           className={`h-9 text-xs font-semibold gap-1.5 ${reqMediaType === "ebook" ? "text-black bg-primary" : ""}`}
-                          onClick={() => setReqMediaType("ebook")}
+                          onClick={() => {
+                            setReqMediaType("ebook");
+                            setIsSelectedFromRegistry(false);
+                          }}
                         >
                           <BookOpen className="h-3.5 w-3.5" /> Ebook
                         </Button>
@@ -3300,7 +3763,10 @@ function BookLibraryPageContent() {
                             reqMediaType === "audiobook" ? "default" : "outline"
                           }
                           className={`h-9 text-xs font-semibold gap-1.5 ${reqMediaType === "audiobook" ? "text-black bg-amber-400 hover:bg-amber-300" : ""}`}
-                          onClick={() => setReqMediaType("audiobook")}
+                          onClick={() => {
+                            setReqMediaType("audiobook");
+                            setIsSelectedFromRegistry(false);
+                          }}
                         >
                           <Headphones className="h-3.5 w-3.5" /> Audiobook
                         </Button>
@@ -3309,20 +3775,26 @@ function BookLibraryPageContent() {
                     {/* Single Book request only */}
 
                     <div className="space-y-1.5 relative">
-                      <Label htmlFor="reqTitle" className="text-xs font-medium">
-                        {reqType === "series"
-                          ? "Series Title"
-                          : reqMediaType === "audiobook"
-                            ? "Audiobook Title"
-                            : "Book Title"}
+                      <Label htmlFor="reqTitle" className="text-xs font-medium flex items-center justify-between">
+                        <span>
+                          {reqType === "series"
+                            ? "Series Title"
+                            : reqMediaType === "audiobook"
+                              ? "Audiobook Title (or Title + Author)"
+                              : "Book Title (or Title + Author)"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-normal">
+                          e.g. "Project Hail Mary Andy Weir"
+                        </span>
                       </Label>
                       <Input
                         id="reqTitle"
                         type="text"
-                        placeholder="e.g. Project Hail Mary"
+                        placeholder="e.g. Project Hail Mary Andy Weir"
                         value={reqTitle}
                         onChange={(e) => {
                           setReqTitle(e.target.value);
+                          setIsSelectedFromRegistry(false);
                           setShowSuggestions(true);
                         }}
                         onFocus={() => setShowSuggestions(true)}
@@ -3352,14 +3824,16 @@ function BookLibraryPageContent() {
                             openLibrarySuggestions.map((book, idx) => (
                               <div
                                 key={idx}
-                                className="p-2 flex gap-3 hover:bg-muted/40 cursor-pointer items-start transition-colors z-50 relative"
-                                onMouseDown={async () => {
+                                className="p-2.5 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
+                                onMouseDown={async (e) => {
+                                  e.preventDefault();
                                   setReqTitle(book.title);
                                   setReqAuthor(book.author);
                                   setReqCoverUrl(book.coverUrl || "");
                                   setReqPublishYear(
                                     book.year ? String(book.year) : "",
                                   );
+                                  setIsSelectedFromRegistry(true);
                                   setShowSuggestions(false);
 
                                   if (reqType === "series") {
@@ -3386,27 +3860,45 @@ function BookLibraryPageContent() {
                                   }
                                 }}
                               >
-                                {book.coverUrl ? (
-                                  <img
-                                    src={book.coverUrl}
-                                    alt={book.title}
-                                    className="w-8 h-10 object-cover rounded bg-muted/20 shrink-0 border border-muted"
-                                  />
-                                ) : (
-                                  <div className="w-8 h-10 rounded bg-muted flex items-center justify-center text-[8px] text-muted-foreground shrink-0 border border-muted">
-                                    NO COVER
+                                <div className="flex gap-2.5 items-center min-w-0 flex-1">
+                                  {book.coverUrl ? (
+                                    <img
+                                      src={book.coverUrl}
+                                      alt={book.title}
+                                      className="w-8 h-10 object-cover rounded bg-muted/20 shrink-0 border border-muted"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-10 rounded bg-muted flex items-center justify-center text-[8px] text-muted-foreground shrink-0 border border-muted">
+                                      NO COVER
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <h5
+                                      className="text-xs font-semibold text-foreground leading-snug truncate group-hover:text-primary transition-colors"
+                                      title={book.title}
+                                    >
+                                      {book.title}
+                                    </h5>
+                                    <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
+                                      <span>{book.author}</span>
+                                      {book.year && book.year !== "Unknown Year" && (
+                                        <>
+                                          <span>•</span>
+                                          <span>{book.year}</span>
+                                        </>
+                                      )}
+                                      <span>•</span>
+                                      <span
+                                        className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                                          reqMediaType === "audiobook"
+                                            ? "bg-amber-400/20 text-amber-400"
+                                            : "bg-primary/20 text-primary"
+                                        }`}
+                                      >
+                                        {reqMediaType === "audiobook" ? "AUDIOBOOK" : "EBOOK"}
+                                      </span>
+                                    </p>
                                   </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <h5
-                                    className="text-xs font-semibold text-foreground leading-snug truncate"
-                                    title={book.title}
-                                  >
-                                    {book.title}
-                                  </h5>
-                                  <p className="text-[10px] text-muted-foreground truncate">
-                                    {book.author} • {book.year}
-                                  </p>
                                 </div>
                               </div>
                             ))
@@ -3414,20 +3906,159 @@ function BookLibraryPageContent() {
                         </div>
                       )}
                     </div>
-                    <div className="space-y-1.5">
+
+                    <div className="space-y-1.5 relative">
                       <Label
                         htmlFor="reqAuthor"
-                        className="text-xs font-medium"
+                        className="text-xs font-medium flex items-center justify-between"
                       >
-                        Author (Optional)
+                        <span>Author (Optional)</span>
+                        {authorSuggestions.length > 0 && showAuthorSuggestions && (
+                          <span className="text-[10px] text-muted-foreground font-normal">
+                            {authorSuggestions.length} {reqMediaType === "audiobook" ? "audiobooks" : "books"} found
+                          </span>
+                        )}
                       </Label>
-                      <Input
-                        id="reqAuthor"
-                        type="text"
-                        placeholder="e.g. Andy Weir"
-                        value={reqAuthor}
-                        onChange={(e) => setReqAuthor(e.target.value)}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="reqAuthor"
+                          type="text"
+                          placeholder="e.g. Andy Weir"
+                          value={reqAuthor}
+                          onChange={(e) => {
+                            setReqAuthor(e.target.value);
+                            setIsSelectedFromRegistry(false);
+                            setShowAuthorSuggestions(true);
+                          }}
+                          onFocus={() => {
+                            if (reqAuthor.trim().length >= 2) {
+                              setShowAuthorSuggestions(true);
+                            }
+                          }}
+                          autoComplete="off"
+                        />
+                        {searchingAuthorRegistry && (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary absolute right-3 top-2.5 pointer-events-none" />
+                        )}
+                      </div>
+
+                      {showAuthorSuggestions && (
+                        <div
+                          className="fixed inset-0 z-40 bg-transparent"
+                          onClick={() => setShowAuthorSuggestions(false)}
+                        />
+                      )}
+
+                      {showAuthorSuggestions && reqAuthor.trim().length >= 2 && (
+                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[#1e1e24] text-foreground border border-muted/80 rounded-md shadow-xl max-h-72 overflow-y-auto divide-y divide-muted/50">
+                          <div className="px-3 py-1.5 bg-[#17171c] border-b border-muted/40 text-[10px] uppercase font-bold tracking-wider text-muted-foreground flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              {reqMediaType === "audiobook" ? (
+                                <Headphones className="h-3 w-3 text-amber-400" />
+                              ) : (
+                                <BookOpen className="h-3 w-3 text-primary" />
+                              )}
+                              Available Books by {reqAuthor}
+                            </span>
+                            <span className="text-[9px] lowercase font-normal opacity-80">
+                              click to select
+                            </span>
+                          </div>
+                          {searchingAuthorRegistry ? (
+                            <div className="p-3 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                              <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                              Searching {reqMediaType === "audiobook" ? "audiobooks" : "books"} by {reqAuthor}...
+                            </div>
+                          ) : authorSuggestions.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-muted-foreground italic">
+                              No {reqMediaType === "audiobook" ? "audiobooks" : "books"} found for "{reqAuthor}".
+                            </div>
+                          ) : (
+                            authorSuggestions.map((book, idx) => (
+                              <div
+                                key={idx}
+                                className="p-2.5 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
+                                onMouseDown={async (e) => {
+                                  e.preventDefault();
+                                  setReqTitle(book.title);
+                                  setReqAuthor(book.author);
+                                  setReqCoverUrl(book.coverUrl || "");
+                                  setReqPublishYear(
+                                    book.year ? String(book.year) : "",
+                                  );
+                                  setIsSelectedFromRegistry(true);
+                                  setShowAuthorSuggestions(false);
+                                  setShowSuggestions(false);
+
+                                  if (reqType === "series") {
+                                    setSearchingRegistry(true);
+                                    try {
+                                      const list = await getSeriesBooksList(
+                                        book.title,
+                                        book.author,
+                                      );
+                                      setSeriesBooksChecklist(
+                                        list.map((b) => ({
+                                          ...b,
+                                          checked: true,
+                                        })),
+                                      );
+                                    } catch (err) {
+                                      console.error(
+                                        "Failed to load series books list:",
+                                        err,
+                                      );
+                                    } finally {
+                                      setSearchingRegistry(false);
+                                    }
+                                  }
+                                }}
+                              >
+                                <div className="flex gap-2.5 items-center min-w-0 flex-1">
+                                  {book.coverUrl ? (
+                                    <img
+                                      src={book.coverUrl}
+                                      alt={book.title}
+                                      className="w-8 h-10 object-cover rounded bg-muted/20 shrink-0 border border-muted"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-10 rounded bg-muted flex items-center justify-center text-[8px] text-muted-foreground shrink-0 border border-muted">
+                                      NO COVER
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <h5
+                                      className="text-xs font-semibold text-foreground leading-snug truncate group-hover:text-primary transition-colors"
+                                      title={book.title}
+                                    >
+                                      {book.title}
+                                    </h5>
+                                    <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
+                                      <span>{book.author}</span>
+                                      {book.year && book.year !== "Unknown Year" && (
+                                        <>
+                                          <span>•</span>
+                                          <span>{book.year}</span>
+                                        </>
+                                      )}
+                                      <span>•</span>
+                                      <span
+                                        className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                                          reqMediaType === "audiobook"
+                                            ? "bg-amber-400/20 text-amber-400"
+                                            : "bg-primary/20 text-primary"
+                                        }`}
+                                      >
+                                        {reqMediaType === "audiobook" ? "AUDIOBOOK" : "EBOOK"}
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {reqType === "series" && (
@@ -3561,10 +4192,32 @@ function BookLibraryPageContent() {
                       </div>
                     )}
 
+                    {reqType !== "series" && reqTitle.trim().length >= 2 && (
+                      isSelectedFromRegistry ? (
+                        <div className="flex items-center gap-2 p-2.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium animate-in fade-in">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                          <span className="truncate">
+                            Verified registry book selected: <strong>{reqTitle}</strong> {reqAuthor ? `by ${reqAuthor}` : ""}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs animate-in fade-in">
+                          <Info className="h-4 w-4 shrink-0 text-amber-400" />
+                          <span>
+                            Please select an auto-populated match from the suggestions list above to submit.
+                          </span>
+                        </div>
+                      )
+                    )}
+
                     <Button
                       type="submit"
-                      disabled={isSubmittingRequest || !reqTitle.trim()}
-                      className={`w-full font-semibold text-black gap-2 ${reqMediaType === "audiobook" ? "bg-amber-400 hover:bg-amber-300" : "bg-primary hover:bg-primary/90"}`}
+                      disabled={
+                        isSubmittingRequest ||
+                        (!isSelectedFromRegistry && reqType !== "series") ||
+                        !reqTitle.trim()
+                      }
+                      className={`w-full font-semibold text-black gap-2 ${reqMediaType === "audiobook" ? "bg-amber-400 hover:bg-amber-300" : "bg-primary hover:bg-primary/90"} disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       {isSubmittingRequest ? (
                         <>
@@ -3685,303 +4338,475 @@ function BookLibraryPageContent() {
                         .map((req) => {
                           const canDelete =
                             isAdmin || req.requestedBy === user?.username;
+                          const isDownloading =
+                            (req.status && req.status.startsWith("Downloading")) ||
+                            !!req.downloadProgress;
+                          const isSearching = req.status === "Searching";
+                          const isFailed = req.status && req.status.startsWith("Failed");
+                          const isPending = req.status === "Pending";
+                          const isApproved =
+                            req.status && req.status.startsWith("Approved");
+                          const isDownloaded = req.status === "Downloaded";
+
+                          // Format download progress safely
+                          const rawPct =
+                            req.downloadProgress?.percentage !== undefined
+                              ? parseFloat(req.downloadProgress.percentage)
+                              : undefined;
+                          const hasProgressPercent =
+                            rawPct !== undefined && !isNaN(rawPct);
+                          const progressPercent = hasProgressPercent
+                            ? Math.max(0, Math.min(100, rawPct))
+                            : 0;
+
                           return (
                             <div
                               key={req.id}
-                              className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                              className={`p-4 space-y-3 transition-all duration-200 border-b border-muted/40 last:border-b-0 ${
+                                isDownloading
+                                  ? "bg-cyan-950/10"
+                                  : isFailed
+                                    ? "bg-red-950/10"
+                                    : "hover:bg-muted/10"
+                              }`}
                             >
-                              <div className="flex gap-3 items-start min-w-0 w-full sm:w-auto flex-1">
-                                {canDelete && (
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedRequestIds.includes(
-                                      req.id,
-                                    )}
-                                    onChange={() => toggleSelectRequest(req.id)}
-                                    className="mt-1 h-4 w-4 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 shrink-0 cursor-pointer"
-                                  />
-                                )}
-                                {req.coverUrl &&
-                                req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").length > 3 ? (
-                                  <img
-                                    src={req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "")}
-                                    alt={req.title}
-                                    className="w-10 h-14 object-cover rounded bg-muted/20 border border-muted/50 shrink-0"
-                                  />
-                                ) : (
-                                  <div className="w-10 h-14 rounded bg-muted/30 border border-muted/50 flex items-center justify-center text-[7px] text-muted-foreground shrink-0 font-bold uppercase text-center p-0.5">
-                                    No Cover
-                                  </div>
-                                )}
-                                <div className="space-y-1 min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <h4
-                                      className="font-semibold text-sm truncate"
-                                      title={req.title}
+                              {/* Main Header / Info Row */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+                                {/* Left: Checkbox + Artwork + Book Details */}
+                                <div className="flex gap-3 items-start min-w-0 flex-1">
+                                  {canDelete && (
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedRequestIds.includes(req.id)}
+                                      onChange={() => toggleSelectRequest(req.id)}
+                                      className="mt-1 h-4 w-4 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 shrink-0 cursor-pointer"
+                                    />
+                                  )}
+
+                                  {/* Cover Thumbnail */}
+                                  <div className="relative group shrink-0">
+                                    {req.coverUrl &&
+                                    req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? (
+                                      <img
+                                        src={req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim()}
+                                        alt={req.title}
+                                        className="w-10 h-14 object-cover rounded bg-muted/20 border border-muted/50 shrink-0"
+                                        onError={(e) => {
+                                          (e.target as HTMLElement).style.display = "none";
+                                          const fb = (e.target as HTMLElement).parentElement?.querySelector(".cover-fallback");
+                                          if (fb) (fb as HTMLElement).style.display = "flex";
+                                        }}
+                                      />
+                                    ) : null}
+                                    <div
+                                      className={`cover-fallback w-10 h-14 rounded bg-muted/30 border border-muted/50 flex-col items-center justify-center text-[7px] text-muted-foreground shrink-0 font-bold uppercase text-center p-0.5 ${
+                                        req.coverUrl && req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? "hidden" : "flex"
+                                      }`}
                                     >
-                                      {req.title}
-                                    </h4>
-                                    {req.mediaType === "audiobook" ? (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] py-0 px-1 border-amber-500/40 text-amber-400 bg-amber-500/10 font-bold flex items-center gap-1"
-                                      >
-                                        <Headphones className="h-3 w-3" />{" "}
-                                        AUDIOBOOK
-                                      </Badge>
-                                    ) : req.type === "series" ? (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] py-0 px-1 border-purple-500/30 text-purple-400 bg-purple-500/5 font-semibold"
-                                      >
-                                        SERIES
-                                      </Badge>
-                                    ) : (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] py-0 px-1 border-blue-500/30 text-blue-400 bg-blue-500/5 font-semibold"
-                                      >
-                                        EBOOK
-                                      </Badge>
-                                    )}
+                                      <BookOpen className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
+                                      No Cover
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      className="absolute -bottom-1 -right-1 h-5 w-5 p-0 rounded-full bg-primary/90 text-black shadow hover:bg-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                                      title="Fetch / Refresh Cover Artwork"
+                                      disabled={refreshingRequestCoverId === req.id}
+                                      onClick={() => handleRefreshRequestCover(req.id)}
+                                    >
+                                      {refreshingRequestCoverId === req.id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <ImageIcon className="h-3 w-3" />
+                                      )}
+                                    </Button>
                                   </div>
-                                  <p className="text-xs text-muted-foreground truncate font-medium">
-                                    {req.author
-                                      ? `by ${req.author}`
-                                      : "Unknown Author"}{" "}
-                                    {req.publishYear
-                                      ? `(${req.publishYear})`
-                                      : ""}
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground">
-                                    Requested by{" "}
-                                    <span className="font-semibold text-foreground">
-                                      {req.requestedBy}
-                                    </span>{" "}
-                                    •{" "}
-                                    {new Date(
-                                      req.createdAt,
-                                    ).toLocaleDateString()}
-                                  </p>
+
+                                  {/* Titles, Badges, and Requester */}
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4
+                                        className="font-semibold text-sm truncate max-w-[260px] sm:max-w-md"
+                                        title={req.title}
+                                      >
+                                        {req.title}
+                                      </h4>
+                                      {req.mediaType === "audiobook" ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] py-0 px-1.5 border-amber-500/40 text-amber-400 bg-amber-500/10 font-bold flex items-center gap-1 shrink-0"
+                                        >
+                                          <Headphones className="h-3 w-3" /> AUDIOBOOK
+                                        </Badge>
+                                      ) : req.type === "series" ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] py-0 px-1.5 border-purple-500/30 text-purple-400 bg-purple-500/5 font-semibold shrink-0"
+                                        >
+                                          SERIES
+                                        </Badge>
+                                      ) : (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] py-0 px-1.5 border-blue-500/30 text-blue-400 bg-blue-500/5 font-semibold shrink-0"
+                                        >
+                                          EBOOK
+                                        </Badge>
+                                      )}
+
+                                      {/* Status Badge */}
+                                      <Badge
+                                        className={`text-xs font-semibold shrink-0 ${
+                                          isDownloading
+                                            ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 animate-pulse"
+                                            : isSearching
+                                              ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 animate-pulse"
+                                              : isApproved
+                                                ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                                                : isPending
+                                                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                                  : isDownloaded
+                                                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                                    : "bg-red-500/20 text-red-400 border border-red-500/30"
+                                        }`}
+                                      >
+                                        {isDownloading ? (
+                                          <span className="flex items-center gap-1.5">
+                                            <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />
+                                            Downloading
+                                          </span>
+                                        ) : isSearching ? (
+                                          <span className="flex items-center gap-1.5">
+                                            <Search className="h-3 w-3 text-indigo-400" />
+                                            Searching
+                                          </span>
+                                        ) : (
+                                          req.status
+                                        )}
+                                      </Badge>
+                                    </div>
+
+                                    <p className="text-xs text-muted-foreground truncate font-medium">
+                                      {req.author ? `by ${req.author}` : "Unknown Author"}{" "}
+                                      {req.publishYear ? `(${req.publishYear})` : ""}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      Requested by{" "}
+                                      <span className="font-semibold text-foreground">
+                                        {req.requestedBy}
+                                      </span>{" "}
+                                      • {new Date(req.createdAt).toLocaleDateString()}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end border-t sm:border-t-0 pt-3 sm:pt-0 mt-1 sm:mt-0">
-                                <Badge
-                                  className={`text-xs ${
-                                    req.status === "Pending"
-                                      ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30"
-                                      : req.status === "Approved"
-                                        ? "bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30"
-                                        : req.status === "Downloaded"
-                                          ? "bg-green-500/20 text-green-600 dark:text-green-400 border border-green-500/30"
-                                          : "bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30"
-                                  }`}
-                                >
-                                  {req.status}
-                                </Badge>
-                                {req.status.startsWith("Failed") && (
-                                  <div className="flex gap-1.5 items-center">
+
+                                {/* Right: Actions Cluster */}
+                                <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0">
+                                  {/* Series Auto-Monitor Toggle */}
+                                  {(req.series || req.type === "series") && (
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold"
-                                      onClick={async () => {
-                                        try {
-                                          await retryBookRequest(req.id);
-                                          alert(
-                                            "Auto-retry search successfully queued in the background!",
-                                          );
-                                          const reqs = await getBookRequests();
-                                          setRequests(reqs || []);
-                                        } catch (err: any) {
-                                          alert(
-                                            err.message ||
-                                              "Failed to retry request.",
-                                          );
-                                        }
-                                      }}
-                                    >
-                                      Auto-Retry
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px]"
-                                      onClick={() => triggerProwlarrSearch(req)}
-                                    >
-                                      <Search className="h-3 w-3 mr-1" /> Search
-                                      Release
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 w-7 p-0 border-red-500/40 text-red-400 hover:bg-red-950/60 shrink-0"
-                                      title="Copy Full Error Message"
-                                      onClick={() =>
-                                        showErrorModal(
-                                          req.status,
-                                          "Request Error Details",
-                                        )
+                                      className={`h-7 text-[10px] font-semibold px-2 gap-1 ${
+                                        req.monitorSeries
+                                          ? "bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25"
+                                          : "border-muted text-muted-foreground hover:text-foreground"
+                                      }`}
+                                      title={
+                                        req.monitorSeries
+                                          ? "Series is being automatically monitored for new installments"
+                                          : "Enable automatic background monitoring for new books in this series"
                                       }
+                                      disabled={togglingMonitorId === req.id}
+                                      onClick={() => handleToggleSeriesMonitoring(req.id)}
                                     >
-                                      <Copy className="h-3 w-3" />
+                                      {togglingMonitorId === req.id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Zap
+                                          className={`h-3 w-3 ${req.monitorSeries ? "text-purple-400 fill-purple-400" : ""}`}
+                                        />
+                                      )}
+                                      {req.monitorSeries ? "Monitored" : "Monitor Series"}
                                     </Button>
-                                  </div>
-                                )}
-                                {(isAdmin ||
-                                  req.requestedBy === user?.username) && (
-                                  <div className="flex gap-1 items-center">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="p-1 h-7 w-7 text-amber-500 hover:text-amber-600 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 shrink-0"
-                                      title="Report Request Issue"
-                                      onClick={() =>
-                                        handleOpenReportIssueModal({
-                                          type: "request",
-                                          title: req.title,
-                                          id: req.id,
-                                          status: req.status,
-                                        })
-                                      }
-                                    >
-                                      <AlertTriangle className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 shrink-0"
-                                      title="Delete Request"
-                                      onClick={() =>
-                                        handleDeleteRequest(req.id)
-                                      }
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                )}
-                                {req.status === "Pending" && (
-                                  <div className="flex gap-1.5 items-center">
-                                    {(isAdmin ||
-                                      req.requestedBy === user?.username) && (
+                                  )}
+
+                                  {/* Direct File Upload / Fulfill */}
+                                  {(isAdmin || req.requestedBy === user?.username) &&
+                                    req.status !== "Downloaded" && (
+                                      <label className="cursor-pointer">
+                                        <input
+                                          type="file"
+                                          accept=".epub,.pdf,.m4b,.mp3,.torrent,.nzb"
+                                          className="hidden"
+                                          disabled={uploadingFulfillId === req.id}
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              handleFulfillWithUpload(req.id, file);
+                                              e.target.value = "";
+                                            }
+                                          }}
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          type="button"
+                                          asChild
+                                          className="h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
+                                          title="Fulfill directly by uploading book file (.epub, .pdf, .m4b, .mp3) or NZB/Torrent"
+                                          disabled={uploadingFulfillId === req.id}
+                                        >
+                                          <span>
+                                            {uploadingFulfillId === req.id ? (
+                                              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                            ) : (
+                                              <FileUp className="h-3.5 w-3.5 text-primary" />
+                                            )}
+                                            <span className="hidden sm:inline text-[11px]">Upload</span>
+                                          </span>
+                                        </Button>
+                                      </label>
+                                    )}
+
+                                  {/* Auto-Retry for Failed requests */}
+                                  {isFailed && (
+                                    <>
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold"
+                                        className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold"
+                                        onClick={async () => {
+                                          try {
+                                            await retryBookRequest(req.id);
+                                            alert(
+                                              "Auto-retry search successfully queued in the background!",
+                                            );
+                                            const reqs = await getBookRequests();
+                                            setRequests(reqs || []);
+                                          } catch (err: any) {
+                                            alert(
+                                              err.message || "Failed to retry request.",
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        Auto-Retry
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-[10px]"
+                                        onClick={() => triggerProwlarrSearch(req)}
+                                      >
+                                        <Search className="h-3 w-3 mr-1" /> Search Release
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 w-7 p-0 border-red-500/40 text-red-400 hover:bg-red-950/60 shrink-0"
+                                        title="Copy Full Error Message"
                                         onClick={() =>
-                                          triggerProwlarrSearch(req)
+                                          showErrorModal(
+                                            req.status,
+                                            "Request Error Details",
+                                          )
                                         }
                                       >
-                                        <Search className="h-3 w-3 mr-1" />{" "}
-                                        Search Release
+                                        <Copy className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  )}
+
+                                  {/* Pending actions */}
+                                  {isPending && (
+                                    <>
+                                      {(isAdmin || req.requestedBy === user?.username) && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold"
+                                          onClick={() => triggerProwlarrSearch(req)}
+                                        >
+                                          <Search className="h-3 w-3 mr-1" /> Search Release
+                                        </Button>
+                                      )}
+                                      {isAdmin && (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="p-1 h-7 w-7 text-green-500 hover:text-green-600 border-green-500/30 bg-green-500/5 hover:bg-green-500/10"
+                                            onClick={() =>
+                                              handleUpdateRequestStatus(req.id, "Approved")
+                                            }
+                                            title="Approve Request"
+                                          >
+                                            <Check className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
+                                            onClick={() =>
+                                              handleUpdateRequestStatus(req.id, "Rejected")
+                                            }
+                                            title="Reject Request"
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </>
+                                      )}
+                                    </>
+                                  )}
+
+                                  {/* Active downloading / downloaded search actions */}
+                                  {(isAdmin || req.requestedBy === user?.username) &&
+                                    (isDownloading || isDownloaded) && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 bg-cyan-500/5 font-semibold"
+                                        onClick={() => triggerProwlarrSearch(req)}
+                                      >
+                                        <Search className="h-3 w-3 mr-1" /> Search Release
                                       </Button>
                                     )}
-                                    {isAdmin && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="p-1 h-7 w-7 text-green-500 hover:text-green-600 border-green-500/30 bg-green-500/5 hover:bg-green-500/10"
-                                          onClick={() =>
-                                            handleUpdateRequestStatus(
-                                              req.id,
-                                              "Approved",
-                                            )
-                                          }
-                                        >
-                                          <Check className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
-                                          onClick={() =>
-                                            handleUpdateRequestStatus(
-                                              req.id,
-                                              "Rejected",
-                                            )
-                                          }
-                                        >
-                                          <X className="h-4 w-4" />
-                                        </Button>
-                                      </>
-                                    )}
-                                  </div>
-                                )}{" "}
-                                {(isAdmin ||
-                                  req.requestedBy === user?.username) &&
-                                  (req.status === "Downloaded" ||
-                                    req.status === "Downloading") && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 bg-cyan-500/5 font-semibold mr-1"
-                                      onClick={() => triggerProwlarrSearch(req)}
-                                    >
-                                      <Search className="h-3 w-3 mr-1" /> Search
-                                      Release
-                                    </Button>
-                                  )}
-                                {(isAdmin ||
-                                  req.requestedBy === user?.username) &&
-                                  (req.status === "Approved" ||
-                                    req.status === "Downloading") && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 bg-blue-500/5 font-semibold mr-1"
-                                      onClick={async () => {
-                                        try {
-                                          const res =
-                                            await importCompletedDownload(
-                                              req.id,
-                                            );
-                                          if (res.success) {
-                                            alert(
-                                              res.message ||
-                                                "Imported completed download to library!",
-                                            );
-                                          } else {
+
+                                  {(isAdmin || req.requestedBy === user?.username) &&
+                                    (isApproved || isDownloading) && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 bg-blue-500/5 font-semibold"
+                                        onClick={async () => {
+                                          try {
+                                            const res = await importCompletedDownload(req.id);
+                                            if (res.success) {
+                                              alert(
+                                                res.message ||
+                                                  "Imported completed download to library!",
+                                              );
+                                            } else {
+                                              showErrorModal(
+                                                res.error ||
+                                                  "Failed to locate completed download.",
+                                                "Import Download Error",
+                                              );
+                                            }
+                                            const reqs = await getBookRequests();
+                                            setRequests(reqs || []);
+                                          } catch (err: any) {
                                             showErrorModal(
-                                              res.error ||
-                                                "Failed to locate completed download.",
+                                              err.message ||
+                                                "Failed to import download.",
                                               "Import Download Error",
                                             );
                                           }
-                                          const reqs = await getBookRequests();
-                                          setRequests(reqs || []);
-                                        } catch (err: any) {
-                                          showErrorModal(
-                                            err.message ||
-                                              "Failed to import download.",
-                                            "Import Download Error",
-                                          );
-                                        }
-                                      }}
-                                    >
-                                      <Download className="h-3 w-3 mr-1" />{" "}
-                                      Import Download
-                                    </Button>
-                                  )}
-                                {isAdmin &&
-                                  (req.status === "Approved" ||
-                                    req.status === "Downloading") && (
+                                        }}
+                                      >
+                                        <Download className="h-3 w-3 mr-1" /> Import Download
+                                      </Button>
+                                    )}
+
+                                  {isAdmin && (isApproved || isDownloading) && (
                                     <Button
                                       size="sm"
                                       variant="outline"
                                       className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
                                       onClick={() =>
-                                        handleUpdateRequestStatus(
-                                          req.id,
-                                          "Downloaded",
-                                        )
+                                        handleUpdateRequestStatus(req.id, "Downloaded")
                                       }
                                     >
                                       Mark Downloaded
                                     </Button>
                                   )}
 
+                                  {/* Utility actions: Cover, Report Issue, Delete */}
+                                  {(isAdmin || req.requestedBy === user?.username) && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="p-1 h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
+                                        title="Fetch / Refresh Cover Artwork"
+                                        disabled={refreshingRequestCoverId === req.id}
+                                        onClick={() => handleRefreshRequestCover(req.id)}
+                                      >
+                                        {refreshingRequestCoverId === req.id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                        ) : (
+                                          <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                                        )}
+                                        <span className="hidden sm:inline text-[11px]">Cover</span>
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="p-1 h-7 w-7 text-amber-500 hover:text-amber-600 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 shrink-0"
+                                        title="Report Request Issue"
+                                        onClick={() =>
+                                          handleOpenReportIssueModal({
+                                            type: "request",
+                                            title: req.title,
+                                            id: req.id,
+                                            status: req.status,
+                                          })
+                                        }
+                                      >
+                                        <AlertTriangle className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 shrink-0"
+                                        title="Delete Request"
+                                        onClick={() => handleDeleteRequest(req.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
+
+                              {/* Dedicated Full-Width Download Progress Bar (when Downloading) */}
+                              {isDownloading && (
+                                <div className="w-full bg-cyan-950/20 border border-cyan-500/30 rounded-lg p-3 space-y-2 shadow-inner animate-in fade-in duration-300">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="font-semibold text-cyan-400 flex items-center gap-1.5">
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />
+                                      {req.downloadProgress?.client
+                                        ? `Downloading via ${req.downloadProgress.client}`
+                                        : "Active Download in Client Queue"}
+                                    </span>
+                                    <span className="font-mono font-bold text-foreground">
+                                      {hasProgressPercent
+                                        ? `${progressPercent.toFixed(1)}%`
+                                        : "Connecting / Downloading..."}
+                                    </span>
+                                  </div>
+                                  <Progress
+                                    value={hasProgressPercent ? progressPercent : undefined}
+                                    className="h-2 bg-zinc-900/80 rounded-full"
+                                  />
+                                  <div className="flex justify-between items-center text-[11px] text-muted-foreground font-mono">
+                                    <span>
+                                      {req.downloadProgress?.mb
+                                        ? `${req.downloadProgress.mb} MB`
+                                        : ""}
+                                      {req.downloadProgress?.mbleft
+                                        ? ` (${req.downloadProgress.mbleft} MB remaining)`
+                                        : ""}
+                                    </span>
+                                    <span>
+                                      {req.downloadProgress?.timeleft
+                                        ? `ETA: ${req.downloadProgress.timeleft}`
+                                        : ""}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -4491,15 +5316,85 @@ function BookLibraryPageContent() {
                         devices list.
                       </p>
                     </div>
-                    <Button
-                      type="submit"
-                      className="w-full font-bold text-black"
-                    >
-                      Save Settings
-                    </Button>
+                    <div className="space-y-2 pt-1">
+                      <Button
+                        type="submit"
+                        className="w-full font-bold text-black bg-primary hover:bg-primary/90"
+                      >
+                        Save Settings
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10 gap-1.5"
+                        disabled={runningDiagnostics}
+                        onClick={handleRunKindleDiagnostics}
+                      >
+                        {runningDiagnostics ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Shield className="h-3.5 w-3.5" />
+                        )}
+                        Run Pre-Flight Delivery Check
+                      </Button>
+                    </div>
                   </form>
                 </CardContent>
               </Card>
+
+              {/* Pre-flight Diagnostic Results */}
+              {kindleDiagnostics && (
+                <Card className="border-muted/60 bg-[#16161c]/90 mt-4 animate-in fade-in">
+                  <CardHeader className="py-3 px-4 border-b border-muted/50 flex flex-row items-center justify-between">
+                    <CardTitle className="text-xs font-bold flex items-center gap-1.5">
+                      <Zap className="h-3.5 w-3.5 text-amber-400" /> Pre-Flight Diagnostic Report
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 text-[10px] px-1.5 text-muted-foreground hover:text-foreground"
+                      onClick={() => setKindleDiagnostics(null)}
+                    >
+                      Dismiss
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="p-3 space-y-2.5">
+                    {kindleDiagnostics.checks.map((item, idx) => {
+                      const isPass = item.status === "pass";
+                      const isWarn = item.status === "warn";
+                      return (
+                        <div key={idx} className="space-y-1 text-xs border-b border-muted/30 pb-2 last:border-b-0 last:pb-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-foreground flex items-center gap-1.5">
+                              {isPass ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              ) : isWarn ? (
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                              ) : (
+                                <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                              )}
+                              {item.name}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className={`text-[9px] py-0 px-1.5 font-bold ${
+                                isPass
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                  : isWarn
+                                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                    : "bg-red-500/10 text-red-400 border-red-500/30"
+                              }`}
+                            >
+                              {isPass ? "READY" : isWarn ? "WARNING" : "ATTENTION"}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground pl-5">{item.message}</p>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             <div className="lg:col-span-2">
@@ -4561,6 +5456,277 @@ function BookLibraryPageContent() {
               </Card>
             </div>
           </div>
+
+          {/* Send-to-Kindle Outbound Delivery History & Diagnostics Panel */}
+          <Card className="border-muted/60 mt-6">
+            <CardHeader className="py-3.5 border-b border-muted/50 flex flex-row justify-between items-center flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Mail className="h-4.5 w-4.5 text-primary" /> Kindle Delivery History & Error Diagnostics
+                </CardTitle>
+                <Badge variant="outline" className="text-xs font-mono">
+                  {kindleLogs.length} attempts
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-muted text-muted-foreground hover:text-foreground gap-1.5"
+                  disabled={loadingKindleLogs}
+                  onClick={loadKindleLogs}
+                >
+                  <RefreshCw className={`h-3 w-3 ${loadingKindleLogs ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+                {kindleLogs.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/30 gap-1"
+                    disabled={clearingKindleLogs}
+                    onClick={handleClearDeliveryLogs}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Clear History
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingKindleLogs ? (
+                <div className="p-8 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" /> Loading delivery history...
+                </div>
+              ) : kindleLogs.length === 0 ? (
+                <div className="p-8 text-center text-sm text-muted-foreground italic">
+                  No Send-to-Kindle delivery attempts logged yet. Whenever you or an admin sends a book to Kindle, the transaction log and delivery verification will appear here.
+                </div>
+              ) : (
+                <div className="divide-y divide-muted/50">
+                  {kindleLogs.map((log) => {
+                    const isDelivered = log.status === "DELIVERED";
+                    const isFailed = log.status === "FAILED";
+                    return (
+                      <div key={log.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-muted/10 transition-colors">
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-semibold text-sm truncate text-foreground" title={log.bookTitle}>
+                              {log.bookTitle}
+                            </h4>
+                            {log.bookAuthor && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                by {log.bookAuthor}
+                              </span>
+                            )}
+                            <Badge
+                              className={`text-[10px] py-0 px-1.5 font-bold ${
+                                isDelivered
+                                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                                  : isFailed
+                                    ? "bg-red-500/15 text-red-400 border border-red-500/30"
+                                    : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                              }`}
+                            >
+                              {isDelivered ? "🟢 DELIVERED" : isFailed ? "🔴 DELIVERY FAILED" : "🟡 RETRYING"}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+                            <span>To: <code className="font-mono text-foreground font-semibold">{log.recipientEmail}</code></span>
+                            <span>•</span>
+                            <span>Format: <span className="uppercase font-semibold">{log.fileFormat || "EPUB"}</span></span>
+                            {log.fileSizeBytes ? (
+                              <>
+                                <span>•</span>
+                                <span>{(log.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB</span>
+                              </>
+                            ) : null}
+                            <span>•</span>
+                            <span>{new Date(log.createdAt).toLocaleString()}</span>
+                          </div>
+
+                          {/* Failure diagnostics & resolution */}
+                          {isFailed && log.errorMessage && (
+                            <div className="mt-2 p-2.5 rounded-md bg-red-950/20 border border-red-500/30 text-xs space-y-1">
+                              <p className="text-red-400 font-medium flex items-center gap-1.5">
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                                <strong>Error:</strong> {log.errorMessage}
+                              </p>
+                              {serverSmtpFrom && (
+                                <p className="text-[11px] text-amber-300/90 pl-5">
+                                  💡 <strong>Amazon Whitelist Check:</strong> Ensure your server sending address (<code className="bg-black/40 px-1 rounded">{serverSmtpFrom}</code>) is added to your Amazon Approved Personal Document E-mail List.
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 shrink-0 md:justify-end">
+                          {isFailed && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10 gap-1.5"
+                              disabled={retryingLogId === log.id}
+                              onClick={() => handleRetryDelivery(log.id)}
+                            >
+                              {retryingLogId === log.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              )}
+                              Retry Delivery
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="help" className="space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-muted/50">
+            <div>
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <HelpCircle className="h-6 w-6 text-primary" /> Ebooks & Audiobooks User Guide
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Comprehensive guide to in-browser reading, Send-to-Kindle delivery, chapter management, requests, and series tracking.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1.5 h-8"
+                onClick={async () => {
+                  setGuideLoading(true);
+                  try {
+                    const fresh = await getEbooksUserGuide();
+                    setGuideMarkdown(fresh);
+                    setEditGuideText(fresh);
+                  } catch (e) {
+                    console.error("Failed to reload user guide:", e);
+                  } finally {
+                    setGuideLoading(false);
+                  }
+                }}
+                disabled={guideLoading}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${guideLoading ? "animate-spin" : ""}`} />
+                Refresh Guide
+              </Button>
+              {isAdmin && (
+                <Button
+                  variant={isEditingGuide ? "secondary" : "outline"}
+                  size="sm"
+                  className="text-xs gap-1.5 h-8"
+                  onClick={() => setIsEditingGuide(!isEditingGuide)}
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                  {isEditingGuide ? "Preview Guide" : "Edit Guide"}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {isEditingGuide && isAdmin ? (
+            <Card className="border-primary/40 bg-slate-950/60 shadow-xl">
+              <CardHeader className="py-3 px-5 border-b border-muted/40 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Edit3 className="h-4 w-4 text-primary" /> Edit User Guide Markdown
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Changes are saved directly to <code>user_guide_ebooks.md</code>.
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => {
+                      setEditGuideText(guideMarkdown);
+                      setIsEditingGuide(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="text-xs font-semibold text-black gap-1.5 h-8 bg-primary hover:bg-primary/90"
+                    disabled={savingGuide}
+                    onClick={async () => {
+                      setSavingGuide(true);
+                      try {
+                        const res = await saveEbooksUserGuide(editGuideText);
+                        if (res && res.success) {
+                          setGuideMarkdown(editGuideText);
+                          setIsEditingGuide(false);
+                        } else {
+                          showErrorModal(res?.error || "Failed to save guide.", "Save Error");
+                        }
+                      } catch (err: any) {
+                        showErrorModal(err.message || "Failed to save guide.", "Save Error");
+                      } finally {
+                        setSavingGuide(false);
+                      }
+                    }}
+                  >
+                    {savingGuide ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Save className="h-3.5 w-3.5" />
+                    )}
+                    Save Changes
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4">
+                <textarea
+                  value={editGuideText}
+                  onChange={(e) => setEditGuideText(e.target.value)}
+                  className="w-full h-[600px] font-mono text-xs bg-slate-900/90 text-slate-100 p-4 rounded-lg border border-slate-800 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed resize-y"
+                  placeholder="# Write markdown guide content here..."
+                />
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-muted/60 bg-slate-950/40 shadow-xl overflow-hidden">
+              <CardContent className="p-6 md:p-8">
+                {guideLoading ? (
+                  <div className="py-16 text-center text-muted-foreground flex flex-col items-center justify-center gap-3">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-xs">Loading User Guide...</p>
+                  </div>
+                ) : (
+                  <div className="prose prose-invert prose-emerald max-w-none text-slate-200 text-sm leading-relaxed 
+                    [&>h1]:text-2xl [&>h1]:font-extrabold [&>h1]:text-white [&>h1]:border-b [&>h1]:border-muted/50 [&>h1]:pb-3 [&>h1]:mb-6
+                    [&>h2]:text-lg [&>h2]:font-bold [&>h2]:text-primary [&>h2]:mt-8 [&>h2]:mb-3 [&>h2]:border-b [&>h2]:border-muted/30 [&>h2]:pb-1.5
+                    [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:text-amber-400 [&>h3]:mt-4 [&>h3]:mb-2
+                    [&>p]:my-2.5 [&>p]:leading-relaxed
+                    [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:my-2.5 [&>ul>li]:my-1
+                    [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:my-2.5 [&>ol>li]:my-1
+                    [&>blockquote]:border-l-2 [&>blockquote]:border-primary [&>blockquote]:pl-4 [&>blockquote]:py-1 [&>blockquote]:my-4 [&>blockquote]:bg-primary/5 [&>blockquote]:rounded-r
+                    [&_code]:bg-muted/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-primary [&_code]:text-xs [&_code]:font-mono
+                    [&_pre]:bg-slate-900 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:border [&_pre]:border-slate-800
+                    [&_hr]:border-muted/40 [&_hr]:my-6
+                    [&_a]:text-primary [&_a]:underline [&_a]:hover:text-primary/80">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {guideMarkdown || "*No guide content found. Click 'Refresh Guide' to load content.*"}
+                    </ReactMarkdown>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -4635,10 +5801,17 @@ function BookLibraryPageContent() {
           <Card className="w-full max-w-3xl max-h-[85vh] flex flex-col border-muted shadow-2xl">
             <CardHeader className="border-b border-muted/50 pb-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-bold flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" /> Search Releases
-                  for "{activeRequestForSearch.title}"
-                </CardTitle>
+                <div>
+                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" /> Search Releases
+                    for "{activeRequestForSearch.title}"
+                  </CardTitle>
+                  {activeRequestForSearch.author && activeRequestForSearch.author !== "Unknown Author" && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      by <span className="font-semibold text-foreground">{activeRequestForSearch.author}</span>
+                    </p>
+                  )}
+                </div>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -4652,7 +5825,7 @@ function BookLibraryPageContent() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="text"
-                    placeholder="Refine search query (e.g. Add 'Full-Cast')"
+                    placeholder="Refine search query (e.g. Title Author or Specific Group)"
                     value={customSearchQuery}
                     onChange={(e) => setCustomSearchQuery(e.target.value)}
                     className="flex-1 h-8 text-xs"
@@ -4664,21 +5837,89 @@ function BookLibraryPageContent() {
                   />
                   <Button
                     size="sm"
-                    className="h-8 text-xs px-3"
+                    className="h-8 text-xs px-3 font-semibold text-black"
                     onClick={() => triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, customSearchQuery)}
                     disabled={searchingProwlarr}
                   >
                     <Search className="h-3 w-3 mr-1" /> Search
                   </Button>
                 </div>
+
+                {/* Quick Query Shortcut Chips */}
+                {(() => {
+                  const cleanT = (activeRequestForSearch.title || "").replace(/\s*\([^)]+\)\s*/g, " ").trim();
+                  const cleanA = (activeRequestForSearch.author && activeRequestForSearch.author !== "Unknown Author" ? activeRequestForSearch.author : "").trim();
+                  if (!cleanA) return null;
+                  return (
+                    <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                      <span className="text-muted-foreground text-[10px] uppercase font-bold">Quick Queries:</span>
+                      <button
+                        type="button"
+                        className="px-2 py-0.5 rounded bg-muted/30 border border-muted hover:bg-primary/20 hover:border-primary/40 text-foreground text-[10px] transition-colors"
+                        onClick={() => {
+                          const q = `${cleanT} ${cleanA}`;
+                          setCustomSearchQuery(q);
+                          triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, q);
+                        }}
+                      >
+                        🔍 "{cleanT} {cleanA}"
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 py-0.5 rounded bg-muted/30 border border-muted hover:bg-primary/20 hover:border-primary/40 text-foreground text-[10px] transition-colors"
+                        onClick={() => {
+                          const q = `${cleanA} ${cleanT}`;
+                          setCustomSearchQuery(q);
+                          triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, q);
+                        }}
+                      >
+                        🔍 "{cleanA} {cleanT}"
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 py-0.5 rounded bg-muted/30 border border-muted hover:bg-primary/20 hover:border-primary/40 text-foreground text-[10px] transition-colors"
+                        onClick={() => {
+                          setCustomSearchQuery(cleanT);
+                          triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, cleanT);
+                        }}
+                      >
+                        🔍 "{cleanT}" (Title only)
+                      </button>
+                    </div>
+                  );
+                })()}
                 
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span>
-                    Prowlarr Indexers query status:{" "}
-                    {searchingProwlarr
-                      ? "Searching indexers..."
-                      : `${prowlarrResults.length} releases found.`}
-                  </span>
+                <div className="flex items-center justify-between gap-2 flex-wrap border-t border-muted/30 pt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs">
+                      {searchingProwlarr
+                        ? "Searching indexers..."
+                        : `${prowlarrResults.length} releases found across indexers.`}
+                    </span>
+                    {!searchingProwlarr && prowlarrResults.length > 0 && (
+                      <div className="flex items-center gap-1 ml-2 bg-muted/20 p-0.5 rounded border border-muted/50">
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant={releaseFilter === "matches" ? "default" : "ghost"}
+                          className={`h-6 text-[10px] px-2 font-medium ${releaseFilter === "matches" ? "bg-emerald-600 text-white font-semibold" : "text-muted-foreground"}`}
+                          onClick={() => setReleaseFilter("matches")}
+                        >
+                          Matching Releases ({prowlarrResults.filter((r: any) => r.matchQuality !== "mismatch").length})
+                        </Button>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant={releaseFilter === "all" ? "default" : "ghost"}
+                          className={`h-6 text-[10px] px-2 font-medium ${releaseFilter === "all" ? "bg-primary text-black font-semibold" : "text-muted-foreground"}`}
+                          onClick={() => setReleaseFilter("all")}
+                        >
+                          All ({prowlarrResults.length})
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground font-medium">
                       Format:
@@ -4749,47 +5990,92 @@ function BookLibraryPageContent() {
                 </div>
               ) : (
                 <div className="divide-y divide-muted/50">
-                  {prowlarrResults.map((release, i) => (
-                    <div
-                      key={i}
-                      className="p-4 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors"
-                    >
-                      <div className="space-y-1 flex-1 min-w-0">
-                        <h4
-                          className="font-semibold text-xs leading-snug text-foreground break-words truncate"
-                          title={release.title}
+                  {prowlarrResults
+                    .filter((release: any) => releaseFilter === "all" || release.matchQuality !== "mismatch")
+                    .map((release: any, i: number) => {
+                      const isExact = release.matchQuality === "exact";
+                      const isMismatch = release.matchQuality === "mismatch";
+                      return (
+                        <div
+                          key={i}
+                          className={`p-4 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors ${isExact ? "bg-emerald-500/5 border-l-2 border-emerald-500" : isMismatch ? "opacity-60 bg-red-500/5" : ""}`}
                         >
-                          {release.title}
-                        </h4>
-                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-                          <Badge
-                            variant="outline"
-                            className="text-[9px] py-0 border-muted uppercase"
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4
+                                className="font-semibold text-xs leading-snug text-foreground break-words truncate"
+                                title={release.title}
+                              >
+                                {release.title}
+                              </h4>
+                              {release.isBlocklisted ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] py-0 px-1.5 font-bold bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1"
+                                >
+                                  <Ban className="h-2.5 w-2.5" /> Blocklisted Release
+                                </Badge>
+                              ) : release.badgeText ? (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[9px] py-0 px-1.5 font-bold ${release.badgeColor || "border-muted text-muted-foreground"}`}
+                                >
+                                  {release.badgeText}
+                                </Badge>
+                              ) : null}
+                            </div>
+                            
+                            {release.warning && (
+                              <p className="text-[10px] text-amber-400/90 font-medium">
+                                ⚠️ {release.warning}
+                              </p>
+                            )}
+
+                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] py-0 border-muted uppercase"
+                              >
+                                {release.protocol}
+                              </Badge>
+                              <span className="font-medium text-foreground">
+                                {(release.size / (1024 * 1024)).toFixed(1)} MB
+                              </span>
+                              <span>Indexer: <span className="text-foreground font-medium">{release.indexer}</span></span>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            disabled={pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-")}
+                            onClick={() => handleSendRelease(release)}
+                            className={`text-xs font-bold shrink-0 ${isExact ? "bg-emerald-500 hover:bg-emerald-400 text-black" : "text-black"}`}
                           >
-                            {release.protocol}
-                          </Badge>
-                          <span className="font-medium text-foreground">
-                            {(release.size / (1024 * 1024)).toFixed(1)} MB
-                          </span>
-                          <span>Indexer: {release.indexer}</span>
+                            {pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-") ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Download className="h-3 w-3 mr-1" /> Grab
+                              </>
+                            )}
+                          </Button>
                         </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        disabled={pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-")}
-                          onClick={() => handleSendRelease(release)}
-                          className="text-xs font-bold text-black shrink-0"
+                      );
+                    })}
+                    {releaseFilter === "matches" && prowlarrResults.filter((r: any) => r.matchQuality !== "mismatch").length === 0 && (
+                      <div className="p-8 text-center space-y-2">
+                        <p className="text-xs text-muted-foreground italic">
+                          No exact author/title matches found in the {prowlarrResults.length} releases returned.
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setReleaseFilter("all")}
                         >
-                          {pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-") ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <>
-                            <Download className="h-3 w-3 mr-1" /> Grab
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  ))}
+                          Show All {prowlarrResults.length} Indexer Releases
+                        </Button>
+                      </div>
+                    )}
                 </div>
               )}
             </CardContent>
@@ -5379,68 +6665,21 @@ function BookLibraryPageContent() {
         </div>
       )}
 
-      {errorModal.open && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-lg border-red-500/40 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden relative">
-            <CardHeader className="border-b border-red-900/40 bg-red-950/30 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold text-red-400 flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-                  {errorModal.title}
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-slate-400 hover:text-white"
-                  onClick={() =>
-                    setErrorModal({ open: false, title: "", message: "" })
-                  }
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              <p className="text-xs text-slate-300">
-                An issue occurred. You can highlight or click the button below
-                to copy the error:
-              </p>
-              <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 relative group">
-                <pre className="text-xs font-mono text-red-300 whitespace-pre-wrap break-all max-h-48 overflow-y-auto select-all p-1">
-                  {errorModal.message}
-                </pre>
-              </div>
-            </CardContent>
-            <CardFooter className="border-t border-slate-900 p-3 bg-slate-950/60 flex items-center justify-between gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5"
-                onClick={() =>
-                  setErrorModal({ open: false, title: "", message: "" })
-                }
-              >
-                Close
-              </Button>
-              <Button
-                size="sm"
-                className="h-8 text-xs font-bold bg-red-600 text-white hover:bg-red-500 gap-1.5 shadow"
-                onClick={() => handleCopyErrorToClipboard(errorModal.message)}
-              >
-                {errorModal.copied ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-emerald-300" /> Copied to
-                    Clipboard!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" /> 📋 Copy Error
-                  </>
-                )}
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
+      <ErrorTicketModal
+        open={errorModal.open}
+        title={errorModal.title || "System Error Notice"}
+        message={errorModal.message}
+        onClose={() => setErrorModal({ open: false, title: "", message: "" })}
+      />
+
+      {activeReadingBook && (
+        <BookReaderModal
+          book={activeReadingBook}
+          onClose={() => {
+            setActiveReadingBook(null);
+            refreshReadingProgress();
+          }}
+        />
       )}
     </div>
   );

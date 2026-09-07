@@ -67,19 +67,19 @@ export default function RequestLibraryAccess() {
         <>
             <Button 
                 onClick={() => setIsOpen(true)}
-                className="w-full text-base font-semibold h-12 shadow-sm hover:shadow transition-all bg-primary text-black"
+                className="w-full text-base font-semibold h-12 shadow-lg transition-all bg-emerald-500 hover:bg-emerald-600 text-black hover:ring-2 hover:ring-emerald-400/50 active:scale-95"
             >
-                <BookOpen className="mr-2 h-4 w-4" />
+                <BookOpen className="mr-2 h-5 w-5" />
                 Request Book Library Access
             </Button>
 
             {isOpen && (
-                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-md border-muted shadow-2xl relative">
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-md border-border/50 shadow-2xl relative bg-[#121218]/95 backdrop-blur-md">
                         <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="absolute right-3 top-3 h-8 w-8"
+                            className="absolute right-3 top-3 h-8 w-8 hover:ring-1 hover:ring-border active:scale-95 transition-all"
                             onClick={() => setIsOpen(false)}
                             disabled={submitting}
                         >
@@ -87,8 +87,8 @@ export default function RequestLibraryAccess() {
                         </Button>
 
                         <CardHeader className="pb-4">
-                            <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <BookOpen className="h-5 w-5 text-primary" /> Request Library Access
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-emerald-400">
+                                <BookOpen className="h-5 w-5 text-emerald-400" /> Request Library Access
                             </CardTitle>
                             <CardDescription>
                                 Submit a request to the administrator to access the book shelves.
@@ -98,12 +98,12 @@ export default function RequestLibraryAccess() {
                         <CardContent>
                             {loadingProfile ? (
                                 <div className="flex flex-col items-center justify-center py-8 space-y-2">
-                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                    <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
                                     <p className="text-xs text-muted-foreground">Loading account details...</p>
                                 </div>
                             ) : success ? (
                                 <div className="flex flex-col items-center justify-center py-8 space-y-3 text-center">
-                                    <div className="h-10 w-10 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500">
+                                    <div className="h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.2)]">
                                         <Check className="h-6 w-6" />
                                     </div>
                                     <h3 className="font-semibold text-sm text-foreground">Request Sent!</h3>
@@ -155,7 +155,7 @@ export default function RequestLibraryAccess() {
                                     <Button 
                                         type="submit" 
                                         disabled={submitting} 
-                                        className="w-full text-black font-bold mt-2"
+                                        className="w-full text-black font-bold mt-2 bg-emerald-500 hover:bg-emerald-600 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-lg active:scale-95 transition-all"
                                     >
                                         {submitting ? (
                                             <>

@@ -62,18 +62,18 @@ export default function UserProfilePage() {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto p-4 sm:p-6 animate-in fade-in duration-500">
-            <div>
-                <h1 className="text-2xl font-extrabold tracking-tight flex items-center gap-2">
+            <div className="space-y-1">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">
                     <User className="h-6 w-6 text-primary" /> Account Profile & Settings
                 </h1>
                 <p className="text-muted-foreground text-sm">
-                    Manage your personal account credentials and security settings.
+                    Manage your personal account credentials, Send-to-Kindle settings, and security.
                 </p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
                 {/* ACCOUNT INFORMATION CARD */}
-                <Card className="border-muted/60 bg-card/95">
+                <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
                     <CardHeader>
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <ShieldCheck className="h-5 w-5 text-primary" /> Account Details
@@ -82,35 +82,35 @@ export default function UserProfilePage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-1">
-                            <Label className="text-xs text-muted-foreground">Username</Label>
-                            <div className="font-semibold text-base flex items-center gap-2">
+                            <Label className="text-xs text-muted-foreground font-semibold">Username</Label>
+                            <div className="font-semibold text-base flex items-center gap-2 text-foreground">
                                 <span>{user?.username || "Unknown"}</span>
-                                <Badge variant={user?.role === "ADMIN" ? "default" : "secondary"}>
+                                <Badge variant={user?.role === "ADMIN" ? "default" : "secondary"} className="text-[10px] font-bold">
                                     {user?.role || "USER"}
                                 </Badge>
                             </div>
                         </div>
 
-                        <div className="space-y-1 pt-2 border-t border-muted/40">
-                            <Label className="text-xs text-muted-foreground">Email Address</Label>
-                            <div className="text-sm font-medium flex items-center gap-2">
+                        <div className="space-y-1 pt-2 border-t border-border/40">
+                            <Label className="text-xs text-muted-foreground font-semibold">Email Address</Label>
+                            <div className="text-sm font-medium flex items-center gap-2 text-foreground">
                                 <Mail className="h-4 w-4 text-muted-foreground" />
                                 <span>{user?.email || "No Email Associated"}</span>
                             </div>
                         </div>
 
-                        <div className="space-y-1 pt-2 border-t border-muted/40">
-                            <Label className="text-xs text-muted-foreground">Send-to-Kindle Email</Label>
-                            <div className="text-sm font-medium flex items-center gap-2">
+                        <div className="space-y-1 pt-2 border-t border-border/40">
+                            <Label className="text-xs text-muted-foreground font-semibold">Send-to-Kindle Email</Label>
+                            <div className="text-sm font-medium flex items-center gap-2 text-foreground">
                                 <MailCheck className="h-4 w-4 text-primary" />
                                 <span>{user?.kindleEmail || "Not Configured (Set up under Book Library)"}</span>
                             </div>
                         </div>
 
-                        <div className="space-y-1 pt-2 border-t border-muted/40">
-                            <Label className="text-xs text-muted-foreground">Account Access Status</Label>
+                        <div className="space-y-1 pt-2 border-t border-border/40">
+                            <Label className="text-xs text-muted-foreground font-semibold">Account Access Status</Label>
                             <div>
-                                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1 text-xs">
+                                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1 text-xs font-semibold">
                                     <CheckCircle2 className="h-3.5 w-3.5" /> Approved Access
                                 </Badge>
                             </div>
@@ -119,7 +119,7 @@ export default function UserProfilePage() {
                 </Card>
 
                 {/* CHANGE PASSWORD CARD */}
-                <Card className="border-muted/60 bg-card/95">
+                <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
                     <CardHeader>
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <KeyRound className="h-5 w-5 text-primary" /> Change Password
@@ -142,7 +142,7 @@ export default function UserProfilePage() {
                             )}
                             
                             <div className="space-y-1.5">
-                                <Label htmlFor="currentPassword">Current or Temporary Password</Label>
+                                <Label htmlFor="currentPassword" className="text-xs font-semibold">Current or Temporary Password</Label>
                                 <Input 
                                     id="currentPassword"
                                     type="password" 
@@ -150,11 +150,12 @@ export default function UserProfilePage() {
                                     value={passCurrent} 
                                     onChange={(e) => setPassCurrent(e.target.value)} 
                                     placeholder="Enter current or temp password"
+                                    className="bg-background/60"
                                 />
                             </div>
 
                             <div className="space-y-1.5">
-                                <Label htmlFor="newPassword">New Password</Label>
+                                <Label htmlFor="newPassword" className="text-xs font-semibold">New Password</Label>
                                 <Input 
                                     id="newPassword"
                                     type="password" 
@@ -162,13 +163,14 @@ export default function UserProfilePage() {
                                     value={passNew} 
                                     onChange={(e) => setPassNew(e.target.value)} 
                                     placeholder="Minimum 6 characters"
+                                    className="bg-background/60"
                                 />
                             </div>
 
-                            <Button type="submit" disabled={passLoading} className="w-full font-bold">
+                            <Button type="submit" disabled={passLoading} className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98">
                                 {passLoading ? (
                                     <>
-                                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Updating...
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Updating Password...
                                     </>
                                 ) : (
                                     <>

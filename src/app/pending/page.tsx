@@ -33,9 +33,9 @@ export default function PendingPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background px-4 py-12">
-      <Card className="w-full max-w-md border-border/40 shadow-2xl bg-card/95 backdrop-blur-sm">
+      <Card className="w-full max-w-md border-border/50 shadow-2xl bg-[#121218]/90 backdrop-blur-md">
         <CardHeader className="text-center space-y-3 pb-4">
-          <div className="mx-auto bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl w-fit">
+          <div className="mx-auto bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl w-fit shadow-[0_0_15px_rgba(245,158,11,0.15)]">
             <Clock className="h-10 w-10 text-amber-500 animate-pulse" />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
@@ -78,7 +78,7 @@ export default function PendingPage() {
             <Button 
               type="button" 
               variant="default" 
-              className="w-full h-11 font-medium gap-2"
+              className="w-full h-11 font-semibold gap-2 hover:ring-2 hover:ring-amber-500/40 hover:shadow-lg active:scale-95 transition-all"
               onClick={fetchUser}
               disabled={isRefreshing}
             >
@@ -89,7 +89,7 @@ export default function PendingPage() {
             <Button 
               type="button" 
               variant="outline" 
-              className="w-full h-11 font-medium gap-2 text-muted-foreground hover:text-foreground"
+              className="w-full h-11 font-medium gap-2 text-muted-foreground hover:text-foreground hover:ring-1 hover:ring-border active:scale-95 transition-all"
               onClick={() => logout()}
             >
               <LogOut className="h-4 w-4" />

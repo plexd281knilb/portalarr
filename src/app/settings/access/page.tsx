@@ -193,17 +193,17 @@ export default function AccessSettingsPage() {
     return (
         <div className="space-y-6 max-w-5xl">
             <div>
-                <h3 className="text-lg font-medium">Access Control & User Management</h3>
+                <h3 className="text-xl font-bold tracking-tight text-emerald-400">Access Control & User Directory</h3>
                 <p className="text-sm text-muted-foreground">
                     Provision accounts, manage user roles, process pending access requests, and sync accounts from your Plex Friends list.
                 </p>
             </div>
 
             {/* PLEX AUTO-SYNC BANNER */}
-            <Card className="border-[#e5a00d]/30 bg-[#e5a00d]/5">
+            <Card className="border-[#e5a00d]/40 bg-[#e5a00d]/5 backdrop-blur-md shadow-sm hover:border-[#e5a00d]/60 hover:shadow-md transition-all duration-200">
                 <CardContent className="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="space-y-1">
-                        <div className="flex items-center gap-2 font-medium text-foreground">
+                        <div className="flex items-center gap-2 font-bold text-foreground">
                             <Play className="h-4 w-4 text-[#e5a00d] fill-current" />
                             <span>Plex Friends Auto-Sync</span>
                         </div>
@@ -219,7 +219,7 @@ export default function AccessSettingsPage() {
                     <Button 
                         type="button" 
                         variant="outline"
-                        className="border-[#e5a00d]/40 text-[#e5a00d] hover:bg-[#e5a00d]/10 shrink-0 gap-2 h-10 font-semibold"
+                        className="border-[#e5a00d]/40 text-[#e5a00d] hover:bg-[#e5a00d]/10 shrink-0 gap-2 h-10 font-semibold transition-all duration-200 hover:ring-2 hover:ring-[#e5a00d]/40 active:scale-95"
                         onClick={handleSyncPlex}
                         disabled={syncingPlex}
                     >
@@ -231,31 +231,31 @@ export default function AccessSettingsPage() {
 
             <div className="grid gap-6 md:grid-cols-2">
                 {/* CREATE USER FORM */}
-                <Card>
+                <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
+                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
                             <UserPlus className="h-5 w-5 text-primary" /> Create Account
                         </CardTitle>
                         <CardDescription>Add a new administrator or pre-approved user.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleCreate} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>Username</Label>
-                                <Input name="username" placeholder="e.g. jsmith" required />
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Username</Label>
+                                <Input name="username" placeholder="e.g. jsmith" required className="bg-background/60" />
                             </div>
-                            <div className="space-y-2">
-                                <Label>Email Address</Label>
-                                <Input name="email" type="email" placeholder="user@example.com" required />
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Email Address</Label>
+                                <Input name="email" type="email" placeholder="user@example.com" required className="bg-background/60" />
                             </div>
-                            <div className="space-y-2">
-                                <Label>Password</Label>
-                                <Input name="password" type="password" required placeholder="Minimum 6 characters" />
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Password</Label>
+                                <Input name="password" type="password" required placeholder="Minimum 6 characters" className="bg-background/60" />
                             </div>
-                            <div className="space-y-2">
-                                <Label>Role</Label>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Role</Label>
                                 <Select name="role" defaultValue="USER">
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectTrigger className="bg-background/80"><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="ADMIN">Admin (Full Access & Settings)</SelectItem>
                                         <SelectItem value="SUPER_USER">Super User (Radarr/Sonarr Access)</SelectItem>
@@ -263,7 +263,7 @@ export default function AccessSettingsPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <Button type="submit" className="w-full font-semibold">
+                            <Button type="submit" className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98">
                                 <UserPlus className="h-4 w-4 mr-2" /> Create Approved User
                             </Button>
                         </form>
@@ -271,9 +271,9 @@ export default function AccessSettingsPage() {
                 </Card>
 
                 {/* CHANGE PASSWORD FORM */}
-                <Card>
+                <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
+                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
                             <KeyRound className="h-5 w-5 text-primary" /> Change Your Password
                         </CardTitle>
                         <CardDescription>Update your logged-in administrator password.</CardDescription>
@@ -292,25 +292,27 @@ export default function AccessSettingsPage() {
                                     <span>{passErr}</span>
                                 </div>
                             )}
-                            <div className="space-y-2">
-                                <Label>Current / Temp Password</Label>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Current / Temp Password</Label>
                                 <Input 
                                     type="password" required 
                                     value={passCurrent} 
                                     onChange={(e) => setPassCurrent(e.target.value)} 
                                     placeholder="Enter current password"
+                                    className="bg-background/60"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <Label>New Password</Label>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">New Password</Label>
                                 <Input 
                                     type="password" required 
                                     value={passNew} 
                                     onChange={(e) => setPassNew(e.target.value)} 
                                     placeholder="Minimum 6 characters"
+                                    className="bg-background/60"
                                 />
                             </div>
-                            <Button type="submit" disabled={passLoading} className="w-full font-semibold">
+                            <Button type="submit" disabled={passLoading} className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98">
                                 {passLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <KeyRound className="h-4 w-4 mr-2" />}
                                 Update My Password
                             </Button>
@@ -321,10 +323,10 @@ export default function AccessSettingsPage() {
 
             {/* ADMIN RESET USER PASSWORD MODAL */}
             {resetModalUserId && (
-                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-                    <Card className="w-full max-w-md bg-card border-muted/80 shadow-2xl">
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-md bg-[#121218] border-border/60 shadow-2xl">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
+                            <CardTitle className="flex items-center gap-2 text-lg font-bold text-amber-500">
                                 <KeyRound className="h-5 w-5 text-amber-500" /> Admin Reset User Password
                             </CardTitle>
                             <CardDescription>
@@ -345,20 +347,21 @@ export default function AccessSettingsPage() {
                                         <span>{adminResetErr}</span>
                                     </div>
                                 )}
-                                <div className="space-y-2">
-                                    <Label>New Password</Label>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold">New Password</Label>
                                     <Input 
                                         type="password" required 
                                         value={adminNewPass}
                                         onChange={(e) => setAdminNewPass(e.target.value)}
                                         placeholder="Enter new user password"
+                                        className="bg-background/60"
                                     />
                                 </div>
                                 <div className="flex gap-2 justify-end pt-2">
                                     <Button type="button" variant="outline" onClick={() => setResetModalUserId(null)}>
                                         Cancel
                                     </Button>
-                                    <Button type="submit" disabled={adminResetLoading} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+                                    <Button type="submit" disabled={adminResetLoading} className="bg-amber-600 hover:bg-amber-500 text-white font-semibold transition-all duration-200 hover:ring-2 hover:ring-amber-400/40 active:scale-95">
                                         {adminResetLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                                         Save Password
                                     </Button>
@@ -370,18 +373,18 @@ export default function AccessSettingsPage() {
             )}
 
             {/* USER LIST & FILTERS */}
-            <Card>
+            <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
                 <CardHeader className="space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
-                            <CardTitle>Existing Users & Access Directory</CardTitle>
+                            <CardTitle className="text-xl font-bold">Existing Users & Access Directory</CardTitle>
                             <CardDescription>Manage user permissions, roles, Kindle emails, and account requests.</CardDescription>
                         </div>
                         {pendingUsersCount > 0 && (
                             <Button 
                                 variant="default" 
                                 size="sm" 
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold shrink-0"
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-md active:scale-95"
                                 onClick={handleApproveAllPending}
                             >
                                 <CheckCheck className="h-4 w-4" /> Approve All Pending ({pendingUsersCount})
@@ -395,18 +398,18 @@ export default function AccessSettingsPage() {
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input 
                                 placeholder="Search users..." 
-                                className="pl-9 text-xs h-9"
+                                className="pl-9 text-xs h-9 bg-background/60"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
 
                         {/* STATUS FILTER BUTTONS */}
-                        <div className="flex flex-wrap gap-1.5 bg-muted/30 p-1 rounded-lg border border-muted/50 text-xs w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-1.5 bg-muted/30 p-1 rounded-xl border border-muted/50 text-xs w-full sm:w-auto">
                             <Button 
                                 variant={filterStatus === "ALL" ? "secondary" : "ghost"} 
                                 size="sm" 
-                                className="h-7 text-xs px-2.5"
+                                className="h-7 text-xs px-2.5 transition-all duration-200 hover:ring-2 hover:ring-primary/40 active:scale-95 font-semibold"
                                 onClick={() => setFilterStatus("ALL")}
                             >
                                 All ({users.length})
@@ -414,7 +417,7 @@ export default function AccessSettingsPage() {
                             <Button 
                                 variant={filterStatus === "PENDING" ? "secondary" : "ghost"} 
                                 size="sm" 
-                                className="h-7 text-xs px-2.5 text-amber-400"
+                                className="h-7 text-xs px-2.5 text-amber-400 transition-all duration-200 hover:ring-2 hover:ring-amber-400/40 active:scale-95 font-semibold"
                                 onClick={() => setFilterStatus("PENDING")}
                             >
                                 Pending ({users.filter(u => u.status === "PENDING").length})
@@ -422,7 +425,7 @@ export default function AccessSettingsPage() {
                             <Button 
                                 variant={filterStatus === "APPROVED" ? "secondary" : "ghost"} 
                                 size="sm" 
-                                className="h-7 text-xs px-2.5 text-emerald-400"
+                                className="h-7 text-xs px-2.5 text-emerald-400 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 font-semibold"
                                 onClick={() => setFilterStatus("APPROVED")}
                             >
                                 Approved ({users.filter(u => u.status === "APPROVED" || !u.status).length})
@@ -430,7 +433,7 @@ export default function AccessSettingsPage() {
                             <Button 
                                 variant={filterStatus === "REJECTED" ? "secondary" : "ghost"} 
                                 size="sm" 
-                                className="h-7 text-xs px-2.5 text-red-400"
+                                className="h-7 text-xs px-2.5 text-red-400 transition-all duration-200 hover:ring-2 hover:ring-red-400/40 active:scale-95 font-semibold"
                                 onClick={() => setFilterStatus("REJECTED")}
                             >
                                 Rejected ({users.filter(u => u.status === "REJECTED").length})
@@ -441,35 +444,35 @@ export default function AccessSettingsPage() {
                 <CardContent>
                     <div className="space-y-3">
                         {loading ? (
-                            <div className="text-sm text-muted-foreground flex items-center gap-2 p-4">
-                                <Loader2 className="h-4 w-4 animate-spin text-primary" /> Loading users directory...
+                            <div className="text-sm text-muted-foreground flex items-center gap-2 p-6 justify-center">
+                                <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Loading user directory...
                             </div>
                         ) : filteredUsers.length === 0 ? (
-                            <div className="text-sm text-muted-foreground italic p-4 text-center border border-dashed rounded-xl">
+                            <div className="text-sm text-muted-foreground italic p-8 text-center border border-dashed border-border/40 rounded-xl bg-muted/10">
                                 No matching users found.
                             </div>
                         ) : (
                             filteredUsers.map((user) => (
-                                <div key={user.id} className={`flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-xl gap-4 transition-all duration-200 ${user.status === "PENDING" ? "bg-amber-500/10 border-amber-500/30" : "bg-muted/20 hover:bg-muted/30"}`}>
+                                <div key={user.id} className={`flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-xl gap-4 transition-all duration-200 ${user.status === "PENDING" ? "bg-amber-500/10 border-amber-500/40 hover:border-amber-500/60" : "bg-[#101014]/90 border-border/40 hover:border-emerald-500/30 hover:ring-2 hover:ring-emerald-500/20"}`}>
                                     <div className="flex items-start gap-3 flex-1 min-w-0">
-                                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5 border border-primary/20">
                                             {user.role === "ADMIN" ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-muted-foreground" />}
                                         </div>
                                         <div className="space-y-1.5 flex-1 min-w-0">
                                             <div className="font-semibold text-sm flex flex-wrap items-center gap-2">
-                                                <span className="truncate">{user.username}</span>
+                                                <span className="truncate text-foreground">{user.username}</span>
                                                 {user.status === "PENDING" && (
-                                                    <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] gap-1">
+                                                    <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/40 text-[10px] gap-1 font-bold">
                                                         <Clock className="h-3 w-3" /> Pending Approval
                                                     </Badge>
                                                 )}
                                                 {user.status === "REJECTED" && (
-                                                    <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px]">
+                                                    <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/40 text-[10px] font-bold">
                                                         Rejected
                                                     </Badge>
                                                 )}
                                                 {user.kindleEmail ? (
-                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px] gap-1" title={user.kindleEmail}>
+                                                    <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/40 text-[10px] gap-1 font-semibold" title={user.kindleEmail}>
                                                         <Send className="h-3 w-3" /> Kindle Ready
                                                     </Badge>
                                                 ) : (
@@ -498,12 +501,12 @@ export default function AccessSettingsPage() {
                                                 {editingKindleUserId === user.id ? (
                                                     <div className="flex items-center gap-2 w-full max-w-sm">
                                                         <Input 
-                                                            className="h-7 text-xs" 
+                                                            className="h-7 text-xs bg-background/80" 
                                                             placeholder="e.g. user_123@kindle.com"
                                                             value={kindleEmailInput}
                                                             onChange={(e) => setKindleEmailInput(e.target.value)}
                                                         />
-                                                        <Button size="sm" className="h-7 px-2 text-xs" onClick={() => handleSaveKindleEmail(user.id)}>
+                                                        <Button size="sm" className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40" onClick={() => handleSaveKindleEmail(user.id)}>
                                                             Save
                                                         </Button>
                                                         <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingKindleUserId(null)}>
@@ -517,7 +520,7 @@ export default function AccessSettingsPage() {
                                                         <Button 
                                                             variant="ghost" 
                                                             size="icon" 
-                                                            className="h-5 w-5 text-muted-foreground hover:text-foreground opacity-60 group-hover/k:opacity-100"
+                                                            className="h-5 w-5 text-muted-foreground hover:text-foreground opacity-60 group-hover/k:opacity-100 transition-all duration-200 hover:ring-1 hover:ring-primary/40"
                                                             onClick={() => {
                                                                 setEditingKindleUserId(user.id);
                                                                 setKindleEmailInput(user.kindleEmail || "");
@@ -536,7 +539,7 @@ export default function AccessSettingsPage() {
                                     <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-center">
                                         {/* ROLE SELECTOR */}
                                         <Select defaultValue={user.role} onValueChange={(val) => handleRoleChange(user.id, val)}>
-                                            <SelectTrigger className="h-8 text-xs w-28 bg-background border-muted">
+                                            <SelectTrigger className="h-8 text-xs w-28 bg-background/80 border-border/60 font-semibold">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -548,15 +551,15 @@ export default function AccessSettingsPage() {
 
                                         {user.status === "PENDING" ? (
                                             <>
-                                                <Button size="sm" variant="default" className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white gap-1 text-xs font-semibold" onClick={() => handleApprove(user.id)}>
+                                                <Button size="sm" variant="default" className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white gap-1 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
                                                     <CheckCircle2 className="h-3.5 w-3.5" /> Approve
                                                 </Button>
-                                                <Button size="sm" variant="outline" className="h-8 px-2.5 text-red-400 border-red-800/40 hover:bg-red-950/40 gap-1 text-xs" onClick={() => handleReject(user.id)}>
+                                                <Button size="sm" variant="outline" className="h-8 px-2.5 text-red-400 border-red-800/40 hover:bg-red-950/40 gap-1 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95" onClick={() => handleReject(user.id)}>
                                                     <XCircle className="h-3.5 w-3.5" /> Reject
                                                 </Button>
                                             </>
                                         ) : user.status === "REJECTED" ? (
-                                            <Button size="sm" variant="outline" className="h-8 px-2.5 text-emerald-400 border-emerald-800/40 hover:bg-emerald-950/40 gap-1 text-xs" onClick={() => handleApprove(user.id)}>
+                                            <Button size="sm" variant="outline" className="h-8 px-2.5 text-emerald-400 border-emerald-800/40 hover:bg-emerald-950/40 gap-1 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
                                                 <CheckCircle2 className="h-3.5 w-3.5" /> Approve
                                             </Button>
                                         ) : null}
@@ -565,7 +568,7 @@ export default function AccessSettingsPage() {
                                         <Button 
                                             size="sm" 
                                             variant="outline" 
-                                            className="h-8 px-2.5 text-xs text-amber-500 border-amber-500/30 hover:bg-amber-500/10 gap-1"
+                                            className="h-8 px-2.5 text-xs text-amber-500 border-amber-500/30 hover:bg-amber-500/10 gap-1 font-semibold transition-all duration-200 hover:ring-2 hover:ring-amber-500/40 active:scale-95"
                                             onClick={() => {
                                                 setResetModalUserId(user.id);
                                                 setAdminResetMsg("");
@@ -579,7 +582,7 @@ export default function AccessSettingsPage() {
                                         <Button 
                                             size="icon" 
                                             variant="ghost" 
-                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-950/40" 
+                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-950/40 transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95" 
                                             onClick={() => handleDelete(user.id)} 
                                             title="Delete User"
                                         >

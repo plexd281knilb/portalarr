@@ -135,17 +135,66 @@ model Book {
 }
 
 model BookRequest {
-  id          String   @id @default(cuid())
+  id           String   @id @default(cuid())
+  title        String
+  author       String?
+  series       String?  // Series name if requested as part of a series
+  volumeNumber String?  // Volume or book number
+  coverUrl     String?
+  publishYear  String?
+  requestedBy  String   // Username
+  type         String   @default("book") // "book" or "series"
+  mediaType    String   @default("ebook") // "ebook" or "audiobook"
+  status       String   @default("Pending") // "Pending", "Approved", "Downloaded", "Rejected"
+  monitorSeries Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model KindleDeliveryLog {
+  id             String   @id @default(cuid())
+  bookId         String?
+  bookTitle      String
+  bookAuthor     String?
+  recipientEmail String   // Kindle email
+  userEmail      String?  // User personal account email
+  username       String   // Portalarr username
+  status         String   @default("DELIVERED") // "DELIVERED", "FAILED", "WARNING"
+  errorMessage   String?
+  fileSize       Float?   // in bytes
+  fileType       String?  // "epub", "pdf", etc.
+  diagnostics    String?  // JSON or text summary of pre-flight/dispatch checks
+  createdAt      DateTime @default(now())
+}
+
+model FailedRelease {
+  id            String   @id @default(cuid())
+  releaseTitle  String
+  downloadUrl   String?
+  guid          String?
+  protocol      String   @default("torrent") // "torrent" or "usenet"
+  reason        String?
+  bookRequestId String?
+  createdAt     DateTime @default(now())
+}
+
+model FeatureSuggestion {
+  id          String        @id @default(cuid())
   title       String
-  author      String?
-  series      String?  // Series name if requested as part of a series
-  volumeNumber String? // Volume or book number
-  coverUrl    String?
-  publishYear String?
-  requestedBy String   // Username
-  type        String   @default("book") // "book" or "series"
-  mediaType   String   @default("ebook") // "ebook" or "audiobook"
-  status      String   @default("Pending") // "Pending", "Approved", "Downloaded", "Rejected"
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  description String?
+  category    String        @default("General")
+  createdBy   String        @default("Admin")
+  votes       FeatureVote[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model FeatureVote {
+  id           String            @id @default(cuid())
+  suggestionId String
+  suggestion   FeatureSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  username     String
+  createdAt    DateTime          @default(now())
+
+  @@unique([suggestionId, username])
 }

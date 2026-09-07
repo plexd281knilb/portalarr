@@ -59,23 +59,28 @@ export default function AdminTicketsPage() {
     };
 
     return (
-        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-5xl mx-auto">
+        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-5xl mx-auto animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+                    <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2 text-foreground">
                         <LifeBuoy className="h-8 w-8 text-primary"/> Support Tickets
                     </h2>
-                    <p className="text-muted-foreground">Manage and respond to user-submitted issues.</p>
+                    <p className="text-muted-foreground text-sm">Manage and respond to user-submitted issues.</p>
                 </div>
-                <Button onClick={loadTickets} variant="outline" size="sm" className="w-fit">
+                <Button 
+                    onClick={loadTickets} 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-fit transition-all duration-200 hover:ring-2 hover:ring-primary/40 active:scale-95"
+                >
                     <Loader2 className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                    Refresh
+                    Refresh Tickets
                 </Button>
             </div>
 
             <div className="grid gap-6">
                 {tickets.length === 0 && !loading && (
-                    <Card className="border-dashed bg-muted/20">
+                    <Card className="border-dashed border-border/50 bg-[#121218]/50 rounded-2xl">
                         <CardContent className="p-12 text-center text-muted-foreground italic">
                             No support tickets found. All systems go!
                         </CardContent>
@@ -83,31 +88,32 @@ export default function AdminTicketsPage() {
                 )}
                 
                 {tickets.map((ticket) => (
-                    <Card key={ticket.id} className="overflow-hidden border-primary/5 shadow-sm hover:shadow-md transition-shadow">
-                        <CardHeader className="bg-muted/30 pb-4">
+                    <Card key={ticket.id} className="overflow-hidden border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
+                        <CardHeader className="bg-muted/20 pb-4 border-b border-border/40">
                             <div className="flex justify-between items-start w-full gap-4">
                                 <div className="space-y-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <CardTitle className="text-lg font-bold truncate">
+                                        <CardTitle className="text-lg font-bold truncate text-foreground">
                                             {ticket.name}
                                         </CardTitle>
-                                        <Badge variant="secondary" className="font-mono text-[10px] px-1.5 py-0 h-5">
-                                            <Mail className="h-3 w-3 mr-1"/> {ticket.email}
+                                        <Badge variant="secondary" className="font-mono text-[10px] px-2 py-0.5 h-5 bg-muted/40 border border-border/40">
+                                            <Mail className="h-3 w-3 mr-1 text-primary"/> {ticket.email}
                                         </Badge>
                                     </div>
                                     <CardDescription className="text-xs">
                                         Submitted {formatDistanceToNow(new Date(ticket.createdAt))} ago
                                     </CardDescription>
                                 </div>
-                                <div className="flex items-center gap-1">
-                                    <Badge className={`${getStatusColor(ticket.status)} text-white border-0 shadow-sm px-3`}>
+                                <div className="flex items-center gap-2">
+                                    <Badge className={`${getStatusColor(ticket.status)} text-white border-0 shadow-sm px-3 py-0.5 font-semibold text-xs`}>
                                         {ticket.status}
                                     </Badge>
                                     <Button 
                                         variant="ghost" 
                                         size="icon" 
-                                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                        className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/40 transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95"
                                         onClick={() => handleDelete(ticket.id)}
+                                        title="Delete Ticket"
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -115,43 +121,43 @@ export default function AdminTicketsPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-6">
-                            <div className="bg-background border rounded-lg p-4 text-sm leading-relaxed whitespace-pre-wrap shadow-inner">
+                            <div className="bg-background/60 border border-border/40 rounded-xl p-4 text-sm leading-relaxed whitespace-pre-wrap shadow-inner text-foreground">
                                 {ticket.issue}
                             </div>
                             
-                            <div className="flex flex-wrap gap-2 pt-2">
+                            <div className="flex flex-wrap gap-2 pt-1">
                                 <Link href={`/settings/access?search=${encodeURIComponent(ticket.email)}`} passHref>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs border-blue-500/30 text-blue-500 hover:bg-blue-500 hover:text-white">
-                                        <UserCog className="h-3 w-3 mr-1.5" /> Manage User
+                                    <Button variant="outline" size="sm" className="h-8 text-xs font-semibold border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-500/40 active:scale-95 transition-all duration-200">
+                                        <UserCog className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> Manage User
                                     </Button>
                                 </Link>
                                 <Link href="/radarr" passHref>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs border-yellow-500/30 text-yellow-500 hover:bg-yellow-500 hover:text-white">
-                                        <Film className="h-3 w-3 mr-1.5" /> Radarr
+                                    <Button variant="outline" size="sm" className="h-8 text-xs font-semibold border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500/40 active:scale-95 transition-all duration-200">
+                                        <Film className="h-3.5 w-3.5 mr-1.5 text-blue-400" /> Radarr (Movies)
                                     </Button>
                                 </Link>
                                 <Link href="/sonarr" passHref>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs border-cyan-500/30 text-cyan-500 hover:bg-cyan-500 hover:text-white">
-                                        <Tv className="h-3 w-3 mr-1.5" /> Sonarr
+                                    <Button variant="outline" size="sm" className="h-8 text-xs font-semibold border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:ring-2 hover:ring-cyan-500/40 active:scale-95 transition-all duration-200">
+                                        <Tv className="h-3.5 w-3.5 mr-1.5 text-cyan-400" /> Sonarr (TV)
                                     </Button>
                                 </Link>
                                 <Link href="/library" passHref>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs border-purple-500/30 text-purple-500 hover:bg-purple-500 hover:text-white">
-                                        <BookOpen className="h-3 w-3 mr-1.5" /> Library
+                                    <Button variant="outline" size="sm" className="h-8 text-xs font-semibold border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:ring-2 hover:ring-purple-500/40 active:scale-95 transition-all duration-200">
+                                        <BookOpen className="h-3.5 w-3.5 mr-1.5 text-purple-400" /> Book Library
                                     </Button>
                                 </Link>
                             </div>
 
-                            <form onSubmit={(e) => handleUpdate(e, ticket.id)} className="space-y-4 pt-4 border-t border-dashed">
+                            <form onSubmit={(e) => handleUpdate(e, ticket.id)} className="space-y-4 pt-4 border-t border-border/40 border-dashed">
                                 <div className="space-y-2">
                                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                                        <Send className="h-3 w-3" /> Admin Response
+                                        <Send className="h-3.5 w-3.5 text-primary" /> Admin Response
                                     </Label>
                                     <Textarea 
                                         name="adminComment" 
                                         defaultValue={ticket.adminComment || ""} 
                                         placeholder="Type your message to the user..." 
-                                        className="min-h-[100px] bg-muted/10 focus-visible:ring-primary/30"
+                                        className="min-h-[100px] bg-background/60 border-border/40 focus-visible:ring-primary/40 text-xs sm:text-sm"
                                     />
                                     <p className="text-[10px] text-muted-foreground italic">
                                         This message will be included in the email notification sent to the user.
@@ -159,9 +165,9 @@ export default function AdminTicketsPage() {
                                 </div>
                                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-2">
                                     <div className="flex items-center gap-2">
-                                        <Label className="text-xs font-medium whitespace-nowrap">Set Status:</Label>
+                                        <Label className="text-xs font-semibold whitespace-nowrap">Set Status:</Label>
                                         <Select name="status" defaultValue={ticket.status}>
-                                            <SelectTrigger className="w-[160px] h-9">
+                                            <SelectTrigger className="w-[160px] h-9 bg-background/80 border-border/60 text-xs font-semibold">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -171,7 +177,7 @@ export default function AdminTicketsPage() {
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <Button type="submit" className="gap-2 h-9 shadow-sm" size="sm">
+                                    <Button type="submit" className="gap-2 h-9 font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98" size="sm">
                                         <Send className="h-4 w-4" /> Save & Notify User
                                     </Button>
                                 </div>

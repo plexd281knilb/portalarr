@@ -79,63 +79,63 @@ export default function SystemStatus() {
     };
 
     return (
-        <Card className="h-full animate-in fade-in duration-700">
+        <Card className="h-full border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 animate-in fade-in duration-700">
             <CardHeader>
                 <div className="flex justify-between items-start">
                     <div>
-                        <CardTitle className="flex items-center gap-2">
+                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
                             <Activity className="h-5 w-5 text-primary"/> System Status
                         </CardTitle>
-                        <CardDescription>Live server performance.</CardDescription>
+                        <CardDescription>Live server performance & stream metrics.</CardDescription>
                     </div>
-                    <div className="flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    <div className="flex relative h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
                     </div>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
                 
                 {/* General Health */}
-                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                    <span className="font-medium">Overall Health</span>
+                <div className="flex items-center justify-between p-3 bg-muted/20 border border-border/40 rounded-xl">
+                    <span className="font-semibold text-sm">Overall Health</span>
                     {stats.downApps && stats.downApps.length > 0 ? (
-                        <Badge variant="destructive" className="gap-1">
-                            <WifiOff className="h-3 w-3"/> Issues Detected
+                        <Badge variant="destructive" className="gap-1.5 shadow-sm">
+                            <WifiOff className="h-3.5 w-3.5"/> Issues Detected
                         </Badge>
                     ) : (
-                        <Badge className="bg-green-500 hover:bg-green-600 gap-1">
-                            <Activity className="h-3 w-3"/> All Systems Operational
+                        <Badge className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 shadow-sm">
+                            <Activity className="h-3.5 w-3.5"/> All Systems Operational
                         </Badge>
                     )}
                 </div>
                 
                 {stats.downApps && stats.downApps.length > 0 && (
-                    <div className="text-sm text-red-500 bg-red-50 p-3 rounded border border-red-100">
+                    <div className="text-xs text-red-400 bg-red-950/40 p-3 rounded-xl border border-red-800/40">
                         <strong>Down:</strong> {stats.downApps.join(", ")}
                     </div>
                 )}
 
                 {/* Stream Count Section */}
-                <div className="py-2 border-y">
+                <div className="py-3 border-y border-border/40">
                     <div className="text-center mb-3">
-                        <div className="text-3xl font-bold text-primary transition-all duration-500">
+                        <div className="text-3xl sm:text-4xl font-black text-primary transition-all duration-500">
                             {totalStreams}
                         </div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Active Streams</div>
+                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-1">Total Active Streams</div>
                     </div>
                     
                     {/* Individual Server Breakdown */}
                     {stats.streamStats && stats.streamStats.length > 0 && (
-                        <div className="space-y-2 mt-4 pt-4 border-t border-dashed">
+                        <div className="space-y-2 mt-4 pt-4 border-t border-dashed border-border/40">
                             {[...stats.streamStats].sort(sortStreams).map((server: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between text-sm">
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                        <PlaySquare className="h-4 w-4" />
+                                <div key={idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/10 hover:bg-muted/20 transition-colors">
+                                    <div className="flex items-center gap-2 text-foreground font-medium">
+                                        <PlaySquare className="h-3.5 w-3.5 text-primary" />
                                         <span>{server.name}</span>
                                     </div>
-                                    <Badge variant={server.count > 0 ? "default" : "secondary"}>
-                                        {server.count}
+                                    <Badge variant={server.count > 0 ? "default" : "secondary"} className="text-[10px]">
+                                        {server.count} {server.count === 1 ? "stream" : "streams"}
                                     </Badge>
                                 </div>
                             ))}
@@ -147,20 +147,20 @@ export default function SystemStatus() {
                 {stats.serverStats && stats.serverStats.length > 0 && (
                     <div className="space-y-3">
                         {[...stats.serverStats].sort(sortHardware).map((server: any) => (
-                            <div key={server.name} className="space-y-1">
+                            <div key={server.name} className="space-y-1.5 p-2.5 rounded-xl bg-muted/15 border border-border/30">
                                 <div className="flex justify-between text-xs font-semibold text-muted-foreground">
-                                    <span>{server.name}</span>
-                                    <span className={server.online ? "text-green-500" : "text-red-500"}>
+                                    <span className="text-foreground">{server.name}</span>
+                                    <span className={server.online ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                                         {server.online ? "ONLINE" : "OFFLINE"}
                                     </span>
                                 </div>
                                 {server.online && (
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                        <div className="flex items-center gap-1 bg-muted p-1.5 rounded">
-                                            <Cpu className="h-3 w-3"/> {server.cpu?.toFixed(1) || 0}% CPU
+                                    <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
+                                        <div className="flex items-center gap-1.5 bg-background/60 border border-border/30 p-1.5 rounded-lg">
+                                            <Cpu className="h-3 w-3 text-sky-400"/> {server.cpu?.toFixed(1) || 0}% CPU
                                         </div>
-                                        <div className="flex items-center gap-1 bg-muted p-1.5 rounded">
-                                            <HardDrive className="h-3 w-3"/> {server.ram?.toFixed(1) || 0}% RAM
+                                        <div className="flex items-center gap-1.5 bg-background/60 border border-border/30 p-1.5 rounded-lg">
+                                            <HardDrive className="h-3 w-3 text-amber-400"/> {server.ram?.toFixed(1) || 0}% RAM
                                         </div>
                                     </div>
                                 )}

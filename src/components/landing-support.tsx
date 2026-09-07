@@ -49,17 +49,17 @@ export default function LandingSupport() {
   };
 
   return (
-    <Card className="h-full flex flex-col animate-in fade-in duration-700">
+    <Card className="h-full flex flex-col border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 animate-in fade-in duration-700">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-lg font-bold">
           <AlertCircle className="h-5 w-5 text-primary" /> Support
         </CardTitle>
         <CardDescription>Report issues to the server admin.</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col justify-center">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Name</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Name</Label>
             <Input
               name="name"
               required
@@ -67,10 +67,11 @@ export default function LandingSupport() {
               defaultValue={defaultUser.name}
               // The key forces React to update the input once the fetch finishes
               key={`name-${defaultUser.name}`}
+              className="h-9 text-xs bg-background/60"
             />
           </div>
-          <div className="space-y-2">
-            <Label>Email</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Email</Label>
             <Input
               name="email"
               type="email"
@@ -79,55 +80,61 @@ export default function LandingSupport() {
               defaultValue={defaultUser.email}
               // The key forces React to update the input once the fetch finishes
               key={`email-${defaultUser.email}`}
+              className="h-9 text-xs bg-background/60"
             />
           </div>
-          <div className="space-y-2">
-            <Label>Issue</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Issue Description</Label>
             <Textarea
               name="issue"
               required
               placeholder="Describe the problem..."
-              rows={4}
+              rows={3}
+              className="text-xs bg-background/60 resize-none"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button 
+            type="submit" 
+            className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98" 
+            disabled={loading}
+          >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : success ? (
-              <CheckCircle2 className="h-4 w-4" />
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
             ) : (
               <Send className="h-4 w-4 mr-2" />
             )}
-            {success ? "Sent!" : "Submit Ticket"}
+            {success ? "Ticket Sent!" : "Submit Ticket"}
           </Button>
         </form>
 
         {userRole === "ADMIN" || userRole === "SUPER_USER" ? (
-          <div className="pt-4 mt-4 border-t border-muted/50 grid grid-cols-2 gap-2">
+          <div className="pt-4 mt-4 border-t border-border/40 grid grid-cols-2 gap-2">
             <Button
               asChild
               variant="outline"
-              className="w-full text-[10px] sm:text-xs font-semibold border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
+              className="w-full text-[10px] sm:text-xs font-semibold border-amber-500/30 text-amber-500 hover:bg-amber-500/10 hover:ring-2 hover:ring-amber-500/40 transition-all duration-200 active:scale-95"
             >
               <Link href="/radarr">
-                <Wrench className="h-3 w-3 mr-1" /> Fix Movies Issues
+                <Wrench className="h-3 w-3 mr-1" /> Fix Movies
               </Link>
             </Button>
             <Button
               asChild
               variant="outline"
-              className="w-full text-[10px] sm:text-xs font-semibold border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10"
+              className="w-full text-[10px] sm:text-xs font-semibold border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10 hover:ring-2 hover:ring-cyan-500/40 transition-all duration-200 active:scale-95"
             >
               <Link href="/sonarr">
-                <Wrench className="h-3 w-3 mr-1" /> Fix TV Shows Issues
+                <Wrench className="h-3 w-3 mr-1" /> Fix TV Shows
               </Link>
             </Button>
           </div>
         ) : (
-          <div className="pt-4 mt-4 border-t border-muted/50">
+          <div className="pt-4 mt-4 border-t border-border/40">
             <Button
               variant="outline"
-              className="w-full text-xs text-muted-foreground border-dashed"
+              className="w-full text-xs text-muted-foreground border-dashed border-border/60 hover:text-foreground hover:border-border transition-all duration-200"
               onClick={(e) => {
                 e.preventDefault();
                 const issueArea = document.querySelector(
@@ -140,7 +147,7 @@ export default function LandingSupport() {
                 }
               }}
             >
-              <Wrench className="h-3 w-3 mr-2" /> Request Access to Fix Issues
+              <Wrench className="h-3 w-3 mr-2" /> Request Super User Access
             </Button>
           </div>
         )}

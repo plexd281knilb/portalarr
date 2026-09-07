@@ -47,38 +47,38 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                 <span className="font-bold text-xl tracking-tight">Portalarr</span>
             </Link>
             
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
                 {hasLibraryAccess && (
-                    <Button asChild variant="ghost" size="sm" className="flex gap-2 text-primary hover:text-primary hover:bg-primary/10">
+                    <Button asChild variant="ghost" size="sm" className="flex gap-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">
                         <Link href="/library" title="Book Library">
                             <BookOpen className="h-4 w-4" /> 
-                            <span className="hidden sm:inline">Book Library</span>
+                            <span className="hidden sm:inline font-semibold">Book Library</span>
                         </Link>
                     </Button>
                 )}
 
                 {pathname === "/beta" ? (
-                    <Button asChild variant="ghost" size="sm" className="flex gap-2">
+                    <Button asChild variant="ghost" size="sm" className="flex gap-2 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
                         <Link href="/" title="Dashboard">
                             <LayoutDashboard className="h-4 w-4" /> 
-                            <span className="hidden sm:inline">Dashboard</span>
+                            <span className="hidden sm:inline font-semibold">Dashboard</span>
                         </Link>
                     </Button>
                 ) : (
-                    <Button asChild variant="ghost" size="sm" className="flex gap-2">
+                    <Button asChild variant="ghost" size="sm" className="flex gap-2 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
                         <Link href="/settings" title="Settings">
                             <Settings className="h-4 w-4" /> 
-                            <span className="hidden sm:inline">Settings</span>
+                            <span className="hidden sm:inline font-semibold">Settings</span>
                         </Link>
                     </Button>
                 )}
 
                 <button 
-                onClick={() => logout()} 
-                className="flex items-center gap-2 text-sm font-medium text-red-500 hover:text-red-600 transition-colors ml-2"
+                  onClick={() => logout()} 
+                  className="flex items-center gap-1.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 hover:ring-2 hover:ring-red-500/40 px-3 py-1.5 rounded-lg active:scale-95 transition-all ml-1"
                 >
-                <LogOut className="w-4 h-4" /> 
-                <span className="hidden sm:inline">Sign Out</span>
+                  <LogOut className="w-3.5 h-3.5" /> 
+                  <span className="hidden sm:inline">Sign Out</span>
                 </button>
             </div>
           </header>

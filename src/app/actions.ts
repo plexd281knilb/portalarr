@@ -12,6 +12,8 @@ import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolve
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 import { logger } from "@/lib/logger";
+import fs from "fs";
+import path from "path";
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -1212,6 +1214,111 @@ export async function submitSupportTicket(formData: FormData) {
     }
 }
 
+export async function submitAutoErrorTicketAction(errorPayload: {
+    errorMessage: string;
+    errorTitle?: string;
+    pageUrl?: string;
+    userAgent?: string;
+    customNote?: string;
+}) {
+    try {
+        let name = "Anonymous User";
+        let email = "user@portalarr.local";
+        
+        try {
+            const session: any = await verifyUser();
+            if (session) {
+                name = (session.username as string) || "Portalarr User";
+                email = (session.email as string) || `${session.username || "user"}@portalarr.local`;
+            }
+        } catch (e) {
+            // Unauthenticated or guest fallback
+        }
+
+        const formattedIssue = [
+            `🚨 [AUTOMATED ERROR REPORT]`,
+            `Title: ${errorPayload.errorTitle || "System Error"}`,
+            `Page / Route: ${errorPayload.pageUrl || "/"}`,
+            `Timestamp: ${new Date().toISOString()}`,
+            errorPayload.userAgent ? `User Agent: ${errorPayload.userAgent}` : null,
+            ``,
+            `--- ERROR DETAILS ---`,
+            errorPayload.errorMessage,
+            ``,
+            errorPayload.customNote ? `--- USER CONTEXT / NOTE ---\n${errorPayload.customNote}` : null
+        ].filter(Boolean).join("\n");
+
+        const ticket = await prisma.supportTicket.create({
+            data: {
+                name,
+                email,
+                issue: formattedIssue,
+                status: "Pending"
+            }
+        });
+
+        logger.addLog("ERROR", "SYSTEM", `[AUTO-TICKET] Created support ticket #${ticket.id.slice(0, 8)} from ${name}: ${errorPayload.errorMessage.slice(0, 100)}`);
+
+        // Send email notification to Admin if SMTP is configured
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (settings?.smtpHost && settings?.smtpUser) {
+            try {
+                const transporter = nodemailer.createTransport({
+                    host: settings.smtpHost,
+                    port: settings.smtpPort,
+                    secure: settings.smtpPort === 465,
+                    auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
+                } as any);
+
+                const appUrl = await getAppUrl();
+                const htmlContent = `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                        <h2 style="color: #dc2626; display: flex; align-items: center; gap: 8px;">
+                            🚨 Automated Error Report Ticket
+                        </h2>
+                        <p><strong>User:</strong> ${name} (<a href="mailto:${email}">${email}</a>)</p>
+                        <p><strong>Page:</strong> <code>${errorPayload.pageUrl || "/"}</code></p>
+                        
+                        <div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 20px 0; border-radius: 4px;">
+                            <h4 style="margin-top: 0; color: #991b1b;">Error:</h4>
+                            <pre style="white-space: pre-wrap; word-break: break-all; color: #7f1d1d; font-family: monospace; font-size: 13px;">${errorPayload.errorMessage}</pre>
+                            ${errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : ""}
+                        </div>
+
+                        <h4 style="color: #475569; margin-bottom: 10px;">Quick Actions</h4>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <a href="${appUrl}/admin/tickets" style="display: inline-block; padding: 8px 12px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">View Tickets Dashboard</a>
+                            <a href="${appUrl}/settings/access?search=${encodeURIComponent(email)}" style="display: inline-block; padding: 8px 12px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Manage User Access</a>
+                        </div>
+                    </div>
+                `;
+
+                await transporter.sendMail({
+                    from: `"Portalarr Error Alert" <${settings.smtpUser}>`,
+                    to: settings.smtpUser,
+                    replyTo: email,
+                    subject: `🚨 [Error Ticket] ${errorPayload.errorTitle || "System Error"} reported by ${name}`,
+                    text: formattedIssue,
+                    html: htmlContent
+                });
+            } catch (mailErr: any) {
+                console.error("[AUTO-TICKET] Failed to send email alert for ticket:", mailErr.message || mailErr);
+            }
+        }
+
+        try {
+            revalidatePath("/");
+            revalidatePath("/admin/tickets");
+        } catch (e) {
+            // Safe fallback outside Next.js request lifecycle
+        }
+        return { success: true, ticketId: ticket.id };
+    } catch (e: any) {
+        console.error("[AUTO-TICKET] Error creating ticket:", e);
+        return { success: false, error: e.message || "Failed to create support ticket." };
+    }
+}
+
 export async function getActiveDownloads() {
     const apps = await prisma.mediaApp.findMany({
         where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent", "qbittorrent", "SABnzbd", "NZBGet"] } }
@@ -1435,21 +1542,248 @@ export async function deleteBetaCard(id: string) {
 // --- ROADMAP ACTIONS ---
 // ============================================================================
 
-export async function getRoadmapText() {
-    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-    return settings?.roadmapText || "### 🚀 Upcoming Releases & Roadmap\nNo new updates at this time. Check back later!";
+export async function getRoadmapText(): Promise<string> {
+    try {
+        const roadmapPath = path.join(process.cwd(), "roadmap.md");
+        if (fs.existsSync(roadmapPath)) {
+            return fs.readFileSync(roadmapPath, "utf-8");
+        }
+        const upperRoadmapPath = path.join(process.cwd(), "ROADMAP.md");
+        if (fs.existsSync(upperRoadmapPath)) {
+            return fs.readFileSync(upperRoadmapPath, "utf-8");
+        }
+    } catch (e) {
+        console.warn("Failed to read roadmap.md from disk:", e);
+    }
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+    return settings?.roadmapText || "# 🗺️ Portalarr Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
 }
 
 export async function updateRoadmapText(formData: FormData) {
     await verifyAdmin();
-    const text = formData.get("text") as string;
-    await prisma.settings.upsert({
-        where: { id: "global" },
-        update: { roadmapText: text },
-        create: { id: "global", roadmapText: text }
-    });
+    const text = (formData.get("text") as string) || "";
+    try {
+        const roadmapPath = path.join(process.cwd(), "roadmap.md");
+        fs.writeFileSync(roadmapPath, text, "utf-8");
+    } catch (e: any) {
+        console.error("Failed to write roadmap.md:", e);
+    }
+    try {
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { roadmapText: text },
+            create: { id: "global", roadmapText: text }
+        });
+    } catch (e: any) {
+        console.error("Failed to sync roadmapText to database:", e);
+    }
     revalidatePath("/");
     revalidatePath("/settings");
+    revalidatePath("/beta");
+    return { success: true };
+}
+
+// ============================================================================
+// --- COMMUNITY FEATURE SUGGESTIONS & VOTING POLL ---
+// ============================================================================
+
+export async function getFeatureSuggestions() {
+    try {
+        const user: any = await verifyUser().catch(() => null);
+        const username: string = String(user?.username || "");
+
+        const suggestions = await prisma.featureSuggestion.findMany({
+            include: {
+                votes: true
+            },
+            orderBy: {
+                createdAt: "desc"
+            }
+        });
+
+        const formatted = suggestions.map(s => {
+            const hasVoted = username ? s.votes.some(v => v.username.toLowerCase() === username.toLowerCase()) : false;
+            return {
+                id: s.id,
+                title: s.title,
+                description: s.description,
+                category: s.category,
+                createdBy: s.createdBy,
+                votesCount: s.votes.length,
+                hasVoted,
+                createdAt: s.createdAt
+            };
+        });
+
+        // Sort by votes count descending, then by creation date descending
+        formatted.sort((a, b) => {
+            if (b.votesCount !== a.votesCount) {
+                return b.votesCount - a.votesCount;
+            }
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+
+        return { success: true, suggestions: formatted, currentUsername: username };
+    } catch (e: any) {
+        console.error("Failed to fetch feature suggestions:", e);
+        return { success: false, error: e.message || "Failed to fetch suggestions", suggestions: [] };
+    }
+}
+
+export async function toggleFeatureVote(suggestionId: string) {
+    try {
+        const user: any = await verifyUser();
+        const username: string = String(user?.username || "");
+        if (!username) {
+            return { success: false, error: "User session invalid" };
+        }
+
+        const suggestion = await prisma.featureSuggestion.findUnique({
+            where: { id: suggestionId },
+            include: { votes: true }
+        });
+
+        if (!suggestion) {
+            return { success: false, error: "Suggestion not found" };
+        }
+
+        const existingVote = suggestion.votes.find(
+            v => v.username.toLowerCase() === username.toLowerCase()
+        );
+
+        let hasVoted = false;
+        if (existingVote) {
+            // Unvote / uncheck
+            await prisma.featureVote.delete({
+                where: { id: existingVote.id }
+            });
+            hasVoted = false;
+        } else {
+            // Vote / check
+            await prisma.featureVote.create({
+                data: {
+                    suggestionId,
+                    username
+                }
+            });
+            hasVoted = true;
+        }
+
+        const updatedCount = await prisma.featureVote.count({
+            where: { suggestionId }
+        });
+
+        revalidatePath("/");
+        revalidatePath("/beta");
+
+        return { success: true, hasVoted, votesCount: updatedCount };
+    } catch (e: any) {
+        console.error("Failed to toggle feature vote:", e);
+        return { success: false, error: e.message || "Failed to submit vote" };
+    }
+}
+
+export async function createFeatureSuggestion(title: string, description?: string, category?: string) {
+    try {
+        const user: any = await verifyUser();
+        const username: string = String(user?.username || "Anonymous");
+
+        const cleanTitle = (title || "").trim();
+        if (cleanTitle.length < 3) {
+            return { success: false, error: "Feature title must be at least 3 characters long" };
+        }
+
+        const newSuggestion = await prisma.featureSuggestion.create({
+            data: {
+                title: cleanTitle,
+                description: (description || "").trim() || null,
+                category: (category || "General").trim() || "General",
+                createdBy: username,
+                votes: {
+                    create: {
+                        username
+                    }
+                }
+            },
+            include: {
+                votes: true
+            }
+        });
+
+        revalidatePath("/");
+        revalidatePath("/beta");
+
+        return {
+            success: true,
+            suggestion: {
+                id: newSuggestion.id,
+                title: newSuggestion.title,
+                description: newSuggestion.description,
+                category: newSuggestion.category,
+                createdBy: newSuggestion.createdBy,
+                votesCount: newSuggestion.votes.length,
+                hasVoted: true,
+                createdAt: newSuggestion.createdAt
+            }
+        };
+    } catch (e: any) {
+        console.error("Failed to create feature suggestion:", e);
+        return { success: false, error: e.message || "Failed to create suggestion" };
+    }
+}
+
+export async function deleteFeatureSuggestion(suggestionId: string) {
+    try {
+        const user: any = await verifyUser();
+        if (user?.role !== "ADMIN") {
+            return { success: false, error: "Unauthorized. Admin privileges required." };
+        }
+
+        await prisma.featureSuggestion.delete({
+            where: { id: suggestionId }
+        });
+
+        revalidatePath("/");
+        revalidatePath("/beta");
+
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to delete feature suggestion:", e);
+        return { success: false, error: e.message || "Failed to delete suggestion" };
+    }
+}
+
+// ============================================================================
+// --- USER GUIDE ACTIONS ---
+// ============================================================================
+
+export async function getEbooksUserGuide(): Promise<string> {
+    try {
+        const guidePath = path.join(process.cwd(), "user_guide_ebooks.md");
+        if (fs.existsSync(guidePath)) {
+            return fs.readFileSync(guidePath, "utf-8");
+        }
+        const rootGuidePath = path.join(process.cwd(), "USER_GUIDE.md");
+        if (fs.existsSync(rootGuidePath)) {
+            return fs.readFileSync(rootGuidePath, "utf-8");
+        }
+    } catch (e) {
+        console.warn("Failed to read user_guide_ebooks.md from disk:", e);
+    }
+    return "# 📖 Portalarr Ebooks & Audiobooks User Guide\n\nWelcome to Portalarr!";
+}
+
+export async function saveEbooksUserGuide(content: string) {
+    await verifyAdmin();
+    try {
+        const guidePath = path.join(process.cwd(), "user_guide_ebooks.md");
+        fs.writeFileSync(guidePath, content, "utf-8");
+        revalidatePath("/library");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to write user_guide_ebooks.md:", e);
+        return { success: false, error: e.message || "Failed to save user guide." };
+    }
 }
 
 // ============================================================================
@@ -1480,9 +1814,6 @@ export async function updateAlertBanner(formData: FormData) {
 // ============================================================================
 // --- BOOK LIBRARY & REQUEST ACTIONS (SHELFMARK + GRIMMORY) ---
 // ============================================================================
-
-import fs from "fs";
-import path from "path";
 
 async function verifyUser() {
     const cookieStore = await cookies();
@@ -2022,20 +2353,175 @@ export async function getBookRequests() {
                 }
             }
         }
+
+        // Non-blocking background auto-resolution for requests with missing or empty covers
+        const allReqsWithoutCovers = await prisma.bookRequest.findMany({
+            where: {
+                OR: [
+                    { coverUrl: null },
+                    { coverUrl: "" },
+                    { coverUrl: { startsWith: "?lib=" } }
+                ]
+            },
+            take: 6
+        });
+        if (allReqsWithoutCovers.length > 0) {
+            (async () => {
+                for (const r of allReqsWithoutCovers) {
+                    try {
+                        const cov = await fetchBookCover(r.title, r.author || "Unknown Author", r.mediaType || "ebook");
+                        if (cov && cov !== "local") {
+                            await prisma.bookRequest.update({
+                                where: { id: r.id },
+                                data: { coverUrl: cov }
+                            });
+                        }
+                    } catch (e) {}
+                }
+            })();
+        }
     } catch (e) {}
     
     const cleanRole = (session?.role || "").toUpperCase();
 
+    let requests: any[] = [];
     if (cleanRole === "ADMIN") {
-        return await prisma.bookRequest.findMany({
+        requests = await prisma.bookRequest.findMany({
             orderBy: { createdAt: "desc" }
         });
     } else {
         const username = (session?.username || "") as string;
-        return await prisma.bookRequest.findMany({
+        requests = await prisma.bookRequest.findMany({
             where: { requestedBy: username },
             orderBy: { createdAt: "desc" }
         });
+    }
+
+    // Attach real-time download progress if request is downloading
+    try {
+        const hasDownloading = requests.some(r => r.status && r.status.startsWith("Downloading"));
+        if (hasDownloading) {
+            const activeDownloads = await getActiveDownloads().catch(() => []);
+            for (const req of requests) {
+                if (req.status && req.status.startsWith("Downloading")) {
+                    const normReqTitle = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    for (const app of activeDownloads) {
+                        if (!app.online || !app.queue) continue;
+                        const match = app.queue.find((q: any) => {
+                            const normQ = (q.filename || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                            return normQ.includes(normReqTitle) || (normReqTitle.length > 5 && normReqTitle.includes(normQ));
+                        });
+                        if (match) {
+                            req.downloadProgress = {
+                                percentage: Number(match.percentage) || 0,
+                                timeleft: match.timeleft || "Unknown",
+                                mb: match.mb || 0,
+                                mbleft: match.mbleft || 0,
+                                client: app.name || app.type
+                            };
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {}
+
+    return requests;
+}
+
+export async function sendRequestCompletionNotification(requestIdOrBook: any, matchedBook?: any) {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            return;
+        }
+
+        let request: any = null;
+        let book: any = matchedBook;
+
+        if (typeof requestIdOrBook === "string") {
+            request = await prisma.bookRequest.findUnique({ where: { id: requestIdOrBook } });
+        } else if (requestIdOrBook && requestIdOrBook.title) {
+            request = requestIdOrBook;
+        }
+
+        if (!request) return;
+
+        const requester = await prisma.user.findFirst({
+            where: { username: request.requestedBy }
+        });
+
+        if (!requester || !requester.email) {
+            return;
+        }
+
+        const isAudiobook = (request.mediaType || book?.mediaType) === "audiobook";
+        const mediaLabel = isAudiobook ? "Audiobook" : "Ebook";
+        const title = book?.title || request.title;
+        const author = book?.author || request.author || "Unknown Author";
+        const appUrl = await getAppUrl();
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        const coverUrl = book?.coverUrl || request.coverUrl;
+        const cleanCoverUrl = coverUrl ? (coverUrl.startsWith("http") ? coverUrl : `${appUrl}${coverUrl}`) : null;
+
+        const actionLink = isAudiobook
+            ? `${appUrl}/library?tab=audiobooks${book?.id ? `&playBookId=${book.id}` : ""}`
+            : `${appUrl}/library?tab=libs${book?.id ? `&openBookId=${book.id}` : ""}`;
+
+        const actionText = isAudiobook ? "🎧 Listen in Player" : "📖 Read in Browser";
+
+        const mailOptions = {
+            from: senderEmail,
+            to: requester.email,
+            subject: `🎉 Your ${mediaLabel} is Ready: ${title}`,
+            html: `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <span style="display: inline-block; font-size: 11px; font-weight: bold; letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; background: ${isAudiobook ? '#fef3c7' : '#dbeafe'}; color: ${isAudiobook ? '#b45309' : '#1e40af'};">
+                            ${isAudiobook ? '🎧 Audiobook Ready' : '📖 Ebook Ready'}
+                        </span>
+                        <h2 style="color: #0f172a; margin: 12px 0 4px 0; font-size: 22px; font-weight: 800;">Your Request has Arrived!</h2>
+                        <p style="color: #64748b; font-size: 14px; margin: 0;">Hi <strong>${requester.username}</strong>, your requested media was successfully downloaded and imported into the library.</p>
+                    </div>
+
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 20px 0; display: flex; gap: 16px; align-items: center;">
+                        ${cleanCoverUrl ? `<img src="${cleanCoverUrl}" alt="${title}" style="width: 70px; height: 100px; object-fit: cover; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);" />` : ''}
+                        <div>
+                            <h3 style="margin: 0 0 4px 0; font-size: 16px; color: #0f172a; font-weight: 700;">${title}</h3>
+                            <p style="margin: 0 0 4px 0; font-size: 13px; color: #475569;">by <strong>${author}</strong></p>
+                            ${request.series ? `<p style="margin: 0; font-size: 12px; color: #64748b;">Series: <em>${request.series}</em> ${request.volumeNumber ? `#${request.volumeNumber}` : ''}</p>` : ''}
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin: 28px 0 16px 0;">
+                        <a href="${actionLink}" style="background-color: ${isAudiobook ? '#d97706' : '#2563eb'}; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                            ${actionText}
+                        </a>
+                    </div>
+
+                    <p style="text-align: center; font-size: 12px; color: #94a3b8; margin-top: 24px;">
+                        Portalarr Media Server • <a href="${appUrl}/library" style="color: #64748b; text-decoration: underline;">View Library</a>
+                    </p>
+                </div>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[SMTP-NOTIFICATION] Sent request completion email to ${requester.email} for "${title}"`);
+    } catch (e: any) {
+        console.error("[SMTP-NOTIFICATION] Failed to send request completion email:", e.message || e);
     }
 }
 
@@ -2158,16 +2644,33 @@ export async function createBookRequest(formData: FormData) {
         
         if (!title) return { success: false, error: "Title is required" };
         
-        let finalTitle = title;
-        let finalAuthor = author;
+        let finalTitle = title.trim();
+        let finalAuthor = author.trim();
         let finalSeries: string | null = null;
         let finalVolNum: string | null = null;
         let finalCover = coverUrl;
         let finalYear = publishYear;
 
+        // Auto-extract author if passed in title input (e.g. "Cold Wind by Andrew Givler" or "Cold Wind - Andrew Givler")
+        if (!finalAuthor || finalAuthor === "Unknown Author") {
+            if (/\s+by\s+/i.test(finalTitle)) {
+                const parts = finalTitle.split(/\s+by\s+/i);
+                finalTitle = parts[0].trim();
+                finalAuthor = parts.slice(1).join(" by ").trim();
+            } else if (finalTitle.includes(" - ")) {
+                const parts = finalTitle.split(" - ");
+                finalTitle = parts[0].trim();
+                finalAuthor = parts.slice(1).join(" - ").trim();
+            } else if (finalTitle.includes(": ")) {
+                const parts = finalTitle.split(": ");
+                finalTitle = parts[0].trim();
+                finalAuthor = parts.slice(1).join(": ").trim();
+            }
+        }
+
         try {
-            if (!author) {
-                const heur = callDefaultResolver(`${title} ${author}`, mediaType);
+            if (!finalAuthor) {
+                const heur = callDefaultResolver(`${finalTitle} ${finalAuthor}`, mediaType);
                 if (heur) {
                     if (heur.title) finalTitle = heur.title;
                     if (heur.author && heur.author !== "Unknown Author") finalAuthor = heur.author;
@@ -3729,6 +4232,179 @@ function getDownloadCategoryForLibrary(libraryName: string, mediaType: string = 
     return "books";
 }
 
+interface ReleaseMatchEvaluation {
+    score: number;
+    matchQuality: "exact" | "good" | "partial" | "mismatch";
+    badgeText: string;
+    badgeColor: string;
+    authorMatch: boolean;
+    titleMatch: boolean;
+    parsedAuthor: string;
+    parsedTitle: string;
+    warning?: string;
+    rejected?: boolean;
+    rejectionReason?: string;
+}
+
+function evaluateReleaseMatch(
+    releaseTitle: string,
+    requestedTitle: string,
+    requestedAuthor?: string | null,
+    mediaType: string = "ebook"
+): ReleaseMatchEvaluation {
+    const raw = releaseTitle || "";
+    const parsed = parseFilenameMetadata(raw);
+    
+    const cleanReqTitle = cleanSearchQuery(requestedTitle || "").toLowerCase();
+    const cleanReqAuthor = cleanSearchQuery(requestedAuthor || "").toLowerCase();
+    
+    const cleanParsedTitle = cleanSearchQuery(parsed.title || "").toLowerCase();
+    const cleanParsedAuthor = cleanSearchQuery(parsed.author || "").toLowerCase();
+    const rawLower = raw.toLowerCase();
+
+    // 1. Music / Non-Book Reject Check in Ebook mode
+    if (mediaType === "ebook") {
+        const isMusic = /\.(?:flac|wav|aac|ogg|wma|m4a|alac|aiff|ape|opus)$/i.test(raw) ||
+                        /\b(?:flac|vinyl|remastered|5cd|cd\s*box\s*set|box\s*set)\b/i.test(rawLower) ||
+                        /\b\d+\.\d{2}\.\s+/i.test(raw);
+        if (isMusic) {
+            return {
+                score: 0,
+                matchQuality: "mismatch",
+                badgeText: "Music / Non-Book",
+                badgeColor: "bg-red-500/10 text-red-400 border-red-500/30",
+                authorMatch: false,
+                titleMatch: false,
+                parsedAuthor: parsed.author,
+                parsedTitle: parsed.title,
+                warning: "Audio/Music file filtered from ebook releases",
+                rejected: true,
+                rejectionReason: "Music / Non-book audio file detected"
+            };
+        }
+    }
+
+    // 2. Author Analysis
+    let authorMatch = false;
+    let authorMismatch = false;
+    const hasRequestedAuthor = cleanReqAuthor.length >= 2 && cleanReqAuthor !== "unknown author";
+
+    if (hasRequestedAuthor) {
+        // Break requested author into tokens (e.g. ["andrew", "givler"])
+        const authorTokens = cleanReqAuthor.split(/\s+/).filter(t => t.length >= 2);
+        const lastName = authorTokens[authorTokens.length - 1]; // e.g. "givler"
+        
+        // Check if release title or parsed author contains the author tokens
+        const rawHasLastName = lastName && rawLower.includes(lastName);
+        const rawHasFullName = rawLower.includes(cleanReqAuthor);
+        const parsedHasLastName = lastName && cleanParsedAuthor.includes(lastName);
+        
+        if (rawHasFullName || rawHasLastName || parsedHasLastName) {
+            authorMatch = true;
+        } else if (cleanParsedAuthor && cleanParsedAuthor !== "unknown author") {
+            // Parsed a distinct author that doesn't match any token of requested author
+            const parsedTokens = cleanParsedAuthor.split(/\s+/).filter(t => t.length >= 2);
+            const sharesToken = authorTokens.some(at => parsedTokens.some(pt => pt.includes(at) || at.includes(pt)));
+            if (!sharesToken) {
+                authorMismatch = true;
+            }
+        }
+    }
+
+    // 3. Title Analysis
+    let titleMatch = false;
+    let partialTitle = false;
+
+    // Direct exact title comparison
+    const normParsedTitleAlpha = cleanParsedTitle.replace(/[^a-z0-9]/g, "");
+    const normReqTitleAlpha = cleanReqTitle.replace(/[^a-z0-9]/g, "");
+    
+    if (normParsedTitleAlpha === normReqTitleAlpha && normReqTitleAlpha.length > 0) {
+        titleMatch = true;
+    } else if (cleanParsedTitle.includes(cleanReqTitle) || cleanReqTitle.includes(cleanParsedTitle)) {
+        const reqWords = cleanReqTitle.split(/\s+/).filter(w => w.length > 0);
+        const parsedWords = cleanParsedTitle.split(/\s+/).filter(w => w.length > 0);
+        if (Math.abs(reqWords.length - parsedWords.length) <= 1 && reqWords.length > 1) {
+            titleMatch = true;
+        } else {
+            partialTitle = true;
+        }
+    } else {
+        const reqWords = cleanReqTitle.split(/\s+/).filter(w => w.length > 1);
+        const matchCount = reqWords.filter(w => cleanParsedTitle.includes(w) || rawLower.includes(w)).length;
+        if (reqWords.length > 0 && matchCount === reqWords.length) {
+            partialTitle = true;
+        }
+    }
+
+    // 4. Decision & Scoring
+    let score = 10;
+    let matchQuality: "exact" | "good" | "partial" | "mismatch" = "mismatch";
+    let badgeText = "Low Match";
+    let badgeColor = "bg-zinc-500/10 text-zinc-400 border-zinc-500/30";
+    let warning: string | undefined = undefined;
+    let rejected = false;
+
+    if (authorMismatch) {
+        score = 5;
+        matchQuality = "mismatch";
+        badgeText = `Wrong Author (${parsed.author})`;
+        badgeColor = "bg-red-500/10 text-red-400 border-red-500/30";
+        warning = `Author Mismatch: Release is by ${parsed.author}, not ${requestedAuthor}`;
+        rejected = true;
+    } else if (authorMatch && titleMatch) {
+        score = 100;
+        matchQuality = "exact";
+        badgeText = "Best Match (100%)";
+        badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
+    } else if (authorMatch && partialTitle) {
+        score = 80;
+        matchQuality = "good";
+        badgeText = "Author Match";
+        badgeColor = "bg-blue-500/10 text-blue-400 border-blue-500/30";
+    } else if (authorMatch && !titleMatch) {
+        score = 65;
+        matchQuality = "good";
+        badgeText = "Author Match (Partial Title)";
+        badgeColor = "bg-blue-500/10 text-blue-400 border-blue-500/30";
+    } else if (!hasRequestedAuthor && titleMatch) {
+        score = 80;
+        matchQuality = "good";
+        badgeText = "Exact Title";
+        badgeColor = "bg-blue-500/10 text-blue-400 border-blue-500/30";
+    } else if (titleMatch && !authorMatch) {
+        score = 60;
+        matchQuality = "good";
+        badgeText = "Title Match (Author Unverified)";
+        badgeColor = "bg-cyan-500/10 text-cyan-400 border-cyan-500/30";
+    } else if (partialTitle) {
+        score = 35;
+        matchQuality = "partial";
+        badgeText = "Partial Title";
+        badgeColor = "bg-amber-500/10 text-amber-400 border-amber-500/30";
+    } else {
+        score = 10;
+        matchQuality = "mismatch";
+        badgeText = "Low Match";
+        badgeColor = "bg-zinc-500/10 text-zinc-400 border-zinc-500/30";
+        rejected = true;
+    }
+
+    return {
+        score,
+        matchQuality,
+        badgeText,
+        badgeColor,
+        authorMatch,
+        titleMatch,
+        parsedAuthor: parsed.author,
+        parsedTitle: parsed.title,
+        warning,
+        rejected,
+        rejectionReason: warning
+    };
+}
+
 export async function filterReleasesForMediaType(results: any[], mediaType: string = "ebook") {
     if (!results || !Array.isArray(results)) return [];
 
@@ -3778,14 +4454,24 @@ export async function filterReleasesForMediaType(results: any[], mediaType: stri
             return isAudioCategory || hasAudioKeyword;
         } else {
             // EBOOKS
-            // Must NOT be an audiobook format
-            const isAudiobook = titleLower.includes("audiobook") ||
-                                titleLower.includes("audio book") ||
-                                titleLower.includes(".m4b") ||
-                                titleLower.includes(".mp3") ||
-                                titleLower.includes("unabridged") ||
-                                titleLower.includes("narrated by");
-            if (isAudiobook) return false;
+            // Must NOT be an audiobook or music track/album
+            const isAudioOrMusic = titleLower.includes("audiobook") ||
+                                   titleLower.includes("audio book") ||
+                                   titleLower.includes(".m4b") ||
+                                   titleLower.includes(".mp3") ||
+                                   titleLower.includes(".flac") ||
+                                   titleLower.includes(".wav") ||
+                                   titleLower.includes(".aac") ||
+                                   titleLower.includes(".ogg") ||
+                                   titleLower.includes(".m4a") ||
+                                   titleLower.includes("unabridged") ||
+                                   titleLower.includes("narrated by") ||
+                                   titleLower.includes("box set") ||
+                                   titleLower.includes("5cd") ||
+                                   titleLower.includes("remastered") ||
+                                   titleLower.includes("vinyl") ||
+                                   /\b\d+\.\d{2}\.\s+/i.test(r.title);
+            if (isAudioOrMusic) return false;
 
             // Size: 50 KB to 100 MB
             const isValidEbookSize = r.size >= 50 * 1024 && r.size <= 100 * 1024 * 1024;
@@ -3837,6 +4523,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                     where: { id: requestId },
                     data: { status: "Downloaded" }
                 });
+                sendRequestCompletionNotification(req, existingBook).catch(() => {});
                 return;
             }
         }
@@ -3924,49 +4611,62 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const prowlarrUrl = cleanUrl(prowlarrApp.url);
         const prowlarrKey = decryptData(prowlarrApp.apiKey as string);
         const cleanTitleBase = title.replace(/\s*\([^)]+\)\s*/g, " ").trim();
-        const queryText = author ? `${cleanTitleBase} ${author}` : cleanTitleBase;
+        const cleanAuthorBase = (author && author !== "Unknown Author" ? author : "").trim();
+        const queryText = cleanAuthorBase ? `${cleanTitleBase} ${cleanAuthorBase}` : cleanTitleBase;
 
-        // Tier 1: Title + Author (using executeProwlarrSearch for 4-tier literal Torznab fallbacks)
+        // Tier 1: Title + Author (using executeProwlarrSearch for multi-tier Torznab fallbacks)
         let results = await executeProwlarrSearch(queryText, reqMediaType, prowlarrUrl, prowlarrKey);
         let candidates = await filterReleasesForMediaType(results, reqMediaType);
 
-        // Tier 2: Title Only (using executeProwlarrSearch for 4-tier literal Torznab fallbacks)
+        // Tier 2: Title Only (using executeProwlarrSearch for multi-tier Torznab fallbacks)
         if (candidates.length === 0 && cleanTitleBase && cleanTitleBase !== queryText) {
             console.log(`[AUTO-DOWNLOAD] Tier 1 search yielded 0 candidates. Retrying with Title-only query: "${cleanTitleBase}"`);
             results = await executeProwlarrSearch(cleanTitleBase, reqMediaType, prowlarrUrl, prowlarrKey);
             candidates = await filterReleasesForMediaType(results, reqMediaType);
         }
 
-        if (candidates.length === 0) {
+        const blocklisted = await prisma.failedRelease.findMany().catch(() => []);
+        const blocklistedUrls = new Set(blocklisted.map(b => (b.downloadUrl || "").toLowerCase()).filter(Boolean));
+        const blocklistedTitles = new Set(blocklisted.map(b => (b.releaseTitle || "").toLowerCase()).filter(Boolean));
+
+        // Radarr/Sonarr/Readarr Scoring & Rejection Decision Engine
+        const evaluatedCandidates = candidates.map((r: any) => {
+            const isBlocked = blocklistedUrls.has((r.downloadUrl || "").toLowerCase()) || blocklistedTitles.has((r.title || "").toLowerCase());
+            if (isBlocked) {
+                console.log(`[AUTO-DOWNLOAD] Skipping blocklisted release: "${r.title}"`);
+                return null;
+            }
+
+            const evalResult = evaluateReleaseMatch(r.title, title, author, reqMediaType);
+            let totalScore = evalResult.score;
+
+            if (reqMediaType === "ebook") {
+                const aTitle = (r.title || "").toLowerCase();
+                if (aTitle.includes("epub")) totalScore += 5;
+                else if (aTitle.includes("mobi") || aTitle.includes("azw3")) totalScore += 2;
+            }
+            if (r.protocol === "usenet") totalScore += 3;
+            else if (r.protocol === "torrent") totalScore += Math.min((r.seeders || 0) / 25, 2);
+
+            return {
+                ...r,
+                ...evalResult,
+                totalScore
+            };
+        }).filter((r: any) => r && !r.rejected && r.matchQuality !== "mismatch" && r.totalScore >= 35);
+
+        if (evaluatedCandidates.length === 0) {
+            console.log(`[AUTO-DOWNLOAD] No valid matching releases found on indexers for "${title}" by "${author}". Rejecting mismatches.`);
             await prisma.bookRequest.update({
                 where: { id: requestId },
-                data: { status: `Failed - No suitable ${reqMediaType} releases found on indexers` }
+                data: { status: `Failed - No matching ${reqMediaType} release found for "${title}" by "${author || "Unknown Author"}"` }
             });
             return;
         }
 
-        candidates.sort((a: any, b: any) => {
-            if (reqMediaType === "ebook") {
-                const aTitle = (a.title || "").toLowerCase();
-                const bTitle = (b.title || "").toLowerCase();
-                const aIsEpub = aTitle.includes("epub");
-                const bIsEpub = bTitle.includes("epub");
-                
-                // Heavily penalize non-epub formats (azw3, mobi, pdf)
-                if (aIsEpub && !bIsEpub) return -1;
-                if (!aIsEpub && bIsEpub) return 1;
-            }
-
-            if (a.protocol === "usenet" && b.protocol !== "usenet") return -1;
-            if (a.protocol !== "usenet" && b.protocol === "usenet") return 1;
-            if (a.protocol === "torrent" && b.protocol === "torrent") {
-                return (b.seeders || 0) - (a.seeders || 0);
-            }
-            return 0;
-        });
-
-        const selectedRelease = candidates[0];
-        console.log(`[AUTO-DOWNLOAD] Selected release for grab: ${selectedRelease.title}`);
+        evaluatedCandidates.sort((a: any, b: any) => b.totalScore - a.totalScore);
+        const selectedRelease = evaluatedCandidates[0];
+        console.log(`[AUTO-DOWNLOAD] Selected release for grab (Score: ${selectedRelease.totalScore}, Quality: ${selectedRelease.matchQuality}): ${selectedRelease.title}`);
 
         let downloadId = "";
         if (selectedRelease.protocol === "usenet") {
@@ -4019,7 +4719,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         });
 
         // Launch background downloader polling and failover task
-        monitorAndRetryDownload(requestId, candidates, 0, downloadId).catch(err => {
+        monitorAndRetryDownload(requestId, evaluatedCandidates, 0, downloadId).catch(err => {
             console.error(`[AUTO-DOWNLOAD-MONITOR] Background thread crashed:`, err);
         });
         
@@ -4106,7 +4806,12 @@ async function executeProwlarrSearch(query: string, mediaType: string, prowlarrU
     return results;
 }
 
-export async function searchProwlarrIndexers(query: string, mediaType: string = "ebook") {
+export async function searchProwlarrIndexers(
+    query: string, 
+    mediaType: string = "ebook",
+    expectedTitle?: string,
+    expectedAuthor?: string
+) {
     await verifyUser();
     
     const prowlarrApp = await prisma.mediaApp.findFirst({
@@ -4133,33 +4838,54 @@ export async function searchProwlarrIndexers(query: string, mediaType: string = 
             return true;
         });
 
-        uniqueFiltered.sort((a: any, b: any) => {
-            if (mediaType === "ebook") {
-                const aTitle = (a.title || "").toLowerCase();
-                const bTitle = (b.title || "").toLowerCase();
-                const aIsEpub = aTitle.includes("epub");
-                const bIsEpub = bTitle.includes("epub");
-                
-                if (aIsEpub && !bIsEpub) return -1;
-                if (!aIsEpub && bIsEpub) return 1;
-            }
+        const targetTitle = expectedTitle || query;
+        const targetAuthor = expectedAuthor;
 
-            if (a.protocol === "usenet" && b.protocol !== "usenet") return -1;
-            if (a.protocol !== "usenet" && b.protocol === "usenet") return 1;
-            if (a.protocol === "torrent" && b.protocol === "torrent") {
-                return (b.seeders || 0) - (a.seeders || 0);
+        const blocklisted = await prisma.failedRelease.findMany().catch(() => []);
+        const blocklistedMap = new Map<string, string>();
+        for (const b of blocklisted) {
+            if (b.downloadUrl) blocklistedMap.set(b.downloadUrl.toLowerCase(), b.reason || "Previous download failure");
+            if (b.releaseTitle) blocklistedMap.set(b.releaseTitle.toLowerCase(), b.reason || "Previous download failure");
+        }
+
+        const evaluatedReleases = uniqueFiltered.map((r: any) => {
+            const evalResult = evaluateReleaseMatch(r.title, targetTitle, targetAuthor, mediaType);
+            let score = evalResult.score;
+
+            if (mediaType === "ebook") {
+                const aTitle = (r.title || "").toLowerCase();
+                if (aTitle.includes("epub")) score += 5;
+                else if (aTitle.includes("mobi") || aTitle.includes("azw3")) score += 2;
             }
-            return 0;
+            if (r.protocol === "usenet") score += 3;
+            else if (r.protocol === "torrent") score += Math.min((r.seeders || 0) / 25, 2);
+
+            const isBlocked = blocklistedMap.has((r.downloadUrl || "").toLowerCase()) || blocklistedMap.has((r.title || "").toLowerCase());
+            const blockReason = blocklistedMap.get((r.downloadUrl || "").toLowerCase()) || blocklistedMap.get((r.title || "").toLowerCase());
+
+            return {
+                title: r.title,
+                size: r.size,
+                downloadUrl: r.downloadUrl,
+                indexer: r.indexer,
+                protocol: r.protocol,
+                infoUrl: r.infoUrl,
+                score: isBlocked ? Math.min(score, 10) : score,
+                matchQuality: evalResult.matchQuality,
+                badgeText: evalResult.badgeText,
+                badgeColor: evalResult.badgeColor,
+                parsedAuthor: evalResult.parsedAuthor,
+                parsedTitle: evalResult.parsedTitle,
+                warning: evalResult.warning,
+                rejected: evalResult.rejected,
+                isBlocklisted: isBlocked,
+                blocklistReason: blockReason
+            };
         });
 
-        return uniqueFiltered.map((r: any) => ({
-            title: r.title,
-            size: r.size,
-            downloadUrl: r.downloadUrl,
-            indexer: r.indexer,
-            protocol: r.protocol,
-            infoUrl: r.infoUrl
-        }));
+        evaluatedReleases.sort((a: any, b: any) => b.score - a.score);
+
+        return evaluatedReleases;
     } catch (e: any) {
         console.error("Prowlarr search failed:", e);
         throw new Error(e.message || "Failed to query Prowlarr API");
@@ -4765,6 +5491,7 @@ export async function monitorAndRetryDownload(
                     if (foundFilePath) {
                         if (isForeignLanguage(path.basename(foundFilePath))) {
                             console.warn(`[AUTO-DOWNLOAD-MONITOR] Completed download file "${path.basename(foundFilePath)}" matches foreign language indicators. Deleting and marking download as failed to retry English releases.`);
+                            await recordFailedRelease(release.title, release.downloadUrl, release.guid, release.protocol, "Foreign language detected in download", requestId);
                             
                             let clientCleaned = false;
                             try {
@@ -4860,6 +5587,7 @@ export async function monitorAndRetryDownload(
                                 if (bounceErr.message === "DRM_PROTECTED") {
                                     hasDrm = true;
                                     console.warn(`[AUTO-DOWNLOAD-MONITOR] Detected DRM in release "${release.title}". Deleting and marking download as failed to retry another release.`);
+                                    await recordFailedRelease(release.title, release.downloadUrl, release.guid, release.protocol, "DRM protected file", requestId);
                                 } else {
                                     console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${finalDestPath}:`, bounceErr.message);
                                 }
@@ -4996,6 +5724,9 @@ export async function monitorAndRetryDownload(
                 });
                 
                 if (matchedBook) {
+                    // Send completion notification email
+                    sendRequestCompletionNotification(req, matchedBook).catch(() => {});
+
                     if (req.mediaType === "ebook") {
                         console.log(`[AUTO-DOWNLOAD-MONITOR] Found matching ebook "${matchedBook.title}". Automatically mailing to Kindle for ${req.requestedBy}...`);
                         await sendBookToUserKindleInternal(matchedBook.id, req.requestedBy);
@@ -5005,6 +5736,7 @@ export async function monitorAndRetryDownload(
                     return;
                 } else {
                     console.warn(`[AUTO-DOWNLOAD-MONITOR] Could not find registered book in library matching request title: "${req.title}". Deleting library copy and retrying next release.`);
+                    await recordFailedRelease(release.title, release.downloadUrl, release.guid, release.protocol, "Library scanner could not register matched book", requestId);
                     
                     await prisma.bookRequest.update({
                         where: { id: requestId },
@@ -5028,6 +5760,7 @@ export async function monitorAndRetryDownload(
 
         if (downloadStatus === "failed") {
             console.log(`[AUTO-DOWNLOAD-MONITOR] Download failed for release: ${release.title}`);
+            await recordFailedRelease(release.title, release.downloadUrl, release.guid, release.protocol, "Download failed or timed out", requestId);
             break; 
         }
     }
@@ -5316,6 +6049,81 @@ export async function runAiBatchMetadataScanner() {
     }
 }
 
+export async function validateAndSanitizeKindleEbook(filePath: string, title?: string, author?: string) {
+    if (!fs.existsSync(filePath)) {
+        return { valid: false, error: "Ebook file not found on disk. Try re-scanning your library.", fileSize: 0, fileSizeMb: "0" };
+    }
+
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) {
+        return { valid: false, error: "Target path is a directory stub rather than a media file.", fileSize: 0, fileSizeMb: "0" };
+    }
+
+    const maxSizeBytes = 50 * 1024 * 1024; // Amazon 50MB limit
+    const fileSizeMb = (stat.size / (1024 * 1024)).toFixed(1);
+    if (stat.size > maxSizeBytes) {
+        return {
+            valid: false,
+            error: `File size (${fileSizeMb} MB) exceeds Amazon Send-to-Kindle's 50 MB email limit. Please read this book directly in your browser or download it directly to your device.`,
+            fileSize: stat.size,
+            fileSizeMb
+        };
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const unsupported = [".cbr", ".cbz", ".rar", ".zip", ".7z", ".mp3", ".m4b", ".m4a", ".flac", ".wav"];
+    if (unsupported.includes(ext)) {
+        return {
+            valid: false,
+            error: `Format '${ext}' is not supported by Amazon Send-to-Kindle. Only EPUB, PDF, and standard text formats are supported.`,
+            fileSize: stat.size,
+            fileSizeMb
+        };
+    }
+
+    // EPUB format integrity check (magic bytes 'PK\x03\x04')
+    if (ext === ".epub") {
+        try {
+            const fd = fs.openSync(filePath, "r");
+            const buffer = Buffer.alloc(4);
+            fs.readSync(fd, buffer, 0, 4, 0);
+            fs.closeSync(fd);
+            const isZip = buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+            if (!isZip) {
+                return {
+                    valid: false,
+                    error: "EPUB file is corrupted or not a valid archive (missing standard ZIP header).",
+                    fileSize: stat.size,
+                    fileSizeMb
+                };
+            }
+        } catch (e: any) {
+            return {
+                valid: false,
+                error: `Failed to verify EPUB integrity: ${e.message}`,
+                fileSize: stat.size,
+                fileSizeMb
+            };
+        }
+    }
+
+    const rawBase = title && author ? `${author}_${title}` : path.basename(filePath, ext);
+    const cleanAttachmentName = rawBase
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // remove accents
+        .replace(/[^a-zA-Z0-9_\-]/g, "_")
+        .replace(/__+/g, "_")
+        .substring(0, 80) + ext;
+
+    return {
+        valid: true,
+        fileSize: stat.size,
+        fileSizeMb,
+        cleanAttachmentName,
+        ext
+    };
+}
+
 export async function sendBookToKindle(bookId: string, targetUsername?: string) {
     try {
         const session = await verifyUser();
@@ -5350,8 +6158,24 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
         );
         if (!hasAccess) return { success: false, error: "Unauthorized access to this library book" };
 
-        if (!fs.existsSync(book.filePath)) {
-            return { success: false, error: "Ebook file not found on disk. Try scanning the library again." };
+        const validation = await validateAndSanitizeKindleEbook(book.filePath, book.title, book.author || undefined);
+        if (!validation.valid) {
+            await prisma.kindleDeliveryLog.create({
+                data: {
+                    bookId: book.id,
+                    bookTitle: book.title,
+                    bookAuthor: book.author || "Unknown",
+                    recipientEmail: user.kindleEmail,
+                    userEmail: user.email || "",
+                    username: user.username,
+                    status: "FAILED",
+                    errorMessage: validation.error,
+                    fileSize: validation.fileSize || 0,
+                    fileType: book.fileType || "epub",
+                    diagnostics: JSON.stringify({ reason: "Pre-flight validation failed", detail: validation.error })
+                }
+            }).catch(() => {});
+            return { success: false, error: validation.error };
         }
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
@@ -5371,12 +6195,6 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
             }
         });
 
-        const ext = path.extname(book.filePath).toLowerCase();
-        const cleanAttachmentName = path.basename(book.filePath, ext)
-            .replace(/[^a-zA-Z0-9]/g, "_")
-            .replace(/__+/g, "_")
-            .toLowerCase() + ext;
-
         const mailOptions = {
             from: senderEmail,
             to: user.kindleEmail,
@@ -5384,7 +6202,7 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
             text: `Delivering your ebook "${book.title}" to your Kindle device.`,
             attachments: [
                 {
-                    filename: cleanAttachmentName,
+                    filename: validation.cleanAttachmentName,
                     path: book.filePath
                 }
             ]
@@ -5392,10 +6210,54 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
 
         try {
             await transporter.sendMail(mailOptions);
+            
+            // Record successful delivery
+            await prisma.kindleDeliveryLog.create({
+                data: {
+                    bookId: book.id,
+                    bookTitle: book.title,
+                    bookAuthor: book.author || "Unknown",
+                    recipientEmail: user.kindleEmail,
+                    userEmail: user.email || "",
+                    username: user.username,
+                    status: "DELIVERED",
+                    fileSize: validation.fileSize,
+                    fileType: validation.ext?.replace(".", "") || "epub",
+                    diagnostics: JSON.stringify({
+                        sanitizedAttachment: validation.cleanAttachmentName,
+                        sizeMb: `${validation.fileSizeMb} MB`,
+                        sender: senderEmail,
+                        deliveredAt: new Date().toISOString()
+                    })
+                }
+            }).catch(() => {});
+
+            revalidatePath("/library");
             return { success: true };
         } catch (e: any) {
             console.error("Kindle SMTP send failed:", e);
             
+            await prisma.kindleDeliveryLog.create({
+                data: {
+                    bookId: book.id,
+                    bookTitle: book.title,
+                    bookAuthor: book.author || "Unknown",
+                    recipientEmail: user.kindleEmail,
+                    userEmail: user.email || "",
+                    username: user.username,
+                    status: "FAILED",
+                    errorMessage: e.message || "SMTP error",
+                    fileSize: validation.fileSize,
+                    fileType: validation.ext?.replace(".", "") || "epub",
+                    diagnostics: JSON.stringify({
+                        error: e.message,
+                        code: e.code,
+                        sender: senderEmail,
+                        failedAt: new Date().toISOString()
+                    })
+                }
+            }).catch(() => {});
+
             if (user.email) {
                 try {
                     const failMailOptions = {
@@ -5557,13 +6419,25 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         console.error(`[AUTO-KINDLE] Book not found: ${bookId}`);
         return;
     }
-    if (!fs.existsSync(book.filePath)) {
-        console.error(`[AUTO-KINDLE] Book file not found on disk: ${book.filePath}`);
-        return;
-    }
-    const stat = fs.statSync(book.filePath);
-    if (!stat.isFile()) {
-        console.error(`[AUTO-KINDLE] Book path is not a file (likely a directory stub): ${book.filePath}`);
+
+    const validation = await validateAndSanitizeKindleEbook(book.filePath, book.title, book.author || undefined);
+    if (!validation.valid) {
+        console.warn(`[AUTO-KINDLE] Book "${book.title}" skipped: ${validation.error}`);
+        await prisma.kindleDeliveryLog.create({
+            data: {
+                bookId: book.id,
+                bookTitle: book.title,
+                bookAuthor: book.author || "Unknown",
+                recipientEmail: user.kindleEmail,
+                userEmail: user.email || "",
+                username: user.username,
+                status: "FAILED",
+                errorMessage: validation.error,
+                fileSize: validation.fileSize || 0,
+                fileType: book.fileType || "epub",
+                diagnostics: JSON.stringify({ reason: "Pre-flight validation failed", detail: validation.error })
+            }
+        }).catch(() => {});
         return;
     }
 
@@ -5585,12 +6459,6 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         }
     });
 
-    const ext = path.extname(book.filePath).toLowerCase();
-    const cleanAttachmentName = path.basename(book.filePath, ext)
-        .replace(/[^a-zA-Z0-9]/g, "_")
-        .replace(/__+/g, "_")
-        .toLowerCase() + ext;
-
     const mailOptions = {
         from: senderEmail,
         to: user.kindleEmail,
@@ -5598,7 +6466,7 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         text: `Delivering your ebook "${book.title}" to your Kindle device.`,
         attachments: [
             {
-                filename: cleanAttachmentName,
+                filename: validation.cleanAttachmentName,
                 path: book.filePath
             }
         ]
@@ -5607,10 +6475,52 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
     try {
         await transporter.sendMail(mailOptions);
         console.log(`[AUTO-KINDLE] Ebook "${book.title}" successfully emailed to ${user.kindleEmail} for ${username}`);
+        
+        await prisma.kindleDeliveryLog.create({
+            data: {
+                bookId: book.id,
+                bookTitle: book.title,
+                bookAuthor: book.author || "Unknown",
+                recipientEmail: user.kindleEmail,
+                userEmail: user.email || "",
+                username: user.username,
+                status: "DELIVERED",
+                fileSize: validation.fileSize,
+                fileType: validation.ext?.replace(".", "") || "epub",
+                diagnostics: JSON.stringify({
+                    sanitizedAttachment: validation.cleanAttachmentName,
+                    sizeMb: `${validation.fileSizeMb} MB`,
+                    sender: senderEmail,
+                    deliveredAt: new Date().toISOString()
+                })
+            }
+        }).catch(() => {});
+
         return { success: true };
     } catch (e: any) {
         console.error("[AUTO-KINDLE] Kindle SMTP send failed:", e);
         
+        await prisma.kindleDeliveryLog.create({
+            data: {
+                bookId: book.id,
+                bookTitle: book.title,
+                bookAuthor: book.author || "Unknown",
+                recipientEmail: user.kindleEmail,
+                userEmail: user.email || "",
+                username: user.username,
+                status: "FAILED",
+                errorMessage: e.message || "SMTP error",
+                fileSize: validation.fileSize,
+                fileType: validation.ext?.replace(".", "") || "epub",
+                diagnostics: JSON.stringify({
+                    error: e.message,
+                    code: e.code,
+                    sender: senderEmail,
+                    failedAt: new Date().toISOString()
+                })
+            }
+        }).catch(() => {});
+
         if (user.email) {
             try {
                 const failMailOptions = {
@@ -5636,7 +6546,7 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
                                     <br/>
                                     <span style="color: #64748b; font-size: 12px;">Amazon.com &rarr; Preferences &rarr; Personal Document Settings &rarr; Approved Personal Document E-mail List</span>
                                 </li>
-                                <li><strong>Check File Size:</strong> Kindle has a 50MB email file size limit. Your book size is <code>${fs.existsSync(book.filePath) ? (fs.statSync(book.filePath).size / (1024 * 1024)).toFixed(1) : "0.0"} MB</code>.</li>
+                                <li><strong>Check File Size:</strong> Kindle has a 50MB email file size limit. Your book size is <code>${validation.fileSizeMb} MB</code>.</li>
                                 <li><strong>Verify Kindle Email:</strong> Double-check that your Kindle address (currently configured as <code>${user.kindleEmail}</code>) is exactly correct in your library settings.</li>
                             </ol>
                         </div>
@@ -5647,6 +6557,465 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
                 console.error("[AUTO-KINDLE] Failed to send troubleshooting email:", err);
             }
         }
+    }
+}
+
+export async function getKindleDeliveryLogs(limit: number = 30) {
+    try {
+        const session = await verifyUser();
+        const isAdmin = session.role === "ADMIN";
+
+        if (isAdmin) {
+            return await prisma.kindleDeliveryLog.findMany({
+                orderBy: { createdAt: "desc" },
+                take: limit
+            });
+        } else {
+            return await prisma.kindleDeliveryLog.findMany({
+                where: { username: session.username as string },
+                orderBy: { createdAt: "desc" },
+                take: limit
+            });
+        }
+    } catch (e: any) {
+        console.error("[KINDLE-LOGS] Failed to fetch Kindle delivery logs:", e);
+        return [];
+    }
+}
+
+export async function retryKindleDelivery(deliveryLogId: string) {
+    try {
+        const session = await verifyUser();
+        const log = await prisma.kindleDeliveryLog.findUnique({
+            where: { id: deliveryLogId }
+        });
+        if (!log) return { success: false, error: "Delivery log record not found" };
+
+        if (session.role !== "ADMIN" && log.username !== session.username) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        if (log.bookId) {
+            return await sendBookToKindle(log.bookId, log.username);
+        }
+
+        // Try to locate book by title
+        const book = await prisma.book.findFirst({
+            where: { title: log.bookTitle }
+        });
+        if (book) {
+            return await sendBookToKindle(book.id, log.username);
+        }
+
+        return { success: false, error: `Could not locate book "${log.bookTitle}" in library to retry.` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to retry delivery" };
+    }
+}
+
+export async function clearKindleDeliveryLogs() {
+    try {
+        const session = await verifyUser();
+        if (session.role === "ADMIN") {
+            await prisma.kindleDeliveryLog.deleteMany({});
+        } else {
+            await prisma.kindleDeliveryLog.deleteMany({
+                where: { username: session.username as string }
+            });
+        }
+        revalidatePath("/library");
+        return { success: true, message: "Kindle delivery logs cleared." };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to clear logs" };
+    }
+}
+
+export async function diagnoseKindleHealth(bookId?: string) {
+    try {
+        const session = await verifyUser();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const user = await prisma.user.findUnique({ where: { username: session.username as string } });
+
+        const checks: Array<{ name: string; status: "pass" | "warn" | "fail"; message: string }> = [];
+
+        // Check 1: Server SMTP Host
+        if (settings?.smtpHost && settings?.smtpUser && settings?.smtpPass) {
+            checks.push({
+                name: "Server SMTP Configuration",
+                status: "pass",
+                message: `Configured on ${settings.smtpHost}:${settings.smtpPort || 587}`
+            });
+        } else {
+            checks.push({
+                name: "Server SMTP Configuration",
+                status: "fail",
+                message: "SMTP is not configured on the server. Ask an admin to set it up in Settings."
+            });
+        }
+
+        // Check 2: Sender Email Address
+        const senderEmail = settings?.smtpFrom || settings?.smtpUser;
+        if (senderEmail && senderEmail.includes("@")) {
+            checks.push({
+                name: "Public Sender Address",
+                status: "pass",
+                message: `Sending from ${senderEmail} (Must be added to Amazon Approved Senders List)`
+            });
+        } else {
+            checks.push({
+                name: "Public Sender Address",
+                status: "fail",
+                message: "Sender email is missing or malformed."
+            });
+        }
+
+        // Check 3: User Kindle Email
+        if (user?.kindleEmail) {
+            const isKindleDomain = user.kindleEmail.toLowerCase().endsWith("@kindle.com") || user.kindleEmail.toLowerCase().endsWith("@free.kindle.com");
+            if (isKindleDomain) {
+                checks.push({
+                    name: "User Kindle Address",
+                    status: "pass",
+                    message: `Configured: ${user.kindleEmail}`
+                });
+            } else {
+                checks.push({
+                    name: "User Kindle Address",
+                    status: "warn",
+                    message: `Configured as ${user.kindleEmail}. Kindle addresses typically end with @kindle.com.`
+                });
+            }
+        } else {
+            checks.push({
+                name: "User Kindle Address",
+                status: "fail",
+                message: "No Send-to-Kindle email configured in your profile."
+            });
+        }
+
+        // Check 4: Optional Book File check
+        if (bookId) {
+            const book = await prisma.book.findUnique({ where: { id: bookId } });
+            if (book) {
+                const validation = await validateAndSanitizeKindleEbook(book.filePath, book.title, book.author || undefined);
+                if (validation.valid) {
+                    checks.push({
+                        name: `Book File Integrity (${book.title})`,
+                        status: "pass",
+                        message: `Valid ${validation.ext} file (${validation.fileSizeMb} MB). Ready for delivery.`
+                    });
+                } else {
+                    checks.push({
+                        name: `Book File Integrity (${book.title})`,
+                        status: "fail",
+                        message: validation.error || "Invalid file"
+                    });
+                }
+            }
+        }
+
+        const hasFails = checks.some(c => c.status === "fail");
+        return {
+            ready: !hasFails,
+            senderEmail: senderEmail || "",
+            userKindleEmail: user?.kindleEmail || "",
+            checks
+        };
+    } catch (e: any) {
+        return {
+            ready: false,
+            senderEmail: "",
+            userKindleEmail: "",
+            checks: [{ name: "Diagnostic Engine", status: "fail" as const, message: e.message || "Failed to run diagnostics" }]
+        };
+    }
+}
+
+export async function recordFailedRelease(
+    releaseTitle: string,
+    downloadUrl?: string,
+    guid?: string,
+    protocol: string = "torrent",
+    reason?: string,
+    bookRequestId?: string
+) {
+    try {
+        await prisma.failedRelease.create({
+            data: {
+                releaseTitle,
+                downloadUrl: downloadUrl || null,
+                guid: guid || null,
+                protocol,
+                reason: reason || "Release failed or was rejected during ingestion",
+                bookRequestId: bookRequestId || null
+            }
+        });
+        console.log(`[RELEASE-BLOCKLIST] Blocklisted release: "${releaseTitle}" (Reason: ${reason || "Failed"})`);
+    } catch (e: any) {
+        console.warn("[RELEASE-BLOCKLIST] Failed to record blocklisted release:", e.message || e);
+    }
+}
+
+export async function getBlocklistedReleases() {
+    try {
+        await verifyUser();
+        return await prisma.failedRelease.findMany({
+            orderBy: { createdAt: "desc" },
+            take: 100
+        });
+    } catch (e) {
+        return [];
+    }
+}
+
+export async function blocklistRelease(downloadUrl: string, releaseTitle: string, reason: string) {
+    try {
+        await verifyAdmin();
+        await recordFailedRelease(releaseTitle, downloadUrl, undefined, "torrent", reason);
+        revalidatePath("/library");
+        return { success: true, message: `Release "${releaseTitle}" has been blocklisted.` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to blocklist release" };
+    }
+}
+
+export async function unblocklistRelease(id: string) {
+    try {
+        await verifyAdmin();
+        await prisma.failedRelease.delete({ where: { id } });
+        revalidatePath("/library");
+        return { success: true, message: "Release removed from blocklist." };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to unblocklist release" };
+    }
+}
+
+export async function fulfillRequestWithUpload(formData: FormData) {
+    try {
+        const session = await verifyUser();
+        const requestId = formData.get("requestId") as string;
+        const file = formData.get("file") as File;
+
+        if (!requestId || !file) {
+            return { success: false, error: "Missing requestId or uploaded file." };
+        }
+
+        const request = await prisma.bookRequest.findUnique({ where: { id: requestId } });
+        if (!request) {
+            return { success: false, error: "Book request not found." };
+        }
+
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const originalName = file.name;
+        const ext = path.extname(originalName).toLowerCase();
+
+        // If torrent file: push directly to qBittorrent!
+        if (ext === ".torrent") {
+            const qbitApp = await prisma.mediaApp.findFirst({
+                where: { type: { contains: "qbit" } }
+            });
+            if (!qbitApp) return { success: false, error: "qBittorrent is not configured." };
+            const qbitUrl = cleanUrl(qbitApp.url);
+            const qbitKey = decryptData(qbitApp.apiKey as string);
+            const category = request.mediaType === "audiobook" ? "audiobooks" : "books";
+            
+            const form = new FormData();
+            form.append("torrents", new Blob([buffer], { type: "application/x-bittorrent" }), originalName);
+            form.append("category", category);
+
+            try {
+                await fetch(`${qbitUrl}/api/v2/torrents/add`, { method: "POST", body: form });
+            } catch (e) {
+                const loginRes = await fetch(`${qbitUrl}/api/v2/auth/login`, {
+                    method: "POST",
+                    body: new URLSearchParams({ username: "admin", password: qbitKey }),
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" }
+                });
+                const cookie = loginRes.headers.get("set-cookie");
+                await fetch(`${qbitUrl}/api/v2/torrents/add`, {
+                    method: "POST",
+                    body: form,
+                    headers: cookie ? { "Cookie": cookie } : undefined
+                });
+            }
+
+            await prisma.bookRequest.update({
+                where: { id: requestId },
+                data: { status: "Downloading (Uploaded Torrent)" }
+            });
+            revalidatePath("/library");
+            return { success: true, message: `Uploaded torrent file to qBittorrent for "${request.title}"!` };
+        }
+
+        // If NZB file: push directly to SABnzbd!
+        if (ext === ".nzb") {
+            const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
+            if (!sabApp) return { success: false, error: "SABnzbd is not configured." };
+            const sabUrl = cleanUrl(sabApp.url);
+            const sabKey = decryptData(sabApp.apiKey as string);
+            const category = request.mediaType === "audiobook" ? "audiobooks" : "books";
+
+            const form = new FormData();
+            form.append("name", new Blob([buffer], { type: "application/x-nzb" }), originalName);
+            form.append("cat", category);
+            form.append("output", "json");
+            form.append("apikey", sabKey);
+            form.append("mode", "addfile");
+
+            const res = await fetch(`${sabUrl}/api`, { method: "POST", body: form });
+            if (!res.ok) return { success: false, error: "SABnzbd failed to accept NZB upload." };
+
+            await prisma.bookRequest.update({
+                where: { id: requestId },
+                data: { status: "Downloading (Uploaded NZB)" }
+            });
+            revalidatePath("/library");
+            return { success: true, message: `Uploaded NZB file to SABnzbd for "${request.title}"!` };
+        }
+
+        // Media file (.epub, .pdf, .m4b, .mp3, etc.)
+        const targetLib = await getTargetLibraryForUser(request.requestedBy, request.mediaType || "ebook", request.coverUrl);
+        if (!targetLib) {
+            return { success: false, error: "No target library found for user." };
+        }
+
+        const sanitize = (str: string) => str.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+        const safeAuthor = sanitize(request.author || "Unknown Author");
+        const safeTitle = sanitize(request.title);
+        const destDir = path.join(targetLib.path, safeAuthor, safeTitle);
+        if (!fs.existsSync(destDir)) {
+            fs.mkdirSync(destDir, { recursive: true });
+        }
+
+        const destPath = path.join(destDir, `${safeAuthor} - ${safeTitle}${ext}`);
+        fs.writeFileSync(destPath, buffer);
+
+        // Scan the library to register the new book
+        await scanLibraryInternal(targetLib.id, { enableAi: true });
+
+        // Mark request as Downloaded
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { status: "Downloaded" }
+        });
+
+        // Find created book
+        const createdBook = await prisma.book.findFirst({
+            where: { filePath: destPath }
+        });
+
+        // If request had series information, assign it
+        if (createdBook && request.series) {
+            await prisma.book.update({
+                where: { id: createdBook.id },
+                data: {
+                    series: request.series,
+                    volumeNumber: request.volumeNumber || createdBook.volumeNumber
+                }
+            });
+        }
+
+        // Send completion notification email
+        sendRequestCompletionNotification(request, createdBook || { title: request.title, author: request.author, mediaType: request.mediaType }).catch(() => {});
+
+        // If ebook and user has Kindle configured, auto-deliver
+        if (request.mediaType !== "audiobook" && createdBook) {
+            sendBookToUserKindleInternal(createdBook.id, request.requestedBy).catch(() => {});
+        }
+
+        revalidatePath("/library");
+        return { success: true, message: `Successfully fulfilled request for "${request.title}" with uploaded file!` };
+    } catch (e: any) {
+        console.error("[FULFILL-UPLOAD-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to fulfill request with uploaded file" };
+    }
+}
+
+export async function getServicesHealthPulse() {
+    try {
+        const [prowlarrApp, sabApp, qbitApp] = await Promise.all([
+            prisma.mediaApp.findFirst({ where: { type: "prowlarr" } }),
+            prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } }),
+            prisma.mediaApp.findFirst({ where: { type: { contains: "qbit" } } })
+        ]);
+
+        const checkService = async (app: any, checkFn: () => Promise<boolean>) => {
+            if (!app) return { configured: false, online: false, name: "Not configured" };
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const online = await Promise.race([
+                    checkFn(),
+                    new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
+                ]);
+                clearTimeout(timeoutId);
+                return { configured: true, online: Boolean(online), name: app.name || app.type };
+            } catch (e) {
+                return { configured: true, online: false, name: app.name || app.type };
+            }
+        };
+
+        const [prowlarr, sabnzbd, qbittorrent] = await Promise.all([
+            checkService(prowlarrApp, async () => {
+                const url = cleanUrl(prowlarrApp!.url);
+                const key = decryptData(prowlarrApp!.apiKey as string);
+                const res = await fetch(`${url}/api/v1/health?apikey=${key}`, { cache: "no-store" });
+                return res.ok;
+            }),
+            checkService(sabApp, async () => {
+                const url = cleanUrl(sabApp!.url);
+                const key = decryptData(sabApp!.apiKey as string);
+                const res = await fetch(`${url}/api?mode=version&output=json&apikey=${key}`, { cache: "no-store" });
+                return res.ok;
+            }),
+            checkService(qbitApp, async () => {
+                const url = cleanUrl(qbitApp!.url);
+                const res = await fetch(`${url}/api/v2/app/version`, { cache: "no-store" });
+                return res.ok || res.status === 403;
+            })
+        ]);
+
+        return {
+            prowlarr,
+            sabnzbd,
+            qbittorrent
+        };
+    } catch (e) {
+        return {
+            prowlarr: { configured: false, online: false, name: "Prowlarr" },
+            sabnzbd: { configured: false, online: false, name: "SABnzbd" },
+            qbittorrent: { configured: false, online: false, name: "qBittorrent" }
+        };
+    }
+}
+
+export async function toggleMonitorSeries(requestId: string, monitor?: boolean) {
+    try {
+        const session = await verifyUser();
+        const req = await prisma.bookRequest.findUnique({ where: { id: requestId } });
+        if (!req) return { success: false, error: "Request not found" };
+
+        if (session.role !== "ADMIN" && req.requestedBy !== session.username) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const targetMonitor = monitor !== undefined ? monitor : !req.monitorSeries;
+
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { monitorSeries: targetMonitor }
+        });
+
+        revalidatePath("/library");
+        return {
+            success: true,
+            monitorSeries: targetMonitor,
+            message: targetMonitor
+                ? `Auto-monitoring activated for "${req.series || req.title}". Future installments will be discovered automatically!`
+                : `Auto-monitoring disabled for "${req.series || req.title}".`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update series monitor" };
     }
 }
 
@@ -5772,12 +7141,31 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
 export async function searchOpenLibrary(query: string, mediaType: "ebook" | "audiobook" = "ebook") {
     if (!query || query.trim().length < 2) return [];
     try {
+        const cleanQuery = query.trim();
         let results: any[] = [];
+        
+        // Parse compound query if separators exist (e.g. "Cold Wind by Andrew Givler" or "Cold Wind - Andrew Givler")
+        let parsedTitle = cleanQuery;
+        let parsedAuthor = "";
+        if (/\s+by\s+/i.test(cleanQuery)) {
+            const parts = cleanQuery.split(/\s+by\s+/i);
+            parsedTitle = parts[0].trim();
+            parsedAuthor = parts.slice(1).join(" by ").trim();
+        } else if (cleanQuery.includes(" - ")) {
+            const parts = cleanQuery.split(" - ");
+            parsedTitle = parts[0].trim();
+            parsedAuthor = parts.slice(1).join(" - ").trim();
+        } else if (cleanQuery.includes(": ")) {
+            const parts = cleanQuery.split(": ");
+            parsedTitle = parts[0].trim();
+            parsedAuthor = parts.slice(1).join(": ").trim();
+        }
         
         // 1. Audible API (Only for Audiobooks)
         if (mediaType === "audiobook") {
             try {
-                const audUrl = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,contributors,product_desc&num_results=8&products_sort_by=Relevance`;
+                // Use keywords parameter to search across both title and author simultaneously
+                const audUrl = `https://api.audible.com/1.0/catalog/products?keywords=${encodeURIComponent(cleanQuery)}&response_groups=product_attrs,contributors,product_desc&num_results=12&products_sort_by=Relevance`;
                 const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
                 const audData = audRes && audRes.ok ? await audRes.json() : null;
                 
@@ -5801,7 +7189,7 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                             year = prod.release_date.substring(0, 4);
                         }
                         
-                        results.push({ title, author, coverUrl, year });
+                        results.push({ title, author, coverUrl, year, mediaType: "audiobook" });
                     }
                 }
             } catch (e) {
@@ -5812,7 +7200,7 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
         // 2. iTunes API
         try {
             const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
-            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${entity}&limit=8`;
+            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanQuery)}&entity=${entity}&limit=12`;
             let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
             
@@ -5828,7 +7216,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                         title: title,
                         author: item.artistName || "Unknown Author",
                         coverUrl: artwork || "",
-                        year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year"
+                        year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year",
+                        mediaType
                     });
                 }
             }
@@ -5838,7 +7227,10 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
 
         // 3. Open Library
         try {
-            const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
+            const olUrl = parsedAuthor
+                ? `https://openlibrary.org/search.json?title=${encodeURIComponent(parsedTitle)}&author=${encodeURIComponent(parsedAuthor)}&limit=12`
+                : `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQuery)}&limit=12`;
+            const response = await fetchWithRetry(olUrl, {
                 headers: { "Accept": "application/json" }
             });
             const data = response && response.ok ? await response.json() : null;
@@ -5849,7 +7241,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                             title: doc.title,
                             author: doc.author_name ? doc.author_name[0] : "Unknown Author",
                             coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : "",
-                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year"
+                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year",
+                            mediaType
                         });
                     }
                 }
@@ -5860,7 +7253,9 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
 
         // 4. Google Books
         try {
-            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8`;
+            const gUrl = parsedAuthor
+                ? `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(parsedTitle)}+inauthor:${encodeURIComponent(parsedAuthor)}&maxResults=12`
+                : `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(cleanQuery)}&maxResults=12`;
             const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
             const gData = gRes && gRes.ok ? await gRes.json() : null;
             if (gData && gData.items) {
@@ -5871,7 +7266,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                             title: vol.title,
                             author: vol.authors ? vol.authors[0] : "Unknown Author",
                             coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") : "",
-                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year"
+                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year",
+                            mediaType
                         });
                     }
                 }
@@ -5880,6 +7276,7 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
             console.warn("[API-FAILOVER] Google Books API Error:", e);
         }
         
+        // Deduplicate results by normalized title + author
         const uniqueResults = [];
         const seenTitles = new Set();
         for (const res of results) {
@@ -5890,9 +7287,213 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
             }
         }
         
-        return uniqueResults;
+        // Smart query token relevance scoring
+        const stopWords = new Set(["by", "the", "a", "an", "and", "or", "in", "of", "to", "for", "with", "on", "at"]);
+        const queryTokens = cleanQuery.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(t => t.length >= 2 && !stopWords.has(t));
+
+        uniqueResults.sort((a, b) => {
+            const aTitleLower = (a.title || "").toLowerCase();
+            const aAuthorLower = (a.author || "").toLowerCase();
+            const bTitleLower = (b.title || "").toLowerCase();
+            const bAuthorLower = (b.author || "").toLowerCase();
+
+            let aScore = 0;
+            let bScore = 0;
+
+            let aTitleMatches = 0;
+            let aAuthorMatches = 0;
+            let bTitleMatches = 0;
+            let bAuthorMatches = 0;
+
+            for (const token of queryTokens) {
+                if (aTitleLower.includes(token)) {
+                    aScore += 15;
+                    aTitleMatches++;
+                }
+                if (aAuthorLower.includes(token)) {
+                    aScore += 20;
+                    aAuthorMatches++;
+                }
+                if (bTitleLower.includes(token)) {
+                    bScore += 15;
+                    bTitleMatches++;
+                }
+                if (bAuthorLower.includes(token)) {
+                    bScore += 20;
+                    bAuthorMatches++;
+                }
+            }
+
+            // Big bonus if both title and author matched tokens in the combined query
+            if (aTitleMatches > 0 && aAuthorMatches > 0) aScore += 50;
+            if (bTitleMatches > 0 && bAuthorMatches > 0) bScore += 50;
+
+            // Extra bonus for having cover art
+            if (a.coverUrl) aScore += 10;
+            if (b.coverUrl) bScore += 10;
+
+            return bScore - aScore;
+        });
+        
+        return uniqueResults.slice(0, 20);
     } catch (e) {
         console.error("All metadata APIs failed:", e);
+        return [];
+    }
+}
+
+export async function searchOpenLibraryByAuthor(author: string, mediaType: "ebook" | "audiobook" = "ebook") {
+    if (!author || author.trim().length < 2) return [];
+    try {
+        const cleanAuthor = author.trim();
+        let results: any[] = [];
+        
+        // 1. Audible API (Audiobooks by Author)
+        if (mediaType === "audiobook") {
+            try {
+                const audUrl = `https://api.audible.com/1.0/catalog/products?author=${encodeURIComponent(cleanAuthor)}&response_groups=product_attrs,contributors,product_desc&num_results=16&products_sort_by=Relevance`;
+                const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
+                const audData = audRes && audRes.ok ? await audRes.json() : null;
+                
+                if (audData && audData.products && audData.products.length > 0) {
+                    for (const prod of audData.products) {
+                        const title = prod.title;
+                        if (!title) continue;
+                        
+                        let authorName = cleanAuthor;
+                        if (prod.authors && prod.authors.length > 0) {
+                            authorName = prod.authors[0].name || cleanAuthor;
+                        }
+                        
+                        let coverUrl = "";
+                        if (prod.product_images && prod.product_images["500"]) {
+                            coverUrl = prod.product_images["500"];
+                        }
+                        
+                        let year = "Unknown Year";
+                        if (prod.release_date) {
+                            year = prod.release_date.substring(0, 4);
+                        }
+                        
+                        results.push({ title, author: authorName, coverUrl, year, mediaType: "audiobook" });
+                    }
+                }
+            } catch (e) {
+                console.warn("[API-FAILOVER] Audible author search failed:", e);
+            }
+        }
+
+        // 2. iTunes API (Audiobooks or Ebooks by Author/Artist)
+        try {
+            const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
+            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanAuthor)}&entity=${entity}&attribute=authorTerm&limit=15`;
+            let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
+            let data = iRes && iRes.ok ? await iRes.json() : null;
+            
+            if (!data || !data.results || data.results.length === 0) {
+                iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanAuthor)}&entity=${entity}&limit=15`;
+                iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
+                data = iRes && iRes.ok ? await iRes.json() : null;
+            }
+            
+            if (data && data.results && data.results.length > 0) {
+                for (const item of data.results) {
+                    const title = item.trackName || item.collectionName;
+                    if (!title) continue;
+                    let artwork = item.artworkUrl100 || item.artworkUrl60;
+                    if (artwork) {
+                        artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
+                    }
+                    results.push({
+                        title: title,
+                        author: item.artistName || cleanAuthor,
+                        coverUrl: artwork || "",
+                        year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year",
+                        mediaType
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] iTunes author search failed:", e);
+        }
+
+        // 3. Open Library (Author Search)
+        try {
+            const response = await fetchWithRetry(`https://openlibrary.org/search.json?author=${encodeURIComponent(cleanAuthor)}&limit=25&fields=key,title,author_name,cover_i,first_publish_year,edition_count`, {
+                headers: { "Accept": "application/json" }
+            });
+            const data = response && response.ok ? await response.json() : null;
+            if (data && data.docs) {
+                for (const doc of data.docs) {
+                    if (doc.title) {
+                        const titleLower = doc.title.toLowerCase();
+                        const isCompilation = titleLower.includes("box set") || 
+                                              titleLower.includes("boxed set") || 
+                                              titleLower.includes("collection") || 
+                                              titleLower.includes("omnibus") || 
+                                              titleLower.includes("bundle") || 
+                                              titleLower.includes("boxedset");
+                        if (isCompilation && data.docs.length > 5) continue;
+
+                        const authorName = doc.author_name && doc.author_name.length > 0 ? doc.author_name[0] : cleanAuthor;
+                        results.push({
+                            title: doc.title,
+                            author: authorName,
+                            coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : "",
+                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year",
+                            mediaType
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] OpenLibrary author search failed:", e);
+        }
+
+        // 4. Google Books API (Author Search)
+        try {
+            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=inauthor:${encodeURIComponent(cleanAuthor)}&maxResults=15`;
+            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+            const gData = gRes && gRes.ok ? await gRes.json() : null;
+            if (gData && gData.items) {
+                for (const item of gData.items) {
+                    const vol = item.volumeInfo;
+                    if (vol && vol.title) {
+                        results.push({
+                            title: vol.title,
+                            author: vol.authors ? vol.authors[0] : cleanAuthor,
+                            coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") : "",
+                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year",
+                            mediaType
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] Google Books author API error:", e);
+        }
+
+        // Deduplicate results by normalized title + author
+        const uniqueResults = [];
+        const seenTitles = new Set();
+        for (const res of results) {
+            const normalized = (res.title + res.author).toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (!seenTitles.has(normalized)) {
+                seenTitles.add(normalized);
+                uniqueResults.push(res);
+            }
+        }
+
+        // Sort so that items with covers come first
+        uniqueResults.sort((a, b) => {
+            if (a.coverUrl && !b.coverUrl) return -1;
+            if (!a.coverUrl && b.coverUrl) return 1;
+            return 0;
+        });
+
+        return uniqueResults.slice(0, 25);
+    } catch (e) {
+        console.error("Author metadata search failed:", e);
         return [];
     }
 }
@@ -6350,6 +7951,75 @@ export async function refreshBookCover(bookId: string) {
                 author: author && author !== "Unknown Author" ? author : book.author
             }
         });
+        revalidatePath("/library");
+        return { success: true, coverUrl: newCover };
+    }
+    return { success: false, error: "No cover artwork found across iTunes, Open Library, or Google Books." };
+}
+
+export async function refreshRequestCover(requestId: string) {
+    await verifyUser();
+    const req = await prisma.bookRequest.findUnique({ where: { id: requestId } });
+    if (!req) return { success: false, error: "Request not found" };
+
+    let title = req.title;
+    let author = req.author || "";
+
+    // Clean scene noise (e.g. "(Rob Inglis)-PoF", "-PoF", "03 - The Two Towers")
+    title = title.replace(/\s*-\s*[A-Za-z0-9]+$/i, "")
+                 .replace(/\s*\([^)]*PoF[^)]*\)/gi, "")
+                 .replace(/\s*\(Rob Inglis\)/gi, "")
+                 .replace(/\s*\(Unabridged\)/gi, "")
+                 .replace(/\s*\(Narrated by [^)]+\)/gi, "")
+                 .replace(/^[0-9]{2}\s*-\s*/, "")
+                 .trim();
+
+    const lowerTitle = title.toLowerCase();
+    if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("lord of the rings") || lowerTitle.includes("hobbit")) {
+        author = "J. R. R. Tolkien";
+        if (lowerTitle.includes("fellowship of the ring")) title = "The Fellowship of the Ring";
+        else if (lowerTitle.includes("two towers")) title = "The Two Towers";
+        else if (lowerTitle.includes("return of the king")) title = "The Return of the King";
+        else if (lowerTitle.includes("hobbit")) title = "The Hobbit";
+    }
+
+    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
+        author = "J. K. Rowling";
+        if (lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) title = "Harry Potter and the Sorcerer's Stone";
+        else if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
+        else if (lowerTitle.includes("prisoner of azkaban")) title = "Harry Potter and the Prisoner of Azkaban";
+        else if (lowerTitle.includes("goblet of fire")) title = "Harry Potter and the Goblet of Fire";
+        else if (lowerTitle.includes("order of the phoenix")) title = "Harry Potter and the Order of the Phoenix";
+        else if (lowerTitle.includes("half-blood prince")) title = "Harry Potter and the Half-Blood Prince";
+        else if (lowerTitle.includes("deathly hallows")) title = "Harry Potter and the Deathly Hallows";
+    }
+
+    const newCover = await fetchBookCover(title, author, req.mediaType || "ebook");
+    if (newCover && newCover !== "local") {
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { 
+                coverUrl: newCover,
+                title,
+                author: author && author !== "Unknown Author" ? author : req.author
+            }
+        });
+        
+        // Also update any matching book in library
+        const normReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const reqMedia = req.mediaType || "ebook";
+        const matchingBooks = await prisma.book.findMany();
+        for (const b of matchingBooks) {
+            const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const bMedia = b.mediaType || "ebook";
+            if (bMedia === reqMedia && (normB === normReq || normB.includes(normReq) || normReq.includes(normB))) {
+                await prisma.book.update({
+                    where: { id: b.id },
+                    data: { coverUrl: newCover }
+                }).catch(() => {});
+            }
+        }
+
         revalidatePath("/library");
         return { success: true, coverUrl: newCover };
     }
