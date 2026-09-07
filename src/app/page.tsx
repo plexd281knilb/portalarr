@@ -43,8 +43,8 @@ export default async function UserLandingPage() {
       
       {/* --- ALERT BANNER --- */}
       {alertBanner.enabled && alertBanner.text && (
-          <div className="w-full bg-orange-500/20 border-b border-orange-500/50 text-orange-700 dark:text-orange-400 px-4 py-2.5 text-center text-sm font-medium flex items-center justify-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
+          <div className="w-full bg-orange-500/15 border-b border-orange-500/40 text-orange-600 dark:text-orange-400 px-4 py-3 text-center text-sm font-medium flex items-center justify-center gap-2 backdrop-blur-md shadow-sm">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500 animate-pulse" />
               <div className="[&>p]:inline">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                       {alertBanner.text}
@@ -53,31 +53,33 @@ export default async function UserLandingPage() {
           </div>
       )}
 
-      <main className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500">
         
-        <section className="text-center space-y-4 py-8">
-            <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl">System Dashboard</h1>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-                Real-time status, content requests, and support.
+        <section className="text-center space-y-3 py-6 sm:py-8">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
+                System Dashboard
+            </h1>
+            <p className="text-muted-foreground text-sm sm:text-base lg:text-lg max-w-2xl mx-auto">
+                Real-time status, active downloads, content requests, and support.
             </p>
         </section>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <SystemStatus />
-            <Card className="h-full flex flex-col animate-in fade-in duration-700">
+            <Card className="h-full flex flex-col border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold">
                         <ExternalLink className="h-5 w-5 text-primary"/> Request Content
                     </CardTitle>
                     <CardDescription>Looking for something specific? Request it here.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col justify-center space-y-4">
                     {isLoggedIn && (
-                        <div className="border-b border-muted/50 pb-4">
+                        <div className="border-b border-border/40 pb-4">
                             {hasAccess ? (
                                 <Link href="/library" className="w-full block">
-                                    <Button size="lg" className="w-full text-base font-semibold h-12 shadow-sm hover:shadow transition-all bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-2">
-                                        <BookOpen className="h-4 w-4 text-white" />
+                                    <Button size="lg" className="w-full text-base font-semibold h-12 shadow-sm transition-all duration-200 bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-lg active:scale-98">
+                                        <BookOpen className="h-5 w-5 text-white" />
                                         Access Book Library
                                     </Button>
                                 </Link>
@@ -87,7 +89,7 @@ export default async function UserLandingPage() {
                         </div>
                     )}
                     {requestApps.length === 0 ? (
-                        <div className="text-center text-muted-foreground italic p-4">
+                        <div className="text-center text-muted-foreground italic p-4 border border-dashed rounded-lg border-border/40">
                             No request apps configured.
                         </div>
                     ) : (
@@ -98,11 +100,15 @@ export default async function UserLandingPage() {
                                     key={app.id} 
                                     href={safeUrl} 
                                     target={app.externalUrl ? "_blank" : "_self"} 
-                                    className={`w-full ${!app.externalUrl && "opacity-50 cursor-not-allowed"}`}
+                                    className={`w-full block ${!app.externalUrl && "opacity-50 cursor-not-allowed"}`}
                                 >
-                                    <Button size="lg" disabled={!app.externalUrl} className="w-full text-lg h-16 shadow-md hover:shadow-lg transition-all">
+                                    <Button 
+                                        size="lg" 
+                                        disabled={!app.externalUrl} 
+                                        className="w-full text-base sm:text-lg h-14 sm:h-16 shadow-md transition-all duration-200 font-semibold hover:ring-2 hover:ring-primary/50 hover:shadow-lg active:scale-98"
+                                    >
                                         {app.name} 
-                                        {app.externalUrl ? <ExternalLink className="ml-2 h-5 w-5" /> : <span className="ml-2 text-xs">(Not Configured)</span>}
+                                        {app.externalUrl ? <ExternalLink className="ml-2 h-5 w-5" /> : <span className="ml-2 text-xs font-normal opacity-70">(Not Configured)</span>}
                                     </Button>
                                 </Link>
                             );
@@ -119,9 +125,9 @@ export default async function UserLandingPage() {
 
         {/* ROADMAP CARD */}
         <div className="w-full">
-            <Card className="bg-muted/30 border-primary/20 animate-in fade-in duration-1000">
+            <Card className="bg-[#121218]/80 border-primary/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
                 <CardHeader>
-                    <CardTitle className="text-2xl flex items-center gap-2">
+                    <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-primary">
                         🗺️ Roadmap & New Features
                     </CardTitle>
                 </CardHeader>
@@ -135,9 +141,9 @@ export default async function UserLandingPage() {
 
         {/* BETA TESTING CARD */}
         <div className="w-full">
-            <Card className="bg-muted/30 border-primary/20">
+            <Card className="bg-[#121218]/80 border-purple-500/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
                 <CardHeader>
-                    <CardTitle className="text-2xl flex items-center gap-2">
+                    <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-purple-400">
                         🧪 Beta Testing & Additional Services
                     </CardTitle>
                 </CardHeader>
@@ -147,7 +153,7 @@ export default async function UserLandingPage() {
                     </ReactMarkdown>
                 </CardContent>
                 <CardContent>
-                    <Button asChild size="lg" className="mt-4">
+                    <Button asChild size="lg" className="mt-2 font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all duration-200 hover:ring-2 hover:ring-purple-400/50 hover:shadow-lg active:scale-98">
                         <Link href="/beta">View Beta Services</Link>
                     </Button>
                 </CardContent>

@@ -464,7 +464,7 @@ function SettingsPageContent() {
                 <TabsContent value="general" className="space-y-6">
                     
                     {/* ALERT BANNER CARD */}
-                    <Card className="border-orange-500/40 bg-orange-500/5">
+                    <Card className="border-orange-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg shadow-orange-950/20">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-orange-500">
                                 <AlertTriangle className="h-5 w-5"/> System Alert Banner
@@ -489,7 +489,7 @@ function SettingsPageContent() {
                                         placeholder="⚠️ **Maintenance Notice:** Server maintenance scheduled for 2:00 AM EST..." 
                                     />
                                 </div>
-                                <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-500 font-semibold">
+                                <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-500 font-semibold hover:ring-2 hover:ring-orange-500/40 active:scale-95 transition-all shadow-sm">
                                     Save Alert Banner
                                 </Button>
                             </form>
@@ -498,7 +498,7 @@ function SettingsPageContent() {
 
                     <div className="grid gap-6 md:grid-cols-2">
                         {/* SMTP & EMAIL INTEGRATION */}
-                        <Card>
+                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <div>
@@ -614,7 +614,7 @@ function SettingsPageContent() {
                                     </div>
 
                                     <div className="flex flex-wrap gap-2 pt-2">
-                                        <Button type="submit" className="flex-1 font-bold">
+                                        <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
                                             <Send className="h-4 w-4 mr-2"/> 
                                             Save SMTP Settings
                                         </Button>
@@ -622,7 +622,7 @@ function SettingsPageContent() {
                                         <Button 
                                             type="button" 
                                             variant="outline"
-                                            className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-semibold"
+                                            className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all"
                                             onClick={handleTestSmtp}
                                             disabled={testEmailLoading || !systemSettings?.smtpHost}
                                             title="Send a test email to your SMTP account"
@@ -635,6 +635,7 @@ function SettingsPageContent() {
                                             <Button 
                                                 type="button" 
                                                 variant="destructive" 
+                                                className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
                                                 onClick={async () => {
                                                     if(confirm("Are you sure you want to wipe SMTP settings?")) {
                                                         await clearSmtpSettings();
@@ -653,7 +654,7 @@ function SettingsPageContent() {
 
                         {/* AUTOMATION & DOWNLOAD DIRECTORY VALIDATOR */}
                         <div className="space-y-6">
-                            <Card>
+                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2">
                                         <FolderCheck className="h-5 w-5 text-primary" /> Automation & Directory Paths
@@ -676,7 +677,7 @@ function SettingsPageContent() {
                                                             type="button"
                                                             variant="outline"
                                                             size="sm"
-                                                            className="h-6 px-2 text-[10px] font-mono border-muted/50 text-muted-foreground hover:text-primary hover:border-primary/50"
+                                                            className="h-6 px-2 text-[10px] font-mono border-muted/50 text-muted-foreground hover:text-primary hover:border-primary/50 hover:ring-1 hover:ring-primary/30 active:scale-95 transition-all"
                                                             onClick={() => {
                                                                 setInputDownloadsPath(preset);
                                                                 handleTestPermissions(preset);
@@ -699,7 +700,7 @@ function SettingsPageContent() {
                                                 <Button 
                                                     type="button" 
                                                     variant="outline" 
-                                                    className="text-xs shrink-0 font-semibold gap-1"
+                                                    className="text-xs shrink-0 font-semibold gap-1 hover:ring-2 hover:ring-primary/30 active:scale-95 transition-all"
                                                     disabled={validatingPath}
                                                     onClick={() => handleValidatePath(inputDownloadsPath)}
                                                 >
@@ -709,7 +710,7 @@ function SettingsPageContent() {
                                                 <Button 
                                                     type="button" 
                                                     variant="secondary" 
-                                                    className="text-xs shrink-0 font-extrabold gap-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20"
+                                                    className="text-xs shrink-0 font-extrabold gap-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 hover:ring-2 hover:ring-amber-500/40 active:scale-95 transition-all shadow-sm"
                                                     disabled={permTesting}
                                                     onClick={() => handleTestPermissions(inputDownloadsPath)}
                                                 >
@@ -796,14 +797,14 @@ function SettingsPageContent() {
                                                 </div>
                                             )}
                                         </div>
-                                        <Button type="submit" variant="secondary" className="w-full font-semibold">
+                                        <Button type="submit" variant="secondary" className="w-full font-semibold hover:ring-2 hover:ring-primary/30 active:scale-95 transition-all">
                                             Save Automation Settings
                                         </Button>
                                     </form>
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                                 <CardHeader>
                                     <CardTitle>Google Books API</CardTitle>
                                     <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
@@ -850,13 +851,13 @@ function SettingsPageContent() {
                                                 Leaving this blank will fall back to the `GOOGLE_BOOKS_API_KEY` environment variable, or anonymous IP rate limits.
                                             </p>
                                         </div>
-                                        <Button type="submit" size="sm">Save Settings</Button>
+                                        <Button type="submit" size="sm" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Settings</Button>
                                     </form>
                                 </CardContent>
                             </Card>
 
                             {/* AI METADATA AGENT CARD */}
-                            <Card className="border-purple-500/40 bg-purple-500/5">
+                            <Card className="border-purple-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg shadow-purple-950/20">
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
@@ -960,7 +961,7 @@ function SettingsPageContent() {
                                                             type="button" 
                                                             variant="ghost" 
                                                             size="sm" 
-                                                            className="h-6 text-xs px-2"
+                                                            className="h-6 text-xs px-2 hover:ring-1 hover:ring-purple-400/40 active:scale-95 transition-all"
                                                             onClick={handleLoadModels}
                                                             disabled={loadingModels}
                                                         >
@@ -1065,13 +1066,13 @@ function SettingsPageContent() {
                                         )}
 
                                         <div className="flex flex-wrap gap-2 pt-2">
-                                            <Button type="submit" className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold text-white">
+                                            <Button type="submit" className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold text-white hover:ring-2 hover:ring-purple-400/50 active:scale-95 transition-all shadow-md shadow-purple-950/30">
                                                 Save AI Agent Settings
                                             </Button>
                                             <Button 
                                                 type="button" 
                                                 variant="outline" 
-                                                className="border-purple-500/40 text-purple-300 hover:bg-purple-500/10 font-semibold gap-1"
+                                                className="border-purple-500/40 text-purple-300 hover:bg-purple-500/10 font-semibold gap-1 hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all"
                                                 onClick={handleTestAiAgent}
                                                 disabled={testAiLoading}
                                             >
@@ -1081,7 +1082,7 @@ function SettingsPageContent() {
                                             <Button 
                                                 type="button" 
                                                 variant="secondary" 
-                                                className="bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 font-bold gap-1.5 w-full sm:w-auto"
+                                                className="bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 font-bold gap-1.5 w-full sm:w-auto hover:ring-2 hover:ring-purple-400/50 active:scale-95 transition-all shadow-sm"
                                                 onClick={handleRunAiBatchScan}
                                                 disabled={batchScanning}
                                             >
@@ -1105,7 +1106,7 @@ function SettingsPageContent() {
                 <TabsContent value="monitoring" className="space-y-6">
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {/* TAUTULLI INSTANCES */}
-                        <Card className="flex flex-col">
+                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <PlaySquare className="h-5 w-5 text-primary"/> {editingTautulli ? "Edit Tautulli" : "Tautulli Streams"}
@@ -1117,23 +1118,23 @@ function SettingsPageContent() {
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                                         {tautulli.length === 0 && <p className="text-xs text-muted-foreground italic">No Tautulli instances added.</p>}
                                         {tautulli.map(t => (
-                                            <div key={t.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
+                                            <div key={t.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="truncate font-semibold">{t.name}</span>
                                                     <div className="flex items-center gap-1">
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-primary"
+                                                            className="h-7 text-[11px] px-2 text-primary hover:ring-1 hover:ring-primary/40 active:scale-95 transition-all"
                                                             disabled={testingTautulliId === t.id}
                                                             onClick={() => handleTestTautulli(t.id)}
                                                         >
                                                             {testingTautulliId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400" onClick={() => setEditingTautulli(t)}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingTautulli(t)}>
                                                             <Pencil className="h-3.5 w-3.5"/>
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(t.id, removeTautulliInstance)}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(t.id, removeTautulliInstance)}>
                                                             <Trash2 className="h-3.5 w-3.5"/>
                                                         </Button>
                                                     </div>
@@ -1173,9 +1174,9 @@ function SettingsPageContent() {
                                         </div>
                                     </div>
                                     <div className="flex gap-2 mt-2">
-                                        <Button type="submit" size="sm" className="flex-1 font-semibold">{editingTautulli ? "Save Changes" : "Add Tautulli Instance"}</Button>
+                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">{editingTautulli ? "Save Changes" : "Add Tautulli Instance"}</Button>
                                         {editingTautulli && (
-                                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingTautulli(null)}>Cancel</Button>
+                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => setEditingTautulli(null)}>Cancel</Button>
                                         )}
                                     </div>
                                 </form>
@@ -1183,7 +1184,7 @@ function SettingsPageContent() {
                         </Card>
 
                         {/* GLANCES INSTANCES */}
-                        <Card className="flex flex-col">
+                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <Activity className="h-5 w-5 text-sky-400"/> {editingGlances ? "Edit Glances" : "Glances Hardware"}
@@ -1195,23 +1196,23 @@ function SettingsPageContent() {
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                                         {glances.length === 0 && <p className="text-xs text-muted-foreground italic">No Glances instances added.</p>}
                                         {glances.map(g => (
-                                            <div key={g.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
+                                            <div key={g.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="truncate font-semibold">{g.name}</span>
                                                     <div className="flex items-center gap-1">
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-sky-400"
+                                                            className="h-7 text-[11px] px-2 text-sky-400 hover:ring-1 hover:ring-sky-400/40 active:scale-95 transition-all"
                                                             disabled={testingGlancesId === g.id}
                                                             onClick={() => handleTestGlances(g.id)}
                                                         >
                                                             {testingGlancesId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400" onClick={() => setEditingGlances(g)}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingGlances(g)}>
                                                             <Pencil className="h-3.5 w-3.5"/>
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(g.id, removeGlancesInstance)}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(g.id, removeGlancesInstance)}>
                                                             <Trash2 className="h-3.5 w-3.5"/>
                                                         </Button>
                                                     </div>
@@ -1236,9 +1237,9 @@ function SettingsPageContent() {
                                         <Input name="url" placeholder="URL (http://192.168.1.50:61208)" required className="h-9 text-sm font-mono" defaultValue={editingGlances?.url} />
                                     </div>
                                     <div className="flex gap-2 mt-2">
-                                        <Button type="submit" size="sm" className="flex-1 font-semibold">{editingGlances ? "Save Changes" : "Add Glances Server"}</Button>
+                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all">{editingGlances ? "Save Changes" : "Add Glances Server"}</Button>
                                         {editingGlances && (
-                                            <Button type="button" size="sm" variant="outline" onClick={() => setEditingGlances(null)}>Cancel</Button>
+                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => setEditingGlances(null)}>Cancel</Button>
                                         )}
                                     </div>
                                 </form>
@@ -1246,7 +1247,7 @@ function SettingsPageContent() {
                         </Card>
 
                         {/* MEDIA APPS & DOWNLOAD CLIENTS */}
-                        <Card className="flex flex-col">
+                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <Shield className="h-5 w-5 text-emerald-400"/> {editingApp ? "Edit Application" : "Media Stack & Apps"}
@@ -1258,7 +1259,7 @@ function SettingsPageContent() {
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                                         {mediaApps.length === 0 && <p className="text-xs text-muted-foreground italic">No applications configured.</p>}
                                         {mediaApps.map(app => (
-                                            <div key={app.id} className="space-y-1.5 border p-2.5 rounded-xl bg-muted/20 text-sm">
+                                            <div key={app.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <div className="truncate">
                                                         <div className="font-semibold">{app.name}</div>
@@ -1268,16 +1269,16 @@ function SettingsPageContent() {
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-emerald-400"
+                                                            className="h-7 text-[11px] px-2 text-emerald-400 hover:ring-1 hover:ring-emerald-400/40 active:scale-95 transition-all"
                                                             disabled={testingAppId === app.id}
                                                             onClick={() => handleTestApp(app.id)}
                                                         >
                                                             {testingAppId === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400" onClick={() => { setEditingApp(app); setArrMeta(null); }}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingApp(app); setArrMeta(null); }}>
                                                             <Pencil className="h-3.5 w-3.5"/>
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => handleDelete(app.id, removeMediaApp)}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(app.id, removeMediaApp)}>
                                                             <Trash2 className="h-3.5 w-3.5"/>
                                                         </Button>
                                                     </div>
@@ -1386,7 +1387,7 @@ function SettingsPageContent() {
                                         </div>
                                         <div className="flex items-center justify-between mt-1">
                                             <p className="text-[10px] text-muted-foreground ml-1">Comma-separated list of IDs. Super Users will only be able to select from these.</p>
-                                            <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] px-2 py-0" onClick={handleFetchArrMeta} disabled={fetchingArrMeta}>
+                                            <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] px-2 py-0 hover:ring-1 hover:ring-primary/40 active:scale-95 transition-all" onClick={handleFetchArrMeta} disabled={fetchingArrMeta}>
                                                 {fetchingArrMeta ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
                                                 Fetch IDs
                                             </Button>
@@ -1442,9 +1443,9 @@ function SettingsPageContent() {
                                     </div>
 
                                     <div className="flex gap-2">
-                                        <Button type="submit" size="sm" className="w-full h-9 font-semibold">{editingApp ? "Update App" : "Add Application"}</Button>
+                                        <Button type="submit" size="sm" className="w-full h-9 font-semibold hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">{editingApp ? "Update App" : "Add Application"}</Button>
                                         {editingApp && (
-                                            <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => { setEditingApp(null); setArrMeta(null); setNewAppType(""); }}>
+                                            <Button type="button" size="sm" variant="outline" className="h-9 hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingApp(null); setArrMeta(null); setNewAppType(""); }}>
                                                 <X className="h-4 w-4"/>
                                             </Button>
                                         )}
@@ -1458,7 +1459,7 @@ function SettingsPageContent() {
                 {/* --- TAB 4: BETA TESTING & ROADMAP --- */}
                 <TabsContent value="beta" className="space-y-6">
                     {/* ROADMAP CARD EDITOR */}
-                    <Card>
+                    <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">🗺️ Roadmap & Feature Announcements</CardTitle>
                             <CardDescription>Update the Markdown roadmap text displayed on the main dashboard.</CardDescription>
@@ -1485,14 +1486,14 @@ function SettingsPageContent() {
                                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{roadmapText || "*No content*"}</ReactMarkdown>
                                     </TabsContent>
                                 </Tabs>
-                                <Button type="submit" className="font-semibold">Save Roadmap Text</Button>
+                                <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Roadmap Text</Button>
                             </form>
                         </CardContent>
                     </Card>
 
                     <div className="grid gap-6 md:grid-cols-2">
                         {/* BETA DASHBOARD INTRO EDITOR */}
-                        <Card>
+                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <CardTitle>Beta Dashboard Intro</CardTitle>
                                 <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
@@ -1519,13 +1520,13 @@ function SettingsPageContent() {
                                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{betaText || "*No content*"}</ReactMarkdown>
                                         </TabsContent>
                                     </Tabs>
-                                    <Button type="submit" className="font-semibold">Save Intro Text</Button>
+                                    <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Intro Text</Button>
                                 </form>
                             </CardContent>
                         </Card>
 
                         {/* BETA TESTING CARDS EDITOR */}
-                        <Card>
+                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <CardTitle>{editingBetaCard ? "Edit Beta Card" : "Beta Testing Cards"}</CardTitle>
                                 <CardDescription>Manage the interactive service cards on `/beta`.</CardDescription>
@@ -1534,16 +1535,16 @@ function SettingsPageContent() {
                                 {!editingBetaCard && (
                                     <div className="space-y-4 max-h-[300px] overflow-y-auto">
                                         {betaCards.map((card: any) => (
-                                            <div key={card.id} className="flex items-start justify-between border p-3 rounded-xl bg-muted/20">
+                                            <div key={card.id} className="flex items-start justify-between border border-border/40 p-3 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all">
                                                 <div className="space-y-1">
                                                     <div className="font-semibold">{card.title}</div>
                                                     <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
                                                 </div>
                                                 <div className="flex gap-1 shrink-0 ml-2">
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => { setEditingBetaCard(card); setBetaCardContent(card.content); }}>
+                                                    <Button type="button" variant="ghost" size="icon" className="hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingBetaCard(card); setBetaCardContent(card.content); }}>
                                                         <Pencil className="h-4 w-4 text-blue-500" />
                                                     </Button>
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => handleDelete(card.id, deleteBetaCard)}>
+                                                    <Button type="button" variant="ghost" size="icon" className="hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(card.id, deleteBetaCard)}>
                                                         <Trash2 className="h-4 w-4 text-red-500" />
                                                     </Button>
                                                 </div>
@@ -1588,8 +1589,8 @@ function SettingsPageContent() {
                                         <div className="space-y-2"><Label>Button URL</Label><Input name="buttonUrl" defaultValue={editingBetaCard?.buttonUrl} /></div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button type="submit" className="w-full font-semibold">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
-                                        {editingBetaCard && <Button type="button" variant="outline" onClick={() => { setEditingBetaCard(null); setBetaCardContent(""); }}><X className="h-4 w-4"/></Button>}
+                                        <Button type="submit" className="w-full font-semibold hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
+                                        {editingBetaCard && <Button type="button" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingBetaCard(null); setBetaCardContent(""); }}><X className="h-4 w-4"/></Button>}
                                     </div>
                                 </form>
                             </CardContent>

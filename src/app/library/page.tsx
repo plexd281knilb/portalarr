@@ -41,6 +41,15 @@ import {
   runAiLibraryScanAction,
   getEbooksUserGuide,
   saveEbooksUserGuide,
+  getKindleDeliveryLogs,
+  retryKindleDelivery,
+  clearKindleDeliveryLogs,
+  diagnoseKindleHealth,
+  getServicesHealthPulse,
+  fulfillRequestWithUpload,
+  toggleMonitorSeries,
+  getBlocklistedReleases,
+  unblocklistRelease,
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { BookReaderModal } from "@/components/book-reader-modal";
@@ -95,6 +104,14 @@ import {
   Wand2,
   Library,
   HelpCircle,
+  Activity,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
+  FileUp,
+  Clock,
+  Zap,
+  Ban,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -345,6 +362,10 @@ function BookLibraryPageContent() {
       );
       if (topAudio) setSelectedLibrary(topAudio);
       setReqMediaType("audiobook");
+    } else if (val === "kindle") {
+      loadKindleLogs();
+    } else if (val === "requests") {
+      loadServicesPulse();
     }
   };
 
@@ -489,6 +510,171 @@ function BookLibraryPageContent() {
   const [isEditingGuide, setIsEditingGuide] = useState(false);
   const [editGuideText, setEditGuideText] = useState("");
   const [savingGuide, setSavingGuide] = useState(false);
+
+  // Kindle Delivery Tracking & Diagnostics States
+  const [kindleLogs, setKindleLogs] = useState<any[]>([]);
+  const [loadingKindleLogs, setLoadingKindleLogs] = useState(false);
+  const [kindleDiagnostics, setKindleDiagnostics] = useState<{
+    ready: boolean;
+    senderEmail: string;
+    userKindleEmail: string;
+    checks: Array<{ name: string; status: "pass" | "warn" | "fail"; message: string }>;
+  } | null>(null);
+  const [runningDiagnostics, setRunningDiagnostics] = useState(false);
+  const [retryingLogId, setRetryingLogId] = useState<string | null>(null);
+  const [clearingKindleLogs, setClearingKindleLogs] = useState(false);
+
+  // Services Health Pulse State
+  const [servicesPulse, setServicesPulse] = useState<any>(null);
+  const [loadingPulse, setLoadingPulse] = useState(false);
+
+  // Request File Upload & Monitoring
+  const [uploadingFulfillId, setUploadingFulfillId] = useState<string | null>(null);
+  const [togglingMonitorId, setTogglingMonitorId] = useState<string | null>(null);
+
+  // Blocklisted Releases State
+  const [blocklistedReleases, setBlocklistedReleases] = useState<any[]>([]);
+  const [loadingBlocklist, setLoadingBlocklist] = useState(false);
+  const [unblocklistingGuid, setUnblocklistingGuid] = useState<string | null>(null);
+
+  const loadKindleLogs = useCallback(async () => {
+    setLoadingKindleLogs(true);
+    try {
+      const logs = await getKindleDeliveryLogs();
+      setKindleLogs(logs || []);
+    } catch (e) {
+      console.error("Failed to load Kindle delivery logs:", e);
+    } finally {
+      setLoadingKindleLogs(false);
+    }
+  }, []);
+
+  const handleRunKindleDiagnostics = async () => {
+    setRunningDiagnostics(true);
+    try {
+      const diag = await diagnoseKindleHealth(userKindleEmail);
+      setKindleDiagnostics(diag);
+    } catch (e: any) {
+      alert(e.message || "Failed to run Kindle diagnostics.");
+    } finally {
+      setRunningDiagnostics(false);
+    }
+  };
+
+  const handleRetryDelivery = async (logId: string) => {
+    setRetryingLogId(logId);
+    try {
+      const res = await retryKindleDelivery(logId);
+      if (res.success) {
+        alert((res as any).message || "Book successfully resent to Kindle!");
+        loadKindleLogs();
+      } else {
+        showErrorModal(res.error || "Retry delivery failed.", "Kindle Retry Error");
+      }
+    } catch (e: any) {
+      showErrorModal(e.message || "Failed to retry delivery.", "Kindle Retry Error");
+    } finally {
+      setRetryingLogId(null);
+    }
+  };
+
+  const handleClearDeliveryLogs = async () => {
+    if (!confirm("Are you sure you want to clear your Kindle delivery history?")) return;
+    setClearingKindleLogs(true);
+    try {
+      await clearKindleDeliveryLogs();
+      setKindleLogs([]);
+    } catch (e: any) {
+      alert(e.message || "Failed to clear delivery logs.");
+    } finally {
+      setClearingKindleLogs(false);
+    }
+  };
+
+  const loadServicesPulse = useCallback(async () => {
+    setLoadingPulse(true);
+    try {
+      const pulse = await getServicesHealthPulse();
+      setServicesPulse(pulse);
+    } catch (e) {
+      console.error("Failed to check services health pulse:", e);
+    } finally {
+      setLoadingPulse(false);
+    }
+  }, []);
+
+  const handleFulfillWithUpload = async (requestId: string, file: File) => {
+    setUploadingFulfillId(requestId);
+    try {
+      const formData = new FormData();
+      formData.append("requestId", requestId);
+      formData.append("file", file);
+      const res = await fulfillRequestWithUpload(formData);
+      if (res.success) {
+        alert(res.message || "File uploaded and processed successfully!");
+        const reqs = await getBookRequests();
+        setRequests(reqs || []);
+        if (selectedLibrary?.id) {
+          const freshBooks = await getLibraryBooks(selectedLibrary.id);
+          setBooks(freshBooks || []);
+        }
+      } else {
+        showErrorModal(res.error || "Failed to fulfill request with uploaded file.", "Upload Fulfillment Error");
+      }
+    } catch (e: any) {
+      showErrorModal(e.message || "Failed to upload file.", "Upload Error");
+    } finally {
+      setUploadingFulfillId(null);
+    }
+  };
+
+  const handleToggleSeriesMonitoring = async (requestId: string) => {
+    setTogglingMonitorId(requestId);
+    try {
+      const res = await toggleMonitorSeries(requestId);
+      if (res.success) {
+        setRequests((prev) =>
+          prev.map((r) =>
+            r.id === requestId ? { ...r, monitorSeries: res.monitorSeries } : r
+          )
+        );
+      } else {
+        alert(res.error || "Failed to update series monitoring.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to toggle series monitoring.");
+    } finally {
+      setTogglingMonitorId(null);
+    }
+  };
+
+  const loadBlocklist = useCallback(async () => {
+    setLoadingBlocklist(true);
+    try {
+      const list = await getBlocklistedReleases();
+      setBlocklistedReleases(list || []);
+    } catch (e) {
+      console.error("Failed to load blocklisted releases:", e);
+    } finally {
+      setLoadingBlocklist(false);
+    }
+  }, []);
+
+  const handleUnblocklist = async (guid: string) => {
+    setUnblocklistingGuid(guid);
+    try {
+      const res = await unblocklistRelease(guid);
+      if (res.success) {
+        setBlocklistedReleases((prev) => prev.filter((r) => r.guid !== guid));
+      } else {
+        alert(res.error || "Failed to remove blocklist entry.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to unblocklist release.");
+    } finally {
+      setUnblocklistingGuid(null);
+    }
+  };
 
   const handleRefreshCover = async (bookId: string) => {
     setRefreshingCoverId(bookId);
@@ -1326,6 +1512,9 @@ function BookLibraryPageContent() {
         } catch (e) {
           console.warn("Failed to load user guide:", e);
         }
+
+        getServicesHealthPulse().then((p) => setServicesPulse(p)).catch(() => {});
+        getKindleDeliveryLogs().then((l) => setKindleLogs(l || [])).catch(() => {});
       } catch (e) {
         console.error("Failed to load initial library data:", e);
       } finally {
@@ -3477,6 +3666,53 @@ function BookLibraryPageContent() {
         </TabsContent>
 
         <TabsContent value="requests" className="space-y-6">
+          {/* Services Health Pulse & Indexer Status Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-muted/50 bg-[#16161c]/80 backdrop-blur-sm shadow-sm">
+            <div className="flex items-center gap-4 flex-wrap">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                <Activity className="h-3.5 w-3.5 text-primary" /> Pipeline Pulse:
+              </span>
+              
+              {/* Prowlarr */}
+              <div className="flex items-center gap-1.5 text-xs font-medium">
+                <span className={`h-2 w-2 rounded-full ${servicesPulse?.prowlarr?.online ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-red-400"}`} />
+                <span className="text-muted-foreground">Prowlarr:</span>
+                <span className={servicesPulse?.prowlarr?.online ? "text-emerald-400 font-semibold" : servicesPulse?.prowlarr?.configured === false ? "text-muted-foreground" : "text-red-400 font-semibold"}>
+                  {servicesPulse?.prowlarr?.online ? `Online (${servicesPulse.prowlarr.indexersCount || 0} indexers)` : servicesPulse?.prowlarr?.configured === false ? "Not Configured" : "Offline"}
+                </span>
+              </div>
+
+              {/* SABnzbd */}
+              <div className="flex items-center gap-1.5 text-xs font-medium">
+                <span className={`h-2 w-2 rounded-full ${servicesPulse?.sabnzbd?.online ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : servicesPulse?.sabnzbd?.configured ? "bg-red-400" : "bg-muted-foreground/40"}`} />
+                <span className="text-muted-foreground">Usenet (SABnzbd):</span>
+                <span className={servicesPulse?.sabnzbd?.online ? "text-emerald-400 font-semibold" : servicesPulse?.sabnzbd?.configured ? "text-red-400 font-semibold" : "text-muted-foreground"}>
+                  {servicesPulse?.sabnzbd?.online ? "Active" : servicesPulse?.sabnzbd?.configured ? "Offline" : "Disabled"}
+                </span>
+              </div>
+
+              {/* qBittorrent */}
+              <div className="flex items-center gap-1.5 text-xs font-medium">
+                <span className={`h-2 w-2 rounded-full ${servicesPulse?.qbittorrent?.online ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : servicesPulse?.qbittorrent?.configured ? "bg-red-400" : "bg-muted-foreground/40"}`} />
+                <span className="text-muted-foreground">Torrent (qBittorrent):</span>
+                <span className={servicesPulse?.qbittorrent?.online ? "text-emerald-400 font-semibold" : servicesPulse?.qbittorrent?.configured ? "text-red-400 font-semibold" : "text-muted-foreground"}>
+                  {servicesPulse?.qbittorrent?.online ? "Active" : servicesPulse?.qbittorrent?.configured ? "Offline" : "Disabled"}
+                </span>
+              </div>
+            </div>
+
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px] text-muted-foreground hover:text-foreground gap-1 px-2"
+              disabled={loadingPulse}
+              onClick={loadServicesPulse}
+            >
+              {loadingPulse ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
+              Refresh Pulse
+            </Button>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1">
               <Card className="border-muted/60 bg-muted/10 sticky top-6">
@@ -4204,6 +4440,34 @@ function BookLibraryPageContent() {
                                       req.createdAt,
                                     ).toLocaleDateString()}
                                   </p>
+
+                                  {/* Real-time Download Progress Bar */}
+                                  {(req.status?.startsWith("Downloading") || req.downloadProgress) && (
+                                    <div className="mt-2.5 space-y-1.5 bg-blue-950/20 border border-blue-500/20 rounded-md p-2.5 animate-in fade-in">
+                                      <div className="flex justify-between items-center text-[11px]">
+                                        <span className="font-semibold text-blue-400 flex items-center gap-1.5">
+                                          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+                                          {req.downloadProgress?.client ? `Downloading via ${req.downloadProgress.client}` : "Active Download in Client Queue"}
+                                        </span>
+                                        <span className="font-mono font-bold text-foreground">
+                                          {req.downloadProgress?.percentage !== undefined ? `${req.downloadProgress.percentage}%` : "Downloading..."}
+                                        </span>
+                                      </div>
+                                      <Progress
+                                        value={req.downloadProgress?.percentage ?? 45}
+                                        className="h-1.5 bg-blue-950/50"
+                                      />
+                                      <div className="flex justify-between items-center text-[10px] text-muted-foreground font-mono">
+                                        <span>
+                                          {req.downloadProgress?.mb ? `${req.downloadProgress.mb} MB` : ""}
+                                          {req.downloadProgress?.mbleft ? ` (${req.downloadProgress.mbleft} MB left)` : ""}
+                                        </span>
+                                        <span>
+                                          {req.downloadProgress?.timeleft ? `ETA: ${req.downloadProgress.timeleft}` : ""}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end border-t sm:border-t-0 pt-3 sm:pt-0 mt-1 sm:mt-0">
@@ -4220,6 +4484,67 @@ function BookLibraryPageContent() {
                                 >
                                   {req.status}
                                 </Badge>
+
+                                {/* Series Auto-Monitor Toggle */}
+                                {(req.series || req.type === "series") && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className={`h-7 text-[10px] font-semibold px-2 gap-1 ${
+                                      req.monitorSeries
+                                        ? "bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25"
+                                        : "border-muted text-muted-foreground hover:text-foreground"
+                                    }`}
+                                    title={req.monitorSeries ? "Series is being automatically monitored for new installments" : "Enable automatic background monitoring for new books in this series"}
+                                    disabled={togglingMonitorId === req.id}
+                                    onClick={() => handleToggleSeriesMonitoring(req.id)}
+                                  >
+                                    {togglingMonitorId === req.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Zap className={`h-3 w-3 ${req.monitorSeries ? "text-purple-400 fill-purple-400" : ""}`} />
+                                    )}
+                                    {req.monitorSeries ? "Monitored" : "Monitor Series"}
+                                  </Button>
+                                )}
+
+                                {/* Direct File Upload / Fulfill */}
+                                {(isAdmin || req.requestedBy === user?.username) && req.status !== "Downloaded" && (
+                                  <label className="cursor-pointer">
+                                    <input
+                                      type="file"
+                                      accept=".epub,.pdf,.m4b,.mp3,.torrent,.nzb"
+                                      className="hidden"
+                                      disabled={uploadingFulfillId === req.id}
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                          handleFulfillWithUpload(req.id, file);
+                                          e.target.value = "";
+                                        }
+                                      }}
+                                    />
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      type="button"
+                                      asChild
+                                      className="h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
+                                      title="Fulfill directly by uploading book file (.epub, .pdf, .m4b, .mp3) or NZB/Torrent"
+                                      disabled={uploadingFulfillId === req.id}
+                                    >
+                                      <span>
+                                        {uploadingFulfillId === req.id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                        ) : (
+                                          <FileUp className="h-3.5 w-3.5 text-primary" />
+                                        )}
+                                        <span className="hidden sm:inline text-[11px]">Upload</span>
+                                      </span>
+                                    </Button>
+                                  </label>
+                                )}
+
                                 {req.status.startsWith("Failed") && (
                                   <div className="flex gap-1.5 items-center">
                                     <Button
@@ -4947,15 +5272,85 @@ function BookLibraryPageContent() {
                         devices list.
                       </p>
                     </div>
-                    <Button
-                      type="submit"
-                      className="w-full font-bold text-black"
-                    >
-                      Save Settings
-                    </Button>
+                    <div className="space-y-2 pt-1">
+                      <Button
+                        type="submit"
+                        className="w-full font-bold text-black bg-primary hover:bg-primary/90"
+                      >
+                        Save Settings
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10 gap-1.5"
+                        disabled={runningDiagnostics}
+                        onClick={handleRunKindleDiagnostics}
+                      >
+                        {runningDiagnostics ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Shield className="h-3.5 w-3.5" />
+                        )}
+                        Run Pre-Flight Delivery Check
+                      </Button>
+                    </div>
                   </form>
                 </CardContent>
               </Card>
+
+              {/* Pre-flight Diagnostic Results */}
+              {kindleDiagnostics && (
+                <Card className="border-muted/60 bg-[#16161c]/90 mt-4 animate-in fade-in">
+                  <CardHeader className="py-3 px-4 border-b border-muted/50 flex flex-row items-center justify-between">
+                    <CardTitle className="text-xs font-bold flex items-center gap-1.5">
+                      <Zap className="h-3.5 w-3.5 text-amber-400" /> Pre-Flight Diagnostic Report
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 text-[10px] px-1.5 text-muted-foreground hover:text-foreground"
+                      onClick={() => setKindleDiagnostics(null)}
+                    >
+                      Dismiss
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="p-3 space-y-2.5">
+                    {kindleDiagnostics.checks.map((item, idx) => {
+                      const isPass = item.status === "pass";
+                      const isWarn = item.status === "warn";
+                      return (
+                        <div key={idx} className="space-y-1 text-xs border-b border-muted/30 pb-2 last:border-b-0 last:pb-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-foreground flex items-center gap-1.5">
+                              {isPass ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              ) : isWarn ? (
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                              ) : (
+                                <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                              )}
+                              {item.name}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className={`text-[9px] py-0 px-1.5 font-bold ${
+                                isPass
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                  : isWarn
+                                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                    : "bg-red-500/10 text-red-400 border-red-500/30"
+                              }`}
+                            >
+                              {isPass ? "READY" : isWarn ? "WARNING" : "ATTENTION"}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground pl-5">{item.message}</p>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             <div className="lg:col-span-2">
@@ -5017,6 +5412,138 @@ function BookLibraryPageContent() {
               </Card>
             </div>
           </div>
+
+          {/* Send-to-Kindle Outbound Delivery History & Diagnostics Panel */}
+          <Card className="border-muted/60 mt-6">
+            <CardHeader className="py-3.5 border-b border-muted/50 flex flex-row justify-between items-center flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Mail className="h-4.5 w-4.5 text-primary" /> Kindle Delivery History & Error Diagnostics
+                </CardTitle>
+                <Badge variant="outline" className="text-xs font-mono">
+                  {kindleLogs.length} attempts
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-muted text-muted-foreground hover:text-foreground gap-1.5"
+                  disabled={loadingKindleLogs}
+                  onClick={loadKindleLogs}
+                >
+                  <RefreshCw className={`h-3 w-3 ${loadingKindleLogs ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+                {kindleLogs.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/30 gap-1"
+                    disabled={clearingKindleLogs}
+                    onClick={handleClearDeliveryLogs}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Clear History
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingKindleLogs ? (
+                <div className="p-8 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" /> Loading delivery history...
+                </div>
+              ) : kindleLogs.length === 0 ? (
+                <div className="p-8 text-center text-sm text-muted-foreground italic">
+                  No Send-to-Kindle delivery attempts logged yet. Whenever you or an admin sends a book to Kindle, the transaction log and delivery verification will appear here.
+                </div>
+              ) : (
+                <div className="divide-y divide-muted/50">
+                  {kindleLogs.map((log) => {
+                    const isDelivered = log.status === "DELIVERED";
+                    const isFailed = log.status === "FAILED";
+                    return (
+                      <div key={log.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-muted/10 transition-colors">
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-semibold text-sm truncate text-foreground" title={log.bookTitle}>
+                              {log.bookTitle}
+                            </h4>
+                            {log.bookAuthor && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                by {log.bookAuthor}
+                              </span>
+                            )}
+                            <Badge
+                              className={`text-[10px] py-0 px-1.5 font-bold ${
+                                isDelivered
+                                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                                  : isFailed
+                                    ? "bg-red-500/15 text-red-400 border border-red-500/30"
+                                    : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                              }`}
+                            >
+                              {isDelivered ? "🟢 DELIVERED" : isFailed ? "🔴 DELIVERY FAILED" : "🟡 RETRYING"}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+                            <span>To: <code className="font-mono text-foreground font-semibold">{log.recipientEmail}</code></span>
+                            <span>•</span>
+                            <span>Format: <span className="uppercase font-semibold">{log.fileFormat || "EPUB"}</span></span>
+                            {log.fileSizeBytes ? (
+                              <>
+                                <span>•</span>
+                                <span>{(log.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB</span>
+                              </>
+                            ) : null}
+                            <span>•</span>
+                            <span>{new Date(log.createdAt).toLocaleString()}</span>
+                          </div>
+
+                          {/* Failure diagnostics & resolution */}
+                          {isFailed && log.errorMessage && (
+                            <div className="mt-2 p-2.5 rounded-md bg-red-950/20 border border-red-500/30 text-xs space-y-1">
+                              <p className="text-red-400 font-medium flex items-center gap-1.5">
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                                <strong>Error:</strong> {log.errorMessage}
+                              </p>
+                              {serverSmtpFrom && (
+                                <p className="text-[11px] text-amber-300/90 pl-5">
+                                  💡 <strong>Amazon Whitelist Check:</strong> Ensure your server sending address (<code className="bg-black/40 px-1 rounded">{serverSmtpFrom}</code>) is added to your Amazon Approved Personal Document E-mail List.
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 shrink-0 md:justify-end">
+                          {isFailed && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10 gap-1.5"
+                              disabled={retryingLogId === log.id}
+                              onClick={() => handleRetryDelivery(log.id)}
+                            >
+                              {retryingLogId === log.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              )}
+                              Retry Delivery
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="help" className="space-y-6">
@@ -5437,14 +5964,21 @@ function BookLibraryPageContent() {
                               >
                                 {release.title}
                               </h4>
-                              {release.badgeText && (
+                              {release.isBlocklisted ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] py-0 px-1.5 font-bold bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1"
+                                >
+                                  <Ban className="h-2.5 w-2.5" /> Blocklisted Release
+                                </Badge>
+                              ) : release.badgeText ? (
                                 <Badge
                                   variant="outline"
                                   className={`text-[9px] py-0 px-1.5 font-bold ${release.badgeColor || "border-muted text-muted-foreground"}`}
                                 >
                                   {release.badgeText}
                                 </Badge>
-                              )}
+                              ) : null}
                             </div>
                             
                             {release.warning && (

@@ -60,51 +60,55 @@ export default function ActiveDownloads() {
     });
 
     return (
-        <Card className="w-full animate-in fade-in duration-700">
-            <CardHeader>
+        <Card className="w-full border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 animate-in fade-in duration-700">
+            <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
                     <div>
-                        <CardTitle className="flex items-center gap-2">
+                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
                             <Download className="h-5 w-5 text-primary"/> Active Downloads
                         </CardTitle>
-                        <CardDescription>Currently downloading to the server.</CardDescription>
+                        <CardDescription>Real-time torrent and Usenet download queue.</CardDescription>
                     </div>
-                    <Badge variant={allQueueItems.length > 0 ? "default" : "secondary"}>
+                    <Badge variant={allQueueItems.length > 0 ? "default" : "secondary"} className="text-xs px-2.5 py-0.5">
                         {allQueueItems.length} in Queue
                     </Badge>
                 </div>
             </CardHeader>
             <CardContent>
                 {allQueueItems.length === 0 ? (
-                    <div className="text-center text-muted-foreground italic py-8 border border-dashed rounded-lg">
-                        No active downloads at the moment.
+                    <div className="text-center text-muted-foreground text-sm italic py-8 border border-dashed border-border/50 rounded-xl bg-muted/10">
+                        No active downloads at the moment. All queues are idle.
                     </div>
                 ) : (
-                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                         {allQueueItems.map((item: any, idx: number) => {
                             // Normalize data between SABnzbd/NZBGet and Arr apps if necessary
                             const title = item.filename || item.title || "Unknown Download";
                             const mbleft = item.mbleft || 0;
                             const mb = item.mb || 0;
                             const percent = item.percentage ? parseFloat(item.percentage) : (mb > 0 ? ((mb - mbleft) / mb) * 100 : 0);
-                            const timeleft = item.timeleft || "Unknown Time";
+                            const timeleft = item.timeleft || "";
+                            const speed = item.speed || "";
                             
                             return (
-                                <div key={idx} className="space-y-2 border-b last:border-0 pb-4 last:pb-0">
-                                    <div className="flex justify-between items-start gap-4">
-                                        <div className="font-medium text-sm truncate" title={title}>
+                                <div key={idx} className="p-3 rounded-xl bg-muted/20 border border-border/40 hover:bg-muted/30 transition-all duration-200 space-y-2">
+                                    <div className="flex justify-between items-start gap-3">
+                                        <div className="font-semibold text-sm truncate flex-1 min-w-0" title={title}>
                                             {title}
                                         </div>
-                                        <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                            {timeleft}
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 font-mono">
+                                            {speed && (
+                                                <span className="text-emerald-400 font-semibold">{speed}</span>
+                                            )}
+                                            {timeleft && <span>ETA: {timeleft}</span>}
                                         </div>
                                     </div>
                                     <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                                            <span>Downloading</span>
-                                            <span>{percent.toFixed(1)}%</span>
+                                        <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
+                                            <span className="text-primary font-semibold">Downloading</span>
+                                            <span className="font-mono text-foreground font-semibold">{percent.toFixed(1)}%</span>
                                         </div>
-                                        <Progress value={percent} className="h-1.5" />
+                                        <Progress value={percent} className="h-2 bg-muted/50 rounded-full" />
                                     </div>
                                 </div>
                             );

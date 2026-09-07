@@ -420,17 +420,25 @@ export default function RadarrPage() {
       </div>
 
       <Tabs defaultValue="search" className="w-full">
-        <TabsList className="grid grid-cols-3 w-full h-auto p-1 bg-muted/50 rounded-lg">
-          <TabsTrigger value="search" className="text-[10px] sm:text-xs py-2 px-1 whitespace-normal text-center h-full">Search TMDB</TabsTrigger>
-          <TabsTrigger value="library" className="text-[10px] sm:text-xs py-2 px-1 whitespace-normal text-center h-full">Library ({libraryLoading ? "..." : library.length})</TabsTrigger>
-          <TabsTrigger value="queue" className="text-[10px] sm:text-xs py-2 px-1 whitespace-normal text-center h-full">Activity / Queue</TabsTrigger>
+        <TabsList className="grid grid-cols-3 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+          <TabsTrigger value="search" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80">
+            <Search className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            <span>Search TMDB</span>
+          </TabsTrigger>
+          <TabsTrigger value="library" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80">
+            <span>Library ({libraryLoading ? "..." : library.length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="queue" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80">
+            <Download className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            <span>Activity / Queue</span>
+          </TabsTrigger>
         </TabsList>
 
         {/* SEARCH TAB */}
         <TabsContent value="search" className="space-y-4 mt-4">
-          <Card>
+          <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
             <CardHeader>
-              <CardTitle>Search New Movies</CardTitle>
+              <CardTitle className="text-xl font-bold">Search New Movies</CardTitle>
               <CardDescription>
                 Search TMDB and add movies to your requested quality profile.
               </CardDescription>
@@ -441,12 +449,12 @@ export default function RadarrPage() {
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search for a movie..."
-                    className="pl-9"
+                    className="pl-9 bg-background/60"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Button type="submit" disabled={searching}>
+                <Button type="submit" disabled={searching} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-all duration-200 hover:ring-2 hover:ring-blue-400/50 active:scale-95">
                   {searching ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
@@ -456,7 +464,7 @@ export default function RadarrPage() {
               </form>
 
               {/* Default Profiles (applied to all searches) */}
-              <div className="grid sm:grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border">
+              <div className="grid sm:grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/40">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase text-muted-foreground">
                     Quality Profile
@@ -465,7 +473,7 @@ export default function RadarrPage() {
                     value={selectedProfileId}
                     onValueChange={setSelectedProfileId}
                   >
-                    <SelectTrigger className="bg-background">
+                    <SelectTrigger className="bg-background/80">
                       <SelectValue placeholder="Select Profile" />
                     </SelectTrigger>
                     <SelectContent>
@@ -485,7 +493,7 @@ export default function RadarrPage() {
                     value={selectedFolderId}
                     onValueChange={setSelectedFolderId}
                   >
-                    <SelectTrigger className="bg-background">
+                    <SelectTrigger className="bg-background/80">
                       <SelectValue placeholder="Select Folder" />
                     </SelectTrigger>
                     <SelectContent>
@@ -508,13 +516,13 @@ export default function RadarrPage() {
                   return (
                     <div
                       key={movie.tmdbId}
-                      className={`flex flex-row gap-3 p-3 rounded-xl border border-border/50 bg-card hover:bg-accent/5 transition-colors relative overflow-hidden ${
+                      className={`flex flex-row gap-3 p-3.5 rounded-xl border border-border/50 bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20 hover:shadow-lg transition-all duration-200 relative overflow-hidden ${
                         movie.id && movie.id > 0
-                          ? "ring-1 ring-blue-500/20"
+                          ? "ring-1 ring-blue-500/30"
                           : ""
                       }`}
                     >
-                      <div className="w-20 sm:w-[90px] h-32 sm:h-[135px] shrink-0 bg-muted rounded-md overflow-hidden relative">
+                      <div className="w-20 sm:w-[90px] h-32 sm:h-[135px] shrink-0 bg-muted/30 border border-border/40 rounded-lg overflow-hidden relative shadow-sm">
                         {coverImg ? (
                           <img
                             src={coverImg}
@@ -556,7 +564,7 @@ export default function RadarrPage() {
                           {movie.overview}
                         </p>
                         <div className="mt-2 flex items-center justify-between">
-                          <span className="text-[10px] uppercase font-bold text-blue-400/80">
+                          <span className="text-[10px] uppercase font-bold text-blue-400">
                             {movie.status}
                           </span>
                           <Button
@@ -578,7 +586,13 @@ export default function RadarrPage() {
                                   : "default"
                                 : "default"
                             }
-                            className="h-7 text-xs"
+                            className={`h-7 text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                              movie.id && movie.id > 0 && !movie.monitored
+                                ? "bg-blue-600 hover:bg-blue-500 text-white hover:ring-2 hover:ring-blue-400/40"
+                                : !movie.id
+                                  ? "bg-blue-600 hover:bg-blue-500 text-white hover:ring-2 hover:ring-blue-400/40"
+                                  : ""
+                            }`}
                           >
                             {addingMovieId === movie.tmdbId ||
                             modifyingId === movie.id ? (
@@ -607,17 +621,18 @@ export default function RadarrPage() {
 
         {/* LIBRARY TAB */}
         <TabsContent value="library" className="space-y-4 mt-4">
-          <Card>
+          <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
             <CardHeader>
-              <CardTitle>Library Management</CardTitle>
+              <CardTitle className="text-xl font-bold">Library Management</CardTitle>
               <CardDescription>
                 View, monitor, and search for new copies of existing movies.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {libraryLoading ? (
-                <div className="py-8 text-center">
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                <div className="py-12 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-400" />
+                  <p className="text-xs text-muted-foreground mt-2">Loading movie library...</p>
                 </div>
               ) : (
                 <>
@@ -626,7 +641,7 @@ export default function RadarrPage() {
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
                         placeholder="Search library..."
-                        className="pl-9"
+                        className="pl-9 bg-background/60"
                         value={librarySearch}
                         onChange={(e) => setLibrarySearch(e.target.value)}
                       />
@@ -636,7 +651,7 @@ export default function RadarrPage() {
                         value={libFilterStatus}
                         onValueChange={(val: any) => setLibFilterStatus(val)}
                       >
-                        <SelectTrigger className="flex-1 sm:w-[140px] min-w-[120px]">
+                        <SelectTrigger className="flex-1 sm:w-[140px] min-w-[120px] bg-background/80">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -653,7 +668,7 @@ export default function RadarrPage() {
                         value={libSort}
                         onValueChange={(val: any) => setLibSort(val)}
                       >
-                        <SelectTrigger className="flex-1 sm:w-[160px] min-w-[140px]">
+                        <SelectTrigger className="flex-1 sm:w-[160px] min-w-[140px] bg-background/80">
                           <SelectValue placeholder="Sort" />
                         </SelectTrigger>
                         <SelectContent>
@@ -676,7 +691,7 @@ export default function RadarrPage() {
                         onClick={fetchLibrary}
                         disabled={libraryLoading}
                         title="Refresh Library"
-                        className="shrink-0"
+                        className="shrink-0 transition-all duration-200 hover:ring-2 hover:ring-blue-500/40"
                       >
                         <RefreshCw
                           className={`h-4 w-4 ${libraryLoading ? "animate-spin" : ""}`}
@@ -692,9 +707,9 @@ export default function RadarrPage() {
                       return (
                         <div
                           key={movie.id}
-                          className="flex gap-4 border rounded-xl p-3 bg-card hover:bg-muted/10 transition-colors relative"
+                          className="flex gap-4 border border-border/50 rounded-xl p-3.5 bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20 hover:shadow-lg transition-all duration-200 relative"
                         >
-                          <div className="w-16 h-24 shrink-0 bg-muted rounded overflow-hidden">
+                          <div className="w-16 sm:w-20 h-24 sm:h-28 shrink-0 bg-muted/30 border border-border/40 rounded-lg overflow-hidden relative shadow-sm">
                             {coverImg ? (
                               <img
                                 src={coverImg}
@@ -707,7 +722,7 @@ export default function RadarrPage() {
                               </div>
                             )}
                           </div>
-                          <div className="flex flex-col flex-1 min-w-0 py-1">
+                          <div className="flex flex-col flex-1 min-w-0 py-0.5">
                             <h4 className="font-semibold text-sm truncate pr-6">
                               {movie.title} ({movie.year})
                             </h4>
@@ -735,7 +750,7 @@ export default function RadarrPage() {
                                 )}
                               </div>
                             )}
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                               <Badge
                                 variant={
                                   movie.hasFile
@@ -744,7 +759,7 @@ export default function RadarrPage() {
                                       ? "destructive"
                                       : "secondary"
                                 }
-                                className="text-[10px] uppercase"
+                                className="text-[10px] uppercase font-bold"
                               >
                                 {movie.hasFile
                                   ? "Downloaded"
@@ -754,7 +769,7 @@ export default function RadarrPage() {
                               </Badge>
                               <Badge
                                 variant="outline"
-                                className="text-[10px] uppercase text-muted-foreground"
+                                className="text-[10px] uppercase text-muted-foreground border-border/60"
                               >
                                 {movie.qualityProfileId
                                   ? profiles.find(
@@ -769,7 +784,7 @@ export default function RadarrPage() {
                                 variant={
                                   movie.monitored ? "destructive" : "secondary"
                                 }
-                                className="h-7 text-xs flex-1"
+                                className="h-7 text-xs flex-1 transition-all duration-200 hover:ring-2 hover:ring-red-500/30 active:scale-95"
                                 disabled={modifyingId === movie.id}
                                 onClick={() => {
                                   if (movie.monitored) {
@@ -794,7 +809,7 @@ export default function RadarrPage() {
                               <Button
                                 size="sm"
                                 variant="default"
-                                className="h-7 text-xs flex-1"
+                                className="h-7 text-xs flex-1 bg-blue-600 hover:bg-blue-500 text-white transition-all duration-200 hover:ring-2 hover:ring-blue-400/40 active:scale-95 font-semibold"
                                 disabled={modifyingId === movie.id}
                                 onClick={() => handleSearchRelease(movie)}
                                 title="Search for a new release interactively"
@@ -803,8 +818,7 @@ export default function RadarrPage() {
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
                                   <>
-                                    <Search className="h-3 w-3 mr-1" /> Search
-                                    Release
+                                    <Search className="h-3 w-3 mr-1" /> Search Release
                                   </>
                                 )}
                               </Button>
@@ -824,7 +838,7 @@ export default function RadarrPage() {
                       );
                     })}
                     {filteredLibrary.length === 0 && (
-                      <p className="text-sm text-muted-foreground italic col-span-full">
+                      <p className="text-sm text-muted-foreground italic col-span-full text-center py-8 border border-dashed border-border/40 rounded-xl">
                         No movies found in library.
                       </p>
                     )}
@@ -837,12 +851,12 @@ export default function RadarrPage() {
 
         {/* QUEUE TAB */}
         <TabsContent value="queue" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0 pb-4 border-b">
+          <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0 pb-4 border-b border-border/40">
               <div className="space-y-1">
-                <CardTitle>Activity / Queue</CardTitle>
+                <CardTitle className="text-xl font-bold">Activity / Queue</CardTitle>
                 <CardDescription>
-                  Monitor active downloads and force imports.
+                  Monitor active movie downloads and force imports.
                 </CardDescription>
               </div>
               <Button
@@ -850,6 +864,7 @@ export default function RadarrPage() {
                 size="sm"
                 onClick={fetchQueue}
                 disabled={queueLoading}
+                className="transition-all duration-200 hover:ring-2 hover:ring-blue-500/40"
               >
                 <RefreshCw
                   className={`h-4 w-4 mr-2 ${queueLoading ? "animate-spin" : ""}`}
@@ -862,7 +877,7 @@ export default function RadarrPage() {
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Filter queue by release name..."
-                  className="pl-9"
+                  className="pl-9 bg-background/60"
                   value={queueSearch}
                   onChange={(e) => setQueueSearch(e.target.value)}
                 />
@@ -873,19 +888,19 @@ export default function RadarrPage() {
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : filteredQueue.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground border border-dashed rounded-xl">
+                <div className="py-8 text-center text-sm text-muted-foreground border border-dashed border-border/40 rounded-xl bg-muted/10">
                   Queue is empty or no items match your search.
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {filteredQueue.map((item: any) => (
                     <div
                       key={item.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 border rounded-xl bg-muted/10"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 border border-border/40 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/30 transition-all duration-200"
                     >
                       <div className="flex-1 min-w-0">
                         <div
-                          className="font-medium text-sm truncate"
+                          className="font-medium text-sm truncate text-foreground"
                           title={item.movie?.title || item.title}
                         >
                           {item.movie?.title || item.title}
@@ -899,7 +914,7 @@ export default function RadarrPage() {
                           </div>
                         )}
                         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                          <span>{item.status}</span>
+                          <span className="text-blue-400 font-medium">{item.status}</span>
                           {item.sizeleft > 0 && item.size > 0 && (
                             <span>
                               {Math.round(
@@ -908,7 +923,7 @@ export default function RadarrPage() {
                               %
                             </span>
                           )}
-                          {item.timeleft && <span>{item.timeleft}</span>}
+                          {item.timeleft && <span>ETA: {item.timeleft}</span>}
                         </div>
                         {item.errorMessage && (
                           <div
@@ -925,7 +940,7 @@ export default function RadarrPage() {
                                 (msg: any, i: number) => (
                                   <div
                                     key={i}
-                                    className="text-xs text-amber-500 flex flex-col bg-amber-500/10 p-2 rounded"
+                                    className="text-xs text-amber-500 flex flex-col bg-amber-500/10 p-2 rounded-lg border border-amber-500/20"
                                   >
                                     {msg.title && msg.title !== item.title && (
                                       <span className="font-semibold flex items-center gap-1">
@@ -959,7 +974,7 @@ export default function RadarrPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 text-xs font-semibold"
+                          className="h-8 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-blue-500/40 active:scale-95"
                           onClick={() => handleForceImport(item.downloadId)}
                           disabled={importingId === item.downloadId}
                         >
@@ -982,9 +997,9 @@ export default function RadarrPage() {
 
       {/* INTERACTIVE RELEASE MODAL */}
       <Dialog open={releasesModalOpen} onOpenChange={setReleasesModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="px-6 py-4 border-b shrink-0">
-            <DialogTitle>Interactive Search</DialogTitle>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 bg-[#121218] border-border/60">
+          <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
+            <DialogTitle className="text-lg font-bold text-blue-400">Interactive Search</DialogTitle>
             <DialogDescription>
               {activeMovie?.title} ({activeMovie?.year})
             </DialogDescription>
@@ -993,15 +1008,15 @@ export default function RadarrPage() {
           <div className="flex-1 overflow-y-auto min-h-[50vh] p-6">
             {releasesLoading ? (
               <div className="h-full flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
-                <p>Searching indexers...</p>
+                <Loader2 className="h-8 w-8 animate-spin mb-4 text-blue-400" />
+                <p className="text-sm">Searching indexers for movie releases...</p>
               </div>
             ) : (
               <>
                 {releases.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground flex flex-col items-center">
                     <XCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                    <p>No releases found.</p>
+                    <p className="text-sm">No releases found.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -1026,16 +1041,20 @@ export default function RadarrPage() {
                       return (
                         <div
                           key={release.guid || idx}
-                          className={`border rounded-lg p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center ${rejected ? "opacity-60 bg-muted/30" : "bg-card"}`}
+                          className={`border rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center transition-all duration-200 ${
+                            rejected
+                              ? "opacity-60 bg-muted/20 border-border/30"
+                              : "bg-[#101014]/90 border-border/50 hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20"
+                          }`}
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <h5 className="font-medium text-sm break-all">
+                              <h5 className="font-medium text-sm break-all text-foreground">
                                 {release.title}
                               </h5>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap mt-2">
-                              <Badge variant="outline" className="text-[10px]">
+                              <Badge variant="outline" className="text-[10px] border-border/60">
                                 {release.quality?.quality?.name || "Unknown"}
                               </Badge>
                               <span className="flex items-center">
@@ -1045,13 +1064,13 @@ export default function RadarrPage() {
                               <span className="capitalize">
                                 {release.protocol}
                               </span>
-                              <span className="bg-muted px-2 py-0.5 rounded text-foreground">
+                              <span className="bg-muted/40 px-2 py-0.5 rounded text-foreground border border-border/30">
                                 {release.indexer}
                               </span>
-                              <span className="text-emerald-500 font-medium">
+                              <span className="text-emerald-400 font-medium">
                                 {release.seeders} S
                               </span>
-                              <span className="text-red-500 font-medium">
+                              <span className="text-red-400 font-medium">
                                 {release.leechers} L
                               </span>
                             </div>
@@ -1072,7 +1091,11 @@ export default function RadarrPage() {
                               isDownloading || !!downloadingRelease || rejected
                             }
                             variant={rejected ? "secondary" : "default"}
-                            className="shrink-0 w-full sm:w-auto"
+                            className={`shrink-0 w-full sm:w-auto font-semibold transition-all duration-200 active:scale-95 ${
+                              !rejected
+                                ? "bg-blue-600 hover:bg-blue-500 text-white hover:ring-2 hover:ring-blue-400/40 hover:shadow-md"
+                                : ""
+                            }`}
                           >
                             {isDownloading ? (
                               <Loader2 className="h-4 w-4 animate-spin mr-2" />

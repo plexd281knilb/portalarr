@@ -132,7 +132,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex h-screen items-center justify-center bg-background p-4 animate-in fade-in duration-500">
-      <Card className="w-full max-w-md shadow-2xl border-muted/60">
+      <Card className="w-full max-w-md shadow-2xl bg-[#121218]/90 backdrop-blur-md border-border/50">
         <CardHeader className="space-y-1 text-center">
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
             {isSetupMode ? <ShieldCheck className="h-8 w-8 text-primary" /> : <Lock className="h-8 w-8 text-primary" />}
@@ -166,14 +166,14 @@ export default function LoginPage() {
             <PasswordForm handleSubmit={handlePasswordSubmit} isSetupMode={true} />
           ) : (
             <Tabs defaultValue="plex" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4">
-                <TabsTrigger value="plex" className="text-xs font-semibold gap-1">
+              <TabsList className="grid w-full grid-cols-3 mb-4 bg-muted/40 border border-muted/60 p-1 rounded-xl gap-1">
+                <TabsTrigger value="plex" className="text-xs font-semibold gap-1 hover:ring-2 hover:ring-amber-500/40 active:scale-95 transition-all">
                   <Play className="h-3.5 w-3.5 text-[#e5a00d] fill-current" /> Plex
                 </TabsTrigger>
-                <TabsTrigger value="password" className="text-xs font-semibold gap-1">
+                <TabsTrigger value="password" className="text-xs font-semibold gap-1 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
                   <KeyRound className="h-3.5 w-3.5" /> Login
                 </TabsTrigger>
-                <TabsTrigger value="register" className="text-xs font-semibold gap-1">
+                <TabsTrigger value="register" className="text-xs font-semibold gap-1 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">
                   <UserPlus className="h-3.5 w-3.5" /> Request
                 </TabsTrigger>
               </TabsList>
@@ -185,7 +185,7 @@ export default function LoginPage() {
                     </p>
                     <Button 
                         type="button" 
-                        className="w-full bg-[#e5a00d] text-black font-semibold hover:bg-[#c98c0b] transition-colors h-11"
+                        className="w-full bg-[#e5a00d] text-black font-semibold hover:bg-[#c98c0b] hover:ring-2 hover:ring-amber-400/50 hover:shadow-[0_0_20px_rgba(229,160,13,0.3)] active:scale-95 transition-all h-11"
                         onClick={handlePlexLogin}
                         disabled={isPlexLoading}
                     >
@@ -258,7 +258,7 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
 
                         <Button 
                             type="button" 
-                            className="w-full h-11 font-semibold text-black gap-2"
+                            className="w-full h-11 font-semibold text-black gap-2 hover:ring-2 hover:ring-primary/40 hover:shadow-lg active:scale-95 transition-all"
                             onClick={() => {
                                 setShowForgot(false);
                             }}
@@ -290,7 +290,7 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
                                 </div>
                             </div>
 
-                            <Button type="submit" className="w-full h-10 font-medium" disabled={isForgotLoading}>
+                            <Button type="submit" className="w-full h-10 font-medium hover:ring-2 hover:ring-primary/40 hover:shadow-lg active:scale-95 transition-all" disabled={isForgotLoading}>
                                 {isForgotLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
                                 Send Temp Password
                             </Button>
@@ -301,7 +301,7 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
                 <Button 
                     type="button" 
                     variant="ghost" 
-                    className="w-full text-xs text-muted-foreground hover:text-foreground"
+                    className="w-full text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-all"
                     onClick={() => { setShowForgot(false); setForgotSuccess(""); setForgotError(""); }}
                 >
                     Back to Sign In
@@ -363,7 +363,7 @@ function PasswordForm({ handleSubmit, isSetupMode }: { handleSubmit: (formData: 
               </div>
             </div>
             
-            <Button type="submit" className="w-full h-11 mt-2">
+            <Button type="submit" className="w-full h-11 mt-2 font-semibold hover:ring-2 hover:ring-primary/40 hover:shadow-lg active:scale-95 transition-all">
                 {isSetupMode ? "Create Admin Account" : "Sign in with Password"}
             </Button>
         </form>
@@ -428,7 +428,7 @@ function RequestAccountForm({ setError }: { setError: (err: string) => void }) {
         Submitting this form will register a temporary account and email the server administrator for approval. You cannot access pages until approved.
       </p>
 
-      <Button type="submit" className="w-full h-11 mt-1 font-medium" disabled={isSubmitting}>
+      <Button type="submit" className="w-full h-11 mt-1 font-semibold hover:ring-2 hover:ring-emerald-400/50 hover:shadow-lg active:scale-95 transition-all" disabled={isSubmitting}>
         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
         Request Account
       </Button>

@@ -171,7 +171,50 @@ async function ensureSchemaColumns() {
             console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'volumeNumber' column to BookRequest table...");
             await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "volumeNumber" TEXT;`);
         }
+        if (!columns.includes("monitorSeries")) {
+            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'monitorSeries' column to BookRequest table...");
+            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "monitorSeries" BOOLEAN DEFAULT 0;`);
+        }
     } catch (e: any) {}
+
+    try {
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "KindleDeliveryLog" (
+                "id" TEXT PRIMARY KEY,
+                "bookId" TEXT,
+                "bookTitle" TEXT NOT NULL,
+                "bookAuthor" TEXT,
+                "recipientEmail" TEXT NOT NULL,
+                "userEmail" TEXT,
+                "username" TEXT NOT NULL,
+                "status" TEXT NOT NULL DEFAULT 'DELIVERED',
+                "errorMessage" TEXT,
+                "fileSize" REAL,
+                "fileType" TEXT,
+                "diagnostics" TEXT,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+    } catch (e: any) {
+        console.error("[DB-SCHEMA-AUTOFIX] Failed to create KindleDeliveryLog table:", e.message || e);
+    }
+
+    try {
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "FailedRelease" (
+                "id" TEXT PRIMARY KEY,
+                "releaseTitle" TEXT NOT NULL,
+                "downloadUrl" TEXT,
+                "guid" TEXT,
+                "protocol" TEXT NOT NULL DEFAULT 'torrent',
+                "reason" TEXT,
+                "bookRequestId" TEXT,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+    } catch (e: any) {
+        console.error("[DB-SCHEMA-AUTOFIX] Failed to create FailedRelease table:", e.message || e);
+    }
 }
 
 ensureSchemaColumns();
@@ -305,9 +348,69 @@ if (!globalForScheduler.schedulerInitialized) {
               }
             }
           } catch (pendingErr: any) {
-            console.error("[BACKGROUND-JOB] Error in scheduled pending request runner:", pendingErr.message || pendingErr);
+            console.error("[BACKGROUND-JOB] Error in auto-approving pending requests:", pendingErr.message || pendingErr);
           }
-          
+
+          // Auto-discover missing installments for monitored series
+          try {
+            const monitoredRequests = await prisma.bookRequest.findMany({
+              where: { monitorSeries: true }
+            });
+
+            if (monitoredRequests.length > 0) {
+              const { findMissingBooksInSeries, autoDownloadBookRequest } = await import("../app/actions");
+              const handledSeries = new Set<string>();
+
+              for (const mReq of monitoredRequests) {
+                const seriesKey = `${mReq.series || mReq.title}-${mReq.author || ""}`.toLowerCase();
+                if (handledSeries.has(seriesKey)) continue;
+                handledSeries.add(seriesKey);
+
+                try {
+                  const res = await findMissingBooksInSeries(mReq.series || mReq.title, mReq.author || "Unknown Author");
+                  if (res && res.success && Array.isArray(res.data)) {
+                    for (const missingBook of res.data) {
+                      // Check if already requested or exists
+                      const existing = await prisma.bookRequest.findFirst({
+                        where: {
+                          title: missingBook.title,
+                          mediaType: mReq.mediaType || "ebook"
+                        }
+                      });
+
+                      if (!existing) {
+                        console.log(`[SERIES-MONITOR] Auto-requesting new installment "${missingBook.title}" in series "${mReq.series || mReq.title}" for ${mReq.requestedBy}...`);
+                        const newReq = await prisma.bookRequest.create({
+                          data: {
+                            title: missingBook.title,
+                            author: missingBook.author || mReq.author || "Unknown Author",
+                            series: mReq.series || mReq.title,
+                            volumeNumber: (missingBook as any).volumeNumber ? String((missingBook as any).volumeNumber) : null,
+                            coverUrl: missingBook.coverUrl || null,
+                            publishYear: (missingBook as any).year ? String((missingBook as any).year) : null,
+                            requestedBy: mReq.requestedBy,
+                            type: "book",
+                            mediaType: mReq.mediaType || "ebook",
+                            status: "Approved",
+                            monitorSeries: true
+                          }
+                        });
+
+                        autoDownloadBookRequest(newReq.id, newReq.title, newReq.author || "").catch(err => {
+                          console.error(`[SERIES-MONITOR-DOWNLOAD] Failed for "${newReq.title}":`, err.message || err);
+                        });
+                      }
+                    }
+                  }
+                } catch (seriesScanErr: any) {
+                  console.warn(`[SERIES-MONITOR] Failed series scan for "${mReq.series || mReq.title}":`, seriesScanErr.message || seriesScanErr);
+                }
+              }
+            }
+          } catch (seriesErr: any) {
+            console.error("[BACKGROUND-JOB] Error in series auto-monitor runner:", seriesErr.message || seriesErr);
+          }
+
           await prisma.settings.upsert({
             where: { id: "global" },
             update: { lastAutoSync: new Date() },
