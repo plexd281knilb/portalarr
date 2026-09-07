@@ -6136,6 +6136,162 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
     }
 }
 
+export async function searchOpenLibraryByAuthor(author: string, mediaType: "ebook" | "audiobook" = "ebook") {
+    if (!author || author.trim().length < 2) return [];
+    try {
+        const cleanAuthor = author.trim();
+        let results: any[] = [];
+        
+        // 1. Audible API (Audiobooks by Author)
+        if (mediaType === "audiobook") {
+            try {
+                const audUrl = `https://api.audible.com/1.0/catalog/products?author=${encodeURIComponent(cleanAuthor)}&response_groups=product_attrs,contributors,product_desc&num_results=16&products_sort_by=Relevance`;
+                const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
+                const audData = audRes && audRes.ok ? await audRes.json() : null;
+                
+                if (audData && audData.products && audData.products.length > 0) {
+                    for (const prod of audData.products) {
+                        const title = prod.title;
+                        if (!title) continue;
+                        
+                        let authorName = cleanAuthor;
+                        if (prod.authors && prod.authors.length > 0) {
+                            authorName = prod.authors[0].name || cleanAuthor;
+                        }
+                        
+                        let coverUrl = "";
+                        if (prod.product_images && prod.product_images["500"]) {
+                            coverUrl = prod.product_images["500"];
+                        }
+                        
+                        let year = "Unknown Year";
+                        if (prod.release_date) {
+                            year = prod.release_date.substring(0, 4);
+                        }
+                        
+                        results.push({ title, author: authorName, coverUrl, year, mediaType: "audiobook" });
+                    }
+                }
+            } catch (e) {
+                console.warn("[API-FAILOVER] Audible author search failed:", e);
+            }
+        }
+
+        // 2. iTunes API (Audiobooks or Ebooks by Author/Artist)
+        try {
+            const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
+            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanAuthor)}&entity=${entity}&attribute=authorTerm&limit=15`;
+            let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
+            let data = iRes && iRes.ok ? await iRes.json() : null;
+            
+            if (!data || !data.results || data.results.length === 0) {
+                iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanAuthor)}&entity=${entity}&limit=15`;
+                iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
+                data = iRes && iRes.ok ? await iRes.json() : null;
+            }
+            
+            if (data && data.results && data.results.length > 0) {
+                for (const item of data.results) {
+                    const title = item.trackName || item.collectionName;
+                    if (!title) continue;
+                    let artwork = item.artworkUrl100 || item.artworkUrl60;
+                    if (artwork) {
+                        artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
+                    }
+                    results.push({
+                        title: title,
+                        author: item.artistName || cleanAuthor,
+                        coverUrl: artwork || "",
+                        year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year",
+                        mediaType
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] iTunes author search failed:", e);
+        }
+
+        // 3. Open Library (Author Search)
+        try {
+            const response = await fetchWithRetry(`https://openlibrary.org/search.json?author=${encodeURIComponent(cleanAuthor)}&limit=25&fields=key,title,author_name,cover_i,first_publish_year,edition_count`, {
+                headers: { "Accept": "application/json" }
+            });
+            const data = response && response.ok ? await response.json() : null;
+            if (data && data.docs) {
+                for (const doc of data.docs) {
+                    if (doc.title) {
+                        const titleLower = doc.title.toLowerCase();
+                        const isCompilation = titleLower.includes("box set") || 
+                                              titleLower.includes("boxed set") || 
+                                              titleLower.includes("collection") || 
+                                              titleLower.includes("omnibus") || 
+                                              titleLower.includes("bundle") || 
+                                              titleLower.includes("boxedset");
+                        if (isCompilation && data.docs.length > 5) continue;
+
+                        const authorName = doc.author_name && doc.author_name.length > 0 ? doc.author_name[0] : cleanAuthor;
+                        results.push({
+                            title: doc.title,
+                            author: authorName,
+                            coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : "",
+                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year",
+                            mediaType
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] OpenLibrary author search failed:", e);
+        }
+
+        // 4. Google Books API (Author Search)
+        try {
+            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=inauthor:${encodeURIComponent(cleanAuthor)}&maxResults=15`;
+            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+            const gData = gRes && gRes.ok ? await gRes.json() : null;
+            if (gData && gData.items) {
+                for (const item of gData.items) {
+                    const vol = item.volumeInfo;
+                    if (vol && vol.title) {
+                        results.push({
+                            title: vol.title,
+                            author: vol.authors ? vol.authors[0] : cleanAuthor,
+                            coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") : "",
+                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year",
+                            mediaType
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("[API-FAILOVER] Google Books author API error:", e);
+        }
+
+        // Deduplicate results by normalized title + author
+        const uniqueResults = [];
+        const seenTitles = new Set();
+        for (const res of results) {
+            const normalized = (res.title + res.author).toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (!seenTitles.has(normalized)) {
+                seenTitles.add(normalized);
+                uniqueResults.push(res);
+            }
+        }
+
+        // Sort so that items with covers come first
+        uniqueResults.sort((a, b) => {
+            if (a.coverUrl && !b.coverUrl) return -1;
+            if (!a.coverUrl && b.coverUrl) return 1;
+            return 0;
+        });
+
+        return uniqueResults.slice(0, 25);
+    } catch (e) {
+        console.error("Author metadata search failed:", e);
+        return [];
+    }
+}
+
 export async function getSeriesBooksList(seriesTitle: string, author: string = "") {
     try {
         const query = author ? `${seriesTitle} ${author}` : seriesTitle;

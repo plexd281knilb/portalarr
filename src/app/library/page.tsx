@@ -22,6 +22,7 @@ import {
   getPublicSmtpFromEmail,
   getAppUsers,
   searchOpenLibrary,
+  searchOpenLibraryByAuthor,
   deleteBookRequest,
   getSeriesBooksList,
   createMultipleBookRequests,
@@ -448,6 +449,11 @@ function BookLibraryPageContent() {
   );
   const [searchingRegistry, setSearchingRegistry] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Author Autocomplete states
+  const [authorSuggestions, setAuthorSuggestions] = useState<any[]>([]);
+  const [searchingAuthorRegistry, setSearchingAuthorRegistry] = useState(false);
+  const [showAuthorSuggestions, setShowAuthorSuggestions] = useState(false);
   const [reqType, setReqType] = useState("book"); // "book" or "series"
   const [reqCoverUrl, setReqCoverUrl] = useState("");
   const [reqPublishYear, setReqPublishYear] = useState("");
@@ -1406,6 +1412,27 @@ function BookLibraryPageContent() {
 
     return () => clearTimeout(delayDebounceFn);
   }, [reqTitle, reqMediaType]);
+
+  useEffect(() => {
+    if (!reqAuthor || reqAuthor.trim().length < 2) {
+      setAuthorSuggestions([]);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setSearchingAuthorRegistry(true);
+      try {
+        const results = await searchOpenLibraryByAuthor(reqAuthor, reqMediaType);
+        setAuthorSuggestions(results || []);
+      } catch (e) {
+        console.error("Author autocomplete search error:", e);
+      } finally {
+        setSearchingAuthorRegistry(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [reqAuthor, reqMediaType]);
 
   useEffect(() => {
     if (selectedLibrary) {
@@ -3491,8 +3518,9 @@ function BookLibraryPageContent() {
                             openLibrarySuggestions.map((book, idx) => (
                               <div
                                 key={idx}
-                                className="p-2 flex gap-3 hover:bg-muted/40 cursor-pointer items-start transition-colors z-50 relative"
-                                onMouseDown={async () => {
+                                className="p-2 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
+                                onMouseDown={async (e) => {
+                                  e.preventDefault();
                                   setReqTitle(book.title);
                                   setReqAuthor(book.author);
                                   setReqCoverUrl(book.coverUrl || "");
@@ -3525,48 +3553,307 @@ function BookLibraryPageContent() {
                                   }
                                 }}
                               >
-                                {book.coverUrl ? (
-                                  <img
-                                    src={book.coverUrl}
-                                    alt={book.title}
-                                    className="w-8 h-10 object-cover rounded bg-muted/20 shrink-0 border border-muted"
-                                  />
-                                ) : (
-                                  <div className="w-8 h-10 rounded bg-muted flex items-center justify-center text-[8px] text-muted-foreground shrink-0 border border-muted">
-                                    NO COVER
+                                <div className="flex gap-2.5 items-center min-w-0 flex-1">
+                                  {book.coverUrl ? (
+                                    <img
+                                      src={book.coverUrl}
+                                      alt={book.title}
+                                      className="w-8 h-10 object-cover rounded bg-muted/20 shrink-0 border border-muted"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-10 rounded bg-muted flex items-center justify-center text-[8px] text-muted-foreground shrink-0 border border-muted">
+                                      NO COVER
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <h5
+                                      className="text-xs font-semibold text-foreground leading-snug truncate group-hover:text-primary transition-colors"
+                                      title={book.title}
+                                    >
+                                      {book.title}
+                                    </h5>
+                                    <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
+                                      <span>{book.author}</span>
+                                      {book.year && book.year !== "Unknown Year" && (
+                                        <>
+                                          <span>•</span>
+                                          <span>{book.year}</span>
+                                        </>
+                                      )}
+                                      <span>•</span>
+                                      <span
+                                        className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                                          reqMediaType === "audiobook"
+                                            ? "bg-amber-400/20 text-amber-400"
+                                            : "bg-primary/20 text-primary"
+                                        }`}
+                                      >
+                                        {reqMediaType === "audiobook" ? "AUDIOBOOK" : "EBOOK"}
+                                      </span>
+                                    </p>
                                   </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <h5
-                                    className="text-xs font-semibold text-foreground leading-snug truncate"
-                                    title={book.title}
-                                  >
-                                    {book.title}
-                                  </h5>
-                                  <p className="text-[10px] text-muted-foreground truncate">
-                                    {book.author} • {book.year}
-                                  </p>
                                 </div>
+
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className={`h-7 px-2.5 text-[10px] font-semibold opacity-90 group-hover:opacity-100 shrink-0 gap-1 ${
+                                    reqMediaType === "audiobook"
+                                      ? "border-amber-400/30 hover:bg-amber-400 hover:text-black text-amber-400"
+                                      : "border-primary/30 hover:bg-primary hover:text-black text-primary"
+                                  }`}
+                                  onMouseDown={async (e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setShowSuggestions(false);
+                                    setShowAuthorSuggestions(false);
+
+                                    setIsSubmittingRequest(true);
+                                    try {
+                                      const formData = new FormData();
+                                      formData.append("title", book.title.trim());
+                                      formData.append("author", book.author.trim());
+                                      formData.append("type", reqType);
+                                      formData.append("mediaType", reqMediaType);
+                                      formData.append("coverUrl", book.coverUrl || "");
+                                      formData.append("publishYear", book.year ? String(book.year) : "");
+                                      if (requestedFor) {
+                                        formData.append("requestedFor", requestedFor);
+                                      }
+                                      if (selectedLibrary?.id) {
+                                        formData.append("libraryId", selectedLibrary.id);
+                                      }
+                                      const res = await createBookRequest(formData);
+                                      if (res && res.error) {
+                                        showErrorModal(res.error, "Request Submission Error");
+                                      } else {
+                                        setReqTitle("");
+                                        setReqAuthor("");
+                                        setReqCoverUrl("");
+                                        setReqPublishYear("");
+                                        const reqs = await getBookRequests();
+                                        setRequests(reqs || []);
+                                      }
+                                    } catch (err: any) {
+                                      showErrorModal(err.message || "Failed to submit request.", "Request Error");
+                                    } finally {
+                                      setIsSubmittingRequest(false);
+                                    }
+                                  }}
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </Button>
                               </div>
                             ))
                           )}
                         </div>
                       )}
                     </div>
-                    <div className="space-y-1.5">
+
+                    <div className="space-y-1.5 relative">
                       <Label
                         htmlFor="reqAuthor"
-                        className="text-xs font-medium"
+                        className="text-xs font-medium flex items-center justify-between"
                       >
-                        Author (Optional)
+                        <span>Author (Optional)</span>
+                        {authorSuggestions.length > 0 && showAuthorSuggestions && (
+                          <span className="text-[10px] text-muted-foreground font-normal">
+                            {authorSuggestions.length} {reqMediaType === "audiobook" ? "audiobooks" : "books"} found
+                          </span>
+                        )}
                       </Label>
-                      <Input
-                        id="reqAuthor"
-                        type="text"
-                        placeholder="e.g. Andy Weir"
-                        value={reqAuthor}
-                        onChange={(e) => setReqAuthor(e.target.value)}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="reqAuthor"
+                          type="text"
+                          placeholder="e.g. Andy Weir"
+                          value={reqAuthor}
+                          onChange={(e) => {
+                            setReqAuthor(e.target.value);
+                            setShowAuthorSuggestions(true);
+                          }}
+                          onFocus={() => {
+                            if (reqAuthor.trim().length >= 2) {
+                              setShowAuthorSuggestions(true);
+                            }
+                          }}
+                          autoComplete="off"
+                        />
+                        {searchingAuthorRegistry && (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary absolute right-3 top-2.5 pointer-events-none" />
+                        )}
+                      </div>
+
+                      {showAuthorSuggestions && (
+                        <div
+                          className="fixed inset-0 z-40 bg-transparent"
+                          onClick={() => setShowAuthorSuggestions(false)}
+                        />
+                      )}
+
+                      {showAuthorSuggestions && reqAuthor.trim().length >= 2 && (
+                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[#1e1e24] text-foreground border border-muted/80 rounded-md shadow-xl max-h-72 overflow-y-auto divide-y divide-muted/50">
+                          <div className="px-3 py-1.5 bg-[#17171c] border-b border-muted/40 text-[10px] uppercase font-bold tracking-wider text-muted-foreground flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              {reqMediaType === "audiobook" ? (
+                                <Headphones className="h-3 w-3 text-amber-400" />
+                              ) : (
+                                <BookOpen className="h-3 w-3 text-primary" />
+                              )}
+                              Available Books by {reqAuthor}
+                            </span>
+                            <span className="text-[9px] lowercase font-normal opacity-80">
+                              click to download
+                            </span>
+                          </div>
+                          {searchingAuthorRegistry ? (
+                            <div className="p-3 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                              <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                              Searching {reqMediaType === "audiobook" ? "audiobooks" : "books"} by {reqAuthor}...
+                            </div>
+                          ) : authorSuggestions.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-muted-foreground italic">
+                              No {reqMediaType === "audiobook" ? "audiobooks" : "books"} found for "{reqAuthor}".
+                            </div>
+                          ) : (
+                            authorSuggestions.map((book, idx) => (
+                              <div
+                                key={idx}
+                                className="p-2 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
+                                onMouseDown={async (e) => {
+                                  e.preventDefault();
+                                  setReqTitle(book.title);
+                                  setReqAuthor(book.author);
+                                  setReqCoverUrl(book.coverUrl || "");
+                                  setReqPublishYear(
+                                    book.year ? String(book.year) : "",
+                                  );
+                                  setShowAuthorSuggestions(false);
+                                  setShowSuggestions(false);
+
+                                  if (reqType === "series") {
+                                    setSearchingRegistry(true);
+                                    try {
+                                      const list = await getSeriesBooksList(
+                                        book.title,
+                                        book.author,
+                                      );
+                                      setSeriesBooksChecklist(
+                                        list.map((b) => ({
+                                          ...b,
+                                          checked: true,
+                                        })),
+                                      );
+                                    } catch (err) {
+                                      console.error(
+                                        "Failed to load series books list:",
+                                        err,
+                                      );
+                                    } finally {
+                                      setSearchingRegistry(false);
+                                    }
+                                  }
+                                }}
+                              >
+                                <div className="flex gap-2.5 items-center min-w-0 flex-1">
+                                  {book.coverUrl ? (
+                                    <img
+                                      src={book.coverUrl}
+                                      alt={book.title}
+                                      className="w-8 h-10 object-cover rounded bg-muted/20 shrink-0 border border-muted"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-10 rounded bg-muted flex items-center justify-center text-[8px] text-muted-foreground shrink-0 border border-muted">
+                                      NO COVER
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <h5
+                                      className="text-xs font-semibold text-foreground leading-snug truncate group-hover:text-primary transition-colors"
+                                      title={book.title}
+                                    >
+                                      {book.title}
+                                    </h5>
+                                    <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
+                                      <span>{book.author}</span>
+                                      {book.year && book.year !== "Unknown Year" && (
+                                        <>
+                                          <span>•</span>
+                                          <span>{book.year}</span>
+                                        </>
+                                      )}
+                                      <span>•</span>
+                                      <span
+                                        className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                                          reqMediaType === "audiobook"
+                                            ? "bg-amber-400/20 text-amber-400"
+                                            : "bg-primary/20 text-primary"
+                                        }`}
+                                      >
+                                        {reqMediaType === "audiobook" ? "AUDIOBOOK" : "EBOOK"}
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className={`h-7 px-2.5 text-[10px] font-semibold opacity-90 group-hover:opacity-100 shrink-0 gap-1 ${
+                                    reqMediaType === "audiobook"
+                                      ? "border-amber-400/30 hover:bg-amber-400 hover:text-black text-amber-400"
+                                      : "border-primary/30 hover:bg-primary hover:text-black text-primary"
+                                  }`}
+                                  onMouseDown={async (e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setShowAuthorSuggestions(false);
+                                    setShowSuggestions(false);
+
+                                    setIsSubmittingRequest(true);
+                                    try {
+                                      const formData = new FormData();
+                                      formData.append("title", book.title.trim());
+                                      formData.append("author", book.author.trim());
+                                      formData.append("type", reqType);
+                                      formData.append("mediaType", reqMediaType);
+                                      formData.append("coverUrl", book.coverUrl || "");
+                                      formData.append("publishYear", book.year ? String(book.year) : "");
+                                      if (requestedFor) {
+                                        formData.append("requestedFor", requestedFor);
+                                      }
+                                      if (selectedLibrary?.id) {
+                                        formData.append("libraryId", selectedLibrary.id);
+                                      }
+                                      const res = await createBookRequest(formData);
+                                      if (res && res.error) {
+                                        showErrorModal(res.error, "Request Submission Error");
+                                      } else {
+                                        setReqTitle("");
+                                        setReqAuthor("");
+                                        setReqCoverUrl("");
+                                        setReqPublishYear("");
+                                        const reqs = await getBookRequests();
+                                        setRequests(reqs || []);
+                                      }
+                                    } catch (err: any) {
+                                      showErrorModal(err.message || "Failed to submit request.", "Request Error");
+                                    } finally {
+                                      setIsSubmittingRequest(false);
+                                    }
+                                  }}
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {reqType === "series" && (
