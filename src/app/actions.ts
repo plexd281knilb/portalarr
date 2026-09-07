@@ -12,6 +12,8 @@ import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolve
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 import { logger } from "@/lib/logger";
+import fs from "fs";
+import path from "path";
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -1435,21 +1437,45 @@ export async function deleteBetaCard(id: string) {
 // --- ROADMAP ACTIONS ---
 // ============================================================================
 
-export async function getRoadmapText() {
-    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-    return settings?.roadmapText || "### 🚀 Upcoming Releases & Roadmap\nNo new updates at this time. Check back later!";
+export async function getRoadmapText(): Promise<string> {
+    try {
+        const roadmapPath = path.join(process.cwd(), "roadmap.md");
+        if (fs.existsSync(roadmapPath)) {
+            return fs.readFileSync(roadmapPath, "utf-8");
+        }
+        const upperRoadmapPath = path.join(process.cwd(), "ROADMAP.md");
+        if (fs.existsSync(upperRoadmapPath)) {
+            return fs.readFileSync(upperRoadmapPath, "utf-8");
+        }
+    } catch (e) {
+        console.warn("Failed to read roadmap.md from disk:", e);
+    }
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+    return settings?.roadmapText || "# 🗺️ Portalarr Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
 }
 
 export async function updateRoadmapText(formData: FormData) {
     await verifyAdmin();
-    const text = formData.get("text") as string;
-    await prisma.settings.upsert({
-        where: { id: "global" },
-        update: { roadmapText: text },
-        create: { id: "global", roadmapText: text }
-    });
+    const text = (formData.get("text") as string) || "";
+    try {
+        const roadmapPath = path.join(process.cwd(), "roadmap.md");
+        fs.writeFileSync(roadmapPath, text, "utf-8");
+    } catch (e: any) {
+        console.error("Failed to write roadmap.md:", e);
+    }
+    try {
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { roadmapText: text },
+            create: { id: "global", roadmapText: text }
+        });
+    } catch (e: any) {
+        console.error("Failed to sync roadmapText to database:", e);
+    }
     revalidatePath("/");
     revalidatePath("/settings");
+    revalidatePath("/beta");
+    return { success: true };
 }
 
 // ============================================================================
@@ -1513,9 +1539,6 @@ export async function updateAlertBanner(formData: FormData) {
 // ============================================================================
 // --- BOOK LIBRARY & REQUEST ACTIONS (SHELFMARK + GRIMMORY) ---
 // ============================================================================
-
-import fs from "fs";
-import path from "path";
 
 async function verifyUser() {
     const cookieStore = await cookies();
