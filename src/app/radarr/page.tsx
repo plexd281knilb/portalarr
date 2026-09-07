@@ -51,6 +51,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+import ErrorTicketModal from "@/components/error-ticket-modal";
+
 export function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return "0 Bytes";
   const k = 1024;
@@ -64,6 +66,22 @@ export default function RadarrPage() {
   const [instances, setInstances] = useState<any[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  // Error Ticket Modal State
+  const [errorModal, setErrorModal] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    context?: string;
+  }>({
+    open: false,
+    title: "",
+    message: "",
+  });
+
+  const showErrorModal = (message: string, title = "Radarr Error", context?: string) => {
+    setErrorModal({ open: true, title, message, context });
+  };
 
   // Profiles and Folders
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -122,12 +140,12 @@ export default function RadarrPage() {
           ),
         );
       } else {
-        alert("Failed to fetch releases: " + res.error);
+        showErrorModal(res.error || "Failed to fetch releases from Radarr", "Release Search Error", movie.title);
         setReleasesModalOpen(false);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to fetch releases.");
+      showErrorModal(e.message || "Failed to fetch releases.", "Release Search Error", movie.title);
       setReleasesModalOpen(false);
     }
     setReleasesLoading(false);
@@ -147,11 +165,11 @@ export default function RadarrPage() {
         setReleasesModalOpen(false);
         setTimeout(fetchQueue, 2000);
       } else {
-        alert("Failed to send release to download client: " + res.error);
+        showErrorModal(res.error || "Failed to send release to download client.", "Download Client Error", activeMovie.title);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to download release: " + e.message);
+      showErrorModal(e.message || "Failed to download release.", "Download Client Error", activeMovie.title);
     }
     setDownloadingRelease(null);
   };
@@ -239,11 +257,11 @@ export default function RadarrPage() {
       if (res.success && res.data) {
         setSearchResults(res.data);
       } else {
-        alert("Search failed: " + res.error);
+        showErrorModal(res.error || "Radarr movie search failed", "Search Error", searchTerm);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Search failed. See console.");
+      showErrorModal(e.message || "Search failed with an unexpected error.", "Search Error", searchTerm);
     }
     setSearching(false);
   };
@@ -263,11 +281,11 @@ export default function RadarrPage() {
         alert("Movie added and download started!");
         fetchLibrary();
       } else {
-        alert("Failed to add movie: " + res.error);
+        showErrorModal(res.error || "Failed to add movie to Radarr", "Add Movie Error", movie.title);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to add movie: " + e.message);
+      showErrorModal(e.message || "Failed to add movie.", "Add Movie Error", movie.title);
     }
     setAddingMovieId(null);
   };
@@ -286,11 +304,11 @@ export default function RadarrPage() {
           prev.map((m) => (m.id === movie.id ? res.data : m)),
         );
       } else {
-        alert("Failed to update monitored state: " + res.error);
+        showErrorModal(res.error || "Failed to update monitored state", "Monitor Error", movie.title);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to update monitored state: " + e.message);
+      showErrorModal(e.message || "Failed to update monitored state.", "Monitor Error", movie.title);
     }
     setModifyingId(null);
   };
@@ -303,11 +321,11 @@ export default function RadarrPage() {
       if (res.success) {
         alert(`Search command sent for: ${movie.title}`);
       } else {
-        alert("Failed to trigger search: " + res.error);
+        showErrorModal(res.error || "Failed to trigger movie search", "Search Trigger Error", movie.title);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to trigger search: " + e.message);
+      showErrorModal(e.message || "Failed to trigger search.", "Search Trigger Error", movie.title);
     }
     setModifyingId(null);
   };
@@ -321,11 +339,11 @@ export default function RadarrPage() {
         alert("Import command sent!");
         setTimeout(fetchQueue, 2000);
       } else {
-        alert("Failed to force import: " + res.error);
+        showErrorModal(res.error || "Failed to force import queue item", "Import Error", `Queue ID: ${downloadId}`);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to force import: " + e.message);
+      showErrorModal(e.message || "Failed to force import queue item.", "Import Error", `Queue ID: ${downloadId}`);
     }
     setImportingId(null);
   };
@@ -1114,6 +1132,15 @@ export default function RadarrPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AUTOMATED ERROR TICKET MODAL */}
+      <ErrorTicketModal
+        open={errorModal.open}
+        title={errorModal.title}
+        message={errorModal.message}
+        context={errorModal.context}
+        onClose={() => setErrorModal({ open: false, title: "", message: "" })}
+      />
     </div>
   );
 }

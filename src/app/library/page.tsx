@@ -53,6 +53,7 @@ import {
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { BookReaderModal } from "@/components/book-reader-modal";
+import ErrorTicketModal from "@/components/error-ticket-modal";
 import {
   Card,
   CardHeader,
@@ -6621,69 +6622,12 @@ function BookLibraryPageContent() {
         </div>
       )}
 
-      {errorModal.open && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-lg border-red-500/40 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden relative">
-            <CardHeader className="border-b border-red-900/40 bg-red-950/30 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold text-red-400 flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-                  {errorModal.title}
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-slate-400 hover:text-white"
-                  onClick={() =>
-                    setErrorModal({ open: false, title: "", message: "" })
-                  }
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              <p className="text-xs text-slate-300">
-                An issue occurred. You can highlight or click the button below
-                to copy the error:
-              </p>
-              <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 relative group">
-                <pre className="text-xs font-mono text-red-300 whitespace-pre-wrap break-all max-h-48 overflow-y-auto select-all p-1">
-                  {errorModal.message}
-                </pre>
-              </div>
-            </CardContent>
-            <CardFooter className="border-t border-slate-900 p-3 bg-slate-950/60 flex items-center justify-between gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5"
-                onClick={() =>
-                  setErrorModal({ open: false, title: "", message: "" })
-                }
-              >
-                Close
-              </Button>
-              <Button
-                size="sm"
-                className="h-8 text-xs font-bold bg-red-600 text-white hover:bg-red-500 gap-1.5 shadow"
-                onClick={() => handleCopyErrorToClipboard(errorModal.message)}
-              >
-                {errorModal.copied ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-emerald-300" /> Copied to
-                    Clipboard!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" /> 📋 Copy Error
-                  </>
-                )}
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-      )}
+      <ErrorTicketModal
+        open={errorModal.open}
+        title={errorModal.title || "System Error Notice"}
+        message={errorModal.message}
+        onClose={() => setErrorModal({ open: false, title: "", message: "" })}
+      />
 
       {activeReadingBook && (
         <BookReaderModal

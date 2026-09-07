@@ -1214,6 +1214,111 @@ export async function submitSupportTicket(formData: FormData) {
     }
 }
 
+export async function submitAutoErrorTicketAction(errorPayload: {
+    errorMessage: string;
+    errorTitle?: string;
+    pageUrl?: string;
+    userAgent?: string;
+    customNote?: string;
+}) {
+    try {
+        let name = "Anonymous User";
+        let email = "user@portalarr.local";
+        
+        try {
+            const session: any = await verifyUser();
+            if (session) {
+                name = (session.username as string) || "Portalarr User";
+                email = (session.email as string) || `${session.username || "user"}@portalarr.local`;
+            }
+        } catch (e) {
+            // Unauthenticated or guest fallback
+        }
+
+        const formattedIssue = [
+            `🚨 [AUTOMATED ERROR REPORT]`,
+            `Title: ${errorPayload.errorTitle || "System Error"}`,
+            `Page / Route: ${errorPayload.pageUrl || "/"}`,
+            `Timestamp: ${new Date().toISOString()}`,
+            errorPayload.userAgent ? `User Agent: ${errorPayload.userAgent}` : null,
+            ``,
+            `--- ERROR DETAILS ---`,
+            errorPayload.errorMessage,
+            ``,
+            errorPayload.customNote ? `--- USER CONTEXT / NOTE ---\n${errorPayload.customNote}` : null
+        ].filter(Boolean).join("\n");
+
+        const ticket = await prisma.supportTicket.create({
+            data: {
+                name,
+                email,
+                issue: formattedIssue,
+                status: "Pending"
+            }
+        });
+
+        logger.addLog("ERROR", "SYSTEM", `[AUTO-TICKET] Created support ticket #${ticket.id.slice(0, 8)} from ${name}: ${errorPayload.errorMessage.slice(0, 100)}`);
+
+        // Send email notification to Admin if SMTP is configured
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (settings?.smtpHost && settings?.smtpUser) {
+            try {
+                const transporter = nodemailer.createTransport({
+                    host: settings.smtpHost,
+                    port: settings.smtpPort,
+                    secure: settings.smtpPort === 465,
+                    auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
+                } as any);
+
+                const appUrl = await getAppUrl();
+                const htmlContent = `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                        <h2 style="color: #dc2626; display: flex; align-items: center; gap: 8px;">
+                            🚨 Automated Error Report Ticket
+                        </h2>
+                        <p><strong>User:</strong> ${name} (<a href="mailto:${email}">${email}</a>)</p>
+                        <p><strong>Page:</strong> <code>${errorPayload.pageUrl || "/"}</code></p>
+                        
+                        <div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 20px 0; border-radius: 4px;">
+                            <h4 style="margin-top: 0; color: #991b1b;">Error:</h4>
+                            <pre style="white-space: pre-wrap; word-break: break-all; color: #7f1d1d; font-family: monospace; font-size: 13px;">${errorPayload.errorMessage}</pre>
+                            ${errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : ""}
+                        </div>
+
+                        <h4 style="color: #475569; margin-bottom: 10px;">Quick Actions</h4>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <a href="${appUrl}/admin/tickets" style="display: inline-block; padding: 8px 12px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">View Tickets Dashboard</a>
+                            <a href="${appUrl}/settings/access?search=${encodeURIComponent(email)}" style="display: inline-block; padding: 8px 12px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Manage User Access</a>
+                        </div>
+                    </div>
+                `;
+
+                await transporter.sendMail({
+                    from: `"Portalarr Error Alert" <${settings.smtpUser}>`,
+                    to: settings.smtpUser,
+                    replyTo: email,
+                    subject: `🚨 [Error Ticket] ${errorPayload.errorTitle || "System Error"} reported by ${name}`,
+                    text: formattedIssue,
+                    html: htmlContent
+                });
+            } catch (mailErr: any) {
+                console.error("[AUTO-TICKET] Failed to send email alert for ticket:", mailErr.message || mailErr);
+            }
+        }
+
+        try {
+            revalidatePath("/");
+            revalidatePath("/admin/tickets");
+        } catch (e) {
+            // Safe fallback outside Next.js request lifecycle
+        }
+        return { success: true, ticketId: ticket.id };
+    } catch (e: any) {
+        console.error("[AUTO-TICKET] Error creating ticket:", e);
+        return { success: false, error: e.message || "Failed to create support ticket." };
+    }
+}
+
 export async function getActiveDownloads() {
     const apps = await prisma.mediaApp.findMany({
         where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent", "qbittorrent", "SABnzbd", "NZBGet"] } }

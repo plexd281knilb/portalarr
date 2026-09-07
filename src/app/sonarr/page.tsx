@@ -54,6 +54,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+import ErrorTicketModal from "@/components/error-ticket-modal";
+
 export function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return "0 Bytes";
   const k = 1024;
@@ -67,6 +69,22 @@ export default function SonarrPage() {
   const [instances, setInstances] = useState<any[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  // Error Ticket Modal State
+  const [errorModal, setErrorModal] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    context?: string;
+  }>({
+    open: false,
+    title: "",
+    message: "",
+  });
+
+  const showErrorModal = (message: string, title = "Sonarr Error", context?: string) => {
+    setErrorModal({ open: true, title, message, context });
+  };
 
   // Profiles and Folders
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -143,7 +161,7 @@ export default function SonarrPage() {
     if (res.success) {
       setEpisodes(res.data);
     } else {
-      alert("Failed to load episodes: " + res.error);
+      showErrorModal(res.error || "Failed to load episodes from Sonarr", "Episode Load Error");
     }
     setEpisodesLoading(false);
   };
@@ -165,7 +183,7 @@ export default function SonarrPage() {
         ),
       );
     } else {
-      alert("Failed to toggle monitor: " + res.error);
+      showErrorModal(res.error || "Failed to toggle episode monitoring", "Episode Monitor Error");
     }
   };
 
@@ -203,7 +221,7 @@ export default function SonarrPage() {
 
     if (!activeSeasonsSeries.id || activeSeasonsSeries.id === 0) {
       if (!selectedProfileId || !selectedFolderId) {
-        alert("Please select a profile and root folder first.");
+        showErrorModal("Please select a quality profile and root folder first before adding the series.", "Selection Required", activeSeasonsSeries.title);
         setSavingSeasons(false);
         return;
       }
@@ -220,11 +238,11 @@ export default function SonarrPage() {
           setSeasonsModalOpen(false);
           fetchLibrary();
         } else {
-          alert("Failed to add show: " + res.error);
+          showErrorModal(res.error || "Failed to add show to Sonarr", "Add Show Error", activeSeasonsSeries.title);
         }
       } catch (e: any) {
         console.error(e);
-        alert("Failed to add show: " + e.message);
+        showErrorModal(e.message || "Failed to add show.", "Add Show Error", activeSeasonsSeries.title);
       }
       setAddingSeriesId(null);
     } else {
@@ -233,7 +251,7 @@ export default function SonarrPage() {
         setSeasonsModalOpen(false);
         fetchLibrary();
       } else {
-        alert("Failed to update seasons: " + res.error);
+        showErrorModal(res.error || "Failed to update seasons", "Season Update Error", activeSeasonsSeries.title);
       }
     }
     setSavingSeasons(false);
@@ -266,7 +284,7 @@ export default function SonarrPage() {
         ),
       );
     } else {
-      alert("Failed to fetch releases: " + res.error);
+      showErrorModal(res.error || "Failed to fetch releases from Sonarr", "Release Search Error", series.title);
       setReleasesModalOpen(false);
     }
     setReleasesLoading(false);
@@ -286,11 +304,11 @@ export default function SonarrPage() {
         setReleasesModalOpen(false);
         setTimeout(fetchQueue, 2000);
       } else {
-        alert("Failed to send release to download client: " + res.error);
+        showErrorModal(res.error || "Failed to send release to download client", "Download Client Error", activeSeries.title);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to download release: " + e.message);
+      showErrorModal(e.message || "Failed to download release.", "Download Client Error", activeSeries.title);
     }
     setDownloadingRelease(null);
   };
@@ -378,15 +396,14 @@ export default function SonarrPage() {
       if (res.success && res.data) {
         setSearchResults(res.data);
       } else {
-        alert("Search failed: " + res.error);
+        showErrorModal(res.error || "Sonarr series search failed", "Search Error", searchTerm);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Search failed. See console.");
+      showErrorModal(e.message || "Search failed with an unexpected error.", "Search Error", searchTerm);
     }
     setSearching(false);
   };
-
 
   const handleToggleMonitor = async (series: any) => {
     if (!selectedAppId) return;
@@ -402,11 +419,11 @@ export default function SonarrPage() {
           prev.map((s) => (s.id === series.id ? res.data : s)),
         );
       } else {
-        alert("Failed to update monitored state: " + res.error);
+        showErrorModal(res.error || "Failed to update monitored state", "Monitor Error", series.title);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to update monitored state: " + e.message);
+      showErrorModal(e.message || "Failed to update monitored state.", "Monitor Error", series.title);
     }
     setModifyingId(null);
   };
@@ -419,11 +436,11 @@ export default function SonarrPage() {
       if (res.success) {
         alert(`Search command sent for: ${series.title}`);
       } else {
-        alert("Failed to trigger search: " + res.error);
+        showErrorModal(res.error || "Failed to trigger search", "Search Trigger Error", series.title);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to trigger search: " + e.message);
+      showErrorModal(e.message || "Failed to trigger search.", "Search Trigger Error", series.title);
     }
     setModifyingId(null);
   };
@@ -437,11 +454,11 @@ export default function SonarrPage() {
         alert("Import command sent!");
         setTimeout(fetchQueue, 2000);
       } else {
-        alert("Failed to force import: " + res.error);
+        showErrorModal(res.error || "Failed to force import queue item", "Import Error", `Queue ID: ${downloadId}`);
       }
     } catch (e: any) {
       console.error(e);
-      alert("Failed to force import: " + e.message);
+      showErrorModal(e.message || "Failed to force import queue item.", "Import Error", `Queue ID: ${downloadId}`);
     }
     setImportingId(null);
   };
@@ -1361,6 +1378,15 @@ export default function SonarrPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AUTOMATED ERROR TICKET MODAL */}
+      <ErrorTicketModal
+        open={errorModal.open}
+        title={errorModal.title}
+        message={errorModal.message}
+        context={errorModal.context}
+        onClose={() => setErrorModal({ open: false, title: "", message: "" })}
+      />
     </div>
   );
 }

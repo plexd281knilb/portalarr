@@ -315,6 +315,23 @@ async function runTestSuite() {
         }
     });
 
+    // 17. Server Action: submitAutoErrorTicketAction()
+    await assertTest("Server Action: submitAutoErrorTicketAction()", async () => {
+        const { submitAutoErrorTicketAction } = await import("../src/app/actions");
+        const res = await submitAutoErrorTicketAction({
+            errorMessage: "Test automated runtime error for verification",
+            errorTitle: "Test System Error",
+            pageUrl: "/library",
+            userAgent: "PortalarrTestSuite/1.0",
+            customNote: "Automated test runner note"
+        });
+        if (!res || !res.success || !res.ticketId) {
+            throw new Error("submitAutoErrorTicketAction failed to create ticket");
+        }
+        // Cleanup test ticket
+        await prisma.supportTicket.delete({ where: { id: res.ticketId } });
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
