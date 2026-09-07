@@ -139,12 +139,35 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
         if (!epubViewerRef.current) return;
         epubViewerRef.current.innerHTML = "";
 
-        // Fetch binary data directly to prevent URL path guessing bugs in epubjs
-        const res = await fetch(`/api/books/${book!.id}`);
-        if (!res.ok) {
-          throw new Error(`Failed to load ebook file (HTTP ${res.status}: ${res.statusText})`);
+        // Use CacheStorage for instant 0ms reopening on subsequent reads
+        const cacheUrl = `/api/books/${book!.id}`;
+        let arrayBuffer: ArrayBuffer | null = null;
+
+        if (typeof window !== "undefined" && "caches" in window) {
+          try {
+            const cache = await caches.open("portalarr-books-v1");
+            const cachedRes = await cache.match(cacheUrl);
+            if (cachedRes) {
+              arrayBuffer = await cachedRes.arrayBuffer();
+            } else {
+              const netRes = await fetch(cacheUrl);
+              if (!netRes.ok) throw new Error(`HTTP ${netRes.status}: ${netRes.statusText}`);
+              await cache.put(cacheUrl, netRes.clone());
+              arrayBuffer = await netRes.arrayBuffer();
+            }
+          } catch (cErr) {
+            console.warn("CacheStorage fallback:", cErr);
+          }
         }
-        const arrayBuffer = await res.arrayBuffer();
+
+        if (!arrayBuffer) {
+          const res = await fetch(cacheUrl);
+          if (!res.ok) {
+            throw new Error(`Failed to load ebook file (HTTP ${res.status}: ${res.statusText})`);
+          }
+          arrayBuffer = await res.arrayBuffer();
+        }
+
         if (!isMounted) return;
 
         const bookInstance = ePub(arrayBuffer);
@@ -201,11 +224,23 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
           if (isMounted) setEpubLoading(false);
         });
 
-        // Load saved progress or start of book
-        const savedLocation = localStorage.getItem(`portalarr-epub-loc-${book!.id}`);
+        // Restore saved progress (CFI location & percentage)
+        let savedCfi: string | null = null;
         try {
-          if (savedLocation) {
-            await rendition.display(savedLocation);
+          const rawProgress = localStorage.getItem(`portalarr-reading-progress-${book!.id}`);
+          if (rawProgress) {
+            const parsed = JSON.parse(rawProgress);
+            if (parsed && parsed.cfi) savedCfi = parsed.cfi;
+          }
+        } catch (e) {}
+
+        if (!savedCfi) {
+          savedCfi = localStorage.getItem(`portalarr-epub-loc-${book!.id}`);
+        }
+
+        try {
+          if (savedCfi) {
+            await rendition.display(savedCfi);
           } else {
             await rendition.display();
           }
@@ -234,25 +269,49 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
             if (loc && loc.start) {
               const perc = bookInstance.locations.percentageFromCfi(loc.start.cfi);
               if (typeof perc === "number") {
-                setEpubProgress(Math.round(perc * 100));
+                const roundedPerc = Math.round(perc * 100);
+                setEpubProgress(roundedPerc);
+
+                const progressPayload = {
+                  bookId: book!.id,
+                  format: "epub",
+                  cfi: loc.start.cfi,
+                  percentage: roundedPerc,
+                  updatedAt: Date.now(),
+                };
+                localStorage.setItem(`portalarr-reading-progress-${book!.id}`, JSON.stringify(progressPayload));
+                window.dispatchEvent(new CustomEvent("portalarr-progress-updated", { detail: progressPayload }));
               }
             }
           }
         }).catch((e: any) => console.warn("Locations generation warning:", e));
 
-        // Track Location Changes
+        // Track Location Changes & Save Progress
         rendition.on("relocated", (location: any) => {
           if (!isMounted) return;
           if (location && location.start) {
             const cfi = location.start.cfi;
             setEpubLocation(cfi);
             localStorage.setItem(`portalarr-epub-loc-${book!.id}`, cfi);
+            
+            let roundedPerc = 0;
             if (bookInstance.locations && bookInstance.locations.length()) {
               const perc = bookInstance.locations.percentageFromCfi(cfi);
               if (typeof perc === "number") {
-                setEpubProgress(Math.round(perc * 100));
+                roundedPerc = Math.round(perc * 100);
+                setEpubProgress(roundedPerc);
               }
             }
+
+            const progressPayload = {
+              bookId: book!.id,
+              format: "epub",
+              cfi,
+              percentage: roundedPerc,
+              updatedAt: Date.now(),
+            };
+            localStorage.setItem(`portalarr-reading-progress-${book!.id}`, JSON.stringify(progressPayload));
+            window.dispatchEvent(new CustomEvent("portalarr-progress-updated", { detail: progressPayload }));
           }
         });
       } catch (err: any) {
@@ -314,10 +373,22 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
           setComicTotalPages(data.totalPages || 0);
 
           // Restore saved page
-          const saved = localStorage.getItem(`portalarr-comic-page-${book!.id}`);
-          const parsedSaved = saved ? parseInt(saved, 10) : 1;
-          if (parsedSaved >= 1 && parsedSaved <= data.totalPages) {
-            setComicCurrentPage(parsedSaved);
+          let savedPage = 1;
+          try {
+            const rawProgress = localStorage.getItem(`portalarr-reading-progress-${book!.id}`);
+            if (rawProgress) {
+              const parsed = JSON.parse(rawProgress);
+              if (parsed && typeof parsed.page === "number") savedPage = parsed.page;
+            }
+          } catch (e) {}
+
+          if (savedPage === 1) {
+            const oldSaved = localStorage.getItem(`portalarr-comic-page-${book!.id}`);
+            if (oldSaved) savedPage = parseInt(oldSaved, 10) || 1;
+          }
+
+          if (savedPage >= 1 && savedPage <= data.totalPages) {
+            setComicCurrentPage(savedPage);
           } else {
             setComicCurrentPage(1);
           }
@@ -341,10 +412,23 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
 
   // Save comic progress & preload next pages
   useEffect(() => {
-    if (!book || !isComic) return;
-    localStorage.setItem(`portalarr-comic-page-${book.id}`, String(comicCurrentPage));
+    if (!book || !isComic || comicTotalPages === 0) return;
 
-    // Preload next 2 pages
+    const percentage = Math.round((comicCurrentPage / comicTotalPages) * 100);
+    const progressPayload = {
+      bookId: book.id,
+      format: "comic",
+      page: comicCurrentPage,
+      totalPages: comicTotalPages,
+      percentage,
+      updatedAt: Date.now(),
+    };
+
+    localStorage.setItem(`portalarr-reading-progress-${book.id}`, JSON.stringify(progressPayload));
+    localStorage.setItem(`portalarr-comic-page-${book.id}`, String(comicCurrentPage));
+    window.dispatchEvent(new CustomEvent("portalarr-progress-updated", { detail: progressPayload }));
+
+    // Preload next 2 pages in memory
     if (comicCurrentPage < comicTotalPages) {
       const nextImg = new Image();
       nextImg.src = `/api/books/${book.id}/comic?page=${comicCurrentPage + 1}`;

@@ -515,6 +515,7 @@ function BookLibraryPageContent() {
   // Sort states
   const [sortBy, setSortBy] = useState("recent");
   const [groupBySeries, setGroupBySeries] = useState(false);
+  const [readingProgressMap, setReadingProgressMap] = useState<Record<string, any>>({});
 
   useEffect(() => {
     const savedSort = localStorage.getItem("book-library-sort");
@@ -530,6 +531,37 @@ function BookLibraryPageContent() {
     if (savedSkip) {
       setSkippedKindleGate(true);
     }
+
+    // Load cached reading progress for all books
+    function loadAllReadingProgress() {
+      const map: Record<string, any> = {};
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("portalarr-reading-progress-")) {
+            const bookId = key.replace("portalarr-reading-progress-", "");
+            try {
+              map[bookId] = JSON.parse(localStorage.getItem(key) || "{}");
+            } catch (e) {}
+          }
+        }
+      } catch (e) {}
+      setReadingProgressMap(map);
+    }
+
+    loadAllReadingProgress();
+
+    const handleProgressUpdate = (e: any) => {
+      if (e?.detail?.bookId) {
+        setReadingProgressMap((prev) => ({
+          ...prev,
+          [e.detail.bookId]: e.detail,
+        }));
+      }
+    };
+
+    window.addEventListener("portalarr-progress-updated", handleProgressUpdate);
+    return () => window.removeEventListener("portalarr-progress-updated", handleProgressUpdate);
   }, []);
 
   const handleSortChange = (value: string) => {
@@ -733,6 +765,20 @@ function BookLibraryPageContent() {
               {displayAuthor}
             </p>
           </div>
+          {readingProgressMap[book.id]?.percentage > 0 && (
+            <div className="space-y-1 bg-primary/10 border border-primary/20 p-2 rounded select-none">
+              <div className="flex justify-between items-center text-[10px] font-bold text-primary">
+                <span>Reading Progress</span>
+                <span>{readingProgressMap[book.id].percentage}%</span>
+              </div>
+              <div className="w-full bg-slate-900/80 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-primary h-full transition-all duration-300 rounded-full"
+                  style={{ width: `${Math.min(readingProgressMap[book.id].percentage, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
           <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
             <span>
               Size:{" "}
@@ -745,6 +791,8 @@ function BookLibraryPageContent() {
         <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
           {(() => {
             const isComic = book.fileType === "cbr" || book.fileType === "cbz" || (book.filePath && /\.(?:cbr|cbz)$/i.test(book.filePath));
+            const progress = readingProgressMap[book.id];
+            const hasProgress = progress && typeof progress.percentage === "number" && progress.percentage > 0;
             return (
               <>
                 <div className="flex gap-2 w-full">
@@ -754,7 +802,8 @@ function BookLibraryPageContent() {
                     className="flex-1 text-xs font-semibold text-black"
                     onClick={() => setActiveReadingBook(book)}
                   >
-                    <BookOpen className="h-3 w-3 mr-1" /> Read
+                    <BookOpen className="h-3 w-3 mr-1" />
+                    {hasProgress ? `Resume (${progress.percentage}%)` : "Read"}
                   </Button>
                   <Button
                     variant="outline"
