@@ -22,6 +22,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import JSZip from "jszip";
+
+if (typeof window !== "undefined" && !(window as any).JSZip) {
+  (window as any).JSZip = JSZip;
+}
 
 interface BookReaderModalProps {
   book: {
@@ -134,7 +139,15 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
         if (!epubViewerRef.current) return;
         epubViewerRef.current.innerHTML = "";
 
-        const bookInstance = ePub(`/api/books/${book!.id}`);
+        // Fetch binary data directly to prevent URL path guessing bugs in epubjs
+        const res = await fetch(`/api/books/${book!.id}`);
+        if (!res.ok) {
+          throw new Error(`Failed to load ebook file (HTTP ${res.status}: ${res.statusText})`);
+        }
+        const arrayBuffer = await res.arrayBuffer();
+        if (!isMounted) return;
+
+        const bookInstance = ePub(arrayBuffer);
         bookRef.current = bookInstance;
 
         const rendition = bookInstance.renderTo(epubViewerRef.current, {
@@ -147,31 +160,70 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
 
         // Register Themes
         rendition.themes.register("dark", {
-          body: { background: "#090d16 !important", color: "#e2e8f0 !important", "font-family": "system-ui, -apple-system, sans-serif !important" },
-          "p, div, span, h1, h2, h3, h4, h5, h6, a": { color: "#e2e8f0 !important" },
+          body: {
+            background: "#090d16 !important",
+            color: "#e2e8f0 !important",
+            "font-family": "system-ui, -apple-system, sans-serif !important",
+            padding: "20px 40px !important",
+          },
+          "p, div, span, h1, h2, h3, h4, h5, h6, a, li": {
+            color: "#e2e8f0 !important",
+          },
         });
         rendition.themes.register("light", {
-          body: { background: "#ffffff !important", color: "#1e293b !important", "font-family": "system-ui, -apple-system, sans-serif !important" },
-          "p, div, span, h1, h2, h3, h4, h5, h6, a": { color: "#1e293b !important" },
+          body: {
+            background: "#ffffff !important",
+            color: "#1e293b !important",
+            "font-family": "system-ui, -apple-system, sans-serif !important",
+            padding: "20px 40px !important",
+          },
+          "p, div, span, h1, h2, h3, h4, h5, h6, a, li": {
+            color: "#1e293b !important",
+          },
         });
         rendition.themes.register("sepia", {
-          body: { background: "#f8f1e5 !important", color: "#5c4033 !important", "font-family": "Georgia, serif !important" },
-          "p, div, span, h1, h2, h3, h4, h5, h6, a": { color: "#5c4033 !important" },
+          body: {
+            background: "#f8f1e5 !important",
+            color: "#5c4033 !important",
+            "font-family": "Georgia, serif !important",
+            padding: "20px 40px !important",
+          },
+          "p, div, span, h1, h2, h3, h4, h5, h6, a, li": {
+            color: "#5c4033 !important",
+          },
         });
 
         rendition.themes.select(epubTheme);
         rendition.themes.fontSize(`${epubFontSize}%`);
 
-        // Load saved progress
+        // Dismiss spinner as soon as rendered
+        rendition.on("rendered", () => {
+          if (isMounted) setEpubLoading(false);
+        });
+
+        // Load saved progress or start of book
         const savedLocation = localStorage.getItem(`portalarr-epub-loc-${book!.id}`);
-        await rendition.display(savedLocation || undefined);
+        try {
+          if (savedLocation) {
+            await rendition.display(savedLocation);
+          } else {
+            await rendition.display();
+          }
+        } catch (dispErr) {
+          console.warn("Could not display saved location, falling back to start:", dispErr);
+          await rendition.display();
+        }
+
+        if (isMounted) {
+          setEpubLoading(false);
+        }
 
         // Extract TOC
         bookInstance.loaded.navigation.then((nav: any) => {
           if (isMounted) {
             setEpubToc(nav.toc || []);
           }
-        });
+        }).catch((e: any) => console.warn("TOC extraction warning:", e));
 
         // Generate Locations for Progress percentage
         bookInstance.ready.then(() => {
@@ -181,10 +233,12 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
             const loc = rendition.currentLocation();
             if (loc && loc.start) {
               const perc = bookInstance.locations.percentageFromCfi(loc.start.cfi);
-              setEpubProgress(Math.round(perc * 100));
+              if (typeof perc === "number") {
+                setEpubProgress(Math.round(perc * 100));
+              }
             }
           }
-        });
+        }).catch((e: any) => console.warn("Locations generation warning:", e));
 
         // Track Location Changes
         rendition.on("relocated", (location: any) => {
@@ -195,14 +249,12 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
             localStorage.setItem(`portalarr-epub-loc-${book!.id}`, cfi);
             if (bookInstance.locations && bookInstance.locations.length()) {
               const perc = bookInstance.locations.percentageFromCfi(cfi);
-              setEpubProgress(Math.round(perc * 100));
+              if (typeof perc === "number") {
+                setEpubProgress(Math.round(perc * 100));
+              }
             }
           }
         });
-
-        if (isMounted) {
-          setEpubLoading(false);
-        }
       } catch (err: any) {
         console.error("EPUB init error:", err);
         if (isMounted) {
@@ -214,8 +266,17 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
 
     initEpub();
 
+    // Window resize handler
+    const handleResize = () => {
+      if (renditionRef.current && epubViewerRef.current) {
+        renditionRef.current.resize();
+      }
+    };
+    window.addEventListener("resize", handleResize);
+
     return () => {
       isMounted = false;
+      window.removeEventListener("resize", handleResize);
       if (bookRef.current) {
         bookRef.current.destroy();
       }
