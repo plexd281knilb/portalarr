@@ -369,6 +369,7 @@ function BookLibraryPageContent() {
   const [resolvingAiId, setResolvingAiId] = useState<string | null>(null);
   const [activeAudiobook, setActiveAudiobook] = useState<any>(null);
   const [activeReadingBook, setActiveReadingBook] = useState<any>(null);
+  const [readingProgressMap, setReadingProgressMap] = useState<Record<string, any>>({});
   const [chaptersModalBook, setChaptersModalBook] = useState<any>(null);
   const [chaptersList, setChaptersList] = useState<any[]>([]);
   const [loadingChapters, setLoadingChapters] = useState(false);
@@ -515,7 +516,44 @@ function BookLibraryPageContent() {
   // Sort states
   const [sortBy, setSortBy] = useState("recent");
   const [groupBySeries, setGroupBySeries] = useState(false);
-  const [readingProgressMap, setReadingProgressMap] = useState<Record<string, any>>({});
+
+  const refreshReadingProgress = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const map: Record<string, any> = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("portalarr-reading-progress-")) {
+          const bookId = key.replace("portalarr-reading-progress-", "");
+          try {
+            map[bookId] = JSON.parse(localStorage.getItem(key) || "{}");
+          } catch (e) {}
+        } else if (key && key.startsWith("portalarr-epub-loc-")) {
+          const bookId = key.replace("portalarr-epub-loc-", "");
+          if (!map[bookId]) {
+            map[bookId] = {
+              bookId,
+              format: "epub",
+              cfi: localStorage.getItem(key),
+              percentage: 1,
+            };
+          }
+        } else if (key && key.startsWith("portalarr-comic-page-")) {
+          const bookId = key.replace("portalarr-comic-page-", "");
+          if (!map[bookId]) {
+            const page = parseInt(localStorage.getItem(key) || "1", 10);
+            map[bookId] = {
+              bookId,
+              format: "comic",
+              page,
+              percentage: 1,
+            };
+          }
+        }
+      }
+    } catch (e) {}
+    setReadingProgressMap(map);
+  }, []);
 
   useEffect(() => {
     const savedSort = localStorage.getItem("book-library-sort");
@@ -532,24 +570,7 @@ function BookLibraryPageContent() {
       setSkippedKindleGate(true);
     }
 
-    // Load cached reading progress for all books
-    function loadAllReadingProgress() {
-      const map: Record<string, any> = {};
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith("portalarr-reading-progress-")) {
-            const bookId = key.replace("portalarr-reading-progress-", "");
-            try {
-              map[bookId] = JSON.parse(localStorage.getItem(key) || "{}");
-            } catch (e) {}
-          }
-        }
-      } catch (e) {}
-      setReadingProgressMap(map);
-    }
-
-    loadAllReadingProgress();
+    refreshReadingProgress();
 
     const handleProgressUpdate = (e: any) => {
       if (e?.detail?.bookId) {
@@ -562,7 +583,7 @@ function BookLibraryPageContent() {
 
     window.addEventListener("portalarr-progress-updated", handleProgressUpdate);
     return () => window.removeEventListener("portalarr-progress-updated", handleProgressUpdate);
-  }, []);
+  }, [refreshReadingProgress]);
 
   const handleSortChange = (value: string) => {
     setSortBy(value);
@@ -765,20 +786,32 @@ function BookLibraryPageContent() {
               {displayAuthor}
             </p>
           </div>
-          {readingProgressMap[book.id]?.percentage > 0 && (
-            <div className="space-y-1 bg-primary/10 border border-primary/20 p-2 rounded select-none">
-              <div className="flex justify-between items-center text-[10px] font-bold text-primary">
-                <span>Reading Progress</span>
-                <span>{readingProgressMap[book.id].percentage}%</span>
+          {(() => {
+            const progress = readingProgressMap[book.id];
+            const hasProgress = progress && (
+              (typeof progress.percentage === "number" && progress.percentage > 0) ||
+              progress.cfi ||
+              (typeof progress.page === "number" && progress.page > 0)
+            );
+            const displayPercentage = hasProgress ? Math.max(1, progress.percentage || 1) : 0;
+
+            if (!hasProgress) return null;
+
+            return (
+              <div className="space-y-1 bg-primary/10 border border-primary/20 p-2 rounded select-none">
+                <div className="flex justify-between items-center text-[10px] font-bold text-primary">
+                  <span>Reading Progress</span>
+                  <span>{displayPercentage}%</span>
+                </div>
+                <div className="w-full bg-slate-900/80 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-primary h-full transition-all duration-300 rounded-full"
+                    style={{ width: `${Math.min(displayPercentage, 100)}%` }}
+                  />
+                </div>
               </div>
-              <div className="w-full bg-slate-900/80 h-1.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-primary h-full transition-all duration-300 rounded-full"
-                  style={{ width: `${Math.min(readingProgressMap[book.id].percentage, 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
+            );
+          })()}
           <div className="text-[10px] text-muted-foreground flex justify-between items-center bg-muted/30 p-2 rounded">
             <span>
               Size:{" "}
@@ -792,7 +825,12 @@ function BookLibraryPageContent() {
           {(() => {
             const isComic = book.fileType === "cbr" || book.fileType === "cbz" || (book.filePath && /\.(?:cbr|cbz)$/i.test(book.filePath));
             const progress = readingProgressMap[book.id];
-            const hasProgress = progress && typeof progress.percentage === "number" && progress.percentage > 0;
+            const hasProgress = progress && (
+              (typeof progress.percentage === "number" && progress.percentage > 0) ||
+              progress.cfi ||
+              (typeof progress.page === "number" && progress.page > 0)
+            );
+            const displayPercentage = hasProgress ? Math.max(1, progress.percentage || 1) : 0;
             return (
               <>
                 <div className="flex gap-2 w-full">
@@ -803,7 +841,7 @@ function BookLibraryPageContent() {
                     onClick={() => setActiveReadingBook(book)}
                   >
                     <BookOpen className="h-3 w-3 mr-1" />
-                    {hasProgress ? `Resume (${progress.percentage}%)` : "Read"}
+                    {hasProgress ? `Resume (${displayPercentage}%)` : "Read"}
                   </Button>
                   <Button
                     variant="outline"
@@ -5700,7 +5738,10 @@ function BookLibraryPageContent() {
       {activeReadingBook && (
         <BookReaderModal
           book={activeReadingBook}
-          onClose={() => setActiveReadingBook(null)}
+          onClose={() => {
+            setActiveReadingBook(null);
+            refreshReadingProgress();
+          }}
         />
       )}
     </div>
