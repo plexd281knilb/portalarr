@@ -29,6 +29,7 @@ import {
   submitSupportTicket,
   retryBookRequest,
   refreshBookCover,
+  refreshRequestCover,
   findMissingBooksInSeries,
   seedDefaultLibraries,
   importCompletedDownload,
@@ -39,6 +40,7 @@ import {
   runAiLibraryScanAction,
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
+import { BookReaderModal } from "@/components/book-reader-modal";
 import {
   Card,
   CardHeader,
@@ -366,6 +368,7 @@ function BookLibraryPageContent() {
   const [scanning, setScanning] = useState(false);
   const [resolvingAiId, setResolvingAiId] = useState<string | null>(null);
   const [activeAudiobook, setActiveAudiobook] = useState<any>(null);
+  const [activeReadingBook, setActiveReadingBook] = useState<any>(null);
   const [chaptersModalBook, setChaptersModalBook] = useState<any>(null);
   const [chaptersList, setChaptersList] = useState<any[]>([]);
   const [loadingChapters, setLoadingChapters] = useState(false);
@@ -484,6 +487,28 @@ function BookLibraryPageContent() {
       alert(e.message || "Failed to refresh cover.");
     } finally {
       setRefreshingCoverId(null);
+    }
+  };
+
+  const [refreshingRequestCoverId, setRefreshingRequestCoverId] = useState<string | null>(null);
+
+  const handleRefreshRequestCover = async (requestId: string) => {
+    setRefreshingRequestCoverId(requestId);
+    try {
+      const res = await refreshRequestCover(requestId);
+      if (res.success && res.coverUrl) {
+        setRequests((prev) =>
+          prev.map((r) =>
+            r.id === requestId ? { ...r, coverUrl: res.coverUrl } : r
+          )
+        );
+      } else {
+        alert(res.error || "Could not fetch cover artwork.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to refresh request cover.");
+    } finally {
+      setRefreshingRequestCoverId(null);
     }
   };
 
@@ -718,83 +743,101 @@ function BookLibraryPageContent() {
           </div>
         </div>
         <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
-          <div className="flex gap-2 w-full">
-            <Button
-              variant="default"
-              size="sm"
-              className="flex-1 text-xs font-semibold text-black"
-              onClick={() => setActiveBook(book)}
-            >
-              <BookOpen className="h-3 w-3 mr-1" /> Read
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 text-xs border-primary/20 text-primary hover:bg-primary/10 font-semibold"
-              title="Send to Kindle"
-              disabled={sendingToKindleId !== null}
-              onClick={() => handleSendToKindle(book.id)}
-            >
-              {sendingToKindleId === book.id ? (
-                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-              ) : (
-                <Send className="h-3 w-3 mr-1" />
-              )}
-              Kindle
-            </Button>
-          </div>
-          {user?.role === "ADMIN" && allUsers.length > 0 && (
-            <div className="w-full flex gap-1 items-center mt-1">
-              <select
-                id={`send-to-user-${book.id}`}
-                className="flex-1 h-7 text-[10px] rounded border border-[#2d2d34] bg-[#111115] px-2 py-0.5 text-muted-foreground focus:outline-none cursor-pointer"
-                defaultValue=""
-                onChange={async (e) => {
-                  const targetUsername = e.target.value;
-                  if (!targetUsername) return;
-
-                  const confirmSend = window.confirm(
-                    `Are you sure you want to send this book to ${targetUsername}'s Kindle?`,
-                  );
-                  if (!confirmSend) {
-                    e.target.value = "";
-                    return;
-                  }
-
-                  // Reset value of select
-                  e.target.value = "";
-
-                  setSendingToKindleId(book.id);
-                  try {
-                    const res = await sendBookToKindle(book.id, targetUsername);
-                    if (res && !res.success) {
-                      alert(
-                        res.error ||
-                          `Delivery to ${targetUsername}'s Kindle failed.`,
-                      );
-                    } else {
-                      alert(
-                        `Ebook successfully sent to ${targetUsername}'s Kindle!`,
-                      );
+          {(() => {
+            const isComic = book.fileType === "cbr" || book.fileType === "cbz" || (book.filePath && /\.(?:cbr|cbz)$/i.test(book.filePath));
+            return (
+              <>
+                <div className="flex gap-2 w-full">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="flex-1 text-xs font-semibold text-black"
+                    onClick={() => setActiveReadingBook(book)}
+                  >
+                    <BookOpen className="h-3 w-3 mr-1" /> Read
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`flex-1 text-xs border-primary/20 text-primary font-semibold ${
+                      isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-primary/10"
+                    }`}
+                    title={
+                      isComic
+                        ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle. Please use Read or Direct Download."
+                        : "Send to Kindle"
                     }
-                  } catch (err: any) {
-                    alert(err.message || `Delivery failed.`);
-                  } finally {
-                    setSendingToKindleId(null);
-                  }
-                }}
-              >
-                <option value="">Send to User's Kindle...</option>
-                {allUsers
-                  .filter((u) => u.kindleEmail)
-                  .map((u) => (
-                    <option key={u.id} value={u.username}>
-                      {u.username} ({u.kindleEmail})
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
+                    disabled={sendingToKindleId !== null || isComic}
+                    onClick={() => !isComic && handleSendToKindle(book.id)}
+                  >
+                    {sendingToKindleId === book.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : (
+                      <Send className="h-3 w-3 mr-1" />
+                    )}
+                    Kindle
+                  </Button>
+                </div>
+                {user?.role === "ADMIN" && allUsers.length > 0 && (
+                  <div className="w-full flex gap-1 items-center mt-1">
+                    <select
+                      id={`send-to-user-${book.id}`}
+                      className={`flex-1 h-7 text-[10px] rounded border border-[#2d2d34] bg-[#111115] px-2 py-0.5 text-muted-foreground focus:outline-none ${
+                        isComic ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
+                      }`}
+                      defaultValue=""
+                      disabled={isComic}
+                      title={isComic ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle." : "Send to User's Kindle"}
+                      onChange={async (e) => {
+                        const targetUsername = e.target.value;
+                        if (!targetUsername || isComic) return;
+
+                        const confirmSend = window.confirm(
+                          `Are you sure you want to send this book to ${targetUsername}'s Kindle?`,
+                        );
+                        if (!confirmSend) {
+                          e.target.value = "";
+                          return;
+                        }
+
+                        // Reset value of select
+                        e.target.value = "";
+
+                        setSendingToKindleId(book.id);
+                        try {
+                          const res = await sendBookToKindle(book.id, targetUsername);
+                          if (res && !res.success) {
+                            alert(
+                              res.error ||
+                                `Delivery to ${targetUsername}'s Kindle failed.`,
+                            );
+                          } else {
+                            alert(
+                              `Ebook successfully sent to ${targetUsername}'s Kindle!`,
+                            );
+                          }
+                        } catch (err: any) {
+                          alert(err.message || `Delivery failed.`);
+                        } finally {
+                          setSendingToKindleId(null);
+                        }
+                      }}
+                    >
+                      <option value="">{isComic ? "Kindle Unsupported for Comic" : "Send to User's Kindle..."}</option>
+                      {!isComic &&
+                        allUsers
+                          .filter((u) => u.kindleEmail)
+                          .map((u) => (
+                            <option key={u.id} value={u.username}>
+                              {u.username} ({u.kindleEmail})
+                            </option>
+                          ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
             <Button
               variant="outline"
@@ -1727,6 +1770,8 @@ function BookLibraryPageContent() {
     }
   }
 
+  const [releaseFilter, setReleaseFilter] = useState<"all" | "matches">("matches");
+
   async function triggerProwlarrSearch(req: any, overrideMediaType?: string, customQuery?: string) {
     const targetMediaType =
       overrideMediaType ||
@@ -1738,18 +1783,25 @@ function BookLibraryPageContent() {
     setProwlarrResults([]);
     setSearchProwlarrError("");
 
-    // Clean the title by removing text inside parentheses (like "Enhanced Edition")
+    // Clean the title and author for smart search
     const cleanTitle = (req.title || "").replace(/\s*\([^)]+\)\s*/g, " ").trim();
-    
-    // Set the initial custom query if not already typing (Title-only is best for Torznab)
-    if (!customQuery && !customSearchQuery) {
-        setCustomSearchQuery(cleanTitle);
+    const cleanAuthor = (req.author && req.author !== "Unknown Author" ? req.author : "").trim();
+    const defaultQuery = cleanAuthor ? `${cleanTitle} ${cleanAuthor}` : cleanTitle;
+    const queryText = customQuery !== undefined ? customQuery : (customSearchQuery || defaultQuery);
+
+    if (customQuery !== undefined) {
+      setCustomSearchQuery(customQuery);
+    } else if (!customSearchQuery) {
+      setCustomSearchQuery(defaultQuery);
     }
     
     try {
-      const queryText = customQuery || customSearchQuery || cleanTitle;
-      const res = await searchProwlarrIndexers(queryText, targetMediaType);
-      setProwlarrResults(res || []);
+      const res = await searchProwlarrIndexers(queryText, targetMediaType, req.title, req.author);
+      const resultsList = res || [];
+      setProwlarrResults(resultsList);
+      
+      const hasExactOrGoodMatches = resultsList.some((r: any) => r.matchQuality !== "mismatch");
+      setReleaseFilter(hasExactOrGoodMatches ? "matches" : "all");
     } catch (e: any) {
       setSearchProwlarrError(e.message || "Failed to search indexers.");
     } finally {
@@ -3701,18 +3753,43 @@ function BookLibraryPageContent() {
                                     className="mt-1 h-4 w-4 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 shrink-0 cursor-pointer"
                                   />
                                 )}
-                                {req.coverUrl &&
-                                req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").length > 3 ? (
-                                  <img
-                                    src={req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "")}
-                                    alt={req.title}
-                                    className="w-10 h-14 object-cover rounded bg-muted/20 border border-muted/50 shrink-0"
-                                  />
-                                ) : (
-                                  <div className="w-10 h-14 rounded bg-muted/30 border border-muted/50 flex items-center justify-center text-[7px] text-muted-foreground shrink-0 font-bold uppercase text-center p-0.5">
+                                <div className="relative group shrink-0">
+                                  {req.coverUrl &&
+                                  req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? (
+                                    <img
+                                      src={req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim()}
+                                      alt={req.title}
+                                      className="w-10 h-14 object-cover rounded bg-muted/20 border border-muted/50 shrink-0"
+                                      onError={(e) => {
+                                        (e.target as HTMLElement).style.display = "none";
+                                        const fb = (e.target as HTMLElement).parentElement?.querySelector(".cover-fallback");
+                                        if (fb) (fb as HTMLElement).style.display = "flex";
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div
+                                    className={`cover-fallback w-10 h-14 rounded bg-muted/30 border border-muted/50 flex-col items-center justify-center text-[7px] text-muted-foreground shrink-0 font-bold uppercase text-center p-0.5 ${
+                                      req.coverUrl && req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? "hidden" : "flex"
+                                    }`}
+                                  >
+                                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
                                     No Cover
                                   </div>
-                                )}
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    className="absolute -bottom-1 -right-1 h-5 w-5 p-0 rounded-full bg-primary/90 text-black shadow hover:bg-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Fetch / Refresh Cover Artwork"
+                                    disabled={refreshingRequestCoverId === req.id}
+                                    onClick={() => handleRefreshRequestCover(req.id)}
+                                  >
+                                    {refreshingRequestCoverId === req.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <ImageIcon className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </div>
                                 <div className="space-y-1 min-w-0 flex-1">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <h4
@@ -3831,6 +3908,21 @@ function BookLibraryPageContent() {
                                 {(isAdmin ||
                                   req.requestedBy === user?.username) && (
                                   <div className="flex gap-1 items-center">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="p-1 h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
+                                      title="Fetch / Refresh Cover Artwork"
+                                      disabled={refreshingRequestCoverId === req.id}
+                                      onClick={() => handleRefreshRequestCover(req.id)}
+                                    >
+                                      {refreshingRequestCoverId === req.id ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                      ) : (
+                                        <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                                      )}
+                                      <span className="hidden sm:inline text-[11px]">Cover</span>
+                                    </Button>
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -4635,10 +4727,17 @@ function BookLibraryPageContent() {
           <Card className="w-full max-w-3xl max-h-[85vh] flex flex-col border-muted shadow-2xl">
             <CardHeader className="border-b border-muted/50 pb-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-bold flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" /> Search Releases
-                  for "{activeRequestForSearch.title}"
-                </CardTitle>
+                <div>
+                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" /> Search Releases
+                    for "{activeRequestForSearch.title}"
+                  </CardTitle>
+                  {activeRequestForSearch.author && activeRequestForSearch.author !== "Unknown Author" && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      by <span className="font-semibold text-foreground">{activeRequestForSearch.author}</span>
+                    </p>
+                  )}
+                </div>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -4652,7 +4751,7 @@ function BookLibraryPageContent() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="text"
-                    placeholder="Refine search query (e.g. Add 'Full-Cast')"
+                    placeholder="Refine search query (e.g. Title Author or Specific Group)"
                     value={customSearchQuery}
                     onChange={(e) => setCustomSearchQuery(e.target.value)}
                     className="flex-1 h-8 text-xs"
@@ -4664,21 +4763,89 @@ function BookLibraryPageContent() {
                   />
                   <Button
                     size="sm"
-                    className="h-8 text-xs px-3"
+                    className="h-8 text-xs px-3 font-semibold text-black"
                     onClick={() => triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, customSearchQuery)}
                     disabled={searchingProwlarr}
                   >
                     <Search className="h-3 w-3 mr-1" /> Search
                   </Button>
                 </div>
+
+                {/* Quick Query Shortcut Chips */}
+                {(() => {
+                  const cleanT = (activeRequestForSearch.title || "").replace(/\s*\([^)]+\)\s*/g, " ").trim();
+                  const cleanA = (activeRequestForSearch.author && activeRequestForSearch.author !== "Unknown Author" ? activeRequestForSearch.author : "").trim();
+                  if (!cleanA) return null;
+                  return (
+                    <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                      <span className="text-muted-foreground text-[10px] uppercase font-bold">Quick Queries:</span>
+                      <button
+                        type="button"
+                        className="px-2 py-0.5 rounded bg-muted/30 border border-muted hover:bg-primary/20 hover:border-primary/40 text-foreground text-[10px] transition-colors"
+                        onClick={() => {
+                          const q = `${cleanT} ${cleanA}`;
+                          setCustomSearchQuery(q);
+                          triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, q);
+                        }}
+                      >
+                        🔍 "{cleanT} {cleanA}"
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 py-0.5 rounded bg-muted/30 border border-muted hover:bg-primary/20 hover:border-primary/40 text-foreground text-[10px] transition-colors"
+                        onClick={() => {
+                          const q = `${cleanA} ${cleanT}`;
+                          setCustomSearchQuery(q);
+                          triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, q);
+                        }}
+                      >
+                        🔍 "{cleanA} {cleanT}"
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 py-0.5 rounded bg-muted/30 border border-muted hover:bg-primary/20 hover:border-primary/40 text-foreground text-[10px] transition-colors"
+                        onClick={() => {
+                          setCustomSearchQuery(cleanT);
+                          triggerProwlarrSearch(activeRequestForSearch, activeRequestForSearch.mediaType, cleanT);
+                        }}
+                      >
+                        🔍 "{cleanT}" (Title only)
+                      </button>
+                    </div>
+                  );
+                })()}
                 
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span>
-                    Prowlarr Indexers query status:{" "}
-                    {searchingProwlarr
-                      ? "Searching indexers..."
-                      : `${prowlarrResults.length} releases found.`}
-                  </span>
+                <div className="flex items-center justify-between gap-2 flex-wrap border-t border-muted/30 pt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs">
+                      {searchingProwlarr
+                        ? "Searching indexers..."
+                        : `${prowlarrResults.length} releases found across indexers.`}
+                    </span>
+                    {!searchingProwlarr && prowlarrResults.length > 0 && (
+                      <div className="flex items-center gap-1 ml-2 bg-muted/20 p-0.5 rounded border border-muted/50">
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant={releaseFilter === "matches" ? "default" : "ghost"}
+                          className={`h-6 text-[10px] px-2 font-medium ${releaseFilter === "matches" ? "bg-emerald-600 text-white font-semibold" : "text-muted-foreground"}`}
+                          onClick={() => setReleaseFilter("matches")}
+                        >
+                          Matching Releases ({prowlarrResults.filter((r: any) => r.matchQuality !== "mismatch").length})
+                        </Button>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant={releaseFilter === "all" ? "default" : "ghost"}
+                          className={`h-6 text-[10px] px-2 font-medium ${releaseFilter === "all" ? "bg-primary text-black font-semibold" : "text-muted-foreground"}`}
+                          onClick={() => setReleaseFilter("all")}
+                        >
+                          All ({prowlarrResults.length})
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground font-medium">
                       Format:
@@ -4749,47 +4916,85 @@ function BookLibraryPageContent() {
                 </div>
               ) : (
                 <div className="divide-y divide-muted/50">
-                  {prowlarrResults.map((release, i) => (
-                    <div
-                      key={i}
-                      className="p-4 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors"
-                    >
-                      <div className="space-y-1 flex-1 min-w-0">
-                        <h4
-                          className="font-semibold text-xs leading-snug text-foreground break-words truncate"
-                          title={release.title}
+                  {prowlarrResults
+                    .filter((release: any) => releaseFilter === "all" || release.matchQuality !== "mismatch")
+                    .map((release: any, i: number) => {
+                      const isExact = release.matchQuality === "exact";
+                      const isMismatch = release.matchQuality === "mismatch";
+                      return (
+                        <div
+                          key={i}
+                          className={`p-4 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors ${isExact ? "bg-emerald-500/5 border-l-2 border-emerald-500" : isMismatch ? "opacity-60 bg-red-500/5" : ""}`}
                         >
-                          {release.title}
-                        </h4>
-                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-                          <Badge
-                            variant="outline"
-                            className="text-[9px] py-0 border-muted uppercase"
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4
+                                className="font-semibold text-xs leading-snug text-foreground break-words truncate"
+                                title={release.title}
+                              >
+                                {release.title}
+                              </h4>
+                              {release.badgeText && (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[9px] py-0 px-1.5 font-bold ${release.badgeColor || "border-muted text-muted-foreground"}`}
+                                >
+                                  {release.badgeText}
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            {release.warning && (
+                              <p className="text-[10px] text-amber-400/90 font-medium">
+                                ⚠️ {release.warning}
+                              </p>
+                            )}
+
+                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] py-0 border-muted uppercase"
+                              >
+                                {release.protocol}
+                              </Badge>
+                              <span className="font-medium text-foreground">
+                                {(release.size / (1024 * 1024)).toFixed(1)} MB
+                              </span>
+                              <span>Indexer: <span className="text-foreground font-medium">{release.indexer}</span></span>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            disabled={pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-")}
+                            onClick={() => handleSendRelease(release)}
+                            className={`text-xs font-bold shrink-0 ${isExact ? "bg-emerald-500 hover:bg-emerald-400 text-black" : "text-black"}`}
                           >
-                            {release.protocol}
-                          </Badge>
-                          <span className="font-medium text-foreground">
-                            {(release.size / (1024 * 1024)).toFixed(1)} MB
-                          </span>
-                          <span>Indexer: {release.indexer}</span>
+                            {pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-") ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Download className="h-3 w-3 mr-1" /> Grab
+                              </>
+                            )}
+                          </Button>
                         </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        disabled={pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-")}
-                          onClick={() => handleSendRelease(release)}
-                          className="text-xs font-bold text-black shrink-0"
+                      );
+                    })}
+                    {releaseFilter === "matches" && prowlarrResults.filter((r: any) => r.matchQuality !== "mismatch").length === 0 && (
+                      <div className="p-8 text-center space-y-2">
+                        <p className="text-xs text-muted-foreground italic">
+                          No exact author/title matches found in the {prowlarrResults.length} releases returned.
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setReleaseFilter("all")}
                         >
-                          {pushingReleaseId === release.downloadUrl || activeRequestForSearch?.id?.startsWith("temp-") ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <>
-                            <Download className="h-3 w-3 mr-1" /> Grab
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  ))}
+                          Show All {prowlarrResults.length} Indexer Releases
+                        </Button>
+                      </div>
+                    )}
                 </div>
               )}
             </CardContent>
@@ -5441,6 +5646,13 @@ function BookLibraryPageContent() {
             </CardFooter>
           </Card>
         </div>
+      )}
+
+      {activeReadingBook && (
+        <BookReaderModal
+          book={activeReadingBook}
+          onClose={() => setActiveReadingBook(null)}
+        />
       )}
     </div>
   );

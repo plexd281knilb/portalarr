@@ -78,7 +78,7 @@ export async function GET(
         let targetPath = book.filePath;
         
         if (stat.isDirectory()) {
-            const validExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".epub", ".pdf", ".mobi", ".azw3"];
+            const validExts = [".m4b", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".epub", ".pdf", ".mobi", ".azw3", ".cbz", ".cbr"];
             const searchParams = req.nextUrl.searchParams;
             const reqFile = searchParams.get("file");
 
@@ -103,6 +103,7 @@ export async function GET(
         else if (ext === ".epub") contentType = "application/epub+zip";
         else if (ext === ".mobi") contentType = "application/x-mobipocket-ebook";
         else if (ext === ".cbz") contentType = "application/x-cbz";
+        else if (ext === ".cbr") contentType = "application/x-cbr";
         else if (ext === ".mp3") contentType = "audio/mpeg";
         else if (ext === ".m4b" || ext === ".m4a") contentType = "audio/mp4";
         else if (ext === ".flac") contentType = "audio/flac";

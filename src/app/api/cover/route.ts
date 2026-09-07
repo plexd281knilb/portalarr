@@ -21,39 +21,88 @@ export async function GET(req: NextRequest) {
 
         if (!id) return new NextResponse("Missing id", { status: 400 });
 
+        // 1. Check Book table
         const book = await prisma.book.findUnique({
             where: { id }
         });
 
-        if (!book || !book.filePath) return new NextResponse("Book not found", { status: 404 });
+        if (book) {
+            if (book.filePath) {
+                let dirPath = "";
+                try {
+                    const stat = fs.statSync(book.filePath);
+                    dirPath = stat.isDirectory() ? book.filePath : path.dirname(book.filePath);
+                } catch (e) {}
 
-        let dirPath = "";
-        try {
-            const stat = fs.statSync(book.filePath);
-            dirPath = stat.isDirectory() ? book.filePath : path.dirname(book.filePath);
-        } catch (e) {
-            return new NextResponse("Book path invalid", { status: 404 });
-        }
+                if (dirPath) {
+                    let coverPath = path.join(dirPath, "cover.jpg");
+                    if (!fs.existsSync(coverPath)) {
+                        coverPath = path.join(dirPath, "cover.png");
+                    }
 
-        let coverPath = path.join(dirPath, "cover.jpg");
-        if (!fs.existsSync(coverPath)) {
-            coverPath = path.join(dirPath, "cover.png");
-        }
+                    if (fs.existsSync(coverPath)) {
+                        const fileBuffer = fs.readFileSync(coverPath);
+                        const ext = path.extname(coverPath).toLowerCase();
+                        const contentType = ext === ".png" ? "image/png" : "image/jpeg";
 
-        if (!fs.existsSync(coverPath)) {
-            return new NextResponse("Cover not found", { status: 404 });
-        }
-
-        const fileBuffer = fs.readFileSync(coverPath);
-        const ext = path.extname(coverPath).toLowerCase();
-        const contentType = ext === ".png" ? "image/png" : "image/jpeg";
-
-        return new NextResponse(fileBuffer, {
-            headers: {
-                "Content-Type": contentType,
-                "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                        return new NextResponse(fileBuffer, {
+                            headers: {
+                                "Content-Type": contentType,
+                                "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                            }
+                        });
+                    }
+                }
             }
+
+            // Fallback to book.coverUrl if remote URL
+            if (book.coverUrl && book.coverUrl.startsWith("http")) {
+                const cleanRemoteUrl = book.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "");
+                try {
+                    const imgRes = await fetch(cleanRemoteUrl);
+                    if (imgRes.ok) {
+                        const imgBuffer = await imgRes.arrayBuffer();
+                        const cType = imgRes.headers.get("content-type") || "image/jpeg";
+                        return new NextResponse(Buffer.from(imgBuffer), {
+                            headers: {
+                                "Content-Type": cType,
+                                "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                            }
+                        });
+                    }
+                } catch (e) {
+                    return NextResponse.redirect(cleanRemoteUrl);
+                }
+            }
+        }
+
+        // 2. Check BookRequest table
+        const bookReq = await prisma.bookRequest.findUnique({
+            where: { id }
         });
+
+        if (bookReq && bookReq.coverUrl) {
+            const cleanCoverUrl = bookReq.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "");
+            if (cleanCoverUrl.startsWith("http")) {
+                try {
+                    const imgRes = await fetch(cleanCoverUrl);
+                    if (imgRes.ok) {
+                        const imgBuffer = await imgRes.arrayBuffer();
+                        const cType = imgRes.headers.get("content-type") || "image/jpeg";
+                        return new NextResponse(Buffer.from(imgBuffer), {
+                            headers: {
+                                "Content-Type": cType,
+                                "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                            }
+                        });
+                    }
+                } catch (e) {
+                    return NextResponse.redirect(cleanCoverUrl);
+                }
+            }
+        }
+
+        return new NextResponse("Cover not found", { status: 404 });
     } catch (e) {
         console.error("[COVER-API] Error:", e);
         return new NextResponse("Internal Server Error", { status: 500 });
