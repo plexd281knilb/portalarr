@@ -16,28 +16,6 @@
 ---
 
 
-### 🚀 Upcoming Milestones
-
-
-#### 🟡 In Active Development
-
-- **Cross-Device Listening Sync:** Seamlessly pick up right where you left off on any phone, tablet, or computer.
-
-- **Personal Reading & Listening Stats:** Track your reading streaks, total books finished, and weekly listening hours.
-
-
-#### 🔵 Planned
-
-- **Smart Book Series Organization:** Automatically group and number books in a series so you always know what to read next.
-
-- **Discord & Phone Alerts:** Get notified instantly when your requested books, movies, or TV episodes are ready to enjoy.
-
-- **Live TV & 24/7 Channels:** Stream custom continuous channels and curated show blocks directly within your media players.
-
-
----
-
-
 ### 💡 Have an Idea or Need Help?
 
 Got a feature suggestion or noticed an issue? Vote on community suggestions below or submit a support ticket anytime!
