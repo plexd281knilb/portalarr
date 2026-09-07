@@ -112,11 +112,15 @@ export async function GET(
         const fileStream = fs.createReadStream(targetPath);
         const fileStat = fs.statSync(targetPath);
 
+        const searchParams = req.nextUrl.searchParams;
+        const isDownload = searchParams.get("download") === "1" || searchParams.get("download") === "true";
+        const disposition = isDownload ? "attachment" : "inline";
+
         return new NextResponse(fileStream as any, {
             headers: {
                 "Content-Type": contentType,
                 "Content-Length": String(fileStat.size),
-                "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`
+                "Content-Disposition": `${disposition}; filename="${encodeURIComponent(fileName)}"`
             }
         });
     } catch (e) {

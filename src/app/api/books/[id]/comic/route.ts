@@ -92,7 +92,47 @@ export async function GET(
             if (files.length > 0) {
                 targetPath = path.join(targetPath, files[0]);
             } else {
-                return new NextResponse("No comic file found in directory", { status: 404 });
+                // Check if directory directly contains loose comic images
+                const rawImages = fs.readdirSync(targetPath)
+                    .filter(f => /\.(?:jpe?g|png|webp|gif|bmp|avif)$/i.test(f))
+                    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+
+                if (rawImages.length > 0) {
+                    const searchParams = req.nextUrl.searchParams;
+                    const pageParam = searchParams.get("page");
+
+                    if (!pageParam) {
+                        return NextResponse.json({
+                            success: true,
+                            format: "folder",
+                            title: book.title,
+                            totalPages: rawImages.length,
+                            pages: rawImages.map((name, idx) => ({
+                                pageNumber: idx + 1,
+                                name: path.basename(name)
+                            }))
+                        });
+                    }
+
+                    const pageNum = parseInt(pageParam, 10);
+                    if (isNaN(pageNum) || pageNum < 1 || pageNum > rawImages.length) {
+                        return new NextResponse("Invalid Page Number", { status: 400 });
+                    }
+
+                    const targetImageName = rawImages[pageNum - 1];
+                    const targetImagePath = path.join(targetPath, targetImageName);
+                    const imgBuffer = fs.readFileSync(targetImagePath);
+                    const contentType = getImageContentType(targetImageName);
+
+                    return new NextResponse(imgBuffer as any, {
+                        headers: {
+                            "Content-Type": contentType,
+                            "Content-Length": String(imgBuffer.length),
+                            "Cache-Control": "public, max-age=86400, immutable"
+                        }
+                    });
+                }
+                return new NextResponse("No comic file or images found in directory", { status: 404 });
             }
         }
 
