@@ -1,26 +1,43 @@
 ### ✨ Recently Released
 
-- **📚 Dual Ebook & Audiobook Shelves:** Dedicated library tabs with automatic format routing and indexer categorization.
-- **📖 In-Browser Kindle & Comic Readers:** Offline book caching (`0ms` reopen), accurate reading %, typography adjustments (Bookerly, themes), and zero-conversion `.cbr`/`.cbz` comic streaming.
-- **🎧 Floating Audio Player & Chapter Reordering:** Continuous background listening, speed controls (0.75x–2.0x), 15s skips, sleep timer, and interactive track reordering.
-- **📨 Smart Autocomplete & 4-Tier Search:** Strict title/author autocomplete with instant artwork previews and multi-tier Prowlarr fallback search.
-- **📧 Send-to-Kindle Health Diagnostics:** Pre-flight SMTP health diagnostics, delivery audit trail, and 1-click retry actions.
-- **🎨 Glassmorphic Dark UI & Glowing Accents:** Hover ring indicators and mobile-first responsive navigation across all pages.
+- **📚 Separate Ebook & Audiobook Shelves:** Easily browse and organize your reading books and audiobooks in their own dedicated tabs.
+
+- **📖 Built-In Book & Comic Reader:** Read your favorite books and comics directly in your browser on both mobile and desktop with customizable fonts, colors, and smooth page flipping.
+
+- **🎧 Audiobook Player & Chapter Controls:** Listen to your audiobooks seamlessly in the background with speed adjustments, quick skips, a sleep timer, and flexible chapter reordering.
+
+- **📨 Instant Search & Cover Previews:** Fast, intelligent book searching with crisp cover artwork automatically found and displayed.
+
+- **📧 1-Click Send to Kindle:** Send books directly to your Kindle device or Kindle app with automatic status updates and delivery confirmations.
+
+- **🎨 Modern Dark Theme & Mobile-Ready UI:** A sleek, clean design that looks and works great across your phone, tablet, and desktop.
+
 
 ---
+
 
 ### 🚀 Upcoming Milestones
 
+
 #### 🟡 In Active Development
-- **Multi-User Audio Playback Sync:** Cross-device progress syncing and *"Continue Listening"* shelf.
-- **Interactive Listening Analytics:** Track reading streaks, finished books, and listening hours.
+
+- **Cross-Device Listening Sync:** Seamlessly pick up right where you left off on any phone, tablet, or computer.
+
+- **Personal Reading & Listening Stats:** Track your reading streaks, total books finished, and weekly listening hours.
+
 
 #### 🔵 Planned
-- **Enhanced Series Management:** Batch volume renaming and multi-author universe tracking.
-- **Real-Time Notification Webhooks:** Automated alerts to Discord, Telegram, and Pushover.
-- **Download Client Telemetry:** Per-indexer match rates and automated queue priorities.
+
+- **Smart Book Series Organization:** Automatically group and number books in a series so you always know what to read next.
+
+- **Discord & Phone Alerts:** Get notified instantly when your requested books, movies, or TV episodes are ready to enjoy.
+
+- **Live TV & 24/7 Channels:** Stream custom continuous channels and curated show blocks directly within your media players.
+
 
 ---
 
-### 💡 Feedback & Support
-Have an idea or spotted an issue? Submit a ticket in the [Support Section](#) or explore active experiments on the [🧪 Beta Portal](/beta).
+
+### 💡 Have an Idea or Need Help?
+
+Got a feature suggestion or noticed an issue? Vote on community suggestions below or submit a support ticket anytime!

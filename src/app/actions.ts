@@ -1584,6 +1584,176 @@ export async function updateRoadmapText(formData: FormData) {
 }
 
 // ============================================================================
+// --- COMMUNITY FEATURE SUGGESTIONS & VOTING POLL ---
+// ============================================================================
+
+export async function getFeatureSuggestions() {
+    try {
+        const user: any = await verifyUser().catch(() => null);
+        const username: string = String(user?.username || "");
+
+        const suggestions = await prisma.featureSuggestion.findMany({
+            include: {
+                votes: true
+            },
+            orderBy: {
+                createdAt: "desc"
+            }
+        });
+
+        const formatted = suggestions.map(s => {
+            const hasVoted = username ? s.votes.some(v => v.username.toLowerCase() === username.toLowerCase()) : false;
+            return {
+                id: s.id,
+                title: s.title,
+                description: s.description,
+                category: s.category,
+                createdBy: s.createdBy,
+                votesCount: s.votes.length,
+                hasVoted,
+                createdAt: s.createdAt
+            };
+        });
+
+        // Sort by votes count descending, then by creation date descending
+        formatted.sort((a, b) => {
+            if (b.votesCount !== a.votesCount) {
+                return b.votesCount - a.votesCount;
+            }
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+
+        return { success: true, suggestions: formatted, currentUsername: username };
+    } catch (e: any) {
+        console.error("Failed to fetch feature suggestions:", e);
+        return { success: false, error: e.message || "Failed to fetch suggestions", suggestions: [] };
+    }
+}
+
+export async function toggleFeatureVote(suggestionId: string) {
+    try {
+        const user: any = await verifyUser();
+        const username: string = String(user?.username || "");
+        if (!username) {
+            return { success: false, error: "User session invalid" };
+        }
+
+        const suggestion = await prisma.featureSuggestion.findUnique({
+            where: { id: suggestionId },
+            include: { votes: true }
+        });
+
+        if (!suggestion) {
+            return { success: false, error: "Suggestion not found" };
+        }
+
+        const existingVote = suggestion.votes.find(
+            v => v.username.toLowerCase() === username.toLowerCase()
+        );
+
+        let hasVoted = false;
+        if (existingVote) {
+            // Unvote / uncheck
+            await prisma.featureVote.delete({
+                where: { id: existingVote.id }
+            });
+            hasVoted = false;
+        } else {
+            // Vote / check
+            await prisma.featureVote.create({
+                data: {
+                    suggestionId,
+                    username
+                }
+            });
+            hasVoted = true;
+        }
+
+        const updatedCount = await prisma.featureVote.count({
+            where: { suggestionId }
+        });
+
+        revalidatePath("/");
+        revalidatePath("/beta");
+
+        return { success: true, hasVoted, votesCount: updatedCount };
+    } catch (e: any) {
+        console.error("Failed to toggle feature vote:", e);
+        return { success: false, error: e.message || "Failed to submit vote" };
+    }
+}
+
+export async function createFeatureSuggestion(title: string, description?: string, category?: string) {
+    try {
+        const user: any = await verifyUser();
+        const username: string = String(user?.username || "Anonymous");
+
+        const cleanTitle = (title || "").trim();
+        if (cleanTitle.length < 3) {
+            return { success: false, error: "Feature title must be at least 3 characters long" };
+        }
+
+        const newSuggestion = await prisma.featureSuggestion.create({
+            data: {
+                title: cleanTitle,
+                description: (description || "").trim() || null,
+                category: (category || "General").trim() || "General",
+                createdBy: username,
+                votes: {
+                    create: {
+                        username
+                    }
+                }
+            },
+            include: {
+                votes: true
+            }
+        });
+
+        revalidatePath("/");
+        revalidatePath("/beta");
+
+        return {
+            success: true,
+            suggestion: {
+                id: newSuggestion.id,
+                title: newSuggestion.title,
+                description: newSuggestion.description,
+                category: newSuggestion.category,
+                createdBy: newSuggestion.createdBy,
+                votesCount: newSuggestion.votes.length,
+                hasVoted: true,
+                createdAt: newSuggestion.createdAt
+            }
+        };
+    } catch (e: any) {
+        console.error("Failed to create feature suggestion:", e);
+        return { success: false, error: e.message || "Failed to create suggestion" };
+    }
+}
+
+export async function deleteFeatureSuggestion(suggestionId: string) {
+    try {
+        const user: any = await verifyUser();
+        if (user?.role !== "ADMIN") {
+            return { success: false, error: "Unauthorized. Admin privileges required." };
+        }
+
+        await prisma.featureSuggestion.delete({
+            where: { id: suggestionId }
+        });
+
+        revalidatePath("/");
+        revalidatePath("/beta");
+
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to delete feature suggestion:", e);
+        return { success: false, error: e.message || "Failed to delete suggestion" };
+    }
+}
+
+// ============================================================================
 // --- USER GUIDE ACTIONS ---
 // ============================================================================
 

@@ -6,11 +6,14 @@ import LandingSupport from "@/components/landing-support";
 import SystemStatus from "@/components/system-status"; 
 import ActiveDownloads from "@/components/active-downloads"; 
 import RequestLibraryAccess from "@/components/request-library-access";
+import FeatureVotingPoll from "@/components/feature-voting-poll";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ExternalLink, AlertTriangle, BookOpen } from "lucide-react"; 
 import { cookies } from "next/headers"; 
+import { jwtVerify } from "jose";
+import { getJwtSecret } from "@/lib/auth-secret";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +25,15 @@ function makeAbsoluteUrl(url: string | null | undefined) {
 
 export default async function UserLandingPage() {
   const cookieStore = await cookies();
-  const isLoggedIn = !!cookieStore.get("session")?.value;
+  const sessionVal = cookieStore.get("session")?.value;
+  const isLoggedIn = !!sessionVal;
+  let isAdmin = false;
+  if (sessionVal) {
+    try {
+      const { payload } = await jwtVerify(sessionVal, getJwtSecret());
+      isAdmin = payload.role === "ADMIN";
+    } catch (e) {}
+  }
 
   // Fetch all dynamic content
   const [apps, betaText, roadmapText, alertBanner, hasAccess] = await Promise.all([
@@ -131,12 +142,17 @@ export default async function UserLandingPage() {
                         🗺️ Roadmap & New Features
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="prose prose-neutral dark:prose-invert max-w-none text-sm sm:text-base leading-relaxed break-words overflow-hidden pb-6 prose-headings:font-bold prose-h3:text-lg prose-h3:text-foreground prose-h3:mt-5 prose-h3:mb-3 prose-h4:text-xs prose-h4:font-semibold prose-h4:text-muted-foreground prose-h4:uppercase prose-h4:tracking-wider prose-h4:mt-4 prose-h4:mb-2 prose-ul:my-2 prose-ul:space-y-2.5 prose-li:my-1.5 prose-li:leading-relaxed prose-hr:my-5 prose-hr:border-border/40">
+                <CardContent className="prose prose-neutral dark:prose-invert max-w-none text-sm sm:text-base leading-relaxed break-words overflow-hidden pb-6 prose-headings:font-bold prose-h3:text-lg sm:prose-h3:text-xl prose-h3:text-foreground prose-h3:mt-6 prose-h3:mb-4 prose-h4:text-xs sm:prose-h4:text-sm prose-h4:font-semibold prose-h4:text-muted-foreground prose-h4:uppercase prose-h4:tracking-wider prose-h4:mt-5 prose-h4:mb-3 prose-ul:my-3 prose-ul:space-y-3.5 prose-li:my-2 prose-li:leading-relaxed prose-hr:my-6 prose-hr:border-border/40">
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                         {roadmapText}
                     </ReactMarkdown>
                 </CardContent>
             </Card>
+        </div>
+
+        {/* COMMUNITY FEATURE SUGGESTIONS & VOTING POLL */}
+        <div className="w-full">
+            <FeatureVotingPoll isAdmin={isAdmin} />
         </div>
 
         {/* BETA TESTING CARD */}

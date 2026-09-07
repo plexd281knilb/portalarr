@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { ArrowLeft, Server } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import FeatureVotingPoll from '@/components/feature-voting-poll';
 
 export default function BetaPage() {
     const [betaCards, setBetaCards] = useState<any[]>([]);
@@ -96,6 +97,10 @@ export default function BetaPage() {
                             </Card>
                         ))
                     )}
+                </div>
+
+                <div className="w-full pt-4">
+                    <FeatureVotingPoll />
                 </div>
             </main>
         </div>

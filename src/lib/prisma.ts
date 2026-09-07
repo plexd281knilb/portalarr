@@ -215,6 +215,83 @@ async function ensureSchemaColumns() {
     } catch (e: any) {
         console.error("[DB-SCHEMA-AUTOFIX] Failed to create FailedRelease table:", e.message || e);
     }
+
+    try {
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "FeatureSuggestion" (
+                "id" TEXT PRIMARY KEY,
+                "title" TEXT NOT NULL,
+                "description" TEXT,
+                "category" TEXT NOT NULL DEFAULT 'General',
+                "createdBy" TEXT NOT NULL DEFAULT 'Admin',
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "FeatureVote" (
+                "id" TEXT PRIMARY KEY,
+                "suggestionId" TEXT NOT NULL,
+                "username" TEXT NOT NULL,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "FeatureVote_suggestionId_fkey" FOREIGN KEY ("suggestionId") REFERENCES "FeatureSuggestion" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+            );
+        `);
+        await prisma.$executeRawUnsafe(`
+            CREATE UNIQUE INDEX IF NOT EXISTS "FeatureVote_suggestionId_username_key" ON "FeatureVote"("suggestionId", "username");
+        `);
+
+        // Seed initial suggestions if empty
+        const count: any[] = await prisma.$queryRawUnsafe(`SELECT count(*) as cnt FROM "FeatureSuggestion";`);
+        const total = count?.[0]?.cnt || 0;
+        if (total === 0) {
+            console.log("[DB-SCHEMA-AUTOFIX] Seeding initial community feature suggestions...");
+            const initialSuggestions = [
+                {
+                    id: "sug_tunarr_live",
+                    title: "Tunarr Live TV & 24/7 Channels",
+                    description: "Stream personalized 24/7 TV channels, custom programming blocks, and continuously running shows directly in your media player.",
+                    category: "Live TV"
+                },
+                {
+                    id: "sug_audiobook_enhancements",
+                    title: "Enhanced Audiobook Player & Playlists",
+                    description: "Smarter chapter tracking, customizable bookmarks, listening speed presets, and cross-device listening resume.",
+                    category: "Audiobooks"
+                },
+                {
+                    id: "sug_plex_user_filter",
+                    title: "Personal Plex Content & NSFW Filtering",
+                    description: "Allow users to customize their Plex experience from Portalarr—toggle NSFW/mature content and hide specific tagged shows or movies.",
+                    category: "Plex"
+                },
+                {
+                    id: "sug_instant_notifications",
+                    title: "Real-Time Discord & Telegram Notifications",
+                    description: "Receive instant notifications on Discord, Telegram, or phone alerts when requested books, movies, or show episodes finish downloading.",
+                    category: "Notifications"
+                },
+                {
+                    id: "sug_listening_stats",
+                    title: "Personal Reading & Listening Statistics",
+                    description: "Track your reading speed, completed books, monthly listening hours, and personalized reading goal milestones.",
+                    category: "Stats"
+                }
+            ];
+
+            for (const s of initialSuggestions) {
+                await prisma.$executeRawUnsafe(
+                    `INSERT OR IGNORE INTO "FeatureSuggestion" ("id", "title", "description", "category", "createdBy", "createdAt", "updatedAt") VALUES (?, ?, ?, ?, 'Admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`,
+                    s.id,
+                    s.title,
+                    s.description,
+                    s.category
+                );
+            }
+        }
+    } catch (e: any) {
+        console.error("[DB-SCHEMA-AUTOFIX] Failed to create or seed FeatureSuggestion tables:", e.message || e);
+    }
 }
 
 ensureSchemaColumns();

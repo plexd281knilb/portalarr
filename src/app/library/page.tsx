@@ -4338,432 +4338,475 @@ function BookLibraryPageContent() {
                         .map((req) => {
                           const canDelete =
                             isAdmin || req.requestedBy === user?.username;
+                          const isDownloading =
+                            (req.status && req.status.startsWith("Downloading")) ||
+                            !!req.downloadProgress;
+                          const isSearching = req.status === "Searching";
+                          const isFailed = req.status && req.status.startsWith("Failed");
+                          const isPending = req.status === "Pending";
+                          const isApproved =
+                            req.status && req.status.startsWith("Approved");
+                          const isDownloaded = req.status === "Downloaded";
+
+                          // Format download progress safely
+                          const rawPct =
+                            req.downloadProgress?.percentage !== undefined
+                              ? parseFloat(req.downloadProgress.percentage)
+                              : undefined;
+                          const hasProgressPercent =
+                            rawPct !== undefined && !isNaN(rawPct);
+                          const progressPercent = hasProgressPercent
+                            ? Math.max(0, Math.min(100, rawPct))
+                            : 0;
+
                           return (
                             <div
                               key={req.id}
-                              className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                              className={`p-4 space-y-3 transition-all duration-200 border-b border-muted/40 last:border-b-0 ${
+                                isDownloading
+                                  ? "bg-cyan-950/10"
+                                  : isFailed
+                                    ? "bg-red-950/10"
+                                    : "hover:bg-muted/10"
+                              }`}
                             >
-                              <div className="flex gap-3 items-start min-w-0 w-full sm:w-auto flex-1">
-                                {canDelete && (
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedRequestIds.includes(
-                                      req.id,
-                                    )}
-                                    onChange={() => toggleSelectRequest(req.id)}
-                                    className="mt-1 h-4 w-4 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 shrink-0 cursor-pointer"
-                                  />
-                                )}
-                                <div className="relative group shrink-0">
-                                  {req.coverUrl &&
-                                  req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? (
-                                    <img
-                                      src={req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim()}
-                                      alt={req.title}
-                                      className="w-10 h-14 object-cover rounded bg-muted/20 border border-muted/50 shrink-0"
-                                      onError={(e) => {
-                                        (e.target as HTMLElement).style.display = "none";
-                                        const fb = (e.target as HTMLElement).parentElement?.querySelector(".cover-fallback");
-                                        if (fb) (fb as HTMLElement).style.display = "flex";
-                                      }}
-                                    />
-                                  ) : null}
-                                  <div
-                                    className={`cover-fallback w-10 h-14 rounded bg-muted/30 border border-muted/50 flex-col items-center justify-center text-[7px] text-muted-foreground shrink-0 font-bold uppercase text-center p-0.5 ${
-                                      req.coverUrl && req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? "hidden" : "flex"
-                                    }`}
-                                  >
-                                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
-                                    No Cover
-                                  </div>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    className="absolute -bottom-1 -right-1 h-5 w-5 p-0 rounded-full bg-primary/90 text-black shadow hover:bg-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Fetch / Refresh Cover Artwork"
-                                    disabled={refreshingRequestCoverId === req.id}
-                                    onClick={() => handleRefreshRequestCover(req.id)}
-                                  >
-                                    {refreshingRequestCoverId === req.id ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <ImageIcon className="h-3 w-3" />
-                                    )}
-                                  </Button>
-                                </div>
-                                <div className="space-y-1 min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <h4
-                                      className="font-semibold text-sm truncate"
-                                      title={req.title}
-                                    >
-                                      {req.title}
-                                    </h4>
-                                    {req.mediaType === "audiobook" ? (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] py-0 px-1 border-amber-500/40 text-amber-400 bg-amber-500/10 font-bold flex items-center gap-1"
-                                      >
-                                        <Headphones className="h-3 w-3" />{" "}
-                                        AUDIOBOOK
-                                      </Badge>
-                                    ) : req.type === "series" ? (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] py-0 px-1 border-purple-500/30 text-purple-400 bg-purple-500/5 font-semibold"
-                                      >
-                                        SERIES
-                                      </Badge>
-                                    ) : (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] py-0 px-1 border-blue-500/30 text-blue-400 bg-blue-500/5 font-semibold"
-                                      >
-                                        EBOOK
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground truncate font-medium">
-                                    {req.author
-                                      ? `by ${req.author}`
-                                      : "Unknown Author"}{" "}
-                                    {req.publishYear
-                                      ? `(${req.publishYear})`
-                                      : ""}
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground">
-                                    Requested by{" "}
-                                    <span className="font-semibold text-foreground">
-                                      {req.requestedBy}
-                                    </span>{" "}
-                                    •{" "}
-                                    {new Date(
-                                      req.createdAt,
-                                    ).toLocaleDateString()}
-                                  </p>
-
-                                  {/* Real-time Download Progress Bar */}
-                                  {(req.status?.startsWith("Downloading") || req.downloadProgress) && (
-                                    <div className="mt-2.5 space-y-1.5 bg-blue-950/20 border border-blue-500/20 rounded-md p-2.5 animate-in fade-in">
-                                      <div className="flex justify-between items-center text-[11px]">
-                                        <span className="font-semibold text-blue-400 flex items-center gap-1.5">
-                                          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
-                                          {req.downloadProgress?.client ? `Downloading via ${req.downloadProgress.client}` : "Active Download in Client Queue"}
-                                        </span>
-                                        <span className="font-mono font-bold text-foreground">
-                                          {req.downloadProgress?.percentage !== undefined ? `${req.downloadProgress.percentage}%` : "Downloading..."}
-                                        </span>
-                                      </div>
-                                      <Progress
-                                        value={req.downloadProgress?.percentage ?? 45}
-                                        className="h-1.5 bg-blue-950/50"
-                                      />
-                                      <div className="flex justify-between items-center text-[10px] text-muted-foreground font-mono">
-                                        <span>
-                                          {req.downloadProgress?.mb ? `${req.downloadProgress.mb} MB` : ""}
-                                          {req.downloadProgress?.mbleft ? ` (${req.downloadProgress.mbleft} MB left)` : ""}
-                                        </span>
-                                        <span>
-                                          {req.downloadProgress?.timeleft ? `ETA: ${req.downloadProgress.timeleft}` : ""}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end border-t sm:border-t-0 pt-3 sm:pt-0 mt-1 sm:mt-0">
-                                <Badge
-                                  className={`text-xs ${
-                                    req.status === "Pending"
-                                      ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30"
-                                      : req.status === "Approved"
-                                        ? "bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30"
-                                        : req.status === "Downloaded"
-                                          ? "bg-green-500/20 text-green-600 dark:text-green-400 border border-green-500/30"
-                                          : "bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30"
-                                  }`}
-                                >
-                                  {req.status}
-                                </Badge>
-
-                                {/* Series Auto-Monitor Toggle */}
-                                {(req.series || req.type === "series") && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className={`h-7 text-[10px] font-semibold px-2 gap-1 ${
-                                      req.monitorSeries
-                                        ? "bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25"
-                                        : "border-muted text-muted-foreground hover:text-foreground"
-                                    }`}
-                                    title={req.monitorSeries ? "Series is being automatically monitored for new installments" : "Enable automatic background monitoring for new books in this series"}
-                                    disabled={togglingMonitorId === req.id}
-                                    onClick={() => handleToggleSeriesMonitoring(req.id)}
-                                  >
-                                    {togglingMonitorId === req.id ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <Zap className={`h-3 w-3 ${req.monitorSeries ? "text-purple-400 fill-purple-400" : ""}`} />
-                                    )}
-                                    {req.monitorSeries ? "Monitored" : "Monitor Series"}
-                                  </Button>
-                                )}
-
-                                {/* Direct File Upload / Fulfill */}
-                                {(isAdmin || req.requestedBy === user?.username) && req.status !== "Downloaded" && (
-                                  <label className="cursor-pointer">
+                              {/* Main Header / Info Row */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+                                {/* Left: Checkbox + Artwork + Book Details */}
+                                <div className="flex gap-3 items-start min-w-0 flex-1">
+                                  {canDelete && (
                                     <input
-                                      type="file"
-                                      accept=".epub,.pdf,.m4b,.mp3,.torrent,.nzb"
-                                      className="hidden"
-                                      disabled={uploadingFulfillId === req.id}
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                          handleFulfillWithUpload(req.id, file);
-                                          e.target.value = "";
-                                        }
-                                      }}
+                                      type="checkbox"
+                                      checked={selectedRequestIds.includes(req.id)}
+                                      onChange={() => toggleSelectRequest(req.id)}
+                                      className="mt-1 h-4 w-4 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 shrink-0 cursor-pointer"
                                     />
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      type="button"
-                                      asChild
-                                      className="h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
-                                      title="Fulfill directly by uploading book file (.epub, .pdf, .m4b, .mp3) or NZB/Torrent"
-                                      disabled={uploadingFulfillId === req.id}
-                                    >
-                                      <span>
-                                        {uploadingFulfillId === req.id ? (
-                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                        ) : (
-                                          <FileUp className="h-3.5 w-3.5 text-primary" />
-                                        )}
-                                        <span className="hidden sm:inline text-[11px]">Upload</span>
-                                      </span>
-                                    </Button>
-                                  </label>
-                                )}
+                                  )}
 
-                                {req.status.startsWith("Failed") && (
-                                  <div className="flex gap-1.5 items-center">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold"
-                                      onClick={async () => {
-                                        try {
-                                          await retryBookRequest(req.id);
-                                          alert(
-                                            "Auto-retry search successfully queued in the background!",
-                                          );
-                                          const reqs = await getBookRequests();
-                                          setRequests(reqs || []);
-                                        } catch (err: any) {
-                                          alert(
-                                            err.message ||
-                                              "Failed to retry request.",
-                                          );
-                                        }
-                                      }}
+                                  {/* Cover Thumbnail */}
+                                  <div className="relative group shrink-0">
+                                    {req.coverUrl &&
+                                    req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? (
+                                      <img
+                                        src={req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim()}
+                                        alt={req.title}
+                                        className="w-10 h-14 object-cover rounded bg-muted/20 border border-muted/50 shrink-0"
+                                        onError={(e) => {
+                                          (e.target as HTMLElement).style.display = "none";
+                                          const fb = (e.target as HTMLElement).parentElement?.querySelector(".cover-fallback");
+                                          if (fb) (fb as HTMLElement).style.display = "flex";
+                                        }}
+                                      />
+                                    ) : null}
+                                    <div
+                                      className={`cover-fallback w-10 h-14 rounded bg-muted/30 border border-muted/50 flex-col items-center justify-center text-[7px] text-muted-foreground shrink-0 font-bold uppercase text-center p-0.5 ${
+                                        req.coverUrl && req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? "hidden" : "flex"
+                                      }`}
                                     >
-                                      Auto-Retry
-                                    </Button>
+                                      <BookOpen className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
+                                      No Cover
+                                    </div>
                                     <Button
                                       size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px]"
-                                      onClick={() => triggerProwlarrSearch(req)}
-                                    >
-                                      <Search className="h-3 w-3 mr-1" /> Search
-                                      Release
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 w-7 p-0 border-red-500/40 text-red-400 hover:bg-red-950/60 shrink-0"
-                                      title="Copy Full Error Message"
-                                      onClick={() =>
-                                        showErrorModal(
-                                          req.status,
-                                          "Request Error Details",
-                                        )
-                                      }
-                                    >
-                                      <Copy className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                )}
-                                {(isAdmin ||
-                                  req.requestedBy === user?.username) && (
-                                  <div className="flex gap-1 items-center">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="p-1 h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
+                                      variant="secondary"
+                                      className="absolute -bottom-1 -right-1 h-5 w-5 p-0 rounded-full bg-primary/90 text-black shadow hover:bg-primary opacity-0 group-hover:opacity-100 transition-opacity"
                                       title="Fetch / Refresh Cover Artwork"
                                       disabled={refreshingRequestCoverId === req.id}
                                       onClick={() => handleRefreshRequestCover(req.id)}
                                     >
                                       {refreshingRequestCoverId === req.id ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                        <Loader2 className="h-3 w-3 animate-spin" />
                                       ) : (
-                                        <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                                        <ImageIcon className="h-3 w-3" />
                                       )}
-                                      <span className="hidden sm:inline text-[11px]">Cover</span>
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="p-1 h-7 w-7 text-amber-500 hover:text-amber-600 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 shrink-0"
-                                      title="Report Request Issue"
-                                      onClick={() =>
-                                        handleOpenReportIssueModal({
-                                          type: "request",
-                                          title: req.title,
-                                          id: req.id,
-                                          status: req.status,
-                                        })
-                                      }
-                                    >
-                                      <AlertTriangle className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 shrink-0"
-                                      title="Delete Request"
-                                      onClick={() =>
-                                        handleDeleteRequest(req.id)
-                                      }
-                                    >
-                                      <Trash2 className="h-4 w-4" />
                                     </Button>
                                   </div>
-                                )}
-                                {req.status === "Pending" && (
-                                  <div className="flex gap-1.5 items-center">
-                                    {(isAdmin ||
-                                      req.requestedBy === user?.username) && (
+
+                                  {/* Titles, Badges, and Requester */}
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4
+                                        className="font-semibold text-sm truncate max-w-[260px] sm:max-w-md"
+                                        title={req.title}
+                                      >
+                                        {req.title}
+                                      </h4>
+                                      {req.mediaType === "audiobook" ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] py-0 px-1.5 border-amber-500/40 text-amber-400 bg-amber-500/10 font-bold flex items-center gap-1 shrink-0"
+                                        >
+                                          <Headphones className="h-3 w-3" /> AUDIOBOOK
+                                        </Badge>
+                                      ) : req.type === "series" ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] py-0 px-1.5 border-purple-500/30 text-purple-400 bg-purple-500/5 font-semibold shrink-0"
+                                        >
+                                          SERIES
+                                        </Badge>
+                                      ) : (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] py-0 px-1.5 border-blue-500/30 text-blue-400 bg-blue-500/5 font-semibold shrink-0"
+                                        >
+                                          EBOOK
+                                        </Badge>
+                                      )}
+
+                                      {/* Status Badge */}
+                                      <Badge
+                                        className={`text-xs font-semibold shrink-0 ${
+                                          isDownloading
+                                            ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 animate-pulse"
+                                            : isSearching
+                                              ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 animate-pulse"
+                                              : isApproved
+                                                ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                                                : isPending
+                                                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                                  : isDownloaded
+                                                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                                    : "bg-red-500/20 text-red-400 border border-red-500/30"
+                                        }`}
+                                      >
+                                        {isDownloading ? (
+                                          <span className="flex items-center gap-1.5">
+                                            <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />
+                                            Downloading
+                                          </span>
+                                        ) : isSearching ? (
+                                          <span className="flex items-center gap-1.5">
+                                            <Search className="h-3 w-3 text-indigo-400" />
+                                            Searching
+                                          </span>
+                                        ) : (
+                                          req.status
+                                        )}
+                                      </Badge>
+                                    </div>
+
+                                    <p className="text-xs text-muted-foreground truncate font-medium">
+                                      {req.author ? `by ${req.author}` : "Unknown Author"}{" "}
+                                      {req.publishYear ? `(${req.publishYear})` : ""}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      Requested by{" "}
+                                      <span className="font-semibold text-foreground">
+                                        {req.requestedBy}
+                                      </span>{" "}
+                                      • {new Date(req.createdAt).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Right: Actions Cluster */}
+                                <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0">
+                                  {/* Series Auto-Monitor Toggle */}
+                                  {(req.series || req.type === "series") && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className={`h-7 text-[10px] font-semibold px-2 gap-1 ${
+                                        req.monitorSeries
+                                          ? "bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25"
+                                          : "border-muted text-muted-foreground hover:text-foreground"
+                                      }`}
+                                      title={
+                                        req.monitorSeries
+                                          ? "Series is being automatically monitored for new installments"
+                                          : "Enable automatic background monitoring for new books in this series"
+                                      }
+                                      disabled={togglingMonitorId === req.id}
+                                      onClick={() => handleToggleSeriesMonitoring(req.id)}
+                                    >
+                                      {togglingMonitorId === req.id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Zap
+                                          className={`h-3 w-3 ${req.monitorSeries ? "text-purple-400 fill-purple-400" : ""}`}
+                                        />
+                                      )}
+                                      {req.monitorSeries ? "Monitored" : "Monitor Series"}
+                                    </Button>
+                                  )}
+
+                                  {/* Direct File Upload / Fulfill */}
+                                  {(isAdmin || req.requestedBy === user?.username) &&
+                                    req.status !== "Downloaded" && (
+                                      <label className="cursor-pointer">
+                                        <input
+                                          type="file"
+                                          accept=".epub,.pdf,.m4b,.mp3,.torrent,.nzb"
+                                          className="hidden"
+                                          disabled={uploadingFulfillId === req.id}
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              handleFulfillWithUpload(req.id, file);
+                                              e.target.value = "";
+                                            }
+                                          }}
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          type="button"
+                                          asChild
+                                          className="h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
+                                          title="Fulfill directly by uploading book file (.epub, .pdf, .m4b, .mp3) or NZB/Torrent"
+                                          disabled={uploadingFulfillId === req.id}
+                                        >
+                                          <span>
+                                            {uploadingFulfillId === req.id ? (
+                                              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                            ) : (
+                                              <FileUp className="h-3.5 w-3.5 text-primary" />
+                                            )}
+                                            <span className="hidden sm:inline text-[11px]">Upload</span>
+                                          </span>
+                                        </Button>
+                                      </label>
+                                    )}
+
+                                  {/* Auto-Retry for Failed requests */}
+                                  {isFailed && (
+                                    <>
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold"
+                                        className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold"
+                                        onClick={async () => {
+                                          try {
+                                            await retryBookRequest(req.id);
+                                            alert(
+                                              "Auto-retry search successfully queued in the background!",
+                                            );
+                                            const reqs = await getBookRequests();
+                                            setRequests(reqs || []);
+                                          } catch (err: any) {
+                                            alert(
+                                              err.message || "Failed to retry request.",
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        Auto-Retry
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-[10px]"
+                                        onClick={() => triggerProwlarrSearch(req)}
+                                      >
+                                        <Search className="h-3 w-3 mr-1" /> Search Release
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 w-7 p-0 border-red-500/40 text-red-400 hover:bg-red-950/60 shrink-0"
+                                        title="Copy Full Error Message"
                                         onClick={() =>
-                                          triggerProwlarrSearch(req)
+                                          showErrorModal(
+                                            req.status,
+                                            "Request Error Details",
+                                          )
                                         }
                                       >
-                                        <Search className="h-3 w-3 mr-1" />{" "}
-                                        Search Release
+                                        <Copy className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  )}
+
+                                  {/* Pending actions */}
+                                  {isPending && (
+                                    <>
+                                      {(isAdmin || req.requestedBy === user?.username) && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold"
+                                          onClick={() => triggerProwlarrSearch(req)}
+                                        >
+                                          <Search className="h-3 w-3 mr-1" /> Search Release
+                                        </Button>
+                                      )}
+                                      {isAdmin && (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="p-1 h-7 w-7 text-green-500 hover:text-green-600 border-green-500/30 bg-green-500/5 hover:bg-green-500/10"
+                                            onClick={() =>
+                                              handleUpdateRequestStatus(req.id, "Approved")
+                                            }
+                                            title="Approve Request"
+                                          >
+                                            <Check className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
+                                            onClick={() =>
+                                              handleUpdateRequestStatus(req.id, "Rejected")
+                                            }
+                                            title="Reject Request"
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </>
+                                      )}
+                                    </>
+                                  )}
+
+                                  {/* Active downloading / downloaded search actions */}
+                                  {(isAdmin || req.requestedBy === user?.username) &&
+                                    (isDownloading || isDownloaded) && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 bg-cyan-500/5 font-semibold"
+                                        onClick={() => triggerProwlarrSearch(req)}
+                                      >
+                                        <Search className="h-3 w-3 mr-1" /> Search Release
                                       </Button>
                                     )}
-                                    {isAdmin && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="p-1 h-7 w-7 text-green-500 hover:text-green-600 border-green-500/30 bg-green-500/5 hover:bg-green-500/10"
-                                          onClick={() =>
-                                            handleUpdateRequestStatus(
-                                              req.id,
-                                              "Approved",
-                                            )
-                                          }
-                                        >
-                                          <Check className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
-                                          onClick={() =>
-                                            handleUpdateRequestStatus(
-                                              req.id,
-                                              "Rejected",
-                                            )
-                                          }
-                                        >
-                                          <X className="h-4 w-4" />
-                                        </Button>
-                                      </>
-                                    )}
-                                  </div>
-                                )}{" "}
-                                {(isAdmin ||
-                                  req.requestedBy === user?.username) &&
-                                  (req.status === "Downloaded" ||
-                                    req.status === "Downloading") && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 bg-cyan-500/5 font-semibold mr-1"
-                                      onClick={() => triggerProwlarrSearch(req)}
-                                    >
-                                      <Search className="h-3 w-3 mr-1" /> Search
-                                      Release
-                                    </Button>
-                                  )}
-                                {(isAdmin ||
-                                  req.requestedBy === user?.username) &&
-                                  (req.status === "Approved" ||
-                                    req.status === "Downloading") && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 bg-blue-500/5 font-semibold mr-1"
-                                      onClick={async () => {
-                                        try {
-                                          const res =
-                                            await importCompletedDownload(
-                                              req.id,
-                                            );
-                                          if (res.success) {
-                                            alert(
-                                              res.message ||
-                                                "Imported completed download to library!",
-                                            );
-                                          } else {
+
+                                  {(isAdmin || req.requestedBy === user?.username) &&
+                                    (isApproved || isDownloading) && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 bg-blue-500/5 font-semibold"
+                                        onClick={async () => {
+                                          try {
+                                            const res = await importCompletedDownload(req.id);
+                                            if (res.success) {
+                                              alert(
+                                                res.message ||
+                                                  "Imported completed download to library!",
+                                              );
+                                            } else {
+                                              showErrorModal(
+                                                res.error ||
+                                                  "Failed to locate completed download.",
+                                                "Import Download Error",
+                                              );
+                                            }
+                                            const reqs = await getBookRequests();
+                                            setRequests(reqs || []);
+                                          } catch (err: any) {
                                             showErrorModal(
-                                              res.error ||
-                                                "Failed to locate completed download.",
+                                              err.message ||
+                                                "Failed to import download.",
                                               "Import Download Error",
                                             );
                                           }
-                                          const reqs = await getBookRequests();
-                                          setRequests(reqs || []);
-                                        } catch (err: any) {
-                                          showErrorModal(
-                                            err.message ||
-                                              "Failed to import download.",
-                                            "Import Download Error",
-                                          );
-                                        }
-                                      }}
-                                    >
-                                      <Download className="h-3 w-3 mr-1" />{" "}
-                                      Import Download
-                                    </Button>
-                                  )}
-                                {isAdmin &&
-                                  (req.status === "Approved" ||
-                                    req.status === "Downloading") && (
+                                        }}
+                                      >
+                                        <Download className="h-3 w-3 mr-1" /> Import Download
+                                      </Button>
+                                    )}
+
+                                  {isAdmin && (isApproved || isDownloading) && (
                                     <Button
                                       size="sm"
                                       variant="outline"
                                       className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
                                       onClick={() =>
-                                        handleUpdateRequestStatus(
-                                          req.id,
-                                          "Downloaded",
-                                        )
+                                        handleUpdateRequestStatus(req.id, "Downloaded")
                                       }
                                     >
                                       Mark Downloaded
                                     </Button>
                                   )}
 
+                                  {/* Utility actions: Cover, Report Issue, Delete */}
+                                  {(isAdmin || req.requestedBy === user?.username) && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="p-1 h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
+                                        title="Fetch / Refresh Cover Artwork"
+                                        disabled={refreshingRequestCoverId === req.id}
+                                        onClick={() => handleRefreshRequestCover(req.id)}
+                                      >
+                                        {refreshingRequestCoverId === req.id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                        ) : (
+                                          <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                                        )}
+                                        <span className="hidden sm:inline text-[11px]">Cover</span>
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="p-1 h-7 w-7 text-amber-500 hover:text-amber-600 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 shrink-0"
+                                        title="Report Request Issue"
+                                        onClick={() =>
+                                          handleOpenReportIssueModal({
+                                            type: "request",
+                                            title: req.title,
+                                            id: req.id,
+                                            status: req.status,
+                                          })
+                                        }
+                                      >
+                                        <AlertTriangle className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 shrink-0"
+                                        title="Delete Request"
+                                        onClick={() => handleDeleteRequest(req.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
+
+                              {/* Dedicated Full-Width Download Progress Bar (when Downloading) */}
+                              {isDownloading && (
+                                <div className="w-full bg-cyan-950/20 border border-cyan-500/30 rounded-lg p-3 space-y-2 shadow-inner animate-in fade-in duration-300">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="font-semibold text-cyan-400 flex items-center gap-1.5">
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />
+                                      {req.downloadProgress?.client
+                                        ? `Downloading via ${req.downloadProgress.client}`
+                                        : "Active Download in Client Queue"}
+                                    </span>
+                                    <span className="font-mono font-bold text-foreground">
+                                      {hasProgressPercent
+                                        ? `${progressPercent.toFixed(1)}%`
+                                        : "Connecting / Downloading..."}
+                                    </span>
+                                  </div>
+                                  <Progress
+                                    value={hasProgressPercent ? progressPercent : undefined}
+                                    className="h-2 bg-zinc-900/80 rounded-full"
+                                  />
+                                  <div className="flex justify-between items-center text-[11px] text-muted-foreground font-mono">
+                                    <span>
+                                      {req.downloadProgress?.mb
+                                        ? `${req.downloadProgress.mb} MB`
+                                        : ""}
+                                      {req.downloadProgress?.mbleft
+                                        ? ` (${req.downloadProgress.mbleft} MB remaining)`
+                                        : ""}
+                                    </span>
+                                    <span>
+                                      {req.downloadProgress?.timeleft
+                                        ? `ETA: ${req.downloadProgress.timeleft}`
+                                        : ""}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}

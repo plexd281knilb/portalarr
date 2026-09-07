@@ -86,7 +86,8 @@ export default function ActiveDownloads() {
                             const title = item.filename || item.title || "Unknown Download";
                             const mbleft = item.mbleft || 0;
                             const mb = item.mb || 0;
-                            const percent = item.percentage ? parseFloat(item.percentage) : (mb > 0 ? ((mb - mbleft) / mb) * 100 : 0);
+                            const percentRaw = item.percentage !== undefined ? parseFloat(item.percentage) : (mb > 0 ? ((mb - mbleft) / mb) * 100 : 0);
+                            const percent = isNaN(percentRaw) ? 0 : Math.max(0, Math.min(100, percentRaw));
                             const timeleft = item.timeleft || "";
                             const speed = item.speed || "";
                             
@@ -105,7 +106,10 @@ export default function ActiveDownloads() {
                                     </div>
                                     <div className="space-y-1">
                                         <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
-                                            <span className="text-primary font-semibold">Downloading</span>
+                                            <span className="text-cyan-400 font-semibold flex items-center gap-1.5">
+                                                <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                                                Downloading
+                                            </span>
                                             <span className="font-mono text-foreground font-semibold">{percent.toFixed(1)}%</span>
                                         </div>
                                         <Progress value={percent} className="h-2 bg-muted/50 rounded-full" />
