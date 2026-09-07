@@ -2218,16 +2218,33 @@ export async function createBookRequest(formData: FormData) {
         
         if (!title) return { success: false, error: "Title is required" };
         
-        let finalTitle = title;
-        let finalAuthor = author;
+        let finalTitle = title.trim();
+        let finalAuthor = author.trim();
         let finalSeries: string | null = null;
         let finalVolNum: string | null = null;
         let finalCover = coverUrl;
         let finalYear = publishYear;
 
+        // Auto-extract author if passed in title input (e.g. "Cold Wind by Andrew Givler" or "Cold Wind - Andrew Givler")
+        if (!finalAuthor || finalAuthor === "Unknown Author") {
+            if (/\s+by\s+/i.test(finalTitle)) {
+                const parts = finalTitle.split(/\s+by\s+/i);
+                finalTitle = parts[0].trim();
+                finalAuthor = parts.slice(1).join(" by ").trim();
+            } else if (finalTitle.includes(" - ")) {
+                const parts = finalTitle.split(" - ");
+                finalTitle = parts[0].trim();
+                finalAuthor = parts.slice(1).join(" - ").trim();
+            } else if (finalTitle.includes(": ")) {
+                const parts = finalTitle.split(": ");
+                finalTitle = parts[0].trim();
+                finalAuthor = parts.slice(1).join(": ").trim();
+            }
+        }
+
         try {
-            if (!author) {
-                const heur = callDefaultResolver(`${title} ${author}`, mediaType);
+            if (!finalAuthor) {
+                const heur = callDefaultResolver(`${finalTitle} ${finalAuthor}`, mediaType);
                 if (heur) {
                     if (heur.title) finalTitle = heur.title;
                     if (heur.author && heur.author !== "Unknown Author") finalAuthor = heur.author;
@@ -6044,12 +6061,31 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
 export async function searchOpenLibrary(query: string, mediaType: "ebook" | "audiobook" = "ebook") {
     if (!query || query.trim().length < 2) return [];
     try {
+        const cleanQuery = query.trim();
         let results: any[] = [];
+        
+        // Parse compound query if separators exist (e.g. "Cold Wind by Andrew Givler" or "Cold Wind - Andrew Givler")
+        let parsedTitle = cleanQuery;
+        let parsedAuthor = "";
+        if (/\s+by\s+/i.test(cleanQuery)) {
+            const parts = cleanQuery.split(/\s+by\s+/i);
+            parsedTitle = parts[0].trim();
+            parsedAuthor = parts.slice(1).join(" by ").trim();
+        } else if (cleanQuery.includes(" - ")) {
+            const parts = cleanQuery.split(" - ");
+            parsedTitle = parts[0].trim();
+            parsedAuthor = parts.slice(1).join(" - ").trim();
+        } else if (cleanQuery.includes(": ")) {
+            const parts = cleanQuery.split(": ");
+            parsedTitle = parts[0].trim();
+            parsedAuthor = parts.slice(1).join(": ").trim();
+        }
         
         // 1. Audible API (Only for Audiobooks)
         if (mediaType === "audiobook") {
             try {
-                const audUrl = `https://api.audible.com/1.0/catalog/products?title=${encodeURIComponent(query)}&response_groups=product_attrs,contributors,product_desc&num_results=8&products_sort_by=Relevance`;
+                // Use keywords parameter to search across both title and author simultaneously
+                const audUrl = `https://api.audible.com/1.0/catalog/products?keywords=${encodeURIComponent(cleanQuery)}&response_groups=product_attrs,contributors,product_desc&num_results=12&products_sort_by=Relevance`;
                 const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
                 const audData = audRes && audRes.ok ? await audRes.json() : null;
                 
@@ -6073,7 +6109,7 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                             year = prod.release_date.substring(0, 4);
                         }
                         
-                        results.push({ title, author, coverUrl, year });
+                        results.push({ title, author, coverUrl, year, mediaType: "audiobook" });
                     }
                 }
             } catch (e) {
@@ -6084,7 +6120,7 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
         // 2. iTunes API
         try {
             const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
-            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${entity}&limit=8`;
+            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanQuery)}&entity=${entity}&limit=12`;
             let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
             
@@ -6100,7 +6136,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                         title: title,
                         author: item.artistName || "Unknown Author",
                         coverUrl: artwork || "",
-                        year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year"
+                        year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year",
+                        mediaType
                     });
                 }
             }
@@ -6110,7 +6147,10 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
 
         // 3. Open Library
         try {
-            const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8`, {
+            const olUrl = parsedAuthor
+                ? `https://openlibrary.org/search.json?title=${encodeURIComponent(parsedTitle)}&author=${encodeURIComponent(parsedAuthor)}&limit=12`
+                : `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQuery)}&limit=12`;
+            const response = await fetchWithRetry(olUrl, {
                 headers: { "Accept": "application/json" }
             });
             const data = response && response.ok ? await response.json() : null;
@@ -6121,7 +6161,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                             title: doc.title,
                             author: doc.author_name ? doc.author_name[0] : "Unknown Author",
                             coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : "",
-                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year"
+                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year",
+                            mediaType
                         });
                     }
                 }
@@ -6132,7 +6173,9 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
 
         // 4. Google Books
         try {
-            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8`;
+            const gUrl = parsedAuthor
+                ? `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(parsedTitle)}+inauthor:${encodeURIComponent(parsedAuthor)}&maxResults=12`
+                : `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(cleanQuery)}&maxResults=12`;
             const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
             const gData = gRes && gRes.ok ? await gRes.json() : null;
             if (gData && gData.items) {
@@ -6143,7 +6186,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                             title: vol.title,
                             author: vol.authors ? vol.authors[0] : "Unknown Author",
                             coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") : "",
-                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year"
+                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year",
+                            mediaType
                         });
                     }
                 }
@@ -6152,6 +6196,7 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
             console.warn("[API-FAILOVER] Google Books API Error:", e);
         }
         
+        // Deduplicate results by normalized title + author
         const uniqueResults = [];
         const seenTitles = new Set();
         for (const res of results) {
@@ -6162,7 +6207,55 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
             }
         }
         
-        return uniqueResults;
+        // Smart query token relevance scoring
+        const stopWords = new Set(["by", "the", "a", "an", "and", "or", "in", "of", "to", "for", "with", "on", "at"]);
+        const queryTokens = cleanQuery.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(t => t.length >= 2 && !stopWords.has(t));
+
+        uniqueResults.sort((a, b) => {
+            const aTitleLower = (a.title || "").toLowerCase();
+            const aAuthorLower = (a.author || "").toLowerCase();
+            const bTitleLower = (b.title || "").toLowerCase();
+            const bAuthorLower = (b.author || "").toLowerCase();
+
+            let aScore = 0;
+            let bScore = 0;
+
+            let aTitleMatches = 0;
+            let aAuthorMatches = 0;
+            let bTitleMatches = 0;
+            let bAuthorMatches = 0;
+
+            for (const token of queryTokens) {
+                if (aTitleLower.includes(token)) {
+                    aScore += 15;
+                    aTitleMatches++;
+                }
+                if (aAuthorLower.includes(token)) {
+                    aScore += 20;
+                    aAuthorMatches++;
+                }
+                if (bTitleLower.includes(token)) {
+                    bScore += 15;
+                    bTitleMatches++;
+                }
+                if (bAuthorLower.includes(token)) {
+                    bScore += 20;
+                    bAuthorMatches++;
+                }
+            }
+
+            // Big bonus if both title and author matched tokens in the combined query
+            if (aTitleMatches > 0 && aAuthorMatches > 0) aScore += 50;
+            if (bTitleMatches > 0 && bAuthorMatches > 0) bScore += 50;
+
+            // Extra bonus for having cover art
+            if (a.coverUrl) aScore += 10;
+            if (b.coverUrl) bScore += 10;
+
+            return bScore - aScore;
+        });
+        
+        return uniqueResults.slice(0, 20);
     } catch (e) {
         console.error("All metadata APIs failed:", e);
         return [];

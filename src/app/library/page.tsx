@@ -1232,6 +1232,7 @@ function BookLibraryPageContent() {
   // Request Form states
   const [reqTitle, setReqTitle] = useState("");
   const [reqAuthor, setReqAuthor] = useState("");
+  const [isSelectedFromRegistry, setIsSelectedFromRegistry] = useState(false);
 
   // Reader state
   const [activeBook, setActiveBook] = useState<any>(null);
@@ -2128,6 +2129,14 @@ function BookLibraryPageContent() {
       return;
     }
 
+    if (reqType !== "series" && !isSelectedFromRegistry) {
+      showErrorModal(
+        "Please select a verified book from the auto-populated search results dropdown. Selecting from the registry ensures complete book details, author formatting, and official cover artwork.",
+        "Registry Selection Required",
+      );
+      return;
+    }
+
     setIsSubmittingRequest(true);
     try {
       let res: any;
@@ -2148,9 +2157,27 @@ function BookLibraryPageContent() {
           selectedLibrary?.id,
         );
       } else {
+        let sendTitle = reqTitle.trim();
+        let sendAuthor = reqAuthor.trim();
+        if (!sendAuthor) {
+          if (/\s+by\s+/i.test(sendTitle)) {
+            const parts = sendTitle.split(/\s+by\s+/i);
+            sendTitle = parts[0].trim();
+            sendAuthor = parts.slice(1).join(" by ").trim();
+          } else if (sendTitle.includes(" - ")) {
+            const parts = sendTitle.split(" - ");
+            sendTitle = parts[0].trim();
+            sendAuthor = parts.slice(1).join(" - ").trim();
+          } else if (sendTitle.includes(": ")) {
+            const parts = sendTitle.split(": ");
+            sendTitle = parts[0].trim();
+            sendAuthor = parts.slice(1).join(": ").trim();
+          }
+        }
+
         const formData = new FormData();
-        formData.append("title", reqTitle.trim());
-        formData.append("author", reqAuthor.trim());
+        formData.append("title", sendTitle);
+        formData.append("author", sendAuthor);
         formData.append("type", reqType);
         formData.append("mediaType", reqMediaType);
         formData.append("coverUrl", reqCoverUrl);
@@ -2177,6 +2204,7 @@ function BookLibraryPageContent() {
       setReqMediaType(activeTab === "audiobooks" ? "audiobook" : "ebook");
       setRequestedFor("");
       setSeriesBooksChecklist([]);
+      setIsSelectedFromRegistry(false);
       const reqs = await getBookRequests();
       setRequests(reqs || []);
     } catch (e: any) {
@@ -3485,7 +3513,10 @@ function BookLibraryPageContent() {
                             reqMediaType === "ebook" ? "default" : "outline"
                           }
                           className={`h-9 text-xs font-semibold gap-1.5 ${reqMediaType === "ebook" ? "text-black bg-primary" : ""}`}
-                          onClick={() => setReqMediaType("ebook")}
+                          onClick={() => {
+                            setReqMediaType("ebook");
+                            setIsSelectedFromRegistry(false);
+                          }}
                         >
                           <BookOpen className="h-3.5 w-3.5" /> Ebook
                         </Button>
@@ -3495,7 +3526,10 @@ function BookLibraryPageContent() {
                             reqMediaType === "audiobook" ? "default" : "outline"
                           }
                           className={`h-9 text-xs font-semibold gap-1.5 ${reqMediaType === "audiobook" ? "text-black bg-amber-400 hover:bg-amber-300" : ""}`}
-                          onClick={() => setReqMediaType("audiobook")}
+                          onClick={() => {
+                            setReqMediaType("audiobook");
+                            setIsSelectedFromRegistry(false);
+                          }}
                         >
                           <Headphones className="h-3.5 w-3.5" /> Audiobook
                         </Button>
@@ -3504,20 +3538,26 @@ function BookLibraryPageContent() {
                     {/* Single Book request only */}
 
                     <div className="space-y-1.5 relative">
-                      <Label htmlFor="reqTitle" className="text-xs font-medium">
-                        {reqType === "series"
-                          ? "Series Title"
-                          : reqMediaType === "audiobook"
-                            ? "Audiobook Title"
-                            : "Book Title"}
+                      <Label htmlFor="reqTitle" className="text-xs font-medium flex items-center justify-between">
+                        <span>
+                          {reqType === "series"
+                            ? "Series Title"
+                            : reqMediaType === "audiobook"
+                              ? "Audiobook Title (or Title + Author)"
+                              : "Book Title (or Title + Author)"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-normal">
+                          e.g. "Cold Wind Andrew Givler"
+                        </span>
                       </Label>
                       <Input
                         id="reqTitle"
                         type="text"
-                        placeholder="e.g. Project Hail Mary"
+                        placeholder="e.g. Project Hail Mary Andy Weir or Cold Wind by Andrew Givler"
                         value={reqTitle}
                         onChange={(e) => {
                           setReqTitle(e.target.value);
+                          setIsSelectedFromRegistry(false);
                           setShowSuggestions(true);
                         }}
                         onFocus={() => setShowSuggestions(true)}
@@ -3556,6 +3596,7 @@ function BookLibraryPageContent() {
                                   setReqPublishYear(
                                     book.year ? String(book.year) : "",
                                   );
+                                  setIsSelectedFromRegistry(true);
                                   setShowSuggestions(false);
 
                                   if (reqType === "series") {
@@ -3661,6 +3702,7 @@ function BookLibraryPageContent() {
                                         setReqAuthor("");
                                         setReqCoverUrl("");
                                         setReqPublishYear("");
+                                        setIsSelectedFromRegistry(false);
                                         const reqs = await getBookRequests();
                                         setRequests(reqs || []);
                                       }
@@ -3701,6 +3743,7 @@ function BookLibraryPageContent() {
                           value={reqAuthor}
                           onChange={(e) => {
                             setReqAuthor(e.target.value);
+                            setIsSelectedFromRegistry(false);
                             setShowAuthorSuggestions(true);
                           }}
                           onFocus={() => {
@@ -3759,6 +3802,7 @@ function BookLibraryPageContent() {
                                   setReqPublishYear(
                                     book.year ? String(book.year) : "",
                                   );
+                                  setIsSelectedFromRegistry(true);
                                   setShowAuthorSuggestions(false);
                                   setShowSuggestions(false);
 
@@ -3865,6 +3909,7 @@ function BookLibraryPageContent() {
                                         setReqAuthor("");
                                         setReqCoverUrl("");
                                         setReqPublishYear("");
+                                        setIsSelectedFromRegistry(false);
                                         const reqs = await getBookRequests();
                                         setRequests(reqs || []);
                                       }
@@ -4016,10 +4061,32 @@ function BookLibraryPageContent() {
                       </div>
                     )}
 
+                    {reqType !== "series" && reqTitle.trim().length >= 2 && (
+                      isSelectedFromRegistry ? (
+                        <div className="flex items-center gap-2 p-2.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium animate-in fade-in">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                          <span className="truncate">
+                            Verified registry book selected: <strong>{reqTitle}</strong> {reqAuthor ? `by ${reqAuthor}` : ""}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs animate-in fade-in">
+                          <Info className="h-4 w-4 shrink-0 text-amber-400" />
+                          <span>
+                            Please select an auto-populated match from the suggestions list above to submit.
+                          </span>
+                        </div>
+                      )
+                    )}
+
                     <Button
                       type="submit"
-                      disabled={isSubmittingRequest || !reqTitle.trim()}
-                      className={`w-full font-semibold text-black gap-2 ${reqMediaType === "audiobook" ? "bg-amber-400 hover:bg-amber-300" : "bg-primary hover:bg-primary/90"}`}
+                      disabled={
+                        isSubmittingRequest ||
+                        (!isSelectedFromRegistry && reqType !== "series") ||
+                        !reqTitle.trim()
+                      }
+                      className={`w-full font-semibold text-black gap-2 ${reqMediaType === "audiobook" ? "bg-amber-400 hover:bg-amber-300" : "bg-primary hover:bg-primary/90"} disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       {isSubmittingRequest ? (
                         <>

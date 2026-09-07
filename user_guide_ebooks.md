@@ -1,4 +1,4 @@
-﻿# 📖 Portalarr Ebooks & Audiobooks User Guide
+# 📖 Portalarr Ebooks & Audiobooks User Guide
 
 Welcome to the comprehensive user guide for **Portalarr's Ebooks and Audiobooks** ecosystem! This document explains all features available in the library, in-browser readers, Send-to-Kindle delivery, audio chapter management, media requests, series tracking, and indexer integration.
 
@@ -107,10 +107,16 @@ Need to correct chapter numbers or track ordering?
 
 Can't find a book in your library? Request and auto-grab it in seconds:
 
-### Requesting by Title
+### Combined Title & Author Search (Narrow Down Results)
+- You can enter both the **Book Title and Author Name** in the title input (e.g. `Cold Wind Andrew Givler`, `Project Hail Mary Andy Weir`, or `Cold Wind by Andrew Givler`).
+- Portalarr parses the compound query and queries Audible keywords, iTunes, Open Library, and Google Books with smart token relevance scoring, immediately ranking the exact book by that author at the top of the suggestions list.
+- Clicking the result automatically populates and separates the Title and Author fields cleanly.
+- You can also click the inline **`Download`** button to grab and download the media immediately in 1 click!
+
+### Requesting by Title Only
 1. Go to the **Requests** tab (or click *Request* in the header).
 2. Select your desired format: **`📖 Ebook`** or **`🎧 Audiobook`**.
-3. Type the book title into the **Book Title** field.
+3. Type the book title into the title field.
 4. An autocomplete dropdown will query Audible, iTunes, OpenLibrary, and Google Books.
 5. Click any matching result to auto-fill title, author, year, and cover art, or click the inline **`Download`** button to instantly grab it in 1 click!
 
@@ -119,6 +125,13 @@ Can't find a book in your library? Request and auto-grab it in seconds:
 2. Portalarr searches connected book registries for all top titles and audiobooks by that author.
 3. Browse the list of available releases with cover art, release year, and format badges.
 4. Click any book to populate the form, or click **`Download`** on the item to immediately start grabbing it!
+
+### 🔒 Verified Registry Selection (Required for Single Requests)
+To guarantee accurate book metadata, official HD cover artwork, and correct indexer searching, single book/audiobook requests require selecting a verified result from the auto-populated suggestions dropdown:
+- As you type a title or author, Portalarr queries global registries in real-time.
+- Simply click your matching book from the suggestions list to lock in the verified metadata (indicated by a green `✓ Verified` badge).
+- Alternatively, click the 1-click **`Download`** button directly on any suggestion item to submit and trigger auto-download immediately.
+- The submit button remains protected until a verified match is selected, preventing broken requests with invalid names or missing covers.
 
 ---
 
