@@ -1,6 +1,7 @@
 import { getPublicMediaApps, getBetaDashboardText, getRoadmapText, getAlertBanner, checkUserLibraryAccess } from "@/app/actions";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm'; 
+import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw'; 
 import LandingSupport from "@/components/landing-support";
 import SystemStatus from "@/components/system-status"; 
@@ -57,7 +58,7 @@ export default async function UserLandingPage() {
           <div className="w-full bg-orange-500/15 border-b border-orange-500/40 text-orange-600 dark:text-orange-400 px-4 py-3 text-center text-sm font-medium flex items-center justify-center gap-2 backdrop-blur-md shadow-sm">
               <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500 animate-pulse" />
               <div className="[&>p]:inline">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]}>
                       {alertBanner.text}
                   </ReactMarkdown>
               </div>
@@ -137,13 +138,57 @@ export default async function UserLandingPage() {
         {/* ROADMAP CARD */}
         <div className="w-full">
             <Card className="bg-[#121218]/80 border-primary/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-3 border-b border-border/40">
                     <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-primary">
                         🗺️ Roadmap & New Features
                     </CardTitle>
+                    <CardDescription className="text-sm text-muted-foreground">
+                        Recent feature highlights, active developments, and upcoming milestones.
+                    </CardDescription>
                 </CardHeader>
-                <CardContent className="prose prose-neutral dark:prose-invert max-w-none text-sm sm:text-base leading-relaxed break-words overflow-hidden pb-6 prose-headings:font-bold prose-h3:text-lg sm:prose-h3:text-xl prose-h3:text-foreground prose-h3:mt-6 prose-h3:mb-4 prose-h4:text-xs sm:prose-h4:text-sm prose-h4:font-semibold prose-h4:text-muted-foreground prose-h4:uppercase prose-h4:tracking-wider prose-h4:mt-5 prose-h4:mb-3 prose-ul:my-3 prose-ul:space-y-3.5 prose-li:my-2 prose-li:leading-relaxed prose-hr:my-6 prose-hr:border-border/40">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                <CardContent className="pt-6 pb-6 text-sm sm:text-base leading-relaxed break-words overflow-hidden">
+                    <ReactMarkdown 
+                        remarkPlugins={[remarkGfm, remarkBreaks]} 
+                        rehypePlugins={[rehypeRaw]}
+                        components={{
+                            h1: ({ node, ...props }) => (
+                                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-8 mb-4 border-b border-border/40 pb-3 flex items-center gap-2" {...props} />
+                            ),
+                            h2: ({ node, ...props }) => (
+                                <h2 className="text-xl sm:text-2xl font-bold text-foreground mt-8 mb-4 border-b border-border/30 pb-2.5 flex items-center gap-2" {...props} />
+                            ),
+                            h3: ({ node, ...props }) => (
+                                <h3 className="text-lg sm:text-xl font-bold text-foreground mt-7 mb-3.5 flex items-center gap-2 first:mt-1 text-primary/95" {...props} />
+                            ),
+                            h4: ({ node, ...props }) => (
+                                <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground mt-6 mb-3 flex items-center gap-1.5" {...props} />
+                            ),
+                            p: ({ node, ...props }) => (
+                                <p className="text-sm sm:text-base leading-relaxed text-muted-foreground/95 my-3" {...props} />
+                            ),
+                            ul: ({ node, ...props }) => (
+                                <ul className="space-y-3.5 my-4 pl-0 list-none" {...props} />
+                            ),
+                            ol: ({ node, ...props }) => (
+                                <ol className="space-y-3 my-4 pl-5 list-decimal text-sm sm:text-base text-muted-foreground/95 leading-relaxed" {...props} />
+                            ),
+                            li: ({ node, ...props }) => (
+                                <li className="text-sm sm:text-base leading-relaxed text-muted-foreground/95 p-3.5 rounded-xl bg-muted/20 border border-border/40 hover:border-primary/30 transition-all block" {...props} />
+                            ),
+                            hr: ({ node, ...props }) => (
+                                <hr className="my-7 border-t border-border/40" {...props} />
+                            ),
+                            strong: ({ node, ...props }) => (
+                                <strong className="font-semibold text-foreground" {...props} />
+                            ),
+                            blockquote: ({ node, ...props }) => (
+                                <blockquote className="border-l-2 border-primary/70 pl-4 py-2 my-4 bg-primary/5 rounded-r text-sm sm:text-base text-foreground/90 italic" {...props} />
+                            ),
+                            a: ({ node, ...props }) => (
+                                <a className="text-primary underline hover:text-primary/80 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+                            ),
+                        }}
+                    >
                         {roadmapText}
                     </ReactMarkdown>
                 </CardContent>
@@ -158,13 +203,30 @@ export default async function UserLandingPage() {
         {/* BETA TESTING CARD */}
         <div className="w-full">
             <Card className="bg-[#121218]/80 border-purple-500/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-3 border-b border-border/40">
                     <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-purple-400">
                         🧪 Beta Testing & Additional Services
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="prose prose-neutral dark:prose-invert max-w-none text-sm sm:text-base leading-relaxed break-words overflow-hidden pb-4 prose-headings:font-bold prose-h3:text-lg prose-h3:text-foreground prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-li:leading-relaxed">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                <CardContent className="pt-6 pb-4 text-sm sm:text-base leading-relaxed break-words overflow-hidden">
+                    <ReactMarkdown 
+                        remarkPlugins={[remarkGfm, remarkBreaks]} 
+                        rehypePlugins={[rehypeRaw]}
+                        components={{
+                            h3: ({ node, ...props }) => (
+                                <h3 className="text-lg font-bold text-foreground mt-4 mb-2" {...props} />
+                            ),
+                            p: ({ node, ...props }) => (
+                                <p className="text-sm sm:text-base leading-relaxed text-muted-foreground/90 my-2.5" {...props} />
+                            ),
+                            ul: ({ node, ...props }) => (
+                                <ul className="space-y-2 my-3 pl-0 list-none" {...props} />
+                            ),
+                            li: ({ node, ...props }) => (
+                                <li className="text-sm leading-relaxed text-muted-foreground/90 p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/10 block" {...props} />
+                            ),
+                        }}
+                    >
                         {betaText}
                     </ReactMarkdown>
                 </CardContent>

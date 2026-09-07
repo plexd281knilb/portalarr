@@ -36,6 +36,7 @@ import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 
 export default function SettingsPage() {
     return (
@@ -1483,7 +1484,7 @@ function SettingsPageContent() {
                                         />
                                     </TabsContent>
                                     <TabsContent value="preview" className="border rounded-md p-5 min-h-[290px] bg-muted/10 prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed overflow-y-auto prose-headings:font-bold prose-h3:text-base prose-h3:text-foreground prose-h3:mt-3 prose-h3:mb-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-hr:my-4">
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{roadmapText || "*No content*"}</ReactMarkdown>
+                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{roadmapText || "*No content*"}</ReactMarkdown>
                                     </TabsContent>
                                 </Tabs>
                                 <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Roadmap Text</Button>
@@ -1517,7 +1518,7 @@ function SettingsPageContent() {
                                             />
                                         </TabsContent>
                                         <TabsContent value="preview" className="border rounded-md p-4 min-h-[164px] bg-muted/10 prose prose-invert max-w-none text-sm overflow-y-auto">
-                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{betaText || "*No content*"}</ReactMarkdown>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{betaText || "*No content*"}</ReactMarkdown>
                                         </TabsContent>
                                     </Tabs>
                                     <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Intro Text</Button>
