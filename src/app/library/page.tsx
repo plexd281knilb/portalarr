@@ -3547,13 +3547,13 @@ function BookLibraryPageContent() {
                               : "Book Title (or Title + Author)"}
                         </span>
                         <span className="text-[10px] text-muted-foreground font-normal">
-                          e.g. "Cold Wind Andrew Givler"
+                          e.g. "Project Hail Mary Andy Weir"
                         </span>
                       </Label>
                       <Input
                         id="reqTitle"
                         type="text"
-                        placeholder="e.g. Project Hail Mary Andy Weir or Cold Wind by Andrew Givler"
+                        placeholder="e.g. Project Hail Mary Andy Weir"
                         value={reqTitle}
                         onChange={(e) => {
                           setReqTitle(e.target.value);

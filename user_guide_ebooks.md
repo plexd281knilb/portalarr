@@ -108,7 +108,7 @@ Need to correct chapter numbers or track ordering?
 Can't find a book in your library? Request and auto-grab it in seconds:
 
 ### Combined Title & Author Search (Narrow Down Results)
-- You can enter both the **Book Title and Author Name** in the title input (e.g. `Cold Wind Andrew Givler`, `Project Hail Mary Andy Weir`, or `Cold Wind by Andrew Givler`).
+- You can enter both the **Book Title and Author Name** in the title input (e.g. `Project Hail Mary Andy Weir` or `The Way of Kings Brandon Sanderson`).
 - Portalarr parses the compound query and queries Audible keywords, iTunes, Open Library, and Google Books with smart token relevance scoring, immediately ranking the exact book by that author at the top of the suggestions list.
 - Clicking the result automatically populates and separates the Title and Author fields cleanly.
 - You can also click the inline **`Download`** button to grab and download the media immediately in 1 click!
