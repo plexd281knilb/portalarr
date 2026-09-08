@@ -889,21 +889,57 @@ export async function testGlancesConfigAction(rawUrl: string) {
     await verifyAdmin();
     if (!rawUrl) return { success: false, error: "URL is required" };
 
-    const clean = cleanUrl(rawUrl);
-
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(`${clean}/api/3/status`, { signal: controller.signal, cache: "no-store" });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-            return { success: true, message: "Successfully connected to Glances server!" };
-        }
-        return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
-    } catch (e: any) {
-        return { success: false, error: e.name === "AbortError" ? "Connection timed out after 6s" : (e.message || "Connection failed") };
+    let clean = cleanUrl(rawUrl.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
     }
+
+    // Strip trailing /api, /api/4, /api/3, /api/2 if user entered a subpath
+    const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
+
+    // Test Glances endpoints across supported versions (v4, v3, v2)
+    const testEndpoints = [
+        "/api/4/cpu",
+        "/api/3/cpu",
+        "/api/2/cpu",
+        "/api/4/system",
+        "/api/3/system",
+        "/api/4/version",
+        "/api/3/version",
+        "/api/3/quicklook",
+        "/api/4/quicklook",
+        "/cpu",
+        "/version",
+        ""
+    ];
+
+    let lastError = "Connection failed";
+
+    for (const ep of testEndpoints) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const targetUrl = ep ? `${baseGlances}${ep}` : baseGlances;
+            const res = await fetch(targetUrl, { signal: controller.signal, cache: "no-store" });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                return { success: true, message: "Successfully connected to Glances server!" };
+            }
+            if (res.status === 401 || res.status === 403) {
+                return { success: false, error: `Authentication required (HTTP ${res.status}). Please check Glances credentials.` };
+            }
+            lastError = `HTTP ${res.status}: ${res.statusText || "Not Found"}`;
+        } catch (e: any) {
+            if (e.name === "AbortError") {
+                lastError = "Connection timed out after 4s";
+            } else {
+                lastError = e.message || "Connection failed";
+            }
+        }
+    }
+
+    return { success: false, error: lastError };
 }
 
 export async function testGlancesConnectionAction(id: string) {
@@ -1495,17 +1531,26 @@ export async function getLandingStats() {
     }));
 
     await Promise.all(glances.map(async (g) => {
-        const cleanGlances = cleanUrl(g.url);
+        let clean = cleanUrl(g.url?.trim() || "");
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+            clean = `http://${clean}`;
+        }
+        const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
         
         const fetchGlancesMetric = async (endpoint: string) => {
             const versions = [4, 3, 2]; 
             for (const v of versions) {
                 try {
-                    const url = `${cleanGlances}/api/${v}/${endpoint}`;
+                    const url = `${baseGlances}/api/${v}/${endpoint}`;
                     const res = await fetch(url, { next: { revalidate: 10 } });
                     if (res.ok) return await res.json();
                 } catch (e) { }
             }
+            try {
+                const url = `${baseGlances}/${endpoint}`;
+                const res = await fetch(url, { next: { revalidate: 10 } });
+                if (res.ok) return await res.json();
+            } catch (e) { }
             throw new Error(`Failed`);
         };
 
@@ -1513,10 +1558,18 @@ export async function getLandingStats() {
             const cpu = await fetchGlancesMetric("cpu");
             const mem = await fetchGlancesMetric("mem");
             
+            const cpuTotal = typeof cpu?.total === 'number' 
+                ? Math.round(cpu.total) 
+                : (typeof cpu?.user === 'number' ? Math.round(cpu.user + (cpu.system || 0)) : (typeof cpu === 'number' ? Math.round(cpu) : 0));
+                
+            const ramPercent = typeof mem?.percent === 'number' 
+                ? Math.round(mem.percent) 
+                : (mem?.total && mem?.used ? Math.round((mem.used / mem.total) * 100) : (typeof mem === 'number' ? Math.round(mem) : 0));
+
             serverStats.push({ 
                 name: g.name, 
-                cpu: cpu.total, 
-                ram: mem.percent, 
+                cpu: cpuTotal, 
+                ram: ramPercent, 
                 online: true 
             });
         } catch (e: any) {
