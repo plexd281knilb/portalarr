@@ -165,29 +165,28 @@ export default function MyPlexHub() {
                                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                                         {/* Left: Poster & Info */}
                                         <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
-                                            {stream.thumb ? (
-                                                <div className="relative w-14 h-20 sm:w-16 sm:h-24 rounded-lg overflow-hidden shrink-0 border border-white/10 shadow-md bg-muted/30">
+                                            <div className="relative w-14 h-20 sm:w-16 sm:h-24 rounded-lg overflow-hidden shrink-0 border border-white/10 shadow-md bg-muted/30 flex items-center justify-center">
+                                                {stream.thumb && (
                                                     <img 
                                                         src={stream.thumb} 
                                                         alt={stream.title} 
-                                                        className="w-full h-full object-cover"
+                                                        className="w-full h-full object-cover relative z-10"
                                                         onError={(e) => {
                                                             (e.target as HTMLElement).style.display = "none";
                                                         }}
                                                     />
-                                                    <div className="absolute bottom-1 right-1 p-1 rounded-full bg-black/70 backdrop-blur-xs">
-                                                        {stream.state === "playing" ? (
-                                                            <Play className="h-3 w-3 text-emerald-400 fill-emerald-400" />
-                                                        ) : (
-                                                            <Pause className="h-3 w-3 text-amber-400 fill-amber-400" />
-                                                        )}
-                                                    </div>
+                                                )}
+                                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/40 bg-muted/10">
+                                                    <Film className="h-6 w-6" />
                                                 </div>
-                                            ) : (
-                                                <div className="w-14 h-20 sm:w-16 sm:h-24 rounded-lg bg-muted/20 border border-border/40 shrink-0 flex items-center justify-center text-muted-foreground">
-                                                    <Film className="h-6 w-6 text-muted-foreground/60" />
+                                                <div className="absolute bottom-1 right-1 p-1 rounded-full bg-black/70 backdrop-blur-xs z-20">
+                                                    {stream.state === "playing" ? (
+                                                        <Play className="h-3 w-3 text-emerald-400 fill-emerald-400" />
+                                                    ) : (
+                                                        <Pause className="h-3 w-3 text-amber-400 fill-amber-400" />
+                                                    )}
                                                 </div>
-                                            )}
+                                            </div>
 
                                             <div className="space-y-1.5 min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-1.5">
@@ -337,21 +336,20 @@ export default function MyPlexHub() {
                                 key={item.id} 
                                 className="group relative rounded-xl bg-[#121218]/70 border border-border/40 overflow-hidden hover:border-primary/40 hover:shadow-md transition-all flex flex-col"
                             >
-                                <div className="relative aspect-video sm:aspect-[16/10] bg-muted/20 overflow-hidden">
-                                    {item.thumb ? (
+                                <div className="relative aspect-video sm:aspect-[16/10] bg-muted/20 overflow-hidden flex items-center justify-center">
+                                    {item.thumb && (
                                         <img 
                                             src={item.thumb} 
                                             alt={item.fullTitle} 
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 relative z-10"
                                             onError={(e) => {
                                                 (e.target as HTMLElement).style.display = "none";
                                             }}
                                         />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                            <Film className="h-6 w-6" />
-                                        </div>
                                     )}
+                                    <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/40 bg-muted/10">
+                                        <Film className="h-6 w-6" />
+                                    </div>
                                     <div className="absolute top-1.5 right-1.5">
                                         <Badge variant="secondary" className="text-[9px] py-0 px-1.5 bg-black/70 backdrop-blur-xs font-semibold text-white/90 max-w-[110px] truncate" title={item.instanceName}>
                                             {item.instanceName}

@@ -9127,8 +9127,11 @@ export async function getUserPlexHubData() {
                             fullTitle = `${s.title} (${s.year})`;
                         }
 
-                        const rawThumb = s.thumb || s.parentThumb || s.grandparentThumb || "";
-                        const thumbUrl = rawThumb ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}` : null;
+                        const rawThumb = s.thumb || s.parentThumb || s.grandparentThumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : "");
+                        const searchTitle = s.grandparentTitle || s.title || "";
+                        const thumbUrl = rawThumb || searchTitle 
+                            ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                            : null;
 
                         const sKey = String(s.sessionKey || s.Session?.id || Math.random());
                         const sId = String(s.Session?.id || sKey);
@@ -9285,8 +9288,11 @@ export async function getUserPlexHubData() {
                             fullTitle = `${s.title} (${s.year})`;
                         }
 
-                        const rawThumb = s.thumb || s.parent_thumb || s.grandparent_thumb || "";
-                        const thumbUrl = rawThumb ? `/api/media/image?instanceId=${t.id}&img=${encodeURIComponent(rawThumb)}` : null;
+                        const rawThumb = s.thumb || s.parent_thumb || s.grandparent_thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
+                        const searchTitle = s.grandparent_title || s.title || "";
+                        const thumbUrl = rawThumb || searchTitle 
+                            ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                            : null;
 
                         activeStreams.push({
                             instanceId: t.id,
@@ -9344,8 +9350,12 @@ export async function getUserPlexHubData() {
                     const rows = histJson.response?.data?.data || [];
                     
                     rows.forEach((r: any) => {
-                        const rawThumb = r.thumb || r.parent_thumb || r.grandparent_thumb || "";
-                        const thumbUrl = rawThumb ? `/api/media/image?instanceId=${t.id}&img=${encodeURIComponent(rawThumb)}` : null;
+                        const rawThumb = r.thumb || r.parent_thumb || r.grandparent_thumb || r.art || (r.rating_key ? `/library/metadata/${r.rating_key}/thumb` : "");
+                        const mediaType = r.media_type || (r.grandparent_title ? "episode" : "movie");
+                        const searchTitle = r.grandparent_title || r.title || "";
+                        const thumbUrl = rawThumb || searchTitle 
+                            ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(r.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                            : null;
                         
                         let displayTitle = r.title || "Unknown";
                         if (r.grandparent_title) {
@@ -9362,7 +9372,7 @@ export async function getUserPlexHubData() {
                             instanceName: t.name,
                             title: r.title,
                             fullTitle: displayTitle,
-                            mediaType: r.media_type || "movie",
+                            mediaType,
                             thumb: thumbUrl,
                             date: r.date ? new Date(r.date * 1000).toISOString() : new Date().toISOString(),
                             durationMinutes: r.duration ? Math.round(Number(r.duration) / 60) : 0,
@@ -9435,9 +9445,13 @@ export async function getUserPlexHubData() {
                                 const matchesUser = userAliases.has(rUser) || userAliases.has(rEmail) || (isAdmin && (!rUser || rUser === "local" || rUser === "admin"));
                                 
                                 if (matchesUser) {
-                                    const rawThumb = r.thumb || r.parentThumb || r.grandparentThumb || "";
+                                    const rawThumb = r.thumb || r.parentThumb || r.grandparentThumb || r.art || (r.ratingKey ? `/library/metadata/${r.ratingKey}/thumb` : "");
+                                    const mediaType = r.type || (r.grandparentTitle ? "episode" : "movie");
+                                    const searchTitle = r.grandparentTitle || r.title || "";
                                     const srvId = `plex::${srv.clientIdentifier}::${cleanBase}`;
-                                    const thumbUrl = rawThumb ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}` : null;
+                                    const thumbUrl = rawThumb || searchTitle 
+                                        ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(r.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                                        : null;
                                     
                                     let displayTitle = r.title || "Unknown";
                                     if (r.grandparentTitle) {
