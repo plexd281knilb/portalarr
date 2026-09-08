@@ -336,8 +336,8 @@ export default function MyPlexHub() {
                                         </div>
                                     )}
                                     <div className="absolute top-1.5 right-1.5">
-                                        <Badge variant="secondary" className="text-[9px] py-0 px-1 bg-black/70 backdrop-blur-xs font-semibold text-white/90">
-                                            {item.instanceName.split(" ")[0]}
+                                        <Badge variant="secondary" className="text-[9px] py-0 px-1.5 bg-black/70 backdrop-blur-xs font-semibold text-white/90 max-w-[110px] truncate" title={item.instanceName}>
+                                            {item.instanceName}
                                         </Badge>
                                     </div>
                                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
