@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/auth-secret";
 import prisma from "@/lib/prisma";
+import { decryptData } from "@/lib/encryption";
 
 export async function GET(req: NextRequest) {
     try {
@@ -37,13 +38,14 @@ export async function GET(req: NextRequest) {
         }
 
         const cleanBase = instance.url.replace(/\/$/, "").replace(/\/api\/v2\/?$/, "");
+        const apiKey = decryptData(instance.apiKey);
         let targetUrl = "";
 
         if (img.startsWith("http://") || img.startsWith("https://")) {
             targetUrl = img;
         } else {
             const cleanImg = img.startsWith("/") ? img : `/${img}`;
-            targetUrl = `${cleanBase}/pms_image_proxy?img=${encodeURIComponent(cleanImg)}&apikey=${instance.apiKey}`;
+            targetUrl = `${cleanBase}/pms_image_proxy?img=${encodeURIComponent(cleanImg)}&apikey=${encodeURIComponent(apiKey)}`;
         }
 
         const res = await fetch(targetUrl, {

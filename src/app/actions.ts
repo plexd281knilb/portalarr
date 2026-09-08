@@ -774,29 +774,29 @@ export async function removeMediaApp(id: string) {
   revalidatePath("/settings");
 }
 
-export async function testAppConnectionAction(id: string) {
+export async function testMediaAppConfigAction(type: string, rawUrl: string, rawApiKey?: string) {
     await verifyAdmin();
-    const app = await prisma.mediaApp.findUnique({ where: { id } });
-    if (!app) return { success: false, error: "App not found" };
+    if (!rawUrl) return { success: false, error: "URL is required" };
 
-    const cleanUrl = app.url.replace(/\/+$/, "");
-    const apiKey = decryptData(app.apiKey as string);
+    const clean = cleanUrl(rawUrl);
+    const apiKey = (rawApiKey || "").trim();
 
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-        let testUrl = `${cleanUrl}/api/v3/system/status?apikey=${apiKey}`;
-        if (app.type.toLowerCase() === "sabnzbd") {
-            testUrl = `${cleanUrl}/api?mode=version&output=json&apikey=${apiKey}`;
-        } else if (app.type.toLowerCase() === "qbittorrent") {
-            testUrl = `${cleanUrl}/api/v2/app/version`;
-        } else if (app.type.toLowerCase() === "nzbget") {
-            testUrl = `${cleanUrl}/jsonrpc`;
-        } else if (app.type.toLowerCase() === "prowlarr") {
-            testUrl = `${cleanUrl}/api/v1/system/status?apikey=${apiKey}`;
-        } else if (app.type.toLowerCase().includes("seerr") || app.type.toLowerCase() === "overseerr") {
-            testUrl = `${cleanUrl}/api/v1/status`;
+        let testUrl = `${clean}/api/v3/system/status?apikey=${apiKey}`;
+        const appType = (type || "").toLowerCase();
+        if (appType === "sabnzbd") {
+            testUrl = `${clean}/api?mode=version&output=json&apikey=${apiKey}`;
+        } else if (appType === "qbittorrent") {
+            testUrl = `${clean}/api/v2/app/version`;
+        } else if (appType === "nzbget") {
+            testUrl = `${clean}/jsonrpc`;
+        } else if (appType === "prowlarr") {
+            testUrl = `${clean}/api/v1/system/status?apikey=${apiKey}`;
+        } else if (appType.includes("seerr") || appType === "overseerr") {
+            testUrl = `${clean}/api/v1/status`;
         }
 
         const res = await fetch(testUrl, { signal: controller.signal, cache: "no-store" });
@@ -804,11 +804,71 @@ export async function testAppConnectionAction(id: string) {
 
         if (res.ok || res.status === 401) {
             if (res.status === 401) return { success: false, error: "Authentication failed: Invalid API Key" };
-            return { success: true, message: `Successfully connected to ${app.name} (${app.type})!` };
+            return { success: true, message: `Successfully connected to ${type || "App"}!` };
         }
-        return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
+        return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
     } catch (e: any) {
         return { success: false, error: e.name === "AbortError" ? "Connection timed out after 6s" : (e.message || "Failed to connect") };
+    }
+}
+
+export async function testAppConnectionAction(id: string) {
+    await verifyAdmin();
+    const app = await prisma.mediaApp.findUnique({ where: { id } });
+    if (!app) return { success: false, error: "App not found" };
+
+    const apiKey = decryptData(app.apiKey as string);
+    const result = await testMediaAppConfigAction(app.type, app.url, apiKey);
+    if (result.success) {
+        return { success: true, message: `Successfully connected to ${app.name} (${app.type})!` };
+    }
+    return result;
+}
+
+export async function testTautulliConfigAction(rawUrl: string, rawApiKey: string) {
+    await verifyAdmin();
+    if (!rawUrl || !rawApiKey) {
+        return { success: false, error: "URL and API Key are required to test connection." };
+    }
+
+    const cleanBase = cleanUrl(rawUrl).replace(/\/api\/v2\/?$/, "");
+    const apiKey = rawApiKey.trim();
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+        // Tautulli API v2 uses cmd=get_server_info, cmd=status, or cmd=get_activity
+        const testUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_server_info`;
+        const res = await fetch(testUrl, { signal: controller.signal, cache: "no-store" });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+            return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
+        }
+
+        const data = await res.json().catch(() => null);
+        if (data && data.response) {
+            if (data.response.result === "error") {
+                return { success: false, error: data.response.message || "Invalid Tautulli API Key" };
+            }
+            if (data.response.result === "success") {
+                const serverName = data.response.data?.pms_name || data.response.data?.server_name;
+                return { 
+                    success: true, 
+                    message: serverName 
+                        ? `Connected to Tautulli! Connected server: "${serverName}"`
+                        : "Successfully connected to Tautulli!"
+                };
+            }
+        }
+
+        return { success: true, message: "Successfully connected to Tautulli!" };
+    } catch (e: any) {
+        if (e.name === "AbortError") {
+            return { success: false, error: "Connection timed out after 7s. Please check host, port, or firewall." };
+        }
+        return { success: false, error: e.message || "Failed to connect to Tautulli" };
     }
 }
 
@@ -817,21 +877,32 @@ export async function testTautulliConnectionAction(id: string) {
     const inst = await prisma.tautulliInstance.findUnique({ where: { id } });
     if (!inst) return { success: false, error: "Tautulli instance not found" };
 
-    const cleanUrl = inst.url.replace(/\/+$/, "");
     const apiKey = decryptData(inst.apiKey);
+    const result = await testTautulliConfigAction(inst.url, apiKey);
+    if (result.success) {
+        return { success: true, message: `Successfully connected to Tautulli instance "${inst.name}"!` };
+    }
+    return result;
+}
+
+export async function testGlancesConfigAction(rawUrl: string) {
+    await verifyAdmin();
+    if (!rawUrl) return { success: false, error: "URL is required" };
+
+    const clean = cleanUrl(rawUrl);
 
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(`${cleanUrl}/api/v2?cmd=arn_get_server_info&apikey=${apiKey}`, { signal: controller.signal, cache: "no-store" });
+        const res = await fetch(`${clean}/api/3/status`, { signal: controller.signal, cache: "no-store" });
         clearTimeout(timeoutId);
 
         if (res.ok) {
-            return { success: true, message: `Successfully connected to Tautulli instance "${inst.name}"!` };
+            return { success: true, message: "Successfully connected to Glances server!" };
         }
-        return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
+        return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
     } catch (e: any) {
-        return { success: false, error: e.name === "AbortError" ? "Connection timed out" : (e.message || "Connection failed") };
+        return { success: false, error: e.name === "AbortError" ? "Connection timed out after 6s" : (e.message || "Connection failed") };
     }
 }
 
@@ -840,21 +911,11 @@ export async function testGlancesConnectionAction(id: string) {
     const inst = await prisma.glancesInstance.findUnique({ where: { id } });
     if (!inst) return { success: false, error: "Glances instance not found" };
 
-    const cleanUrl = inst.url.replace(/\/+$/, "");
-
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(`${cleanUrl}/api/3/status`, { signal: controller.signal, cache: "no-store" });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-            return { success: true, message: `Successfully connected to Glances server "${inst.name}"!` };
-        }
-        return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
-    } catch (e: any) {
-        return { success: false, error: e.name === "AbortError" ? "Connection timed out" : (e.message || "Connection failed") };
+    const result = await testGlancesConfigAction(inst.url);
+    if (result.success) {
+        return { success: true, message: `Successfully connected to Glances server "${inst.name}"!` };
     }
+    return result;
 }
 
 export async function validateDownloadsPathAction(pathStr: string) {
@@ -1413,7 +1474,8 @@ export async function getLandingStats() {
 
     await Promise.all(tautulli.map(async (t) => {
         let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
-        const fullUrl = `${baseUrl}/api/v2?apikey=${t.apiKey}&cmd=get_activity`;
+        const apiKey = decryptData(t.apiKey);
+        const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
 
         try {
             const res = await fetch(fullUrl, { next: { revalidate: 10 } });
@@ -8958,10 +9020,11 @@ export async function getUserPlexHubData() {
     // Query all Tautulli instances concurrently with strict user isolation
     await Promise.allSettled(tautulli.map(async (t) => {
         const cleanBase = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
+        const apiKey = decryptData(t.apiKey);
         
         // 1. Active Activity / Streams
         try {
-            const activityUrl = `${cleanBase}/api/v2?apikey=${t.apiKey}&cmd=get_activity`;
+            const activityUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
             const res = await fetch(activityUrl, { next: { revalidate: 3 } });
             if (res.ok) {
                 const json = await res.json();
@@ -9032,7 +9095,7 @@ export async function getUserPlexHubData() {
 
         // 2. Watch History for this user
         try {
-            const histUrl = `${cleanBase}/api/v2?apikey=${t.apiKey}&cmd=get_history&user=${encodeURIComponent(user.username)}&length=8`;
+            const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&user=${encodeURIComponent(user.username)}&length=8`;
             const histRes = await fetch(histUrl, { next: { revalidate: 30 } });
             if (histRes.ok) {
                 const histJson = await histRes.json();
@@ -9071,7 +9134,7 @@ export async function getUserPlexHubData() {
 
         // 3. User Watch Time Stats
         try {
-            const statsUrl = `${cleanBase}/api/v2?apikey=${t.apiKey}&cmd=get_user_watch_time_stats&user=${encodeURIComponent(user.username)}`;
+            const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&user=${encodeURIComponent(user.username)}`;
             const statsRes = await fetch(statsUrl, { next: { revalidate: 60 } });
             if (statsRes.ok) {
                 const statsJson = await statsRes.json();
@@ -9128,10 +9191,11 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
     }
 
     const cleanBase = cleanUrl(instance.url).replace(/\/api\/v2\/?$/, "");
+    const apiKey = decryptData(instance.apiKey);
 
     // 1. Fetch current activity to strictly verify ownership
     try {
-        const activityUrl = `${cleanBase}/api/v2?apikey=${instance.apiKey}&cmd=get_activity`;
+        const activityUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
         const res = await fetch(activityUrl);
         if (!res.ok) {
             return { success: false, error: "Could not reach server to verify session" };
@@ -9158,7 +9222,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         }
 
         // 2. Execute termination
-        const killUrl = `${cleanBase}/api/v2?apikey=${instance.apiKey}&cmd=terminate_session&session_key=${encodeURIComponent(sessionKey)}&message=${encodeURIComponent("Stream ended by user via Portalarr My Plex Hub")}`;
+        const killUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=terminate_session&session_key=${encodeURIComponent(sessionKey)}&message=${encodeURIComponent("Stream ended by user via Portalarr My Plex Hub")}`;
         const killRes = await fetch(killUrl);
         if (!killRes.ok) {
             return { success: false, error: "Failed to terminate stream on server" };
