@@ -2,7 +2,7 @@ export interface SystemLogEntry {
     id: string;
     timestamp: string;
     level: "INFO" | "WARN" | "ERROR" | "SUCCESS" | "SYSTEM";
-    category: "SCANNER" | "API" | "COVER" | "DOWNLOAD" | "KINDLE" | "SYSTEM" | "DATABASE";
+    category: "SCANNER" | "API" | "COVER" | "DOWNLOAD" | "KINDLE" | "SYSTEM" | "DATABASE" | "PLEX_HUB";
     message: string;
     details?: string;
 }
@@ -35,7 +35,7 @@ class SystemLogger {
 
     public addLog(
         level: "INFO" | "WARN" | "ERROR" | "SUCCESS" | "SYSTEM",
-        category: "SCANNER" | "API" | "COVER" | "DOWNLOAD" | "KINDLE" | "SYSTEM" | "DATABASE",
+        category: "SCANNER" | "API" | "COVER" | "DOWNLOAD" | "KINDLE" | "SYSTEM" | "DATABASE" | "PLEX_HUB",
         message: string,
         details?: string,
         preventConsoleOutput = false

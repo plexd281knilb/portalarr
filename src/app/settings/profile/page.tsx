@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { User, Mail, KeyRound, CheckCircle2, XCircle, Loader2, ShieldCheck, MailCheck } from "lucide-react";
+import { User, Mail, KeyRound, CheckCircle2, XCircle, Loader2, ShieldCheck, MailCheck, Zap, BookOpen } from "lucide-react";
+import ServerSpeedTest from "@/components/server-speed-test";
+import PlexSetupGuides from "@/components/plex-setup-guides";
 
 export default function UserProfilePage() {
     const [user, setUser] = useState<any>(null);
@@ -62,13 +64,19 @@ export default function UserProfilePage() {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto p-4 sm:p-6 animate-in fade-in duration-500">
-            <div className="space-y-1">
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">
-                    <User className="h-6 w-6 text-primary" /> Account Profile & Settings
-                </h1>
-                <p className="text-muted-foreground text-sm">
-                    Manage your personal account credentials, Send-to-Kindle settings, and security.
-                </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                    <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">
+                        <User className="h-6 w-6 text-primary" /> Account Profile & Settings
+                    </h1>
+                    <p className="text-muted-foreground text-sm">
+                        Manage your personal account credentials, Send-to-Kindle settings, and streaming diagnostics.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    <ServerSpeedTest />
+                    <PlexSetupGuides />
+                </div>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">

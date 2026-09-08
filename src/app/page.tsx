@@ -8,6 +8,7 @@ import SystemStatus from "@/components/system-status";
 import ActiveDownloads from "@/components/active-downloads"; 
 import RequestLibraryAccess from "@/components/request-library-access";
 import FeatureVotingPoll from "@/components/feature-voting-poll";
+import MyPlexHub from "@/components/my-plex-hub";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -130,6 +131,13 @@ export default async function UserLandingPage() {
             </Card>
             <LandingSupport />
         </div>
+
+        {/* --- MY PLEX HUB (PERSONAL STREAMS, WATCH HISTORY & DIAGNOSTICS) --- */}
+        {isLoggedIn && (
+            <div className="w-full">
+                <MyPlexHub />
+            </div>
+        )}
 
         <div className="w-full">
              <ActiveDownloads />
