@@ -9143,6 +9143,28 @@ export async function getUserPlexHubData() {
         }
         const cleanBase = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
         const apiKey = decryptData(t.apiKey);
+
+        // First find matching user in Tautulli to get exact user_id
+        let tautulliUserId: string | number | null = null;
+        let tautulliUserName: string = safeUsername;
+        try {
+            const usersUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_users`;
+            const usersRes = await fetch(usersUrl, { next: { revalidate: 300 } });
+            if (usersRes.ok) {
+                const usersJson = await usersRes.json();
+                const tUsers = usersJson.response?.data || [];
+                const match = tUsers.find((u: any) => 
+                    (u.username && u.username.toLowerCase() === usernameLower) ||
+                    (u.email && u.email.toLowerCase() === emailLower) ||
+                    (u.friendly_name && u.friendly_name.toLowerCase() === usernameLower) ||
+                    (isAdmin && (u.is_admin === 1 || u.user_id === 0 || u.username === "Local"))
+                );
+                if (match) {
+                    tautulliUserId = match.user_id;
+                    tautulliUserName = match.username || match.friendly_name || safeUsername;
+                }
+            }
+        } catch (e) {}
         
         // 1. Active Activity / Streams
         try {
@@ -9166,7 +9188,7 @@ export async function getUserPlexHubData() {
                     const sessionFriendly = (s.friendly_name || "").toLowerCase();
 
                     // STRICT PRIVACY RAIL: Only match the logged-in user
-                    if (sessionUser === usernameLower || sessionEmail === emailLower || sessionFriendly === usernameLower) {
+                    if (sessionUser === usernameLower || sessionEmail === emailLower || sessionFriendly === usernameLower || (tautulliUserId !== null && String(s.user_id) === String(tautulliUserId))) {
                         const diagnosis = await analyzeStreamHealth(s);
                         const mediaType = s.media_type || (s.grandparent_title ? "episode" : "movie");
                         
@@ -9225,7 +9247,8 @@ export async function getUserPlexHubData() {
 
         // 2. Watch History for this user from Tautulli
         try {
-            const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&user=${encodeURIComponent(user.username)}&length=8`;
+            const histUserParam = tautulliUserId !== null ? `user_id=${encodeURIComponent(String(tautulliUserId))}` : `user=${encodeURIComponent(tautulliUserName)}`;
+            const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${histUserParam}&length=12`;
             const histRes = await fetch(histUrl, { next: { revalidate: 30 } });
             if (histRes.ok) {
                 const histJson = await histRes.json();
@@ -9264,7 +9287,8 @@ export async function getUserPlexHubData() {
 
         // 3. User Watch Time Stats from Tautulli
         try {
-            const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&user=${encodeURIComponent(user.username)}`;
+            const statsUserParam = tautulliUserId !== null ? `user_id=${encodeURIComponent(String(tautulliUserId))}` : `user=${encodeURIComponent(tautulliUserName)}`;
+            const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&${statsUserParam}`;
             const statsRes = await fetch(statsUrl, { next: { revalidate: 60 } });
             if (statsRes.ok) {
                 const statsJson = await statsRes.json();
@@ -9281,70 +9305,135 @@ export async function getUserPlexHubData() {
         } catch (e) {}
     }));
 
-    // Fallback: If watch history is empty and Direct Plex Token exists, fetch recent history directly from Plex Media Server
-    if (watchHistory.length === 0 && settings?.mainPlexToken) {
+    // --- 3. DIRECT PLEX STATS & HISTORY FALLBACK (if Tautulli is offline, returned 0 stats, or missing history) ---
+    if (settings?.mainPlexToken && (watchHistory.length === 0 || (watchStats.totalWatchTimeHours === 0 && watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0))) {
         try {
             const adminToken = decryptData(settings.mainPlexToken);
             const plexServers = await getPlexServers(adminToken);
+            
             for (const srv of plexServers) {
                 const token = srv.accessToken || adminToken;
                 for (const conn of srv.connections) {
                     try {
                         const cleanBase = conn.uri.replace(/\/+$/, "");
-                        const hRes = await fetch(`${cleanBase}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=20`, {
-                            headers: {
-                                "Accept": "application/json",
-                                "X-Plex-Token": token,
-                                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                            },
-                            next: { revalidate: 30 }
-                        });
-                        if (hRes.ok) {
-                            const hJson = await hRes.json();
-                            const hRows = hJson.MediaContainer?.Metadata || [];
-                            const rows = Array.isArray(hRows) ? hRows : [hRows];
-                            for (const r of rows) {
-                                const rUser = (r.userName || r.user || "").toLowerCase();
-                                if (rUser === usernameLower || rUser === emailLower || isAdmin) {
-                                    const rawThumb = r.thumb || r.parentThumb || r.grandparentThumb || "";
-                                    const thumbUrl = rawThumb ? `/api/media/image?instanceId=${encodeURIComponent("plex::" + srv.clientIdentifier + "::" + cleanBase)}&img=${encodeURIComponent(rawThumb)}` : null;
+
+                        // 1. Fetch Session History (last 200 sessions)
+                        if (watchHistory.length === 0 || watchStats.totalWatchTimeHours === 0) {
+                            const hRes = await fetch(`${cleanBase}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=200`, {
+                                headers: {
+                                    "Accept": "application/json",
+                                    "X-Plex-Token": token,
+                                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                                },
+                                next: { revalidate: 30 }
+                            });
+                            if (hRes.ok) {
+                                const hJson = await hRes.json();
+                                const hRows = hJson.MediaContainer?.Metadata || [];
+                                const rows = Array.isArray(hRows) ? hRows : [hRows];
+                                
+                                for (const r of rows) {
+                                    const rUser = (r.userName || r.user || "").toLowerCase();
+                                    const matchesUser = rUser === usernameLower || rUser === emailLower || (isAdmin && (!rUser || rUser === "local"));
                                     
-                                    let displayTitle = r.title || "Unknown";
-                                    if (r.grandparentTitle) {
-                                        const sNum = r.parentIndex ? String(r.parentIndex).padStart(2, "0") : "01";
-                                        const eNum = r.index ? String(r.index).padStart(2, "0") : "01";
-                                        displayTitle = `${r.grandparentTitle} (S${sNum}E${eNum})`;
-                                    } else if (r.year) {
-                                        displayTitle = `${r.title} (${r.year})`;
+                                    if (matchesUser) {
+                                        const rawThumb = r.thumb || r.parentThumb || r.grandparentThumb || "";
+                                        const srvId = `plex::${srv.clientIdentifier}::${cleanBase}`;
+                                        const thumbUrl = rawThumb ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}` : null;
+                                        
+                                        let displayTitle = r.title || "Unknown";
+                                        if (r.grandparentTitle) {
+                                            const sNum = r.parentIndex ? String(r.parentIndex).padStart(2, "0") : "01";
+                                            const eNum = r.index ? String(r.index).padStart(2, "0") : "01";
+                                            displayTitle = `${r.grandparentTitle} (S${sNum}E${eNum})`;
+                                        } else if (r.year) {
+                                            displayTitle = `${r.title} (${r.year})`;
+                                        }
+
+                                        if (watchHistory.length < 15) {
+                                            watchHistory.push({
+                                                id: `plex-${r.historyKey || r.ratingKey || Math.random()}`,
+                                                instanceId: srvId,
+                                                instanceName: srv.name,
+                                                title: r.title,
+                                                fullTitle: displayTitle,
+                                                mediaType: r.type || "movie",
+                                                thumb: thumbUrl,
+                                                date: r.viewedAt ? new Date(r.viewedAt * 1000).toISOString() : new Date().toISOString(),
+                                                durationMinutes: r.duration ? Math.round(Number(r.duration) / 60000) : 0,
+                                                percentComplete: 100,
+                                                player: "Plex Device",
+                                                ratingKey: r.ratingKey
+                                            });
+                                        }
+
+                                        const durMs = Number(r.duration || r.viewOffset || 0);
+                                        if (durMs > 0) {
+                                            watchStats.totalWatchTimeHours += Math.round(durMs / 3600000);
+                                        }
+                                        if (r.type === "movie") watchStats.moviesWatched++;
+                                        else if (r.type === "episode") watchStats.episodesWatched++;
+                                        else if (r.type === "track") watchStats.musicTracksPlayed++;
                                     }
-
-                                    watchHistory.push({
-                                        id: `plex-${r.historyKey || r.ratingKey || Math.random()}`,
-                                        instanceId: `plex::${srv.clientIdentifier}::${cleanBase}`,
-                                        instanceName: srv.name,
-                                        title: r.title,
-                                        fullTitle: displayTitle,
-                                        mediaType: r.type || "movie",
-                                        thumb: thumbUrl,
-                                        date: r.viewedAt ? new Date(r.viewedAt * 1000).toISOString() : new Date().toISOString(),
-                                        durationMinutes: r.duration ? Math.round(Number(r.duration) / 60000) : 0,
-                                        percentComplete: 100,
-                                        player: "Plex Device",
-                                        ratingKey: r.ratingKey
-                                    });
-
-                                    if (r.type === "movie") watchStats.moviesWatched++;
-                                    else if (r.type === "episode") watchStats.episodesWatched++;
-                                    else if (r.type === "track") watchStats.musicTracksPlayed++;
-                                    if (r.duration) watchStats.totalWatchTimeHours += Math.round(Number(r.duration) / 3600000);
                                 }
                             }
-                            break; // Handled this server
                         }
+
+                        // 2. Fetch Total Watched from PMS Library Sections if library stats are still 0
+                        if (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0) {
+                            try {
+                                const secRes = await fetch(`${cleanBase}/library/sections`, {
+                                    headers: {
+                                        "Accept": "application/json",
+                                        "X-Plex-Token": token,
+                                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                                    },
+                                    next: { revalidate: 120 }
+                                });
+                                if (secRes.ok) {
+                                    const secJson = await secRes.json();
+                                    const sections = secJson.MediaContainer?.Directory || [];
+                                    for (const sec of sections) {
+                                        if (sec.type === "movie") {
+                                            try {
+                                                const mRes = await fetch(`${cleanBase}/library/sections/${sec.key}/all?type=1&unwatched=0&X-Plex-Container-Start=0&X-Plex-Container-Size=0`, {
+                                                    headers: { "Accept": "application/json", "X-Plex-Token": token }
+                                                });
+                                                if (mRes.ok) {
+                                                    const mJson = await mRes.json();
+                                                    const count = Number(mJson.MediaContainer?.totalSize ?? mJson.MediaContainer?.size ?? 0);
+                                                    watchStats.moviesWatched += count;
+                                                }
+                                            } catch (e) {}
+                                        } else if (sec.type === "show") {
+                                            try {
+                                                const eRes = await fetch(`${cleanBase}/library/sections/${sec.key}/all?type=4&unwatched=0&X-Plex-Container-Start=0&X-Plex-Container-Size=0`, {
+                                                    headers: { "Accept": "application/json", "X-Plex-Token": token }
+                                                });
+                                                if (eRes.ok) {
+                                                    const eJson = await eRes.json();
+                                                    const count = Number(eJson.MediaContainer?.totalSize ?? eJson.MediaContainer?.size ?? 0);
+                                                    watchStats.episodesWatched += count;
+                                                }
+                                            } catch (e) {}
+                                        }
+                                    }
+                                }
+                            } catch (e) {}
+                        }
+
+                        // 3. Estimate streaming hours from watched items if history log was purged
+                        if (watchStats.totalWatchTimeHours === 0 && (watchStats.moviesWatched > 0 || watchStats.episodesWatched > 0)) {
+                            watchStats.totalWatchTimeHours = Math.round((watchStats.moviesWatched * 1.8) + (watchStats.episodesWatched * 0.7));
+                        }
+
+                        break; // Connection succeeded
                     } catch (e) {}
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.warn("[PLEX-HUB] Plex stats calculation error:", e);
+        }
     }
 
     // Sort watch history by most recent date across all instances

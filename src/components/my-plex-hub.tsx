@@ -154,6 +154,9 @@ export default function MyPlexHub() {
                                                         src={stream.thumb} 
                                                         alt={stream.title} 
                                                         className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLElement).style.display = "none";
+                                                        }}
                                                     />
                                                     <div className="absolute bottom-1 right-1 p-1 rounded-full bg-black/70 backdrop-blur-xs">
                                                         {stream.state === "playing" ? (
@@ -323,6 +326,9 @@ export default function MyPlexHub() {
                                             src={item.thumb} 
                                             alt={item.fullTitle} 
                                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                            onError={(e) => {
+                                                (e.target as HTMLElement).style.display = "none";
+                                            }}
                                         />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center text-muted-foreground">
