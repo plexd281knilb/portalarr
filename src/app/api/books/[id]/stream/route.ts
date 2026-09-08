@@ -5,6 +5,25 @@ import fs from "fs";
 import path from "path";
 import { getJwtSecret } from "@/lib/auth-secret";
 
+async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string = "", email: string = "", role: string = "") {
+    if ((role || "").toUpperCase() === "ADMIN") return true;
+
+    const safeUsername = (username || "").toLowerCase();
+    const safeEmail = (email || "").toLowerCase();
+
+    // Explicit denial check: If user is listed in restrictedUsers, block access immediately
+    if (restrictedUsersStr && restrictedUsersStr.trim() !== "") {
+        const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+        if ((safeUsername && restricted.includes(safeUsername)) || (safeEmail && restricted.includes(safeEmail))) {
+            return false;
+        }
+    }
+
+    if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
+    const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+    return allowed.includes("*") || (safeUsername && allowed.includes(safeUsername)) || (safeEmail && allowed.includes(safeEmail));
+}
+
 export async function GET(
     req: NextRequest,
     context: { params: Promise<{ id: string }> }
@@ -17,12 +36,29 @@ export async function GET(
         const decoded = await jwtVerify(session, getJwtSecret());
         const payload = decoded.payload;
 
+        const userStatus = (payload.status as string) || "APPROVED";
+        if (userStatus === "PENDING" || userStatus === "REJECTED") {
+            return new NextResponse("Account Pending Approval", { status: 403 });
+        }
+
         const book = await prisma.book.findUnique({
             where: { id },
             include: { library: true }
         });
 
         if (!book) return new NextResponse("Book Not Found", { status: 404 });
+
+        const hasAccess = await checkLibraryAccess(
+            book.library.allowedUsers,
+            book.library.restrictedUsers || "",
+            (payload.username || "") as string,
+            (payload.email || "") as string,
+            (payload.role || "") as string
+        );
+
+        if (!hasAccess) {
+            return new NextResponse("Access Denied", { status: 403 });
+        }
 
         const searchParams = req.nextUrl.searchParams;
         const relativePath = searchParams.get("file");

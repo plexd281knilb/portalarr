@@ -1,10 +1,29 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { jwtVerify } from "jose";
+import { getJwtSecret } from "@/lib/auth-secret";
 import prisma from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
+        const session = req.cookies.get("session")?.value;
+        if (!session) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        let payload;
+        try {
+            const decoded = await jwtVerify(session, getJwtSecret());
+            payload = decoded.payload;
+        } catch (e) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        if (payload.role !== "ADMIN") {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
         const dbUrl = process.env.DATABASE_URL || "";
         const rawPath = dbUrl.replace("file:", "").trim();
         const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
