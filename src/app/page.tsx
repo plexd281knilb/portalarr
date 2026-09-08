@@ -8,6 +8,7 @@ import SystemStatus from "@/components/system-status";
 import ActiveDownloads from "@/components/active-downloads"; 
 import RequestLibraryAccess from "@/components/request-library-access";
 import FeatureVotingPoll from "@/components/feature-voting-poll";
+import MyPlexHub from "@/components/my-plex-hub";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -131,6 +132,13 @@ export default async function UserLandingPage() {
             <LandingSupport />
         </div>
 
+        {/* --- MY PLEX HUB (PERSONAL STREAMS, WATCH HISTORY & DIAGNOSTICS) --- */}
+        {isLoggedIn && (
+            <div className="w-full">
+                <MyPlexHub />
+            </div>
+        )}
+
         <div className="w-full">
              <ActiveDownloads />
         </div>
@@ -152,37 +160,37 @@ export default async function UserLandingPage() {
                         rehypePlugins={[rehypeRaw]}
                         components={{
                             h1: ({ node, ...props }) => (
-                                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-8 mb-4 border-b border-border/40 pb-3 flex items-center gap-2" {...props} />
+                                <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight mt-4 mb-3 border-b border-border/40 pb-2 flex items-center gap-2" {...props} />
                             ),
                             h2: ({ node, ...props }) => (
-                                <h2 className="text-xl sm:text-2xl font-bold text-foreground mt-8 mb-4 border-b border-border/30 pb-2.5 flex items-center gap-2" {...props} />
+                                <h2 className="text-lg sm:text-xl font-bold text-foreground mt-4 mb-2.5 border-b border-border/30 pb-2 flex items-center gap-2" {...props} />
                             ),
                             h3: ({ node, ...props }) => (
-                                <h3 className="text-lg sm:text-xl font-bold text-foreground mt-7 mb-3.5 flex items-center gap-2 first:mt-1 text-primary/95" {...props} />
+                                <h3 className="text-base sm:text-lg font-bold text-foreground mt-4 mb-2 flex items-center gap-2 first:mt-0 text-primary/95" {...props} />
                             ),
                             h4: ({ node, ...props }) => (
-                                <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground mt-6 mb-3 flex items-center gap-1.5" {...props} />
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mt-3 mb-1.5 flex items-center gap-1.5" {...props} />
                             ),
                             p: ({ node, ...props }) => (
-                                <p className="text-sm sm:text-base leading-relaxed text-muted-foreground/95 my-3" {...props} />
+                                <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground/95 my-2" {...props} />
                             ),
                             ul: ({ node, ...props }) => (
-                                <ul className="space-y-3.5 my-4 pl-0 list-none" {...props} />
+                                <ul className="grid grid-cols-1 md:grid-cols-2 gap-2.5 my-2.5 pl-0 list-none" {...props} />
                             ),
                             ol: ({ node, ...props }) => (
-                                <ol className="space-y-3 my-4 pl-5 list-decimal text-sm sm:text-base text-muted-foreground/95 leading-relaxed" {...props} />
+                                <ol className="space-y-2 my-2.5 pl-5 list-decimal text-xs sm:text-sm text-muted-foreground/95 leading-relaxed" {...props} />
                             ),
                             li: ({ node, ...props }) => (
-                                <li className="text-sm sm:text-base leading-relaxed text-muted-foreground/95 p-3.5 rounded-xl bg-muted/20 border border-border/40 hover:border-primary/30 transition-all block" {...props} />
+                                <li className="text-xs sm:text-sm leading-relaxed text-muted-foreground/95 p-3 rounded-xl bg-muted/20 border border-border/40 hover:border-primary/30 transition-all block" {...props} />
                             ),
                             hr: ({ node, ...props }) => (
-                                <hr className="my-7 border-t border-border/40" {...props} />
+                                <hr className="my-4 border-t border-border/40" {...props} />
                             ),
                             strong: ({ node, ...props }) => (
                                 <strong className="font-semibold text-foreground" {...props} />
                             ),
                             blockquote: ({ node, ...props }) => (
-                                <blockquote className="border-l-2 border-primary/70 pl-4 py-2 my-4 bg-primary/5 rounded-r text-sm sm:text-base text-foreground/90 italic" {...props} />
+                                <blockquote className="border-l-2 border-primary/70 pl-3 py-1.5 my-2.5 bg-primary/5 rounded-r text-xs sm:text-sm text-foreground/90 italic" {...props} />
                             ),
                             a: ({ node, ...props }) => (
                                 <a className="text-primary underline hover:text-primary/80 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />

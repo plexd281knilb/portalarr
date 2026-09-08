@@ -6,7 +6,7 @@ import nodemailer from "nodemailer";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { encryptData, decryptData } from "@/lib/encryption";
-import { getPlexServerFriends } from "@/lib/plex";
+import { getPlexServerFriends, getPlexServers, getPlexActiveSessions, getPlexOwnerUser, terminatePlexServerSession } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 
@@ -774,29 +774,29 @@ export async function removeMediaApp(id: string) {
   revalidatePath("/settings");
 }
 
-export async function testAppConnectionAction(id: string) {
+export async function testMediaAppConfigAction(type: string, rawUrl: string, rawApiKey?: string) {
     await verifyAdmin();
-    const app = await prisma.mediaApp.findUnique({ where: { id } });
-    if (!app) return { success: false, error: "App not found" };
+    if (!rawUrl) return { success: false, error: "URL is required" };
 
-    const cleanUrl = app.url.replace(/\/+$/, "");
-    const apiKey = decryptData(app.apiKey as string);
+    const clean = cleanUrl(rawUrl);
+    const apiKey = (rawApiKey || "").trim();
 
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-        let testUrl = `${cleanUrl}/api/v3/system/status?apikey=${apiKey}`;
-        if (app.type.toLowerCase() === "sabnzbd") {
-            testUrl = `${cleanUrl}/api?mode=version&output=json&apikey=${apiKey}`;
-        } else if (app.type.toLowerCase() === "qbittorrent") {
-            testUrl = `${cleanUrl}/api/v2/app/version`;
-        } else if (app.type.toLowerCase() === "nzbget") {
-            testUrl = `${cleanUrl}/jsonrpc`;
-        } else if (app.type.toLowerCase() === "prowlarr") {
-            testUrl = `${cleanUrl}/api/v1/system/status?apikey=${apiKey}`;
-        } else if (app.type.toLowerCase().includes("seerr") || app.type.toLowerCase() === "overseerr") {
-            testUrl = `${cleanUrl}/api/v1/status`;
+        let testUrl = `${clean}/api/v3/system/status?apikey=${apiKey}`;
+        const appType = (type || "").toLowerCase();
+        if (appType === "sabnzbd") {
+            testUrl = `${clean}/api?mode=version&output=json&apikey=${apiKey}`;
+        } else if (appType === "qbittorrent") {
+            testUrl = `${clean}/api/v2/app/version`;
+        } else if (appType === "nzbget") {
+            testUrl = `${clean}/jsonrpc`;
+        } else if (appType === "prowlarr") {
+            testUrl = `${clean}/api/v1/system/status?apikey=${apiKey}`;
+        } else if (appType.includes("seerr") || appType === "overseerr") {
+            testUrl = `${clean}/api/v1/status`;
         }
 
         const res = await fetch(testUrl, { signal: controller.signal, cache: "no-store" });
@@ -804,11 +804,71 @@ export async function testAppConnectionAction(id: string) {
 
         if (res.ok || res.status === 401) {
             if (res.status === 401) return { success: false, error: "Authentication failed: Invalid API Key" };
-            return { success: true, message: `Successfully connected to ${app.name} (${app.type})!` };
+            return { success: true, message: `Successfully connected to ${type || "App"}!` };
         }
-        return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
+        return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
     } catch (e: any) {
         return { success: false, error: e.name === "AbortError" ? "Connection timed out after 6s" : (e.message || "Failed to connect") };
+    }
+}
+
+export async function testAppConnectionAction(id: string) {
+    await verifyAdmin();
+    const app = await prisma.mediaApp.findUnique({ where: { id } });
+    if (!app) return { success: false, error: "App not found" };
+
+    const apiKey = decryptData(app.apiKey as string);
+    const result = await testMediaAppConfigAction(app.type, app.url, apiKey);
+    if (result.success) {
+        return { success: true, message: `Successfully connected to ${app.name} (${app.type})!` };
+    }
+    return result;
+}
+
+export async function testTautulliConfigAction(rawUrl: string, rawApiKey: string) {
+    await verifyAdmin();
+    if (!rawUrl || !rawApiKey) {
+        return { success: false, error: "URL and API Key are required to test connection." };
+    }
+
+    const cleanBase = cleanUrl(rawUrl).replace(/\/api\/v2\/?$/, "");
+    const apiKey = rawApiKey.trim();
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+        // Tautulli API v2 uses cmd=get_server_info, cmd=status, or cmd=get_activity
+        const testUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_server_info`;
+        const res = await fetch(testUrl, { signal: controller.signal, cache: "no-store" });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+            return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
+        }
+
+        const data = await res.json().catch(() => null);
+        if (data && data.response) {
+            if (data.response.result === "error") {
+                return { success: false, error: data.response.message || "Invalid Tautulli API Key" };
+            }
+            if (data.response.result === "success") {
+                const serverName = data.response.data?.pms_name || data.response.data?.server_name;
+                return { 
+                    success: true, 
+                    message: serverName 
+                        ? `Connected to Tautulli! Connected server: "${serverName}"`
+                        : "Successfully connected to Tautulli!"
+                };
+            }
+        }
+
+        return { success: true, message: "Successfully connected to Tautulli!" };
+    } catch (e: any) {
+        if (e.name === "AbortError") {
+            return { success: false, error: "Connection timed out after 7s. Please check host, port, or firewall." };
+        }
+        return { success: false, error: e.message || "Failed to connect to Tautulli" };
     }
 }
 
@@ -817,21 +877,32 @@ export async function testTautulliConnectionAction(id: string) {
     const inst = await prisma.tautulliInstance.findUnique({ where: { id } });
     if (!inst) return { success: false, error: "Tautulli instance not found" };
 
-    const cleanUrl = inst.url.replace(/\/+$/, "");
     const apiKey = decryptData(inst.apiKey);
+    const result = await testTautulliConfigAction(inst.url, apiKey);
+    if (result.success) {
+        return { success: true, message: `Successfully connected to Tautulli instance "${inst.name}"!` };
+    }
+    return result;
+}
+
+export async function testGlancesConfigAction(rawUrl: string) {
+    await verifyAdmin();
+    if (!rawUrl) return { success: false, error: "URL is required" };
+
+    const clean = cleanUrl(rawUrl);
 
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(`${cleanUrl}/api/v2?cmd=arn_get_server_info&apikey=${apiKey}`, { signal: controller.signal, cache: "no-store" });
+        const res = await fetch(`${clean}/api/3/status`, { signal: controller.signal, cache: "no-store" });
         clearTimeout(timeoutId);
 
         if (res.ok) {
-            return { success: true, message: `Successfully connected to Tautulli instance "${inst.name}"!` };
+            return { success: true, message: "Successfully connected to Glances server!" };
         }
-        return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
+        return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
     } catch (e: any) {
-        return { success: false, error: e.name === "AbortError" ? "Connection timed out" : (e.message || "Connection failed") };
+        return { success: false, error: e.name === "AbortError" ? "Connection timed out after 6s" : (e.message || "Connection failed") };
     }
 }
 
@@ -840,21 +911,11 @@ export async function testGlancesConnectionAction(id: string) {
     const inst = await prisma.glancesInstance.findUnique({ where: { id } });
     if (!inst) return { success: false, error: "Glances instance not found" };
 
-    const cleanUrl = inst.url.replace(/\/+$/, "");
-
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(`${cleanUrl}/api/3/status`, { signal: controller.signal, cache: "no-store" });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-            return { success: true, message: `Successfully connected to Glances server "${inst.name}"!` };
-        }
-        return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
-    } catch (e: any) {
-        return { success: false, error: e.name === "AbortError" ? "Connection timed out" : (e.message || "Connection failed") };
+    const result = await testGlancesConfigAction(inst.url);
+    if (result.success) {
+        return { success: true, message: `Successfully connected to Glances server "${inst.name}"!` };
     }
+    return result;
 }
 
 export async function validateDownloadsPathAction(pathStr: string) {
@@ -1413,7 +1474,8 @@ export async function getLandingStats() {
 
     await Promise.all(tautulli.map(async (t) => {
         let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
-        const fullUrl = `${baseUrl}/api/v2?apikey=${t.apiKey}&cmd=get_activity`;
+        const apiKey = decryptData(t.apiKey);
+        const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
 
         try {
             const res = await fetch(fullUrl, { next: { revalidate: 10 } });
@@ -8788,3 +8850,1081 @@ export async function fetchAvailableAiModels(provider: string, apiKey: string) {
         return { success: false, error: e.message };
     }
 }
+
+// ============================================================================
+// --- PLEX HUB & SELF-SERVICE DIAGNOSTICS (STEP 1) ---
+// ============================================================================
+
+export interface StreamDiagnosis {
+    status: "optimal" | "audio_transcode" | "video_transcode" | "bandwidth_cap" | "subtitle_burn";
+    badgeText: string;
+    badgeColor: string;
+    title: string;
+    explanation: string;
+    recommendation: string;
+    steps: string[];
+}
+
+export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
+    const isPlexNative = !!(s.Session || s.Player || s.MediaContainer || (s.TranscodeSession !== undefined && !s.transcode_decision));
+    
+    let videoDecision = (s.video_decision || "").toLowerCase();
+    let audioDecision = (s.audio_decision || "").toLowerCase();
+    let streamBitrate = Number(s.stream_bitrate || s.bitrate || 0);
+    let streamRes = (s.stream_video_resolution || s.video_resolution || "").toLowerCase();
+    let sourceRes = (s.video_resolution || "").toLowerCase();
+    let subDecision = (s.subtitle_decision || "").toLowerCase();
+    let subCodec = (s.subtitle_codec || "").toLowerCase();
+    let player = s.player || s.platform || "your device";
+    let videoCodec = s.video_codec || "";
+    let audioCodec = s.audio_codec || "";
+    let streamAudioCodec = s.stream_audio_codec || "";
+
+    if (isPlexNative || s.TranscodeSession) {
+        player = s.Player?.title || s.Player?.device || s.Player?.platform || player;
+        const ts = s.TranscodeSession;
+        if (ts) {
+            videoDecision = (ts.videoDecision || (ts.transcodeHwRequested ? "transcode" : "") || "transcode").toLowerCase();
+            audioDecision = (ts.audioDecision || "transcode").toLowerCase();
+            subDecision = (ts.subtitleDecision || "").toLowerCase();
+            subCodec = (ts.subtitleCodec || "").toLowerCase();
+            streamBitrate = Number(ts.bitrate || s.Media?.[0]?.bitrate || 0);
+            streamRes = (ts.videoResolution || s.Media?.[0]?.videoResolution || "").toLowerCase();
+            sourceRes = (s.Media?.[0]?.videoResolution || streamRes).toLowerCase();
+            videoCodec = ts.videoCodec || s.Media?.[0]?.videoCodec || "";
+            audioCodec = ts.sourceAudioCodec || s.Media?.[0]?.audioCodec || "";
+            streamAudioCodec = ts.audioCodec || "";
+        } else {
+            videoDecision = "direct play";
+            audioDecision = "direct play";
+            sourceRes = (s.Media?.[0]?.videoResolution || "1080p").toLowerCase();
+            streamRes = sourceRes;
+            streamBitrate = Number(s.Media?.[0]?.bitrate || 0);
+            videoCodec = s.Media?.[0]?.videoCodec || "";
+            audioCodec = s.Media?.[0]?.audioCodec || "";
+        }
+    }
+
+    // 1. Subtitle Burn-In
+    if (subDecision === "burn" || (videoDecision === "transcode" && (subCodec.includes("pgs") || subCodec.includes("ass") || subCodec.includes("vobsub")))) {
+        return {
+            status: "subtitle_burn",
+            badgeText: "Subtitle Burn-In",
+            badgeColor: "amber",
+            title: "Subtitle Rendering Transcode",
+            explanation: `The subtitle track (${subCodec.toUpperCase() || "Image Format"}) is being burned directly into the video stream by the server because ${player} does not support native text rendering for this format.`,
+            recommendation: "Switch to an external SRT subtitle track or adjust subtitle burning settings in Plex.",
+            steps: [
+                "1. During playback, open the Playback Settings / Subtitles menu 💬",
+                "2. Select an 'SRT' subtitle track or search for an external text subtitle",
+                "3. In Plex App Settings → Subtitles / Advanced, set 'Burn Subtitles' to 'Only Image Formats' or 'Automatic'"
+            ]
+        };
+    }
+
+    // 2. Bandwidth Cap (e.g. 720p 2Mbps limit)
+    if (videoDecision === "transcode" && (streamBitrate <= 2200 || (streamRes.includes("720") && !sourceRes.includes("720") && !sourceRes.includes("480")))) {
+        return {
+            status: "bandwidth_cap",
+            badgeText: "2 Mbps Quality Cap",
+            badgeColor: "red",
+            title: "Remote Quality Limit Detected",
+            explanation: `Your ${player} Plex app is set to a default 2 Mbps (720p) remote limit. This causes the server to compress and downscale your video from ${sourceRes.toUpperCase() || "HD"} to 720p, reducing visual sharpness and increasing buffering.`,
+            recommendation: "Change Remote Streaming Quality to 'Maximum' or 'Original' in your device's Plex app settings.",
+            steps: [
+                `1. Open the Plex app on ${player}`,
+                "2. Go to Settings ⚙️ → Video Quality",
+                "3. Find 'Remote Streaming Quality' (or 'Limit Remote Quality')",
+                "4. Change it from 2 Mbps / 720p to 'Maximum' or 'Original'",
+                "5. Disable 'Auto Adjust Quality' to prevent random quality drops",
+                "6. Resume playback to enjoy crisp studio-quality Direct Play!"
+            ]
+        };
+    }
+
+    // 3. Generic Video Transcode
+    if (videoDecision === "transcode") {
+        return {
+            status: "video_transcode",
+            badgeText: "Video Transcode",
+            badgeColor: "orange",
+            title: "Video Codec Conversion",
+            explanation: `The video codec (${videoCodec?.toUpperCase() || "HEVC/H.264"}) is being converted to H.264 for compatibility with ${player}.`,
+            recommendation: "Ensure Direct Play is enabled in your device settings.",
+            steps: [
+                `1. Go to Settings ⚙️ → Advanced / Video in your ${player} Plex app`,
+                "2. Ensure 'Direct Play' and 'Direct Stream' are set to 'Enabled'",
+                "3. If playing in a web browser, consider using the official Plex Desktop App for complete codec and HDR support"
+            ]
+        };
+    }
+
+    // 4. Audio-Only Transcode (Video is Direct Play / Copy)
+    if (audioDecision === "transcode" || audioDecision === "copy") {
+        return {
+            status: "audio_transcode",
+            badgeText: "Direct Stream",
+            badgeColor: "blue",
+            title: "Direct Stream (Audio Transcoding)",
+            explanation: `Video is Direct Playing at 100% native studio quality! Only the audio track (${audioCodec?.toUpperCase() || "TrueHD/DTS"}) is being converted to ${streamAudioCodec?.toUpperCase() || "AAC"} so your sound system/TV speakers can output sound.`,
+            recommendation: "Playback is running efficiently with zero video loss. No action needed unless you have a dedicated surround receiver.",
+            steps: [
+                "1. Your video stream is running at 100% full original quality",
+                "2. If you have an AV receiver with surround sound support, enable 'Audio Passthrough (HDMI)' in Plex Settings"
+            ]
+        };
+    }
+
+    // 5. Optimal Direct Play
+    return {
+        status: "optimal",
+        badgeText: "Direct Play",
+        badgeColor: "emerald",
+        title: "Optimal Direct Play",
+        explanation: `Both video and audio are streaming directly from disk to ${player} with zero compression, original bitrates, and lowest server latency.`,
+        recommendation: "Your setup is running at peak performance!",
+        steps: [
+            "Enjoy your movie or show in original studio quality!"
+        ]
+    };
+}
+
+export async function getUserPlexHubData() {
+    let user: any = null;
+    try {
+        user = await verifyUser();
+    } catch (e) {
+        return { success: false, error: "Unauthorized" };
+    }
+    if (!user) {
+        return { success: false, error: "Unauthorized" };
+    }
+
+    const isAdmin = user.role === "ADMIN";
+    const settings = await prisma.settings.findFirst();
+    const tautulli = await prisma.tautulliInstance.findMany();
+    
+    const safeUsername = String(user?.username || "");
+    const safeEmail = String(user?.email || "");
+
+    const userAliases = new Set<string>();
+    if (safeUsername) userAliases.add(safeUsername.toLowerCase().trim());
+    if (safeEmail) userAliases.add(safeEmail.toLowerCase().trim());
+
+    let adminToken = "";
+    if (settings?.mainPlexToken) {
+        try {
+            adminToken = decryptData(settings.mainPlexToken);
+        } catch (e) {}
+    }
+
+    // Expand user aliases with Plex Owner or Plex Friend identities
+    if (adminToken) {
+        if (isAdmin) {
+            try {
+                const ownerUser = await getPlexOwnerUser(adminToken);
+                if (ownerUser) {
+                    if (ownerUser.username) userAliases.add(ownerUser.username.toLowerCase().trim());
+                    if (ownerUser.email) userAliases.add(ownerUser.email.toLowerCase().trim());
+                    if (ownerUser.title) userAliases.add(ownerUser.title.toLowerCase().trim());
+                }
+            } catch (e) {}
+        } else {
+            try {
+                const friends = await getPlexServerFriends(adminToken);
+                const matchedFriend = friends.find(f => 
+                    (f.username && userAliases.has(f.username.toLowerCase().trim())) ||
+                    (f.email && userAliases.has(f.email.toLowerCase().trim()))
+                );
+                if (matchedFriend) {
+                    if (matchedFriend.username) userAliases.add(matchedFriend.username.toLowerCase().trim());
+                    if (matchedFriend.email) userAliases.add(matchedFriend.email.toLowerCase().trim());
+                }
+            } catch (e) {}
+        }
+    }
+
+    // Portalarr Reading/Listening statistics
+    const [userRequests, userKindleLogs, accessibleLibraries] = await Promise.all([
+        prisma.bookRequest.findMany({
+            where: { requestedBy: safeUsername },
+            orderBy: { createdAt: "desc" }
+        }).catch(() => []),
+        prisma.kindleDeliveryLog.findMany({
+            where: { username: safeUsername },
+            orderBy: { createdAt: "desc" },
+            take: 10
+        }).catch(() => []),
+        prisma.library.findMany({
+            include: { _count: { select: { books: true } } }
+        }).catch(() => [])
+    ]);
+
+    const totalBooksAvailable = accessibleLibraries.reduce((sum, lib) => {
+        const allowed = lib.allowedUsers || "";
+        const restricted = lib.restrictedUsers || "";
+        const u = safeUsername.toLowerCase();
+        if (restricted && restricted.split(",").map(s => s.trim().toLowerCase()).includes(u)) return sum;
+        if (!allowed || allowed === "*" || allowed.split(",").map(s => s.trim().toLowerCase()).includes(u)) {
+            return sum + (lib._count?.books || 0);
+        }
+        return sum;
+    }, 0);
+
+    const activeStreams: any[] = [];
+    const seenSessionKeys = new Set<string>();
+    let watchHistory: any[] = [];
+    let watchStats = {
+        totalWatchTimeHours: 0,
+        moviesWatched: 0,
+        episodesWatched: 0,
+        musicTracksPlayed: 0
+    };
+
+    const serverMap = new Map<string, {
+        id: string;
+        name: string;
+        type: string;
+        directPms: boolean;
+        tautulli: boolean;
+        online: boolean;
+    }>();
+
+    // --- 1. DIRECT PLEX MEDIA SERVER MONITORING (Via Admin Stored Plex Token) ---
+    if (adminToken) {
+        try {
+            const directPlexResults = await getPlexActiveSessions(adminToken);
+            
+            for (const srv of directPlexResults) {
+                const srvId = `plex::${srv.serverId}::${srv.serverUrl}`;
+                const normKey = srv.serverName.toLowerCase().replace(/[^a-z0-9]/g, "");
+                serverMap.set(normKey, {
+                    id: srvId,
+                    name: srv.serverName,
+                    type: "Plex Media Server",
+                    directPms: true,
+                    tautulli: false,
+                    online: true
+                });
+
+                for (const s of srv.sessions) {
+                    const sessionUser = (s.User?.title || s.User?.username || s.User?.name || s.username || s.user || "").toLowerCase().trim();
+                    const sessionEmail = (s.User?.email || s.email || "").toLowerCase().trim();
+                    const sessionFriendly = (s.Player?.title || s.Player?.device || "").toLowerCase().trim();
+
+                    const isMatch = userAliases.has(sessionUser) || userAliases.has(sessionEmail) || userAliases.has(sessionFriendly) || (isAdmin && (!sessionUser || sessionUser === "local" || sessionUser === "admin"));
+
+                    if (isMatch) {
+                        const diagnosis = await analyzeStreamHealth(s);
+                        const mediaType = s.type || (s.grandparentTitle ? "episode" : "movie");
+                        
+                        let fullTitle = s.title || "Unknown";
+                        if (mediaType === "episode" && s.grandparentTitle) {
+                            const seasonNum = s.parentIndex ? String(s.parentIndex).padStart(2, "0") : "01";
+                            const epNum = s.index ? String(s.index).padStart(2, "0") : "01";
+                            fullTitle = `${s.grandparentTitle} - S${seasonNum}E${epNum}: ${s.title}`;
+                        } else if (s.year) {
+                            fullTitle = `${s.title} (${s.year})`;
+                        }
+
+                        const rawThumb = s.thumb || s.parentThumb || s.grandparentThumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : "");
+                        const searchTitle = s.grandparentTitle || s.title || "";
+                        const thumbUrl = rawThumb || searchTitle 
+                            ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                            : null;
+
+                        const sKey = String(s.sessionKey || s.Session?.id || Math.random());
+                        const sId = String(s.Session?.id || sKey);
+                        seenSessionKeys.add(sKey);
+                        seenSessionKeys.add(sId);
+
+                        const durMs = Number(s.duration || 0);
+                        const offsetMs = Number(s.viewOffset || 0);
+                        const progressPercent = durMs > 0 ? Math.round((offsetMs / durMs) * 100) : 0;
+
+                        activeStreams.push({
+                            instanceId: srvId,
+                            instanceName: srv.serverName,
+                            sessionKey: sKey,
+                            sessionId: sId,
+                            title: s.title || "Unknown",
+                            parentTitle: s.parentTitle || "",
+                            grandparentTitle: s.grandparentTitle || "",
+                            fullTitle,
+                            mediaType,
+                            thumb: thumbUrl,
+                            state: s.Player?.state || "playing",
+                            progressPercent,
+                            durationMinutes: durMs ? Math.round(durMs / 60000) : 0,
+                            viewOffsetMinutes: offsetMs ? Math.round(offsetMs / 60000) : 0,
+                            player: s.Player?.title || s.Player?.device || s.Player?.platform || "Plex Client",
+                            platform: s.Player?.platform || "",
+                            device: s.Player?.device || "",
+                            videoDecision: s.TranscodeSession ? (s.TranscodeSession.videoDecision || "transcode") : "direct play",
+                            audioDecision: s.TranscodeSession ? (s.TranscodeSession.audioDecision || "transcode") : "direct play",
+                            transcodeDecision: s.TranscodeSession ? (s.TranscodeSession.videoDecision === "transcode" ? "transcode" : "direct stream") : "direct play",
+                            streamVideoResolution: s.TranscodeSession?.videoResolution || s.Media?.[0]?.videoResolution || "1080p",
+                            sourceVideoResolution: s.Media?.[0]?.videoResolution || "1080p",
+                            streamBitrateMbps: s.TranscodeSession?.bitrate ? (Number(s.TranscodeSession.bitrate) / 1000).toFixed(1) : (s.Media?.[0]?.bitrate ? (Number(s.Media[0].bitrate) / 1000).toFixed(1) : "0"),
+                            videoCodec: s.TranscodeSession?.videoCodec || s.Media?.[0]?.videoCodec || "",
+                            audioCodec: s.TranscodeSession?.sourceAudioCodec || s.Media?.[0]?.audioCodec || "",
+                            streamAudioCodec: s.TranscodeSession?.audioCodec || "",
+                            qualityProfile: "",
+                            bandwidthMbps: s.TranscodeSession?.bitrate ? (Number(s.TranscodeSession.bitrate) / 1000).toFixed(1) : "0",
+                            transcodeHwDecoding: Boolean(s.TranscodeSession?.transcodeHwRequested),
+                            transcodeHwEncoding: Boolean(s.TranscodeSession?.transcodeHwRequested),
+                            transcodeSpeed: String(s.TranscodeSession?.speed || "1.0"),
+                            diagnosis
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("[PLEX-HUB] Direct Plex Session Query Error:", e);
+        }
+    }
+
+    const rawWatchHistory: any[] = [];
+
+    // --- 2. TAUTULLI INSTANCES MONITORING (Query all Tautulli servers concurrently) ---
+    await Promise.allSettled(tautulli.map(async (t) => {
+        const normTName = t.name.toLowerCase().replace(/^tautulli\s*[-_:]*\s*/i, "").replace(/[^a-z0-9]/g, "");
+        const existingKey = normTName ? Array.from(serverMap.keys()).find(k => k === normTName || (k.length > 2 && normTName.includes(k)) || (normTName.length > 2 && k.includes(normTName))) : null;
+        
+        if (existingKey && serverMap.has(existingKey)) {
+            const existing = serverMap.get(existingKey)!;
+            existing.tautulli = true;
+            existing.type = "Direct PMS + Tautulli";
+        } else {
+            serverMap.set(normTName || t.id, {
+                id: t.id,
+                name: t.name,
+                type: "Tautulli Monitor",
+                directPms: false,
+                tautulli: true,
+                online: true
+            });
+        }
+        const cleanBase = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
+        const apiKey = decryptData(t.apiKey);
+        if (!apiKey) return;
+
+        // Find matching user in this Tautulli instance to get exact user_id
+        let tautulliUserId: string | number | null = null;
+        let tautulliMatchedUser: any = null;
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3500);
+            const usersUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_users`;
+            const usersRes = await fetch(usersUrl, { signal: controller.signal, next: { revalidate: 120 } });
+            clearTimeout(timeoutId);
+
+            if (usersRes.ok) {
+                const usersJson = await usersRes.json();
+                const tUsers = usersJson.response?.data || [];
+                const match = tUsers.find((u: any) => {
+                    const uName = (u.username || "").toLowerCase().trim();
+                    const uEmail = (u.email || "").toLowerCase().trim();
+                    const uFriendly = (u.friendly_name || "").toLowerCase().trim();
+                    const uId = String(u.user_id ?? "");
+
+                    if (userAliases.has(uName) || userAliases.has(uEmail) || userAliases.has(uFriendly)) {
+                        return true;
+                    }
+                    if (isAdmin && (u.is_admin === 1 || u.is_admin === "1" || uId === "0" || uName === "local")) {
+                        return true;
+                    }
+                    return false;
+                });
+
+                if (match) {
+                    tautulliMatchedUser = match;
+                    tautulliUserId = match.user_id;
+                }
+            }
+        } catch (e) {
+            console.warn(`[PLEX-HUB] Failed to fetch users for Tautulli ${t.name}:`, e);
+        }
+        
+        // 1. Active Streams from Tautulli
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3500);
+            const activityUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+            const res = await fetch(activityUrl, { signal: controller.signal, cache: "no-store" });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                const json = await res.json();
+                const sessions = json.response?.data?.sessions || [];
+                
+                for (const s of sessions) {
+                    const sessionKey = String(s.session_key || "");
+                    const sessionId = String(s.session_id || "");
+
+                    // Skip if already captured directly from Plex
+                    if (seenSessionKeys.has(sessionKey) || seenSessionKeys.has(sessionId)) {
+                        continue;
+                    }
+
+                    const sUser = (s.user || "").toLowerCase().trim();
+                    const sEmail = (s.email || "").toLowerCase().trim();
+                    const sFriendly = (s.friendly_name || "").toLowerCase().trim();
+                    const sUserId = String(s.user_id ?? "");
+
+                    const isMatch = userAliases.has(sUser) || userAliases.has(sEmail) || userAliases.has(sFriendly) || (tautulliUserId !== null && sUserId === String(tautulliUserId)) || (isAdmin && (sUserId === "0" || sUser === "local" || sUser === "admin"));
+
+                    if (isMatch) {
+                        const diagnosis = await analyzeStreamHealth(s);
+                        const mediaType = s.media_type || (s.grandparent_title ? "episode" : "movie");
+                        
+                        let fullTitle = s.title || "Unknown";
+                        if (mediaType === "episode" && s.grandparent_title) {
+                            const seasonNum = s.parent_media_index ? String(s.parent_media_index).padStart(2, "0") : "01";
+                            const epNum = s.media_index ? String(s.media_index).padStart(2, "0") : "01";
+                            fullTitle = `${s.grandparent_title} - S${seasonNum}E${epNum}: ${s.title}`;
+                        } else if (s.year) {
+                            fullTitle = `${s.title} (${s.year})`;
+                        }
+
+                        const rawThumb = s.thumb || s.parent_thumb || s.grandparent_thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
+                        const searchTitle = s.grandparent_title || s.title || "";
+                        const thumbUrl = rawThumb || searchTitle 
+                            ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                            : null;
+
+                        activeStreams.push({
+                            instanceId: t.id,
+                            instanceName: t.name,
+                            sessionKey,
+                            sessionId,
+                            title: s.title || "Unknown",
+                            parentTitle: s.parent_title || "",
+                            grandparentTitle: s.grandparent_title || "",
+                            fullTitle,
+                            mediaType,
+                            thumb: thumbUrl,
+                            state: s.state || "playing",
+                            progressPercent: Number(s.progress_percent || 0),
+                            durationMinutes: s.duration ? Math.round(Number(s.duration) / 60) : 0,
+                            viewOffsetMinutes: s.view_offset ? Math.round(Number(s.view_offset) / 60) : 0,
+                            player: s.player || s.platform || "Plex Client",
+                            platform: s.platform || "",
+                            device: s.device || "",
+                            videoDecision: s.video_decision || "direct play",
+                            audioDecision: s.audio_decision || "direct play",
+                            transcodeDecision: s.transcode_decision || "direct play",
+                            streamVideoResolution: s.stream_video_resolution || s.video_resolution || "1080p",
+                            sourceVideoResolution: s.video_resolution || "1080p",
+                            streamBitrateMbps: s.stream_bitrate ? (Number(s.stream_bitrate) / 1000).toFixed(1) : (s.bitrate ? (Number(s.bitrate) / 1000).toFixed(1) : "0"),
+                            videoCodec: s.video_codec || "",
+                            audioCodec: s.audio_codec || "",
+                            streamAudioCodec: s.stream_audio_codec || "",
+                            qualityProfile: s.quality_profile || "",
+                            bandwidthMbps: s.bandwidth ? (Number(s.bandwidth) / 1000).toFixed(1) : "0",
+                            transcodeHwDecoding: s.transcode_hw_decoding === 1 || s.transcode_hw_decoding === true,
+                            transcodeHwEncoding: s.transcode_hw_encoding === 1 || s.transcode_hw_encoding === true,
+                            transcodeSpeed: s.transcode_speed || "1.0",
+                            diagnosis
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn(`[PLEX-HUB] Failed to fetch activity for ${t.name}:`, e);
+        }
+
+        // 2. Watch History from this Tautulli instance (STRICTLY GATED TO MATCHED USER)
+        if (tautulliUserId !== null || tautulliMatchedUser !== null) {
+            try {
+                const histUserParam = tautulliUserId !== null ? `user_id=${encodeURIComponent(String(tautulliUserId))}` : `user=${encodeURIComponent(tautulliMatchedUser.username)}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
+                const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${histUserParam}&length=20`;
+                const histRes = await fetch(histUrl, { signal: controller.signal, next: { revalidate: 30 } });
+                clearTimeout(timeoutId);
+
+                if (histRes.ok) {
+                    const histJson = await histRes.json();
+                    const rows = histJson.response?.data?.data || [];
+                    
+                    rows.forEach((r: any) => {
+                        const rawThumb = r.thumb || r.parent_thumb || r.grandparent_thumb || r.art || (r.rating_key ? `/library/metadata/${r.rating_key}/thumb` : "");
+                        const mediaType = r.media_type || (r.grandparent_title ? "episode" : "movie");
+                        const searchTitle = r.grandparent_title || r.title || "";
+                        const thumbUrl = rawThumb || searchTitle 
+                            ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(r.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                            : null;
+                        
+                        let displayTitle = r.title || "Unknown";
+                        if (r.grandparent_title) {
+                            const sNum = r.parent_media_index ? String(r.parent_media_index).padStart(2, "0") : "01";
+                            const eNum = r.media_index ? String(r.media_index).padStart(2, "0") : "01";
+                            displayTitle = `${r.grandparent_title} (S${sNum}E${eNum})`;
+                        } else if (r.year) {
+                            displayTitle = `${r.title} (${r.year})`;
+                        }
+
+                        rawWatchHistory.push({
+                            id: `${t.id}-${r.id || r.rating_key || Math.random()}`,
+                            instanceId: t.id,
+                            instanceName: t.name,
+                            title: r.title,
+                            fullTitle: displayTitle,
+                            mediaType,
+                            thumb: thumbUrl,
+                            date: r.date ? new Date(r.date * 1000).toISOString() : new Date().toISOString(),
+                            durationMinutes: r.duration ? Math.round(Number(r.duration) / 60) : 0,
+                            percentComplete: Number(r.percent_complete || 100),
+                            player: r.player || r.platform || "Plex Device",
+                            ratingKey: r.rating_key
+                        });
+                    });
+                }
+            } catch (e) {}
+
+            // 3. User Watch Time Stats from this Tautulli instance
+            try {
+                const statsUserParam = tautulliUserId !== null ? `user_id=${encodeURIComponent(String(tautulliUserId))}` : `user=${encodeURIComponent(tautulliMatchedUser.username)}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
+                const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&${statsUserParam}`;
+                const statsRes = await fetch(statsUrl, { signal: controller.signal, next: { revalidate: 60 } });
+                clearTimeout(timeoutId);
+
+                if (statsRes.ok) {
+                    const statsJson = await statsRes.json();
+                    const data = statsJson.response?.data || [];
+                    const allTime = data.find((d: any) => d.query_days === 0) || data[data.length - 1];
+                    if (allTime) {
+                        const totalSec = Number(allTime.total_time || 0);
+                        watchStats.totalWatchTimeHours += Math.round(totalSec / 3600);
+                        watchStats.moviesWatched += Number(allTime.total_movies || 0);
+                        watchStats.episodesWatched += Number(allTime.total_episodes || 0);
+                        watchStats.musicTracksPlayed += Number(allTime.total_music || 0);
+                    }
+                }
+            } catch (e) {}
+        }
+    }));
+
+    // --- 3. DIRECT PLEX MEDIA SERVERS HISTORY SCAN (Query ALL discovered PMS instances) ---
+    if (adminToken) {
+        try {
+            const plexServers = await getPlexServers(adminToken);
+            
+            await Promise.allSettled(plexServers.map(async (srv) => {
+                const token = srv.accessToken || adminToken;
+                for (const conn of srv.connections) {
+                    try {
+                        const cleanBase = conn.uri.replace(/\/+$/, "");
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+                        // Fetch Session History for this specific Plex server
+                        const hRes = await fetch(`${cleanBase}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=100`, {
+                            headers: {
+                                "Accept": "application/json",
+                                "X-Plex-Token": token,
+                                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                            },
+                            signal: controller.signal,
+                            next: { revalidate: 30 }
+                        });
+                        clearTimeout(timeoutId);
+
+                        if (hRes.ok) {
+                            const hJson = await hRes.json();
+                            const hRows = hJson.MediaContainer?.Metadata || [];
+                            const rows = Array.isArray(hRows) ? hRows : [hRows];
+                            
+                            for (const r of rows) {
+                                const rUser = (r.userName || r.user || r.title || "").toLowerCase().trim();
+                                const rEmail = (r.userEmail || r.email || "").toLowerCase().trim();
+                                const matchesUser = userAliases.has(rUser) || userAliases.has(rEmail) || (isAdmin && (!rUser || rUser === "local" || rUser === "admin"));
+                                
+                                if (matchesUser) {
+                                    const rawThumb = r.thumb || r.parentThumb || r.grandparentThumb || r.art || (r.ratingKey ? `/library/metadata/${r.ratingKey}/thumb` : "");
+                                    const mediaType = r.type || (r.grandparentTitle ? "episode" : "movie");
+                                    const searchTitle = r.grandparentTitle || r.title || "";
+                                    const srvId = `plex::${srv.clientIdentifier}::${cleanBase}`;
+                                    const thumbUrl = rawThumb || searchTitle 
+                                        ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(r.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                                        : null;
+                                    
+                                    let displayTitle = r.title || "Unknown";
+                                    if (r.grandparentTitle) {
+                                        const sNum = r.parentIndex ? String(r.parentIndex).padStart(2, "0") : "01";
+                                        const eNum = r.index ? String(r.index).padStart(2, "0") : "01";
+                                        displayTitle = `${r.grandparentTitle} - S${sNum}E${eNum}: ${r.title}`;
+                                    } else if (r.year) {
+                                        displayTitle = `${r.title} (${r.year})`;
+                                    }
+
+                                    const durMs = Number(r.duration || r.viewOffset || 0);
+
+                                    rawWatchHistory.push({
+                                        id: `plex-${srv.clientIdentifier}-${r.historyKey || r.ratingKey || Math.random()}`,
+                                        instanceId: srvId,
+                                        instanceName: srv.name,
+                                        title: r.title,
+                                        fullTitle: displayTitle,
+                                        mediaType: r.type || "movie",
+                                        thumb: thumbUrl,
+                                        date: r.viewedAt ? new Date(r.viewedAt * 1000).toISOString() : new Date().toISOString(),
+                                        durationMinutes: durMs ? Math.round(durMs / 60000) : 0,
+                                        percentComplete: 100,
+                                        player: "Plex Device",
+                                        ratingKey: r.ratingKey
+                                    });
+
+                                    // If watch stats on this server were not provided by Tautulli, sum duration
+                                    if (tautulli.length === 0) {
+                                        if (durMs > 0) watchStats.totalWatchTimeHours += Math.round(durMs / 3600000);
+                                        if (r.type === "movie") watchStats.moviesWatched++;
+                                        else if (r.type === "episode") watchStats.episodesWatched++;
+                                        else if (r.type === "track") watchStats.musicTracksPlayed++;
+                                    }
+                                }
+                            }
+                            break; // Successfully queried this server via this connection candidate!
+                        }
+                    } catch (e) {}
+                }
+            }));
+        } catch (e) {
+            console.warn("[PLEX-HUB] Plex stats calculation error:", e);
+        }
+    }
+
+    // --- 4. DEDUPLICATE AND GLOBALLY SORT RECENT WATCH HISTORY ACROSS ALL SERVERS ---
+    const seenPlays = new Set<string>();
+    for (const item of rawWatchHistory) {
+        const timeBucket = item.date ? Math.floor(new Date(item.date).getTime() / (1000 * 60 * 15)) : Math.random();
+        const playKey = `${(item.title || "").toLowerCase()}-${timeBucket}`;
+        if (!seenPlays.has(playKey)) {
+            seenPlays.add(playKey);
+            watchHistory.push(item);
+        }
+    }
+
+    // Sort watch history by most recent date across all instances
+    watchHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    watchHistory = watchHistory.slice(0, 20);
+
+    const serversList = Array.from(serverMap.values());
+
+    return {
+        success: true,
+        user: {
+            username: user.username,
+            email: user.email,
+            role: user.role
+        },
+        serversCount: serversList.length,
+        servers: serversList,
+        activeStreams,
+        watchHistory,
+        watchStats,
+        readingStats: {
+            totalBooksAvailable,
+            totalRequests: userRequests.length,
+            completedRequests: userRequests.filter((r: any) => r.status === "Downloaded").length,
+            kindleDeliveries: userKindleLogs.length
+        }
+    };
+}
+
+export async function killUserStream(instanceId: string, sessionKey: string) {
+    let user: any = null;
+    try {
+        user = await verifyUser();
+    } catch (e) {
+        return { success: false, error: "Unauthorized" };
+    }
+    if (!user || !instanceId || !sessionKey) {
+        return { success: false, error: "Missing instance ID or session key" };
+    }
+
+    const isAdmin = user.role === "ADMIN";
+    const safeUsername = String(user?.username || "").toLowerCase().trim();
+    const safeEmail = String(user?.email || "").toLowerCase().trim();
+
+    const userAliases = new Set<string>();
+    if (safeUsername) userAliases.add(safeUsername);
+    if (safeEmail) userAliases.add(safeEmail);
+
+    const settings = await prisma.settings.findFirst();
+    let adminToken = "";
+    if (settings?.mainPlexToken) {
+        try {
+            adminToken = decryptData(settings.mainPlexToken);
+        } catch (e) {}
+    }
+
+    // Expand user aliases with Plex Owner or Plex Friend identities (identical to getUserPlexHubData)
+    if (adminToken) {
+        if (isAdmin) {
+            try {
+                const ownerUser = await getPlexOwnerUser(adminToken);
+                if (ownerUser) {
+                    if (ownerUser.username) userAliases.add(ownerUser.username.toLowerCase().trim());
+                    if (ownerUser.email) userAliases.add(ownerUser.email.toLowerCase().trim());
+                    if (ownerUser.title) userAliases.add(ownerUser.title.toLowerCase().trim());
+                }
+            } catch (e) {}
+        } else {
+            try {
+                const friends = await getPlexServerFriends(adminToken);
+                const matchedFriend = friends.find(f => 
+                    (f.username && userAliases.has(f.username.toLowerCase().trim())) ||
+                    (f.email && userAliases.has(f.email.toLowerCase().trim()))
+                );
+                if (matchedFriend) {
+                    if (matchedFriend.username) userAliases.add(matchedFriend.username.toLowerCase().trim());
+                    if (matchedFriend.email) userAliases.add(matchedFriend.email.toLowerCase().trim());
+                    if ((matchedFriend as any).title) userAliases.add((matchedFriend as any).title.toLowerCase().trim());
+                }
+            } catch (e) {}
+        }
+    }
+
+    // CASE 1: Direct Plex Media Server Stream Termination via Plex Token
+    if (instanceId.startsWith("plex::")) {
+        const parts = instanceId.split("::");
+        const serverId = parts[1] || "";
+        const serverUrl = parts.slice(2).join("::");
+
+        if (!adminToken) {
+            return { success: false, error: "Plex Server Token is not configured." };
+        }
+
+        // Fetch active sessions directly from PMS to verify ownership
+        try {
+            const cleanBase = serverUrl.replace(/\/+$/, "");
+            const res = await fetch(`${cleanBase}/status/sessions`, {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+
+            if (!res.ok) {
+                return { success: false, error: "Could not reach Plex Media Server to verify session" };
+            }
+
+            const data = await res.json();
+            const rawSessions = data.MediaContainer?.Metadata || [];
+            const sessions = Array.isArray(rawSessions) ? rawSessions : [rawSessions];
+            
+            const targetSession = sessions.find((s: any) => 
+                String(s.sessionKey || s.Session?.id || "") === String(sessionKey) ||
+                String(s.Session?.id || "") === String(sessionKey)
+            );
+
+            if (!targetSession) {
+                return { success: false, error: "Stream session not found or already ended" };
+            }
+
+            const sessionUser = (targetSession.User?.title || targetSession.User?.username || targetSession.User?.name || targetSession.username || targetSession.user || "").toLowerCase().trim();
+            const sessionEmail = (targetSession.User?.email || targetSession.email || "").toLowerCase().trim();
+            const sessionFriendly = (targetSession.Player?.title || targetSession.Player?.device || "").toLowerCase().trim();
+
+            const isOwner = userAliases.has(sessionUser) || 
+                            userAliases.has(sessionEmail) || 
+                            userAliases.has(sessionFriendly) ||
+                            (isAdmin && (!sessionUser || sessionUser === "local" || sessionUser === "admin"));
+
+            if (!isOwner && !isAdmin) {
+                return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
+            }
+
+            const sessionId = targetSession.Session?.id ? String(targetSession.Session.id) : undefined;
+            const termResult = await terminatePlexServerSession(
+                cleanBase, 
+                adminToken, 
+                String(targetSession.sessionKey || sessionKey), 
+                sessionId, 
+                "Stream ended by user via Portalarr My Plex Hub"
+            );
+
+            if (termResult.success) {
+                logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on Plex server "${serverUrl}".`);
+                return { success: true, message: "Stream terminated successfully." };
+            } else {
+                return { success: false, error: termResult.message || "Failed to terminate stream" };
+            }
+
+        } catch (e: any) {
+            return { success: false, error: e.message || "Failed to terminate stream" };
+        }
+    }
+
+    // CASE 2: Tautulli Instance Stream Termination
+    const instance = await prisma.tautulliInstance.findUnique({
+        where: { id: instanceId }
+    });
+    if (!instance) {
+        return { success: false, error: "Server instance not found" };
+    }
+
+    const cleanBase = cleanUrl(instance.url).replace(/\/api\/v2\/?$/, "");
+    const apiKey = decryptData(instance.apiKey);
+
+    // 1. Fetch current activity to strictly verify ownership
+    try {
+        const activityUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+        const res = await fetch(activityUrl, { cache: "no-store" });
+        if (!res.ok) {
+            return { success: false, error: "Could not reach server to verify session" };
+        }
+        const json = await res.json();
+        const sessions = json.response?.data?.sessions || [];
+        const targetSession = sessions.find((s: any) => 
+            String(s.session_key || "") === String(sessionKey) ||
+            String(s.session_id || "") === String(sessionKey)
+        );
+
+        if (!targetSession) {
+            return { success: false, error: "Stream session not found or already ended" };
+        }
+
+        const sessionUser = (targetSession.user || targetSession.username || "").toLowerCase().trim();
+        const sessionEmail = (targetSession.email || "").toLowerCase().trim();
+        const sessionFriendly = (targetSession.friendly_name || targetSession.player || "").toLowerCase().trim();
+        const sessionUserId = String(targetSession.user_id ?? "");
+
+        const isOwner = userAliases.has(sessionUser) || 
+                        userAliases.has(sessionEmail) || 
+                        userAliases.has(sessionFriendly) ||
+                        (isAdmin && (sessionUserId === "0" || sessionUser === "local" || sessionUser === "admin"));
+
+        if (!isOwner && !isAdmin) {
+            return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
+        }
+
+        // 2. Execute termination via Tautulli
+        const sessionKeyParam = targetSession.session_key ? `&session_key=${encodeURIComponent(String(targetSession.session_key))}` : `&session_key=${encodeURIComponent(sessionKey)}`;
+        const sessionIdParam = targetSession.session_id ? `&session_id=${encodeURIComponent(String(targetSession.session_id))}` : "";
+        const killUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=terminate_session${sessionKeyParam}${sessionIdParam}&message=${encodeURIComponent("Stream ended by user via Portalarr My Plex Hub")}`;
+        const killRes = await fetch(killUrl);
+        
+        let killed = false;
+        if (killRes.ok) {
+            const killJson = await killRes.json().catch(() => null);
+            if (killJson?.response?.result === "success") {
+                killed = true;
+            }
+        }
+
+        // If Tautulli termination returned failure and adminToken is available, try terminating directly on Plex
+        if (!killed && adminToken) {
+            try {
+                const plexServers = await getPlexServers(adminToken);
+                for (const srv of plexServers) {
+                    const sToken = srv.accessToken || adminToken;
+                    for (const conn of srv.connections) {
+                        const directRes = await terminatePlexServerSession(
+                            conn.uri,
+                            sToken,
+                            String(targetSession.session_key || sessionKey),
+                            targetSession.session_id ? String(targetSession.session_id) : undefined,
+                            "Stream ended by user via Portalarr My Plex Hub"
+                        );
+                        if (directRes.success) {
+                            killed = true;
+                            break;
+                        }
+                    }
+                    if (killed) break;
+                }
+            } catch (e) {}
+        }
+
+        if (killed || killRes.ok) {
+            logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on server "${instance.name}".`);
+            return { success: true, message: "Stream terminated successfully." };
+        } else {
+            return { success: false, error: "Failed to terminate stream on server" };
+        }
+
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to terminate stream" };
+    }
+}
+
+export async function getPlexSetupGuides() {
+    return [
+        {
+            id: "appletv",
+            name: "Apple TV",
+            icon: "Tv",
+            badge: "Top Recommendation",
+            summary: "Apple TV 4K has powerful hardware and native Direct Play support for almost all audio and video formats.",
+            steps: [
+                {
+                    title: "1. Change Remote Streaming to Maximum",
+                    desc: "Open Plex → Settings (top right gear) → Video Quality → Set 'Remote Streaming' to 'Maximum' (or 'Original')."
+                },
+                {
+                    title: "2. Disable Auto Adjust Quality",
+                    desc: "In the same Video Quality menu, turn 'Auto Adjust Quality' OFF to prevent sudden quality drops to 720p."
+                },
+                {
+                    title: "3. Enable Enhanced Video Player",
+                    desc: "Go to Settings → Advanced → Set 'Use Enhanced Video Player' to 'ON' for zero-lag MP4/MKV playback."
+                },
+                {
+                    title: "4. Audio Passthrough",
+                    desc: "Go to Settings → Audio → Set 'Audio Passthrough' to 'Auto' or 'HDMI' for crystal clear Dolby Atmos/5.1."
+                }
+            ]
+        },
+        {
+            id: "roku",
+            name: "Roku (TV & Streaming Stick)",
+            icon: "Tv2",
+            badge: "Popular",
+            summary: "Roku devices support crisp 4K HDR playback when Direct Play is forced in settings.",
+            steps: [
+                {
+                    title: "1. Set Remote Streaming Quality to Original",
+                    desc: "Open Plex → Click your profile avatar / Settings → Video → Set 'Remote Streaming' to 'Original' (or Maximum)."
+                },
+                {
+                    title: "2. Set Direct Play to Force",
+                    desc: "In Settings → Video → Set 'Direct Play' to 'Force' (or 'Auto') to stop unnecessary video transcoding."
+                },
+                {
+                    title: "3. Fix Subtitle Lag",
+                    desc: "In Settings → Subtitles → Set 'Burn Subtitles' to 'Only Image Formats'. This ensures text subtitles (SRT) display without transcoding."
+                },
+                {
+                    title: "4. Pin Your Favorite Libraries",
+                    desc: "On the left sidebar, click 'More' → Click the three dots next to Movies & TV → Select 'Pin'."
+                }
+            ]
+        },
+        {
+            id: "firetv",
+            name: "Amazon Fire TV & Firestick",
+            icon: "Flame",
+            badge: "Widely Used",
+            summary: "Firesticks often default to low bandwidth limits. Follow these steps to unlock original 4K and 1080p bitrates.",
+            steps: [
+                {
+                    title: "1. Maximize Remote Video Quality",
+                    desc: "Open Plex → Settings (left menu) → Video Quality → Set 'Remote Quality' to 'Maximum' (Original)."
+                },
+                {
+                    title: "2. Disable Auto-Adjust Quality",
+                    desc: "In the same Video Quality section, turn 'Auto Adjust Quality' to 'OFF'."
+                },
+                {
+                    title: "3. Enable Refresh Rate & Resolution Matching",
+                    desc: "Go to Settings → Advanced → Turn 'Match Refresh Rate' and 'Match Resolution' ON for buttery smooth cinema playback."
+                },
+                {
+                    title: "4. Audio Passthrough",
+                    desc: "Go to Settings → Advanced → Audio Passthrough → Set to 'Optical' or 'HDMI' based on your soundbar/TV setup."
+                }
+            ]
+        },
+        {
+            id: "smarttv",
+            name: "Samsung (Tizen) & LG (webOS) TVs",
+            icon: "Monitor",
+            badge: "Smart TVs",
+            summary: "Built-in TV apps often struggle with audio transcoding. Here is how to configure optimal streaming.",
+            steps: [
+                {
+                    title: "1. Unlock Full Remote Streaming Quality",
+                    desc: "Open Plex on your TV → Settings → Video → Set 'Remote Quality' to 'Original' (Maximum)."
+                },
+                {
+                    title: "2. Enable Direct Play and Direct Stream",
+                    desc: "In Settings → Video, ensure BOTH 'Direct Play' and 'Direct Stream' checkboxes are checked."
+                },
+                {
+                    title: "3. Avoid PGS/ASS Subtitles",
+                    desc: "Set 'Burn Subtitles' to 'Only Image Formats'. Use regular SRT subtitles to prevent CPU video transcoding on the TV."
+                },
+                {
+                    title: "4. Prefer Ethernet or 5GHz Wi-Fi",
+                    desc: "Smart TV Wi-Fi cards can be prone to interference. Connect to 5GHz Wi-Fi or wired ethernet for stable 4K bitrate."
+                }
+            ]
+        },
+        {
+            id: "googletv",
+            name: "Google TV & Android TV (Shield / Chromecast)",
+            icon: "Smartphone",
+            badge: "High Performance",
+            summary: "Nvidia Shield and Chromecast with Google TV provide unmatched direct play support for high bitrate 4K Remuxes.",
+            steps: [
+                {
+                    title: "1. Set Remote Video Quality to Maximum",
+                    desc: "Open Plex → Settings → Video Quality → Set 'Remote Quality' to 'Maximum'."
+                },
+                {
+                    title: "2. Turn Off Auto Adjust Quality",
+                    desc: "Disable 'Auto Adjust Quality' to keep bitrates stable at full resolution."
+                },
+                {
+                    title: "3. Enable HDMI Audio Passthrough",
+                    desc: "Go to Settings → Advanced → Set 'Audio Passthrough' to 'HDMI' or 'Optical'."
+                },
+                {
+                    title: "4. Set Maximum H.264 Level",
+                    desc: "In Settings → Advanced, verify 'H.264 Maximum Level' is set to 5.2 or recommended."
+                }
+            ]
+        },
+        {
+            id: "mobile",
+            name: "iOS (iPhone/iPad) & Android Mobile",
+            icon: "Smartphone",
+            badge: "Mobile Apps",
+            summary: "Stream on the go on phones and tablets with full Direct Play and cellular streaming optimization.",
+            steps: [
+                {
+                    title: "1. Set Remote Streaming to Maximum",
+                    desc: "Open Plex app → Account Profile (top right) → Settings → Quality → Set 'Remote Streaming' to 'Maximum'."
+                },
+                {
+                    title: "2. Optional: Cellular Data Limit",
+                    desc: "If you have limited mobile data, you can set 'Limit Cellular Data' to 4 Mbps (720p) or 8 Mbps (1080p) specifically for cellular."
+                },
+                {
+                    title: "3. Download for Offline Playback",
+                    desc: "Plex Pass users can tap the 'Download' icon on any movie or episode to watch offline during flights or travel."
+                }
+            ]
+        },
+        {
+            id: "web",
+            name: "Web Browser vs. Plex Desktop App",
+            icon: "Globe",
+            badge: "PC & Mac",
+            summary: "Web browsers lack native support for HEVC (H.265) and 7.1 TrueHD audio. Use the Plex Desktop app for the best experience.",
+            steps: [
+                {
+                    title: "1. Use the Dedicated Plex Desktop App (Recommended)",
+                    desc: "Download the free official 'Plex for Windows / Mac' app from plex.tv/media-server-downloads/#plex-app. It direct plays 100% of 4K HDR, HEVC, and lossless audio."
+                },
+                {
+                    title: "2. If Using a Browser (Chrome/Edge/Firefox)",
+                    desc: "Go to Plex Web Settings → Quality → Set 'Remote Quality' to 'Maximum'."
+                },
+                {
+                    title: "3. Avoid Browser Audio Transcoding",
+                    desc: "Select standard 5.1 AC3 or AAC audio tracks in browser rather than TrueHD 7.1 or DTS-HD."
+                }
+            ]
+        }
+    ];
+}
+

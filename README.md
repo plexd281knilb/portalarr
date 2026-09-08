@@ -6,13 +6,15 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 
 ## 🚀 Features
 
+- **Personalized "My Plex Hub":** A dedicated stream and playback hub for every user with real-time active stream telemetry (video/audio codecs, transcode decisions, hardware NVENC acceleration, bitrate), **Transcode Doctor** stream diagnostics with tailored device fixes, self-service stream termination, personal watch time analytics (hours streamed, movies finished, episodes watched), in-browser **Server Speed Test**, and **Plex Device Optimization Guides** (Apple TV, Roku, Fire TV, Smart TVs, Android TV, iOS, Web).
+- **Connected Servers Integration:** Unified multi-server management that deduplicates Direct Plex Media Servers and Tautulli monitors into a single clean connected servers view.
 - **Unified Dashboard:** Aggregate status from Plex, Tautulli, Glances, and your "Arr" stack.
 - **AI Metadata Agent & Smart Series Detection:** Multi-provider LLM support (Gemini, Claude, OpenAI, Groq, Ollama, DeepSeek, OpenRouter) for intelligent book metadata extraction, series identification, and automatic volume number assignment (`assignVolumeNumbersWithAI`).
 - **"Missing Books" Series Discovery & Missing Stubs:** Discovers unacquired installments in series ("Show Missing Books") using iTunes, OpenLibrary, and Google Books with 1-click Auto-Grab and Radarr/Sonarr-style missing stubs.
 - **Multi-Tier Torznab Search Fallback Engine:** 4+ tier fallback queries (Literal → Cleaned Punctuation → UK/Alternate Title → Category-less → Format/Audiobook suffix) to maximize indexer match rates.
 - **Deduplicated Active Downloads:** Real-time progress and queue tracking for SABnzbd, NZBGet, and qBittorrent.
 - **Audiobook & Ebook Library:** Dedicated tabs for Ebooks and Audiobooks, strict `mediaType` database isolation, auto-syncing format badges (`MP3` vs `EPUB`), built-in HTML5 audio player with interactive Chapter Selector Modal, user chapter reordering & disk track renaming (`reorderAudiobookChapters`), HTTP Range streaming (`/api/books/[id]/stream`), continuous autoplay next chapter, multi-track/multi-disc folder consolidation (`Disc 01/`, `Disc 02/`), Send-to-Kindle integration, and Prowlarr category routing.
-- **3-Tier Cover Artwork Engine:** Automated 600x600 HD cover resolution (iTunes → Open Library → Google Books) with instant 1-click artwork fetch buttons (`🖼️`).
+- **3-Tier Cover Artwork & Poster Engine:** Automated 600x900 HD poster resolution (Direct PMS → Tautulli → iTunes → Open Library → Google Books) with standard 2:3 vertical poster proportions and 1-click artwork fetch buttons (`🖼️`).
 - **Interactive Release Selection & 1-Click Ingestion:** Interactive release chooser modal for indexers, manual release selection, retry search, and **`📥 Import Download`** action button for instant manual download folder ingestion.
 - **Live Auto-Refreshing Requests & Auto-Approval:** All book requests are automatically approved and instantly trigger downloads. Real-time 5-second polling updates request statuses (`Pending` / `Approved` → `Searching` → `Downloading` → `Downloaded`) and automatically syncs completed downloads to your library shelf with reverse auto-sync validation. A background job also periodically retries any requests that stall.
 - **Responsive Radarr & Sonarr Views:** Mobile-optimized, flexible wrap layouts for Movie and TV libraries featuring prominent release date labeling ("Air Date") and seamless dropdowns.
@@ -26,6 +28,7 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 - **Support & Password Recovery:** Direct support ticket submission with SMTP notifications, format-specific request email badges (`🎧 AUDIOBOOK` vs `📖 EBOOK`), plus built-in temporary password email recovery.
 - **Secure Encryption:** Sensitive API keys and service tokens are encrypted at rest using AES-256-GCM.
 - **Automated CI/CD & Docker:** GitHub Actions pipeline automatically builds and publishes `ghcr.io/plexd281knilb/portalarr:latest` with concurrency rate-limiting safeguards.
+- **🚧 Upcoming — Agregarr & Kometa Replacement:** Built-in dynamic collection manager, smart playlist generator, custom poster overlays (4K UHD, Dolby Vision/Atmos), and personalized user-level movie/TV tag management (allowing users to directly customize and toggle tags, genres, and collections they do and do not want to see).
 
 ## 🛠️ Quick Start
 

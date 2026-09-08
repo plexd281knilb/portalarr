@@ -13,6 +13,7 @@ import {
     getRoadmapText, updateRoadmapText,
     getAlertBanner, updateAlertBanner,
     testAppConnectionAction, testTautulliConnectionAction, testGlancesConnectionAction, validateDownloadsPathAction,
+    testTautulliConfigAction, testGlancesConfigAction, testMediaAppConfigAction,
     getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI, runAiBatchMetadataScanner, testFolderPermissions, fetchAvailableAiModels
 } from "@/app/actions";
 import { testArrConfig } from "@/app/arr-actions";
@@ -28,7 +29,7 @@ import {
     Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, 
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
-    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal
+    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -131,6 +132,16 @@ function SettingsPageContent() {
     const [testingGlancesId, setTestingGlancesId] = useState<string | null>(null);
     const [glancesTestResults, setGlancesTestResults] = useState<{ [id: string]: { success?: boolean, msg?: string, err?: string } }>({});
 
+    // Form Pre-Save Connection Testing States
+    const [testingTautulliForm, setTestingTautulliForm] = useState(false);
+    const [tautulliFormTestResult, setTautulliFormTestResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
+
+    const [testingGlancesForm, setTestingGlancesForm] = useState(false);
+    const [glancesFormTestResult, setGlancesFormTestResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
+
+    const [testingAppForm, setTestingAppForm] = useState(false);
+    const [appFormTestResult, setAppFormTestResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
+
     // Path Validation State
     const [validatingPath, setValidatingPath] = useState(false);
     const [pathResult, setPathResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
@@ -177,6 +188,72 @@ function SettingsPageContent() {
             ...prev,
             [id]: res.success ? { success: true, msg: res.message } : { success: false, err: res.error }
         }));
+    };
+
+    const handleTestTautulliForm = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        const form = e.currentTarget.closest('form');
+        if (!form) return;
+        const url = (form.elements.namedItem("url") as HTMLInputElement)?.value;
+        const apiKey = (form.elements.namedItem("apiKey") as HTMLInputElement)?.value;
+        if (!url || !apiKey) {
+            setTautulliFormTestResult({ success: false, err: "Please enter both URL and API Key to test." });
+            return;
+        }
+        setTestingTautulliForm(true);
+        setTautulliFormTestResult(null);
+        try {
+            const res = await testTautulliConfigAction(url, apiKey);
+            setTautulliFormTestResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
+        } catch (err: any) {
+            setTautulliFormTestResult({ success: false, err: err.message || "Failed to test connection" });
+        } finally {
+            setTestingTautulliForm(false);
+        }
+    };
+
+    const handleTestGlancesForm = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        const form = e.currentTarget.closest('form');
+        if (!form) return;
+        const url = (form.elements.namedItem("url") as HTMLInputElement)?.value;
+        if (!url) {
+            setGlancesFormTestResult({ success: false, err: "Please enter a URL to test." });
+            return;
+        }
+        setTestingGlancesForm(true);
+        setGlancesFormTestResult(null);
+        try {
+            const res = await testGlancesConfigAction(url);
+            setGlancesFormTestResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
+        } catch (err: any) {
+            setGlancesFormTestResult({ success: false, err: err.message || "Failed to test connection" });
+        } finally {
+            setTestingGlancesForm(false);
+        }
+    };
+
+    const handleTestAppForm = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        const form = e.currentTarget.closest('form');
+        if (!form) return;
+        const type = (form.elements.namedItem("type") as HTMLInputElement)?.value || newAppType || editingApp?.type || "";
+        const url = (form.elements.namedItem("url") as HTMLInputElement)?.value;
+        const apiKey = (form.elements.namedItem("apiKey") as HTMLInputElement)?.value;
+        if (!url) {
+            setAppFormTestResult({ success: false, err: "Please enter a URL to test." });
+            return;
+        }
+        setTestingAppForm(true);
+        setAppFormTestResult(null);
+        try {
+            const res = await testMediaAppConfigAction(type, url, apiKey);
+            setAppFormTestResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
+        } catch (err: any) {
+            setAppFormTestResult({ success: false, err: err.message || "Failed to test connection" });
+        } finally {
+            setTestingAppForm(false);
+        }
     };
 
     const handleValidatePath = async (pathStr: string) => {
@@ -432,24 +509,24 @@ function SettingsPageContent() {
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1.5 max-w-5xl bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
-                    <TabsTrigger value="general" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80">
+                <TabsList className="flex flex-wrap items-center w-full max-w-5xl h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+                    <TabsTrigger value="general" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80">
                         <Sliders className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>General & Email</span>
                     </TabsTrigger>
-                    <TabsTrigger value="access" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="access" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
                         <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Access Control</span>
                     </TabsTrigger>
-                    <TabsTrigger value="monitoring" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="monitoring" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80">
                         <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Monitoring & Apps</span>
                     </TabsTrigger>
-                    <TabsTrigger value="beta" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="beta" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
                         <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Beta & Announcements</span>
                     </TabsTrigger>
-                    <TabsTrigger value="logs" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="logs" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
                         <Terminal className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Live System Logs</span>
                     </TabsTrigger>
@@ -1153,6 +1230,7 @@ function SettingsPageContent() {
                                 <form onSubmit={(e) => {
                                     handleForm(e, editingTautulli ? updateTautulliInstance : addTautulliInstance);
                                     if (editingTautulli) setEditingTautulli(null);
+                                    setTautulliFormTestResult(null);
                                 }} className={`space-y-2 ${!editingTautulli && "border-t pt-4 mt-auto"}`}>
                                     {editingTautulli && <input type="hidden" name="id" value={editingTautulli.id} />}
                                     <div className="grid gap-2">
@@ -1174,10 +1252,31 @@ function SettingsPageContent() {
                                             <p className="text-[10px] text-muted-foreground mt-1">Found in Tautulli Settings → Web Interface → API.</p>
                                         </div>
                                     </div>
+                                    {tautulliFormTestResult && (
+                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${tautulliFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
+                                            {tautulliFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                            <span className="leading-tight">{tautulliFormTestResult.msg || tautulliFormTestResult.err}</span>
+                                        </div>
+                                    )}
                                     <div className="flex gap-2 mt-2">
-                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">{editingTautulli ? "Save Changes" : "Add Tautulli Instance"}</Button>
+                                        <Button 
+                                            type="button" 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className="text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95"
+                                            disabled={testingTautulliForm}
+                                            onClick={handleTestTautulliForm}
+                                        >
+                                            {testingTautulliForm ? <Loader2 className="h-3 w-3 animate-spin text-primary" /> : <Zap className="h-3 w-3 text-primary" />}
+                                            Test
+                                        </Button>
+                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
+                                            {editingTautulli ? "Save Changes" : "Add Tautulli Instance"}
+                                        </Button>
                                         {editingTautulli && (
-                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => setEditingTautulli(null)}>Cancel</Button>
+                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingTautulli(null); setTautulliFormTestResult(null); }}>
+                                                Cancel
+                                            </Button>
                                         )}
                                     </div>
                                 </form>
@@ -1231,16 +1330,38 @@ function SettingsPageContent() {
                                 <form onSubmit={(e) => {
                                     handleForm(e, editingGlances ? updateGlancesInstance : addGlancesInstance);
                                     if (editingGlances) setEditingGlances(null);
+                                    setGlancesFormTestResult(null);
                                 }} className={`space-y-2 ${!editingGlances && "border-t pt-4 mt-auto"}`}>
                                     {editingGlances && <input type="hidden" name="id" value={editingGlances.id} />}
                                     <div className="grid gap-2">
                                         <Input name="name" placeholder="Server Name (e.g. Unraid)" required className="h-9 text-sm" defaultValue={editingGlances?.name} />
                                         <Input name="url" placeholder="URL (http://192.168.1.50:61208)" required className="h-9 text-sm font-mono" defaultValue={editingGlances?.url} />
                                     </div>
+                                    {glancesFormTestResult && (
+                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${glancesFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
+                                            {glancesFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                            <span className="leading-tight">{glancesFormTestResult.msg || glancesFormTestResult.err}</span>
+                                        </div>
+                                    )}
                                     <div className="flex gap-2 mt-2">
-                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all">{editingGlances ? "Save Changes" : "Add Glances Server"}</Button>
+                                        <Button 
+                                            type="button" 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className="text-xs font-semibold gap-1.5 border-sky-400/30 hover:border-sky-400 hover:bg-sky-400/10 transition-all active:scale-95 text-sky-400"
+                                            disabled={testingGlancesForm}
+                                            onClick={handleTestGlancesForm}
+                                        >
+                                            {testingGlancesForm ? <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> : <Zap className="h-3 w-3 text-sky-400" />}
+                                            Test
+                                        </Button>
+                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all">
+                                            {editingGlances ? "Save Changes" : "Add Glances Server"}
+                                        </Button>
                                         {editingGlances && (
-                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => setEditingGlances(null)}>Cancel</Button>
+                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingGlances(null); setGlancesFormTestResult(null); }}>
+                                                Cancel
+                                            </Button>
                                         )}
                                     </div>
                                 </form>
@@ -1299,6 +1420,7 @@ function SettingsPageContent() {
                                     handleForm(e, editingApp ? updateMediaApp : addMediaApp);
                                     if (editingApp) setEditingApp(null);
                                     setNewAppType("");
+                                    setAppFormTestResult(null);
                                 }} className={`space-y-3 ${!editingApp && "border-t pt-4 mt-auto"}`}>
                                     {editingApp && <input type="hidden" name="id" value={editingApp.id} />}
                                     <Select 
@@ -1313,7 +1435,7 @@ function SettingsPageContent() {
                                                 <SelectLabel>Downloads</SelectLabel>
                                                 <SelectItem value="sabnzbd">SABnzbd</SelectItem>
                                                 <SelectItem value="nzbget">NZBGet</SelectItem>
-                                                <SelectItem value="qBittorrent">qBittorrent</SelectItem>
+                                                <SelectItem value="qbittorrent">qBittorrent</SelectItem>
                                             </SelectGroup>
                                             <SelectGroup>
                                                 <SelectLabel>Movies & TV</SelectLabel>
@@ -1443,10 +1565,28 @@ function SettingsPageContent() {
                                         )}
                                     </div>
 
+                                    {appFormTestResult && (
+                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${appFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
+                                            {appFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                            <span className="leading-tight">{appFormTestResult.msg || appFormTestResult.err}</span>
+                                        </div>
+                                    )}
+
                                     <div className="flex gap-2">
+                                        <Button 
+                                            type="button" 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className="h-9 text-xs font-semibold gap-1.5 border-emerald-400/30 hover:border-emerald-400 hover:bg-emerald-400/10 transition-all active:scale-95 text-emerald-400"
+                                            disabled={testingAppForm}
+                                            onClick={handleTestAppForm}
+                                        >
+                                            {testingAppForm ? <Loader2 className="h-3 w-3 animate-spin text-emerald-400" /> : <Zap className="h-3 w-3 text-emerald-400" />}
+                                            Test
+                                        </Button>
                                         <Button type="submit" size="sm" className="w-full h-9 font-semibold hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">{editingApp ? "Update App" : "Add Application"}</Button>
                                         {editingApp && (
-                                            <Button type="button" size="sm" variant="outline" className="h-9 hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingApp(null); setArrMeta(null); setNewAppType(""); }}>
+                                            <Button type="button" size="sm" variant="outline" className="h-9 hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingApp(null); setArrMeta(null); setNewAppType(""); setAppFormTestResult(null); }}>
                                                 <X className="h-4 w-4"/>
                                             </Button>
                                         )}
