@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { 
     Tv, Play, Pause, Activity, Film, BookOpen, Clock, AlertTriangle, 
     CheckCircle2, RefreshCw, Smartphone, Monitor, ShieldAlert, Sparkles, 
-    Info, Flame, XCircle, Stethoscope, Loader2, ExternalLink
+    Info, Flame, XCircle, Stethoscope, Loader2, ExternalLink, Server, ChevronDown
 } from "lucide-react";
 import { getUserPlexHubData, killUserStream, StreamDiagnosis } from "@/app/actions";
 import ServerSpeedTest from "@/components/server-speed-test";
@@ -23,6 +23,7 @@ export default function MyPlexHub() {
     const [streamToKill, setStreamToKill] = useState<any>(null);
     const [killingStream, setKillingStream] = useState(false);
     const [killMessage, setKillMessage] = useState<string | null>(null);
+    const [serversModalOpen, setServersModalOpen] = useState(false);
     const [isPending, startTransition] = useTransition();
 
     const loadData = async (isManual = false) => {
@@ -86,6 +87,7 @@ export default function MyPlexHub() {
     const safeData = data || {
         user: { username: "Plex User" },
         serversCount: 0,
+        servers: [],
         activeStreams: [],
         watchHistory: [],
         watchStats: { totalWatchTimeHours: 0, moviesWatched: 0, episodesWatched: 0, musicTracksPlayed: 0 },
@@ -102,18 +104,26 @@ export default function MyPlexHub() {
             {/* Header with Tools */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#121218]/80 border border-border/50 rounded-2xl p-4 backdrop-blur-md shadow-sm">
                 <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
                             <Tv className="h-5 w-5 text-primary" />
                             My Plex Hub
                         </h2>
                         <Badge variant="outline" className="text-[10px] font-semibold bg-primary/10 text-primary border-primary/30">
-                            {data.user?.username}
+                            {safeData.user?.username}
                         </Badge>
-                        {data.serversCount > 1 && (
-                            <Badge variant="secondary" className="text-[10px] text-muted-foreground">
-                                {data.serversCount} Servers Connected
-                            </Badge>
+                        {safeData.serversCount > 0 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setServersModalOpen(true)}
+                                className="h-5 px-2 text-[10px] font-semibold bg-white/[0.04] hover:bg-white/[0.08] border-border/60 text-muted-foreground hover:text-foreground gap-1.5 transition-all rounded-full cursor-pointer shadow-xs"
+                                title="Click to view connected servers"
+                            >
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                {safeData.serversCount} {safeData.serversCount === 1 ? "Server" : "Servers"} Connected
+                                <ChevronDown className="h-3 w-3 opacity-60" />
+                            </Button>
                         )}
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -527,6 +537,81 @@ export default function MyPlexHub() {
                     </DialogContent>
                 </Dialog>
             )}
+
+            {/* --- CONNECTED SERVERS MODAL --- */}
+            <Dialog open={serversModalOpen} onOpenChange={setServersModalOpen}>
+                <DialogContent className="max-w-md bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl">
+                    <DialogHeader className="pb-3 border-b border-border/40">
+                        <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
+                            <Server className="h-5 w-5 text-primary" />
+                            Connected Media Servers
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-muted-foreground">
+                            All active Plex Media Servers and Tautulli monitors linked to your portal.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-2 space-y-2.5 max-h-[60vh] overflow-y-auto">
+                        {safeData.servers && safeData.servers.length > 0 ? (
+                            safeData.servers.map((srv: any, idx: number) => (
+                                <div 
+                                    key={srv.id || idx}
+                                    className="p-3 rounded-xl bg-white/[0.02] border border-border/50 hover:border-border transition-all space-y-1.5"
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                                                <Server className="h-4 w-4" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="text-xs sm:text-sm font-bold text-foreground truncate" title={srv.name}>
+                                                    {srv.name}
+                                                </div>
+                                                <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                                    Online & Active
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {srv.directPms && (
+                                                <Badge variant="outline" className="text-[9px] font-semibold bg-primary/10 text-primary border-primary/30">
+                                                    Direct PMS
+                                                </Badge>
+                                            )}
+                                            {srv.tautulli && (
+                                                <Badge variant="outline" className="text-[9px] font-semibold bg-purple-500/10 text-purple-400 border-purple-500/30">
+                                                    Tautulli
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <p className="text-[11px] text-muted-foreground/80 leading-normal pl-9">
+                                        {srv.directPms && srv.tautulli 
+                                            ? "Direct playback control, transcode diagnostics, and continuous watch history tracking."
+                                            : srv.directPms 
+                                                ? "Direct playback control, stream health diagnostics, and session management."
+                                                : "Telemetry monitor, watch history aggregation, and playback analytics."
+                                        }
+                                    </p>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="py-6 text-center text-xs text-muted-foreground">
+                                No connected servers detected.
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="border-t border-border/40 pt-3">
+                        <Button size="sm" onClick={() => setServersModalOpen(false)} className="font-semibold text-xs">
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

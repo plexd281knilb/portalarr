@@ -9081,7 +9081,14 @@ export async function getUserPlexHubData() {
         musicTracksPlayed: 0
     };
 
-    const serversList: { id: string; name: string }[] = [];
+    const serverMap = new Map<string, {
+        id: string;
+        name: string;
+        type: string;
+        directPms: boolean;
+        tautulli: boolean;
+        online: boolean;
+    }>();
 
     // --- 1. DIRECT PLEX MEDIA SERVER MONITORING (Via Admin Stored Plex Token) ---
     if (adminToken) {
@@ -9090,9 +9097,15 @@ export async function getUserPlexHubData() {
             
             for (const srv of directPlexResults) {
                 const srvId = `plex::${srv.serverId}::${srv.serverUrl}`;
-                if (!serversList.some(s => s.name === srv.serverName)) {
-                    serversList.push({ id: srvId, name: srv.serverName });
-                }
+                const normKey = srv.serverName.toLowerCase().replace(/[^a-z0-9]/g, "");
+                serverMap.set(normKey, {
+                    id: srvId,
+                    name: srv.serverName,
+                    type: "Plex Media Server",
+                    directPms: true,
+                    tautulli: false,
+                    online: true
+                });
 
                 for (const s of srv.sessions) {
                     const sessionUser = (s.User?.title || s.User?.username || s.User?.name || s.username || s.user || "").toLowerCase().trim();
@@ -9172,8 +9185,22 @@ export async function getUserPlexHubData() {
 
     // --- 2. TAUTULLI INSTANCES MONITORING (Query all Tautulli servers concurrently) ---
     await Promise.allSettled(tautulli.map(async (t) => {
-        if (!serversList.some(s => s.id === t.id)) {
-            serversList.push({ id: t.id, name: t.name });
+        const normTName = t.name.toLowerCase().replace(/^tautulli\s*[-_:]*\s*/i, "").replace(/[^a-z0-9]/g, "");
+        const existingKey = normTName ? Array.from(serverMap.keys()).find(k => k === normTName || (k.length > 2 && normTName.includes(k)) || (normTName.length > 2 && k.includes(normTName))) : null;
+        
+        if (existingKey && serverMap.has(existingKey)) {
+            const existing = serverMap.get(existingKey)!;
+            existing.tautulli = true;
+            existing.type = "Direct PMS + Tautulli";
+        } else {
+            serverMap.set(normTName || t.id, {
+                id: t.id,
+                name: t.name,
+                type: "Tautulli Monitor",
+                directPms: false,
+                tautulli: true,
+                online: true
+            });
         }
         const cleanBase = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
         const apiKey = decryptData(t.apiKey);
@@ -9471,6 +9498,8 @@ export async function getUserPlexHubData() {
     // Sort watch history by most recent date across all instances
     watchHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     watchHistory = watchHistory.slice(0, 20);
+
+    const serversList = Array.from(serverMap.values());
 
     return {
         success: true,
