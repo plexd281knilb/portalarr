@@ -20,11 +20,31 @@
 
 - **🎧 Audiobook Player & Chapter Controls:** Listen to your audiobooks seamlessly in the background with speed adjustments, quick skips, a sleep timer, and flexible chapter reordering.
 
-- **📨 Instant Search & Cover Previews:** Fast, intelligent book searching with crisp cover artwork automatically found and displayed.
+- **🔍 Missing Series Discovery & 1-Click Auto-Grab:** Discover unacquired books in series with grayscale placeholder stubs and instant 1-click grab to auto-complete collections.
 
-- **📧 1-Click Send to Kindle:** Send books directly to your Kindle device or Kindle app with automatic status updates and delivery confirmations.
+- **📧 Send to Kindle with Pre-Flight Diagnostics:** 1-click wireless book delivery with end-to-end status tracking, delivery history logs, and instant retry.
 
-- **🎨 Modern Dark Theme & Mobile-Ready UI:** A sleek, clean design that looks and works great across your phone, tablet, and desktop.
+- **🤖 AI Metadata Agent:** Automatic book metadata enrichment, series volume auto-backfilling, and high-definition artwork extraction via multi-provider LLMs.
+
+- **📱 Mobile-Optimized Radarr & Sonarr Views:** Responsive grid layouts for movies and TV series with prominent air date labeling and seamless status filtering.
+
+- **🔐 Persistent 30-Day Sessions:** Sliding JWT authentication so you stay signed in seamlessly across all your devices.
+
+
+---
+
+
+### 🚧 In Development & Upcoming
+
+- **🎯 Agregarr & Kometa (PMM) Replacement:** Native built-in collection generator, dynamic smart playlist manager, and custom artwork/overlay engine—eliminating the need for separate Agregarr and Kometa (Plex Meta Manager) background containers.
+
+- **🏷️ Interactive User Movie & TV Tag Management:** Deep movie and series tagging integration allowing users to directly customize tags, genres, and collections they **do** and **do not** want to see.
+  - *Personalized Inclusions & Exclusions:* Easily hide unwanted genres or content (e.g. Horror, Foreign, Reality TV) while pinning preferred collections (e.g. 4K HDR, Studio Ghibli, Oscar Winners).
+  - *User-Level Visibility Controls:* Tailor recommendations and shelf visibility per user account without affecting other family members or global server settings.
+
+- **✨ Dynamic Trending & Seasonal Hubs:** Automated synchronization with Trakt, IMDb, TMDb, and popular streaming services for rotating trending hubs, holiday collections, and studio spotlights.
+
+- **🎨 Automated Resolution & Audio Badges:** Configurable on-poster overlay badges (4K UHD, Dolby Vision, IMAX Enhanced, Dolby Atmos, DTS:X) managed directly within the web UI.
 
 
 ---
@@ -33,4 +53,5 @@
 ### 💡 Have an Idea or Need Help?
 
 Got a feature suggestion or noticed an issue? Vote on community suggestions below or submit a support ticket anytime!
+
 

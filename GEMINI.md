@@ -37,8 +37,8 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
     - **Monitoring & Apps:** Live connection diagnostic buttons (`"Test"`), inline edit states (`✏️`), dynamic port pre-filling, visibility toggles for sensitive tokens, and unified settings management for Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Jellyseerr, Bazarr, etc.
     - **Beta & Announcements:** Markdown Roadmap editor and interactive Beta Testing Cards manager.
   - **Support System:** Direct ticket submission for users, and a ticket management panel at `/admin/tickets` for administrators (with SMTP email updates).
-  - **Interactive Beta Portal:** A modular dashboard at `/beta` showcasing active and upcoming beta features/services.
   - **Persistent 30-Day Sessions:** Signed HttpOnly JWT session cookies with 30-day lifetime and sliding auto-renewal.
+  - **Upcoming — Agregarr & Kometa (PMM) Replacement & User Movie Tagging:** Native built-in collection generator, dynamic smart playlists, automated poster overlays (4K HDR, Dolby Vision/Atmos), and personalized user-level movie/TV tag management enabling users to directly customize and toggle tags, genres, and collections they do and do not want to see.
 
 ## Building and Running
 

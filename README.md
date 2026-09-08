@@ -28,6 +28,7 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 - **Support & Password Recovery:** Direct support ticket submission with SMTP notifications, format-specific request email badges (`🎧 AUDIOBOOK` vs `📖 EBOOK`), plus built-in temporary password email recovery.
 - **Secure Encryption:** Sensitive API keys and service tokens are encrypted at rest using AES-256-GCM.
 - **Automated CI/CD & Docker:** GitHub Actions pipeline automatically builds and publishes `ghcr.io/plexd281knilb/portalarr:latest` with concurrency rate-limiting safeguards.
+- **🚧 Upcoming — Agregarr & Kometa Replacement:** Built-in dynamic collection manager, smart playlist generator, custom poster overlays (4K UHD, Dolby Vision/Atmos), and personalized user-level movie/TV tag management (allowing users to directly customize and toggle tags, genres, and collections they do and do not want to see).
 
 ## 🛠️ Quick Start
 
