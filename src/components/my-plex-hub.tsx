@@ -330,18 +330,18 @@ export default function MyPlexHub() {
                         </h3>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-3.5">
                         {watchHistory.map((item: any) => (
                             <div 
                                 key={item.id} 
                                 className="group relative rounded-xl bg-[#121218]/70 border border-border/40 overflow-hidden hover:border-primary/40 hover:shadow-md transition-all flex flex-col"
                             >
-                                <div className="relative aspect-video sm:aspect-[16/10] bg-muted/20 overflow-hidden flex items-center justify-center">
+                                <div className="relative aspect-[2/3] w-full bg-muted/20 overflow-hidden flex items-center justify-center">
                                     {item.thumb && (
                                         <img 
                                             src={item.thumb} 
                                             alt={item.fullTitle} 
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 relative z-10"
+                                            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300 relative z-10"
                                             onError={(e) => {
                                                 (e.target as HTMLElement).style.display = "none";
                                             }}

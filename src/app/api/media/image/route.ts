@@ -97,8 +97,8 @@ export async function GET(req: NextRequest) {
                     const directRes = await tryFetchImage(directUrl, {}, 2500);
                     if (directRes) return directRes;
 
-                    // Method B: Transcoded PMS thumbnail
-                    const photoUrl = `${serverBase}/photo/:/transcode?url=${encodeURIComponent(targetPath)}&width=600&height=400&minSize=1&upscale=1&X-Plex-Token=${encodeURIComponent(adminToken)}`;
+                    // Method B: Transcoded PMS thumbnail (2:3 portrait poster ratio)
+                    const photoUrl = `${serverBase}/photo/:/transcode?url=${encodeURIComponent(targetPath)}&width=600&height=900&minSize=1&upscale=1&X-Plex-Token=${encodeURIComponent(adminToken)}`;
                     const photoRes = await tryFetchImage(photoUrl, {}, 2500);
                     if (photoRes) return photoRes;
                 }
@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
                         const dRes = await tryFetchImage(directUrl, {}, 2000);
                         if (dRes) return dRes;
 
-                        const photoUrl = `${cleanBase}/photo/:/transcode?url=${encodeURIComponent(cleanImg)}&width=600&height=400&minSize=1&upscale=1&X-Plex-Token=${encodeURIComponent(sToken)}`;
+                        const photoUrl = `${cleanBase}/photo/:/transcode?url=${encodeURIComponent(cleanImg)}&width=600&height=900&minSize=1&upscale=1&X-Plex-Token=${encodeURIComponent(sToken)}`;
                         const pRes = await tryFetchImage(photoUrl, {}, 2000);
                         if (pRes) return pRes;
                     }
@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
                     const itunesData = await itunesRes.json();
                     const item = itunesData.results?.[0];
                     if (item && item.artworkUrl100) {
-                        const hdArtworkUrl = item.artworkUrl100.replace("100x100bb", "600x600bb");
+                        const hdArtworkUrl = item.artworkUrl100.replace("100x100bb", "600x900bb");
                         const hdImageRes = await tryFetchImage(hdArtworkUrl, {}, 3500);
                         if (hdImageRes) return hdImageRes;
                     }
