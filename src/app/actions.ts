@@ -2100,38 +2100,26 @@ export async function getLibraryBooks(libraryId?: string) {
     } catch (e) {}
     if (!session) throw new Error("Unauthorized");
     
+    // Strictly filter by libraries accessible to the logged-in user
+    const accessibleLibs = await getLibraries();
+    const accessibleLibIds = new Set(accessibleLibs.map(l => l.id));
+
     let targetLibraryIds: string[] = [];
 
     if (!libraryId || libraryId === "all") {
-        const allLibs = await prisma.library.findMany();
-        targetLibraryIds = allLibs.map(l => l.id);
+        targetLibraryIds = Array.from(accessibleLibIds);
     } else if (libraryId === "audiobooks") {
-        const allAudioLibs = await prisma.library.findMany({
-            where: {
-                OR: [
-                    { mediaType: "audiobook" },
-                    { downloadCategory: "audiobooks" },
-                    { name: { contains: "Audio" } },
-                    { name: { contains: "audio" } }
-                ]
-            }
-        });
-        targetLibraryIds = allAudioLibs.map(l => l.id);
+        targetLibraryIds = accessibleLibs
+            .filter(l => l.mediaType === "audiobook" || l.downloadCategory === "audiobooks" || l.name.toLowerCase().includes("audio"))
+            .map(l => l.id);
     } else if (libraryId === "ebooks") {
-        const allEbookLibs = await prisma.library.findMany({
-            where: {
-                NOT: {
-                    OR: [
-                        { mediaType: "audiobook" },
-                        { downloadCategory: "audiobooks" },
-                        { name: { contains: "Audio" } },
-                        { name: { contains: "audio" } }
-                    ]
-                }
-            }
-        });
-        targetLibraryIds = allEbookLibs.map(l => l.id);
+        targetLibraryIds = accessibleLibs
+            .filter(l => !(l.mediaType === "audiobook" || l.downloadCategory === "audiobooks" || l.name.toLowerCase().includes("audio")))
+            .map(l => l.id);
     } else {
+        if (!accessibleLibIds.has(libraryId)) {
+            return []; // User does not have access to this library
+        }
         targetLibraryIds = [libraryId];
     }
     
