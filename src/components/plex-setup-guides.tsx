@@ -74,15 +74,15 @@ export default function PlexSetupGuides() {
 
                     {guides.length > 0 && (
                         <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-                            <TabsList className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 h-auto p-1 bg-muted/30 border border-border/40 rounded-xl gap-1">
+                            <TabsList className="flex flex-wrap items-center gap-1.5 p-1.5 bg-muted/20 border border-border/40 rounded-xl w-full h-auto">
                                 {guides.map(guide => (
                                     <TabsTrigger 
                                         key={guide.id} 
                                         value={guide.id} 
-                                        className="flex items-center justify-center gap-1.5 py-2 px-1 text-[11px] font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all rounded-lg"
+                                        className="flex items-center gap-1.5 py-2 px-3 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all rounded-lg shrink-0"
                                     >
                                         {getDeviceIcon(guide.id)}
-                                        <span className="truncate">{guide.name.split(" ")[0]}</span>
+                                        <span>{guide.name}</span>
                                     </TabsTrigger>
                                 ))}
                             </TabsList>
