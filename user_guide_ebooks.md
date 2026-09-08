@@ -188,7 +188,7 @@ Portalarr connects directly to Prowlarr, Torznab indexers, SABnzbd, NZBGet, and 
 
 ## 🤖 9. AI Metadata Agent & Cover Artwork Engine
 
-- **3-Tier Cover Artwork Engine:** Automatically queries iTunes HD (600x600), OpenLibrary, and Google Books. Click the **`🖼️ Fetch Cover`** button on any card to refresh missing or low-res covers.
+- **3-Tier Cover Artwork Engine:** Automatically queries iTunes HD (600x600/600x900), OpenLibrary, and Google Books. Click the **`🖼️ Fetch Cover`** button on any card to refresh missing or low-res covers.
 - **AI Metadata Agent:** Powered by Gemini, Claude, OpenAI, Ollama, Groq, or DeepSeek. Click **`🤖 Run AI Metadata Agent`** on any card to extract official title, author, series name, volume numbers, and high-resolution artwork from noisy file names.
 
 ---
