@@ -6,7 +6,7 @@ import nodemailer from "nodemailer";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { encryptData, decryptData } from "@/lib/encryption";
-import { getPlexServerFriends } from "@/lib/plex";
+import { getPlexServerFriends, getPlexServers, getPlexActiveSessions, terminatePlexServerSession } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 
@@ -8878,14 +8878,44 @@ export interface StreamDiagnosis {
 }
 
 export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
-    const videoDecision = (s.video_decision || "").toLowerCase();
-    const audioDecision = (s.audio_decision || "").toLowerCase();
-    const streamBitrate = Number(s.stream_bitrate || s.bitrate || 0);
-    const streamRes = (s.stream_video_resolution || s.video_resolution || "").toLowerCase();
-    const sourceRes = (s.video_resolution || "").toLowerCase();
-    const subDecision = (s.subtitle_decision || "").toLowerCase();
-    const subCodec = (s.subtitle_codec || "").toLowerCase();
-    const player = s.player || s.platform || "your device";
+    const isPlexNative = !!(s.Session || s.Player || s.MediaContainer || (s.TranscodeSession !== undefined && !s.transcode_decision));
+    
+    let videoDecision = (s.video_decision || "").toLowerCase();
+    let audioDecision = (s.audio_decision || "").toLowerCase();
+    let streamBitrate = Number(s.stream_bitrate || s.bitrate || 0);
+    let streamRes = (s.stream_video_resolution || s.video_resolution || "").toLowerCase();
+    let sourceRes = (s.video_resolution || "").toLowerCase();
+    let subDecision = (s.subtitle_decision || "").toLowerCase();
+    let subCodec = (s.subtitle_codec || "").toLowerCase();
+    let player = s.player || s.platform || "your device";
+    let videoCodec = s.video_codec || "";
+    let audioCodec = s.audio_codec || "";
+    let streamAudioCodec = s.stream_audio_codec || "";
+
+    if (isPlexNative || s.TranscodeSession) {
+        player = s.Player?.title || s.Player?.device || s.Player?.platform || player;
+        const ts = s.TranscodeSession;
+        if (ts) {
+            videoDecision = (ts.videoDecision || (ts.transcodeHwRequested ? "transcode" : "") || "transcode").toLowerCase();
+            audioDecision = (ts.audioDecision || "transcode").toLowerCase();
+            subDecision = (ts.subtitleDecision || "").toLowerCase();
+            subCodec = (ts.subtitleCodec || "").toLowerCase();
+            streamBitrate = Number(ts.bitrate || s.Media?.[0]?.bitrate || 0);
+            streamRes = (ts.videoResolution || s.Media?.[0]?.videoResolution || "").toLowerCase();
+            sourceRes = (s.Media?.[0]?.videoResolution || streamRes).toLowerCase();
+            videoCodec = ts.videoCodec || s.Media?.[0]?.videoCodec || "";
+            audioCodec = ts.sourceAudioCodec || s.Media?.[0]?.audioCodec || "";
+            streamAudioCodec = ts.audioCodec || "";
+        } else {
+            videoDecision = "direct play";
+            audioDecision = "direct play";
+            sourceRes = (s.Media?.[0]?.videoResolution || "1080p").toLowerCase();
+            streamRes = sourceRes;
+            streamBitrate = Number(s.Media?.[0]?.bitrate || 0);
+            videoCodec = s.Media?.[0]?.videoCodec || "";
+            audioCodec = s.Media?.[0]?.audioCodec || "";
+        }
+    }
 
     // 1. Subtitle Burn-In
     if (subDecision === "burn" || (videoDecision === "transcode" && (subCodec.includes("pgs") || subCodec.includes("ass") || subCodec.includes("vobsub")))) {
@@ -8931,7 +8961,7 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
             badgeText: "Video Transcode",
             badgeColor: "orange",
             title: "Video Codec Conversion",
-            explanation: `The video codec (${s.video_codec?.toUpperCase() || "HEVC/H.264"}) is being converted to H.264 for compatibility with ${player}.`,
+            explanation: `The video codec (${videoCodec?.toUpperCase() || "HEVC/H.264"}) is being converted to H.264 for compatibility with ${player}.`,
             recommendation: "Ensure Direct Play is enabled in your device settings.",
             steps: [
                 `1. Go to Settings ⚙️ → Advanced / Video in your ${player} Plex app`,
@@ -8948,7 +8978,7 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
             badgeText: "Direct Stream",
             badgeColor: "blue",
             title: "Direct Stream (Audio Transcoding)",
-            explanation: `Video is Direct Playing at 100% native studio quality! Only the audio track (${s.audio_codec?.toUpperCase() || "TrueHD/DTS"}) is being converted to ${s.stream_audio_codec?.toUpperCase() || "AAC"} so your sound system/TV speakers can output sound.`,
+            explanation: `Video is Direct Playing at 100% native studio quality! Only the audio track (${audioCodec?.toUpperCase() || "TrueHD/DTS"}) is being converted to ${streamAudioCodec?.toUpperCase() || "AAC"} so your sound system/TV speakers can output sound.`,
             recommendation: "Playback is running efficiently with zero video loss. No action needed unless you have a dedicated surround receiver.",
             steps: [
                 "1. Your video stream is running at 100% full original quality",
@@ -8973,6 +9003,8 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
 
 export async function getUserPlexHubData() {
     const user: any = await verifyUser();
+    const isAdmin = user.role === "ADMIN";
+    const settings = await prisma.settings.findFirst();
     const tautulli = await prisma.tautulliInstance.findMany();
     
     const safeUsername = String(user?.username || "");
@@ -9006,6 +9038,7 @@ export async function getUserPlexHubData() {
     }, 0);
 
     const activeStreams: any[] = [];
+    const seenSessionKeys = new Set<string>();
     let watchHistory: any[] = [];
     let watchStats = {
         totalWatchTimeHours: 0,
@@ -9016,9 +9049,98 @@ export async function getUserPlexHubData() {
 
     const usernameLower = safeUsername.toLowerCase();
     const emailLower = safeEmail.toLowerCase();
+    const serversList: { id: string; name: string }[] = [];
 
-    // Query all Tautulli instances concurrently with strict user isolation
+    // --- 1. DIRECT PLEX MEDIA SERVER MONITORING (Via Admin Stored Plex Token) ---
+    if (settings?.mainPlexToken) {
+        try {
+            const adminToken = decryptData(settings.mainPlexToken);
+            const directPlexResults = await getPlexActiveSessions(adminToken);
+            
+            for (const srv of directPlexResults) {
+                const srvId = `plex::${srv.serverId}::${srv.serverUrl}`;
+                if (!serversList.some(s => s.name === srv.serverName)) {
+                    serversList.push({ id: srvId, name: srv.serverName });
+                }
+
+                for (const s of srv.sessions) {
+                    const sessionUser = (s.User?.title || s.User?.username || s.User?.name || s.username || s.user || "").toLowerCase();
+                    const sessionEmail = (s.User?.email || s.email || "").toLowerCase();
+                    const sessionFriendly = (s.Player?.title || s.Player?.device || "").toLowerCase();
+
+                    // STRICT PRIVACY RAIL: Only match the logged-in user (or admin if no other streams)
+                    if (sessionUser === usernameLower || sessionEmail === emailLower || sessionUser === emailLower || sessionFriendly === usernameLower || (isAdmin && !tautulli.length)) {
+                        const diagnosis = await analyzeStreamHealth(s);
+                        const mediaType = s.type || (s.grandparentTitle ? "episode" : "movie");
+                        
+                        let fullTitle = s.title || "Unknown";
+                        if (mediaType === "episode" && s.grandparentTitle) {
+                            const seasonNum = s.parentIndex ? String(s.parentIndex).padStart(2, "0") : "01";
+                            const epNum = s.index ? String(s.index).padStart(2, "0") : "01";
+                            fullTitle = `${s.grandparentTitle} - S${seasonNum}E${epNum}: ${s.title}`;
+                        } else if (s.year) {
+                            fullTitle = `${s.title} (${s.year})`;
+                        }
+
+                        const rawThumb = s.thumb || s.parentThumb || s.grandparentThumb || "";
+                        const thumbUrl = rawThumb ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}` : null;
+
+                        const sKey = String(s.sessionKey || s.Session?.id || Math.random());
+                        const sId = String(s.Session?.id || sKey);
+                        seenSessionKeys.add(sKey);
+                        seenSessionKeys.add(sId);
+
+                        const durMs = Number(s.duration || 0);
+                        const offsetMs = Number(s.viewOffset || 0);
+                        const progressPercent = durMs > 0 ? Math.round((offsetMs / durMs) * 100) : 0;
+
+                        activeStreams.push({
+                            instanceId: srvId,
+                            instanceName: srv.serverName,
+                            sessionKey: sKey,
+                            sessionId: sId,
+                            title: s.title || "Unknown",
+                            parentTitle: s.parentTitle || "",
+                            grandparentTitle: s.grandparentTitle || "",
+                            fullTitle,
+                            mediaType,
+                            thumb: thumbUrl,
+                            state: s.Player?.state || "playing",
+                            progressPercent,
+                            durationMinutes: durMs ? Math.round(durMs / 60000) : 0,
+                            viewOffsetMinutes: offsetMs ? Math.round(offsetMs / 60000) : 0,
+                            player: s.Player?.title || s.Player?.device || s.Player?.platform || "Plex Client",
+                            platform: s.Player?.platform || "",
+                            device: s.Player?.device || "",
+                            videoDecision: s.TranscodeSession ? (s.TranscodeSession.videoDecision || "transcode") : "direct play",
+                            audioDecision: s.TranscodeSession ? (s.TranscodeSession.audioDecision || "transcode") : "direct play",
+                            transcodeDecision: s.TranscodeSession ? (s.TranscodeSession.videoDecision === "transcode" ? "transcode" : "direct stream") : "direct play",
+                            streamVideoResolution: s.TranscodeSession?.videoResolution || s.Media?.[0]?.videoResolution || "1080p",
+                            sourceVideoResolution: s.Media?.[0]?.videoResolution || "1080p",
+                            streamBitrateMbps: s.TranscodeSession?.bitrate ? (Number(s.TranscodeSession.bitrate) / 1000).toFixed(1) : (s.Media?.[0]?.bitrate ? (Number(s.Media[0].bitrate) / 1000).toFixed(1) : "0"),
+                            videoCodec: s.TranscodeSession?.videoCodec || s.Media?.[0]?.videoCodec || "",
+                            audioCodec: s.TranscodeSession?.sourceAudioCodec || s.Media?.[0]?.audioCodec || "",
+                            streamAudioCodec: s.TranscodeSession?.audioCodec || "",
+                            qualityProfile: "",
+                            bandwidthMbps: s.TranscodeSession?.bitrate ? (Number(s.TranscodeSession.bitrate) / 1000).toFixed(1) : "0",
+                            transcodeHwDecoding: Boolean(s.TranscodeSession?.transcodeHwRequested),
+                            transcodeHwEncoding: Boolean(s.TranscodeSession?.transcodeHwRequested),
+                            transcodeSpeed: String(s.TranscodeSession?.speed || "1.0"),
+                            diagnosis
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("[PLEX-HUB] Direct Plex Session Query Error:", e);
+        }
+    }
+
+    // --- 2. TAUTULLI INSTANCE MONITORING (Optional Enhanced Stats / Activity) ---
     await Promise.allSettled(tautulli.map(async (t) => {
+        if (!serversList.some(s => s.id === t.id)) {
+            serversList.push({ id: t.id, name: t.name });
+        }
         const cleanBase = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
         const apiKey = decryptData(t.apiKey);
         
@@ -9031,6 +9153,14 @@ export async function getUserPlexHubData() {
                 const sessions = json.response?.data?.sessions || [];
                 
                 for (const s of sessions) {
+                    const sessionKey = String(s.session_key || "");
+                    const sessionId = String(s.session_id || "");
+
+                    // Skip if already captured directly from Plex
+                    if (seenSessionKeys.has(sessionKey) || seenSessionKeys.has(sessionId)) {
+                        continue;
+                    }
+
                     const sessionUser = (s.user || "").toLowerCase();
                     const sessionEmail = (s.email || "").toLowerCase();
                     const sessionFriendly = (s.friendly_name || "").toLowerCase();
@@ -9055,8 +9185,8 @@ export async function getUserPlexHubData() {
                         activeStreams.push({
                             instanceId: t.id,
                             instanceName: t.name,
-                            sessionKey: String(s.session_key || ""),
-                            sessionId: String(s.session_id || ""),
+                            sessionKey,
+                            sessionId,
                             title: s.title || "Unknown",
                             parentTitle: s.parent_title || "",
                             grandparentTitle: s.grandparent_title || "",
@@ -9093,7 +9223,7 @@ export async function getUserPlexHubData() {
             console.warn(`[PLEX-HUB] Failed to fetch activity for ${t.name}:`, e);
         }
 
-        // 2. Watch History for this user
+        // 2. Watch History for this user from Tautulli
         try {
             const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&user=${encodeURIComponent(user.username)}&length=8`;
             const histRes = await fetch(histUrl, { next: { revalidate: 30 } });
@@ -9132,14 +9262,13 @@ export async function getUserPlexHubData() {
             }
         } catch (e) {}
 
-        // 3. User Watch Time Stats
+        // 3. User Watch Time Stats from Tautulli
         try {
             const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&user=${encodeURIComponent(user.username)}`;
             const statsRes = await fetch(statsUrl, { next: { revalidate: 60 } });
             if (statsRes.ok) {
                 const statsJson = await statsRes.json();
                 const data = statsJson.response?.data || [];
-                // data is an array for time ranges: day, week, month, all
                 const allTime = data.find((d: any) => d.query_days === 0) || data[data.length - 1];
                 if (allTime) {
                     const totalSec = Number(allTime.total_time || 0);
@@ -9152,6 +9281,72 @@ export async function getUserPlexHubData() {
         } catch (e) {}
     }));
 
+    // Fallback: If watch history is empty and Direct Plex Token exists, fetch recent history directly from Plex Media Server
+    if (watchHistory.length === 0 && settings?.mainPlexToken) {
+        try {
+            const adminToken = decryptData(settings.mainPlexToken);
+            const plexServers = await getPlexServers(adminToken);
+            for (const srv of plexServers) {
+                const token = srv.accessToken || adminToken;
+                for (const conn of srv.connections) {
+                    try {
+                        const cleanBase = conn.uri.replace(/\/+$/, "");
+                        const hRes = await fetch(`${cleanBase}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=20`, {
+                            headers: {
+                                "Accept": "application/json",
+                                "X-Plex-Token": token,
+                                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                            },
+                            next: { revalidate: 30 }
+                        });
+                        if (hRes.ok) {
+                            const hJson = await hRes.json();
+                            const hRows = hJson.MediaContainer?.Metadata || [];
+                            const rows = Array.isArray(hRows) ? hRows : [hRows];
+                            for (const r of rows) {
+                                const rUser = (r.userName || r.user || "").toLowerCase();
+                                if (rUser === usernameLower || rUser === emailLower || isAdmin) {
+                                    const rawThumb = r.thumb || r.parentThumb || r.grandparentThumb || "";
+                                    const thumbUrl = rawThumb ? `/api/media/image?instanceId=${encodeURIComponent("plex::" + srv.clientIdentifier + "::" + cleanBase)}&img=${encodeURIComponent(rawThumb)}` : null;
+                                    
+                                    let displayTitle = r.title || "Unknown";
+                                    if (r.grandparentTitle) {
+                                        const sNum = r.parentIndex ? String(r.parentIndex).padStart(2, "0") : "01";
+                                        const eNum = r.index ? String(r.index).padStart(2, "0") : "01";
+                                        displayTitle = `${r.grandparentTitle} (S${sNum}E${eNum})`;
+                                    } else if (r.year) {
+                                        displayTitle = `${r.title} (${r.year})`;
+                                    }
+
+                                    watchHistory.push({
+                                        id: `plex-${r.historyKey || r.ratingKey || Math.random()}`,
+                                        instanceId: `plex::${srv.clientIdentifier}::${cleanBase}`,
+                                        instanceName: srv.name,
+                                        title: r.title,
+                                        fullTitle: displayTitle,
+                                        mediaType: r.type || "movie",
+                                        thumb: thumbUrl,
+                                        date: r.viewedAt ? new Date(r.viewedAt * 1000).toISOString() : new Date().toISOString(),
+                                        durationMinutes: r.duration ? Math.round(Number(r.duration) / 60000) : 0,
+                                        percentComplete: 100,
+                                        player: "Plex Device",
+                                        ratingKey: r.ratingKey
+                                    });
+
+                                    if (r.type === "movie") watchStats.moviesWatched++;
+                                    else if (r.type === "episode") watchStats.episodesWatched++;
+                                    else if (r.type === "track") watchStats.musicTracksPlayed++;
+                                    if (r.duration) watchStats.totalWatchTimeHours += Math.round(Number(r.duration) / 3600000);
+                                }
+                            }
+                            break; // Handled this server
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {}
+    }
+
     // Sort watch history by most recent date across all instances
     watchHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     watchHistory = watchHistory.slice(0, 10);
@@ -9163,8 +9358,8 @@ export async function getUserPlexHubData() {
             email: user.email,
             role: user.role
         },
-        serversCount: tautulli.length,
-        servers: tautulli.map(t => ({ id: t.id, name: t.name })),
+        serversCount: serversList.length,
+        servers: serversList,
         activeStreams,
         watchHistory,
         watchStats,
@@ -9183,6 +9378,84 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         return { success: false, error: "Missing instance ID or session key" };
     }
 
+    const isAdmin = user.role === "ADMIN";
+    const currentUser = (user.username || "").toLowerCase();
+    const currentEmail = (user.email || "").toLowerCase();
+
+    // CASE 1: Direct Plex Media Server Stream Termination via Plex Token
+    if (instanceId.startsWith("plex::")) {
+        const parts = instanceId.split("::");
+        const serverId = parts[1] || "";
+        const serverUrl = parts.slice(2).join("::");
+
+        const settings = await prisma.settings.findFirst();
+        if (!settings?.mainPlexToken) {
+            return { success: false, error: "Plex Server Token is not configured." };
+        }
+
+        const adminToken = decryptData(settings.mainPlexToken);
+
+        // Fetch active sessions directly from PMS to verify ownership
+        try {
+            const cleanBase = serverUrl.replace(/\/+$/, "");
+            const res = await fetch(`${cleanBase}/status/sessions`, {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+
+            if (!res.ok) {
+                return { success: false, error: "Could not reach Plex Media Server to verify session" };
+            }
+
+            const data = await res.json();
+            const rawSessions = data.MediaContainer?.Metadata || [];
+            const sessions = Array.isArray(rawSessions) ? rawSessions : [rawSessions];
+            
+            const targetSession = sessions.find((s: any) => 
+                String(s.sessionKey || s.Session?.id || "") === String(sessionKey) ||
+                String(s.Session?.id || "") === String(sessionKey)
+            );
+
+            if (!targetSession) {
+                return { success: false, error: "Stream session not found or already ended" };
+            }
+
+            // STRICT SECURITY RAIL: Non-admin users can ONLY terminate their own session
+            const sessionUser = (targetSession.User?.title || targetSession.User?.username || targetSession.username || "").toLowerCase();
+            const sessionEmail = (targetSession.User?.email || targetSession.email || "").toLowerCase();
+
+            const isOwner = sessionUser === currentUser || sessionEmail === currentEmail || sessionUser === currentEmail;
+
+            if (!isOwner && !isAdmin) {
+                return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
+            }
+
+            const sessionId = targetSession.Session?.id ? String(targetSession.Session.id) : undefined;
+            const termResult = await terminatePlexServerSession(
+                cleanBase, 
+                adminToken, 
+                String(targetSession.sessionKey || sessionKey), 
+                sessionId, 
+                "Stream ended by user via Portalarr My Plex Hub"
+            );
+
+            if (termResult.success) {
+                logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on Plex server "${serverUrl}".`);
+                return { success: true, message: "Stream terminated successfully." };
+            } else {
+                return { success: false, error: termResult.message || "Failed to terminate stream" };
+            }
+
+        } catch (e: any) {
+            return { success: false, error: e.message || "Failed to terminate stream" };
+        }
+    }
+
+    // CASE 2: Tautulli Instance Stream Termination
     const instance = await prisma.tautulliInstance.findUnique({
         where: { id: instanceId }
     });
@@ -9211,11 +9484,8 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         // STRICT SECURITY RAIL: Non-admin users can ONLY terminate their own session
         const sessionUser = (targetSession.user || "").toLowerCase();
         const sessionEmail = (targetSession.email || "").toLowerCase();
-        const currentUser = (user.username || "").toLowerCase();
-        const currentEmail = (user.email || "").toLowerCase();
 
         const isOwner = sessionUser === currentUser || sessionEmail === currentEmail;
-        const isAdmin = user.role === "ADMIN";
 
         if (!isOwner && !isAdmin) {
             return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
