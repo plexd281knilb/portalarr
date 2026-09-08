@@ -9537,14 +9537,58 @@ export async function getUserPlexHubData() {
 }
 
 export async function killUserStream(instanceId: string, sessionKey: string) {
-    const user: any = await verifyUser();
-    if (!instanceId || !sessionKey) {
+    let user: any = null;
+    try {
+        user = await verifyUser();
+    } catch (e) {
+        return { success: false, error: "Unauthorized" };
+    }
+    if (!user || !instanceId || !sessionKey) {
         return { success: false, error: "Missing instance ID or session key" };
     }
 
     const isAdmin = user.role === "ADMIN";
-    const currentUser = (user.username || "").toLowerCase();
-    const currentEmail = (user.email || "").toLowerCase();
+    const safeUsername = String(user?.username || "").toLowerCase().trim();
+    const safeEmail = String(user?.email || "").toLowerCase().trim();
+
+    const userAliases = new Set<string>();
+    if (safeUsername) userAliases.add(safeUsername);
+    if (safeEmail) userAliases.add(safeEmail);
+
+    const settings = await prisma.settings.findFirst();
+    let adminToken = "";
+    if (settings?.mainPlexToken) {
+        try {
+            adminToken = decryptData(settings.mainPlexToken);
+        } catch (e) {}
+    }
+
+    // Expand user aliases with Plex Owner or Plex Friend identities (identical to getUserPlexHubData)
+    if (adminToken) {
+        if (isAdmin) {
+            try {
+                const ownerUser = await getPlexOwnerUser(adminToken);
+                if (ownerUser) {
+                    if (ownerUser.username) userAliases.add(ownerUser.username.toLowerCase().trim());
+                    if (ownerUser.email) userAliases.add(ownerUser.email.toLowerCase().trim());
+                    if (ownerUser.title) userAliases.add(ownerUser.title.toLowerCase().trim());
+                }
+            } catch (e) {}
+        } else {
+            try {
+                const friends = await getPlexServerFriends(adminToken);
+                const matchedFriend = friends.find(f => 
+                    (f.username && userAliases.has(f.username.toLowerCase().trim())) ||
+                    (f.email && userAliases.has(f.email.toLowerCase().trim()))
+                );
+                if (matchedFriend) {
+                    if (matchedFriend.username) userAliases.add(matchedFriend.username.toLowerCase().trim());
+                    if (matchedFriend.email) userAliases.add(matchedFriend.email.toLowerCase().trim());
+                    if ((matchedFriend as any).title) userAliases.add((matchedFriend as any).title.toLowerCase().trim());
+                }
+            } catch (e) {}
+        }
+    }
 
     // CASE 1: Direct Plex Media Server Stream Termination via Plex Token
     if (instanceId.startsWith("plex::")) {
@@ -9552,12 +9596,9 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         const serverId = parts[1] || "";
         const serverUrl = parts.slice(2).join("::");
 
-        const settings = await prisma.settings.findFirst();
-        if (!settings?.mainPlexToken) {
+        if (!adminToken) {
             return { success: false, error: "Plex Server Token is not configured." };
         }
-
-        const adminToken = decryptData(settings.mainPlexToken);
 
         // Fetch active sessions directly from PMS to verify ownership
         try {
@@ -9588,11 +9629,14 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                 return { success: false, error: "Stream session not found or already ended" };
             }
 
-            // STRICT SECURITY RAIL: Non-admin users can ONLY terminate their own session
-            const sessionUser = (targetSession.User?.title || targetSession.User?.username || targetSession.username || "").toLowerCase();
-            const sessionEmail = (targetSession.User?.email || targetSession.email || "").toLowerCase();
+            const sessionUser = (targetSession.User?.title || targetSession.User?.username || targetSession.User?.name || targetSession.username || targetSession.user || "").toLowerCase().trim();
+            const sessionEmail = (targetSession.User?.email || targetSession.email || "").toLowerCase().trim();
+            const sessionFriendly = (targetSession.Player?.title || targetSession.Player?.device || "").toLowerCase().trim();
 
-            const isOwner = sessionUser === currentUser || sessionEmail === currentEmail || sessionUser === currentEmail;
+            const isOwner = userAliases.has(sessionUser) || 
+                            userAliases.has(sessionEmail) || 
+                            userAliases.has(sessionFriendly) ||
+                            (isAdmin && (!sessionUser || sessionUser === "local" || sessionUser === "admin"));
 
             if (!isOwner && !isAdmin) {
                 return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
@@ -9633,37 +9677,79 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
     // 1. Fetch current activity to strictly verify ownership
     try {
         const activityUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
-        const res = await fetch(activityUrl);
+        const res = await fetch(activityUrl, { cache: "no-store" });
         if (!res.ok) {
             return { success: false, error: "Could not reach server to verify session" };
         }
         const json = await res.json();
         const sessions = json.response?.data?.sessions || [];
-        const targetSession = sessions.find((s: any) => String(s.session_key) === String(sessionKey));
+        const targetSession = sessions.find((s: any) => 
+            String(s.session_key || "") === String(sessionKey) ||
+            String(s.session_id || "") === String(sessionKey)
+        );
 
         if (!targetSession) {
             return { success: false, error: "Stream session not found or already ended" };
         }
 
-        // STRICT SECURITY RAIL: Non-admin users can ONLY terminate their own session
-        const sessionUser = (targetSession.user || "").toLowerCase();
-        const sessionEmail = (targetSession.email || "").toLowerCase();
+        const sessionUser = (targetSession.user || targetSession.username || "").toLowerCase().trim();
+        const sessionEmail = (targetSession.email || "").toLowerCase().trim();
+        const sessionFriendly = (targetSession.friendly_name || targetSession.player || "").toLowerCase().trim();
+        const sessionUserId = String(targetSession.user_id ?? "");
 
-        const isOwner = sessionUser === currentUser || sessionEmail === currentEmail;
+        const isOwner = userAliases.has(sessionUser) || 
+                        userAliases.has(sessionEmail) || 
+                        userAliases.has(sessionFriendly) ||
+                        (isAdmin && (sessionUserId === "0" || sessionUser === "local" || sessionUser === "admin"));
 
         if (!isOwner && !isAdmin) {
             return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
         }
 
-        // 2. Execute termination
-        const killUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=terminate_session&session_key=${encodeURIComponent(sessionKey)}&message=${encodeURIComponent("Stream ended by user via Portalarr My Plex Hub")}`;
+        // 2. Execute termination via Tautulli
+        const sessionKeyParam = targetSession.session_key ? `&session_key=${encodeURIComponent(String(targetSession.session_key))}` : `&session_key=${encodeURIComponent(sessionKey)}`;
+        const sessionIdParam = targetSession.session_id ? `&session_id=${encodeURIComponent(String(targetSession.session_id))}` : "";
+        const killUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=terminate_session${sessionKeyParam}${sessionIdParam}&message=${encodeURIComponent("Stream ended by user via Portalarr My Plex Hub")}`;
         const killRes = await fetch(killUrl);
-        if (!killRes.ok) {
-            return { success: false, error: "Failed to terminate stream on server" };
+        
+        let killed = false;
+        if (killRes.ok) {
+            const killJson = await killRes.json().catch(() => null);
+            if (killJson?.response?.result === "success") {
+                killed = true;
+            }
         }
 
-        logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title}" on server "${instance.name}".`);
-        return { success: true, message: "Stream terminated successfully." };
+        // If Tautulli termination returned failure and adminToken is available, try terminating directly on Plex
+        if (!killed && adminToken) {
+            try {
+                const plexServers = await getPlexServers(adminToken);
+                for (const srv of plexServers) {
+                    const sToken = srv.accessToken || adminToken;
+                    for (const conn of srv.connections) {
+                        const directRes = await terminatePlexServerSession(
+                            conn.uri,
+                            sToken,
+                            String(targetSession.session_key || sessionKey),
+                            targetSession.session_id ? String(targetSession.session_id) : undefined,
+                            "Stream ended by user via Portalarr My Plex Hub"
+                        );
+                        if (directRes.success) {
+                            killed = true;
+                            break;
+                        }
+                    }
+                    if (killed) break;
+                }
+            } catch (e) {}
+        }
+
+        if (killed || killRes.ok) {
+            logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on server "${instance.name}".`);
+            return { success: true, message: "Stream terminated successfully." };
+        } else {
+            return { success: false, error: "Failed to terminate stream on server" };
+        }
 
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to terminate stream" };
