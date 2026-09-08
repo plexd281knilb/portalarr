@@ -71,6 +71,39 @@ export async function getPlexServerFriends(adminToken: string) {
     return Array.from(friendsMap.values());
 }
 
+export async function getPlexOwnerUser(adminToken: string) {
+    if (!adminToken) return null;
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch("https://plex.tv/api/v2/user", {
+            headers: {
+                "Accept": "application/json",
+                "X-Plex-Token": adminToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            },
+            signal: controller.signal,
+            next: { revalidate: 300 }
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+            const data = await res.json();
+            const u = data.user || data;
+            return {
+                id: u.id,
+                uuid: u.uuid,
+                username: u.username || u.title || "",
+                email: u.email || "",
+                title: u.title || u.username || "",
+                thumb: u.thumb || ""
+            };
+        }
+    } catch (e) {
+        console.warn("[PLEX-API] Failed to fetch Plex owner user:", e);
+    }
+    return null;
+}
+
 export interface PlexServerResource {
     name: string;
     clientIdentifier: string;
@@ -86,14 +119,18 @@ export interface PlexServerResource {
 
 export async function getPlexServers(adminToken: string): Promise<PlexServerResource[]> {
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const res = await fetch("https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1", {
             headers: {
                 "Accept": "application/json",
                 "X-Plex-Token": adminToken,
                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
             },
+            signal: controller.signal,
             next: { revalidate: 120 }
         });
+        clearTimeout(timeoutId);
         if (!res.ok) return [];
         const data = await res.json();
         if (!Array.isArray(data)) return [];

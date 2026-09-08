@@ -83,12 +83,19 @@ export default function MyPlexHub() {
         );
     }
 
-    if (!data) return null;
+    const safeData = data || {
+        user: { username: "Plex User" },
+        serversCount: 0,
+        activeStreams: [],
+        watchHistory: [],
+        watchStats: { totalWatchTimeHours: 0, moviesWatched: 0, episodesWatched: 0, musicTracksPlayed: 0 },
+        readingStats: { totalBooksAvailable: 0, totalRequests: 0, completedRequests: 0, kindleDeliveries: 0 }
+    };
 
-    const activeStreams = data.activeStreams || [];
-    const watchHistory = data.watchHistory || [];
-    const stats = data.watchStats || {};
-    const reading = data.readingStats || {};
+    const activeStreams = safeData.activeStreams || [];
+    const watchHistory = safeData.watchHistory || [];
+    const stats = safeData.watchStats || {};
+    const reading = safeData.readingStats || {};
 
     return (
         <div className="w-full space-y-4">
