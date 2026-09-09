@@ -17,7 +17,8 @@ import {
     invitePlexFriendAndShare,
     updatePlexUserShareSections,
     removePlexUserShare,
-    matchesPlexUser
+    matchesPlexUser,
+    findPlexUserFriend
 } from "@/lib/plex";
 import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
@@ -1531,23 +1532,17 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
     }
 }
 
-export async function updateUserPlexLibraries(userId: string, selectedKeys: (string | number)[]) {
+export async function updateUserPlexLibraries(
+    userId: string, 
+    selectedKeys: (string | number)[],
+    activationType?: "APPROVED" | "TRIAL" | "30_DAYS" | "KEEP_SUSPENDED"
+) {
     try {
         await verifyAdmin();
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return { success: false, error: "User not found" };
 
-        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        if (!settings?.mainPlexToken) {
-            return { success: false, error: "Admin Plex token not configured in settings." };
-        }
-
-        const adminToken = decryptData(settings.mainPlexToken);
-        const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
-        const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
-
-        const servers = await getPlexServers(adminToken);
-        const shares = await getPlexSharedServersList(adminToken);
+        const isCurrentlySuspendedOrExpired = user.status === "SUSPENDED" || user.status === "EXPIRED";
 
         // Group selectedKeys by serverId
         const serverSectionsMap = new Map<string, number[]>();
@@ -1567,13 +1562,12 @@ export async function updateUserPlexLibraries(userId: string, selectedKeys: (str
                     serverSectionsMap.set(srvId, list);
                 }
             } else {
-                // Legacy plain integer: assign to primary server
+                // Legacy plain integer
                 const secId = parseInt(strKey, 10);
-                if (!isNaN(secId) && servers.length > 0) {
-                    const primaryId = servers[0].clientIdentifier;
-                    const list = serverSectionsMap.get(primaryId) || [];
+                if (!isNaN(secId)) {
+                    const list = serverSectionsMap.get("__default__") || [];
                     list.push(secId);
-                    serverSectionsMap.set(primaryId, list);
+                    serverSectionsMap.set("__default__", list);
                 }
             }
         }
@@ -1585,6 +1579,83 @@ export async function updateUserPlexLibraries(userId: string, selectedKeys: (str
             data: { plexLibrarySectionIds: savedStr }
         });
 
+        // If user is suspended/expired and admin chose KEEP_SUSPENDED (or no activation was provided):
+        // Save to DB only and DO NOT grant Plex access.
+        if (isCurrentlySuspendedOrExpired && (!activationType || activationType === "KEEP_SUSPENDED")) {
+            revalidatePath("/settings/access");
+            return { 
+                success: true, 
+                message: `Saved library preferences for ${user.username}. User remains suspended and Plex access was not granted.` 
+            };
+        }
+
+        // If user is suspended/expired and admin chose an activation type, update user status in DB:
+        const now = new Date();
+        if (isCurrentlySuspendedOrExpired && activationType) {
+            let newStatus = "APPROVED";
+            let trialEndsAt: Date | null = null;
+            let subscriptionEndsAt: Date | null = null;
+            let convertedAt = user.convertedAt || now;
+
+            if (activationType === "APPROVED") {
+                newStatus = "APPROVED";
+                trialEndsAt = null;
+                subscriptionEndsAt = null;
+            } else if (activationType === "TRIAL") {
+                newStatus = "TRIAL";
+                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                const trialDays = settings?.defaultTrialDays || 14;
+                trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
+                subscriptionEndsAt = null;
+            } else if (activationType === "30_DAYS") {
+                newStatus = "APPROVED";
+                subscriptionEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                trialEndsAt = null;
+            }
+
+            await prisma.user.update({
+                where: { id: userId },
+                data: {
+                    status: newStatus,
+                    trialEndsAt,
+                    subscriptionEndsAt,
+                    convertedAt
+                }
+            });
+        }
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            return { success: false, error: "Admin Plex token not configured in settings." };
+        }
+
+        const adminToken = decryptData(settings.mainPlexToken);
+        const servers = await getPlexServers(adminToken);
+        const shares = await getPlexSharedServersList(adminToken);
+        const friend = await findPlexUserFriend(adminToken, user);
+
+        const targetEmail = (friend?.email || user.plexEmail || user.email || "").toLowerCase().trim();
+        const targetUser = (friend?.username || user.plexUsername || user.username || "").toLowerCase().trim();
+        const friendId = friend?.id;
+
+        // Assign any legacy plain integer sections to primary server
+        if (serverSectionsMap.has("__default__") && servers.length > 0) {
+            const primaryId = servers[0].clientIdentifier;
+            const existing = serverSectionsMap.get(primaryId) || [];
+            const defSecs = serverSectionsMap.get("__default__") || [];
+            serverSectionsMap.set(primaryId, [...existing, ...defSecs]);
+            serverSectionsMap.delete("__default__");
+        }
+
+        // Match target including friend ID
+        const matchTarget = {
+            id: friendId,
+            email: targetEmail,
+            username: targetUser,
+            plexEmail: user.plexEmail,
+            plexUsername: user.plexUsername
+        };
+
         // For each server, update share on Plex or invite
         for (const srv of servers) {
             const srvId = srv.clientIdentifier;
@@ -1593,7 +1664,7 @@ export async function updateUserPlexLibraries(userId: string, selectedKeys: (str
             // Find matching share for this user on this server
             const match = shares.find(s => 
                 (s.serverId === srvId || !s.serverId || servers.length === 1) &&
-                matchesPlexUser(user, s)
+                matchesPlexUser(matchTarget, s)
             );
 
             if (targetSectionIds.length === 0) {
@@ -1605,14 +1676,15 @@ export async function updateUserPlexLibraries(userId: string, selectedKeys: (str
                 // 1 or more sections selected
                 if (match && match.id) {
                     await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
-                } else if (targetEmail || targetUser) {
-                    await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds);
+                } else if (targetEmail || targetUser || friendId) {
+                    await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
                 }
             }
         }
 
         revalidatePath("/settings/access");
-        return { success: true, message: `Updated shared Plex libraries for ${user.username}.` };
+        const activatedNote = activationType && activationType !== "KEEP_SUSPENDED" ? " and activated account" : "";
+        return { success: true, message: `Updated shared Plex libraries for ${user.username}${activatedNote}.` };
     } catch (e: any) {
         console.error("[UPDATE-USER-PLEX-LIBRARIES-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to update user libraries" };
@@ -1761,6 +1833,17 @@ export async function setUserTrialOrSubscription(
                         }
                     }
 
+                    const friend = await findPlexUserFriend(adminToken, user);
+                    const resolvedTarget = friend?.email || targetEmail || targetUser;
+                    const friendId = friend?.id;
+                    const matchTarget = {
+                        id: friendId,
+                        email: resolvedTarget,
+                        username: targetUser,
+                        plexEmail: user.plexEmail,
+                        plexUsername: user.plexUsername
+                    };
+
                     for (const srv of servers) {
                         const srvId = srv.clientIdentifier;
                         const secIds = serverSectionsMap.get(srvId) || [];
@@ -1768,13 +1851,13 @@ export async function setUserTrialOrSubscription(
 
                         const match = shares.find(s => 
                             (s.serverId === srvId || !s.serverId || servers.length === 1) &&
-                            matchesPlexUser(user, s)
+                            matchesPlexUser(matchTarget, s)
                         );
 
                         if (match && match.id) {
                             await updatePlexUserShareSections(adminToken, match.id, secIds, srvId);
-                        } else if (targetEmail || targetUser) {
-                            await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, secIds);
+                        } else if (resolvedTarget || friendId) {
+                            await invitePlexFriendAndShare(adminToken, srvId, resolvedTarget, secIds, friendId);
                         }
                     }
                 }

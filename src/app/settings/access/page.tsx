@@ -36,7 +36,7 @@ import {
     Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, 
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
-    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server
+    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
@@ -60,6 +60,11 @@ export default function AccessSettingsPage() {
     const [savingUserLibs, setSavingUserLibs] = useState(false);
     const [libSuccessMsg, setLibSuccessMsg] = useState("");
     const [libErrMsg, setLibErrMsg] = useState("");
+
+    // Suspended User Activation Confirmation Modal state
+    const [showActivationPrompt, setShowActivationPrompt] = useState(false);
+    const [pendingLibSaveKeys, setPendingLibSaveKeys] = useState<string[]>([]);
+    const [selectedActivationType, setSelectedActivationType] = useState<"APPROVED" | "TRIAL" | "30_DAYS" | "KEEP_SUSPENDED">("APPROVED");
 
     // Manage Trial / Subscription Modal state
     const [subModalUser, setSubModalUser] = useState<any | null>(null);
@@ -413,9 +418,6 @@ export default function AccessSettingsPage() {
 
     const handleSaveUserLibraries = async () => {
         if (!libModalUser) return;
-        setSavingUserLibs(true);
-        setLibSuccessMsg("");
-        setLibErrMsg("");
 
         // Normalize keys before saving
         const normalizedKeys = userSelectedKeys.map(k => {
@@ -424,8 +426,30 @@ export default function AccessSettingsPage() {
             return k;
         });
 
-        const res = await updateUserPlexLibraries(libModalUser.id, normalizedKeys);
+        // If user is currently suspended or expired and at least 1 library is selected:
+        // prompt the admin with activation options before saving and granting access.
+        if ((libModalUser.status === "SUSPENDED" || libModalUser.status === "EXPIRED") && normalizedKeys.length > 0) {
+            setPendingLibSaveKeys(normalizedKeys);
+            setSelectedActivationType("APPROVED");
+            setShowActivationPrompt(true);
+            return;
+        }
+
+        await executeSaveUserLibraries(normalizedKeys);
+    };
+
+    const executeSaveUserLibraries = async (
+        normalizedKeys: string[], 
+        activationType?: "APPROVED" | "TRIAL" | "30_DAYS" | "KEEP_SUSPENDED"
+    ) => {
+        if (!libModalUser) return;
+        setSavingUserLibs(true);
+        setLibSuccessMsg("");
+        setLibErrMsg("");
+
+        const res = await updateUserPlexLibraries(libModalUser.id, normalizedKeys, activationType);
         setSavingUserLibs(false);
+        setShowActivationPrompt(false);
         if (res.success) {
             setLibSuccessMsg(res.message || "Plex libraries updated successfully!");
             loadUsers();
@@ -1693,7 +1717,7 @@ export default function AccessSettingsPage() {
                             </div>
 
                             <div className="flex gap-2 justify-end pt-3 border-t border-border/40">
-                                <Button type="button" variant="outline" onClick={() => setLibModalUser(null)}>
+                                <Button type="button" variant="outline" onClick={() => { setLibModalUser(null); setShowActivationPrompt(false); }}>
                                     Cancel
                                 </Button>
                                 <Button 
@@ -1704,6 +1728,170 @@ export default function AccessSettingsPage() {
                                 >
                                     {savingUserLibs ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
                                     Save & Sync to Plex
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* SUSPENDED USER ACTIVATION PROMPT MODAL */}
+            {/* ========================================================================= */}
+            {showActivationPrompt && libModalUser && (
+                <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-lg bg-[#121218] border-border/70 shadow-2xl overflow-hidden">
+                        <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                                    <ShieldAlert className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-base font-bold text-foreground">
+                                        Activate Suspended User?
+                                    </CardTitle>
+                                    <CardDescription className="text-xs mt-0.5">
+                                        <strong>{libModalUser.username}</strong> is currently <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/40 text-amber-400 uppercase font-bold">{libModalUser.status}</Badge>. Library access cannot be granted on Plex while suspended.
+                                    </CardDescription>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4 pt-4">
+                            <p className="text-xs text-muted-foreground">
+                                Please select how you would like to activate this user before submitting their granted library access:
+                            </p>
+
+                            <div className="space-y-2">
+                                {/* Option 1: Full Activation (Approved) */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("APPROVED")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                                        selectedActivationType === "APPROVED"
+                                            ? "bg-emerald-950/30 border-emerald-500/60 ring-1 ring-emerald-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="activation_type" 
+                                        checked={selectedActivationType === "APPROVED"} 
+                                        onChange={() => setSelectedActivationType("APPROVED")}
+                                        className="mt-0.5 text-emerald-500 focus:ring-emerald-500"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                            <span className="text-xs font-bold text-foreground">Full Activation (Approved)</span>
+                                            <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0 border border-emerald-500/30">Permanent</Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Activate account permanently with no expiration date. Immediately enables selected libraries on Plex.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Option 2: 14-Day Free Trial */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("TRIAL")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                                        selectedActivationType === "TRIAL"
+                                            ? "bg-blue-950/30 border-blue-500/60 ring-1 ring-blue-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="activation_type" 
+                                        checked={selectedActivationType === "TRIAL"} 
+                                        onChange={() => setSelectedActivationType("TRIAL")}
+                                        className="mt-0.5 text-blue-500 focus:ring-blue-500"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <Timer className="h-4 w-4 text-blue-400" />
+                                            <span className="text-xs font-bold text-foreground">14-Day Free Trial</span>
+                                            <Badge className="bg-blue-500/20 text-blue-400 text-[10px] px-1.5 py-0 border border-blue-500/30">Trial</Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Place user on a 14-day trial period from today. Automatically suspends when trial time runs out.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Option 3: 30-Day Subscription */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("30_DAYS")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                                        selectedActivationType === "30_DAYS"
+                                            ? "bg-purple-950/30 border-purple-500/60 ring-1 ring-purple-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="activation_type" 
+                                        checked={selectedActivationType === "30_DAYS"} 
+                                        onChange={() => setSelectedActivationType("30_DAYS")}
+                                        className="mt-0.5 text-purple-500 focus:ring-purple-500"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="h-4 w-4 text-purple-400" />
+                                            <span className="text-xs font-bold text-foreground">30-Day Subscription</span>
+                                            <Badge className="bg-purple-500/20 text-purple-400 text-[10px] px-1.5 py-0 border border-purple-500/30">Subscription</Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Grant 30 days of active subscription access from today, and enable selected libraries on Plex.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Option 4: Keep Suspended (Save Libraries Only) */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("KEEP_SUSPENDED")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                                        selectedActivationType === "KEEP_SUSPENDED"
+                                            ? "bg-amber-950/30 border-amber-500/60 ring-1 ring-amber-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="activation_type" 
+                                        checked={selectedActivationType === "KEEP_SUSPENDED"} 
+                                        onChange={() => setSelectedActivationType("KEEP_SUSPENDED")}
+                                        className="mt-0.5 text-amber-500 focus:ring-amber-500"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <PauseCircle className="h-4 w-4 text-amber-400" />
+                                            <span className="text-xs font-bold text-foreground">Keep Suspended (Save Libraries Only)</span>
+                                            <Badge className="bg-amber-500/20 text-amber-400 text-[10px] px-1.5 py-0 border border-amber-500/30">No Access</Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Save these library preferences to the database only. Do not activate the user or grant access on Plex.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 justify-end pt-3 border-t border-border/40">
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    disabled={savingUserLibs}
+                                    onClick={() => setShowActivationPrompt(false)}
+                                >
+                                    Back
+                                </Button>
+                                <Button 
+                                    type="button" 
+                                    disabled={savingUserLibs}
+                                    onClick={() => executeSaveUserLibraries(pendingLibSaveKeys, selectedActivationType)}
+                                    className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground transition-all active:scale-95"
+                                >
+                                    {savingUserLibs ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                                    Confirm & Proceed
                                 </Button>
                             </div>
                         </CardContent>
