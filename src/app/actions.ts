@@ -634,19 +634,26 @@ export async function saveSettings(formData: FormData) {
   const rawSmtpPass = formData.get("smtpPass") as string;
   const rawPlexToken = formData.get("mainPlexToken") as string;
   const smtpFrom = formData.get("smtpFrom") as string || "";
+  const tmdbApiKey = formData.get("tmdbApiKey") as string;
+  const traktClientId = formData.get("traktClientId") as string;
+  const mdblistApiKey = formData.get("mdblistApiKey") as string;
 
   const encryptedSmtpPass = encryptData(rawSmtpPass);
   const encryptedPlexToken = encryptData(rawPlexToken);
 
+  const updateData: any = { 
+      smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass: encryptedSmtpPass, 
+      smtpFrom, mainPlexToken: encryptedPlexToken 
+  };
+  if (tmdbApiKey !== null && tmdbApiKey !== undefined) updateData.tmdbApiKey = tmdbApiKey;
+  if (traktClientId !== null && traktClientId !== undefined) updateData.traktClientId = traktClientId;
+  if (mdblistApiKey !== null && mdblistApiKey !== undefined) updateData.mdblistApiKey = mdblistApiKey;
+
   await prisma.settings.upsert({
     where: { id: "global" },
-    update: { 
-        smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass: encryptedSmtpPass, 
-        smtpFrom, mainPlexToken: encryptedPlexToken 
-    },
+    update: updateData,
     create: { 
-        id: "global", smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass: encryptedSmtpPass, 
-        smtpFrom, mainPlexToken: encryptedPlexToken 
+        id: "global", ...updateData
     },
   });
   revalidatePath("/settings");

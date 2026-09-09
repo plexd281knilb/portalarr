@@ -262,7 +262,13 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["notifyPasswordReset", `ALTER TABLE "Settings" ADD COLUMN "notifyPasswordReset" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["notifyMediaRequests", `ALTER TABLE "Settings" ADD COLUMN "notifyMediaRequests" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["notifySupportTickets", `ALTER TABLE "Settings" ADD COLUMN "notifySupportTickets" BOOLEAN NOT NULL DEFAULT 1;`],
-                ["notifySendToKindle", `ALTER TABLE "Settings" ADD COLUMN "notifySendToKindle" BOOLEAN NOT NULL DEFAULT 1;`]
+                ["notifySendToKindle", `ALTER TABLE "Settings" ADD COLUMN "notifySendToKindle" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["tmdbApiKey", `ALTER TABLE "Settings" ADD COLUMN "tmdbApiKey" TEXT;`],
+                ["traktClientId", `ALTER TABLE "Settings" ADD COLUMN "traktClientId" TEXT;`],
+                ["mdblistApiKey", `ALTER TABLE "Settings" ADD COLUMN "mdblistApiKey" TEXT;`],
+                ["autoOverlaySync", `ALTER TABLE "Settings" ADD COLUMN "autoOverlaySync" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["autoCollectionSync", `ALTER TABLE "Settings" ADD COLUMN "autoCollectionSync" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["leavingSoonDiskThreshold", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonDiskThreshold" INTEGER NOT NULL DEFAULT 15;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -609,6 +615,122 @@ export async function ensureSchemaColumns(): Promise<void> {
             `);
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Failed to create EmailTemplate table:", e.message || e);
+        }
+
+        // --- 11. CURATION, AGREGARR & KOMETA (PMM) TABLES & COLUMNS ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "MediaCollection" (
+                    "id" TEXT PRIMARY KEY,
+                    "title" TEXT NOT NULL,
+                    "summary" TEXT,
+                    "sortTitle" TEXT,
+                    "type" TEXT NOT NULL DEFAULT 'curated',
+                    "category" TEXT,
+                    "serverId" TEXT,
+                    "sectionKey" TEXT,
+                    "sourceType" TEXT DEFAULT 'tmdb',
+                    "sourceQuery" TEXT,
+                    "rules" TEXT,
+                    "posterUrl" TEXT,
+                    "ratingKey" TEXT,
+                    "itemCount" INTEGER NOT NULL DEFAULT 0,
+                    "autoSync" BOOLEAN NOT NULL DEFAULT 1,
+                    "syncInterval" TEXT NOT NULL DEFAULT 'daily',
+                    "lastSyncedAt" DATETIME,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "MediaOverlayRule" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "serverId" TEXT,
+                    "sectionKey" TEXT,
+                    "overlayType" TEXT NOT NULL DEFAULT 'combined',
+                    "position" TEXT NOT NULL DEFAULT 'top-right',
+                    "theme" TEXT NOT NULL DEFAULT 'glass',
+                    "badgeStyle" TEXT NOT NULL DEFAULT 'pill',
+                    "showResolution" BOOLEAN NOT NULL DEFAULT 1,
+                    "showHdr" BOOLEAN NOT NULL DEFAULT 1,
+                    "showAudio" BOOLEAN NOT NULL DEFAULT 1,
+                    "showRatings" BOOLEAN NOT NULL DEFAULT 0,
+                    "showLeavingSoon" BOOLEAN NOT NULL DEFAULT 1,
+                    "enabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "itemCount" INTEGER NOT NULL DEFAULT 0,
+                    "lastAppliedAt" DATETIME,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "MediaArtBackup" (
+                    "id" TEXT PRIMARY KEY,
+                    "ratingKey" TEXT NOT NULL,
+                    "serverId" TEXT,
+                    "title" TEXT,
+                    "originalArtUrl" TEXT,
+                    "backupFilePath" TEXT NOT NULL,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
+            await prisma.$executeRawUnsafe(`
+                CREATE UNIQUE INDEX IF NOT EXISTS "MediaArtBackup_serverId_ratingKey_key" ON "MediaArtBackup"("serverId", "ratingKey");
+            `);
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "UserContentPreference" (
+                    "id" TEXT PRIMARY KEY,
+                    "userId" TEXT NOT NULL UNIQUE,
+                    "excludedGenres" TEXT,
+                    "excludedTags" TEXT,
+                    "maxContentRating" TEXT,
+                    "hideLeavingSoon" BOOLEAN NOT NULL DEFAULT 0,
+                    "hideHorror" BOOLEAN NOT NULL DEFAULT 0,
+                    "hideNsfw" BOOLEAN NOT NULL DEFAULT 0,
+                    "hideGore" BOOLEAN NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "UserContentPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "MediaContentAdvisory" (
+                    "id" TEXT PRIMARY KEY,
+                    "ratingKey" TEXT NOT NULL,
+                    "serverId" TEXT,
+                    "title" TEXT,
+                    "imdbId" TEXT,
+                    "tmdbId" TEXT,
+                    "mpaaRating" TEXT,
+                    "nudityLevel" TEXT,
+                    "violenceLevel" TEXT,
+                    "profanityLevel" TEXT,
+                    "alcoholLevel" TEXT,
+                    "frighteningLevel" TEXT,
+                    "digitalReleaseDate" DATETIME,
+                    "theatricalReleaseDate" DATETIME,
+                    "inTheaters" BOOLEAN NOT NULL DEFAULT 0,
+                    "isLeavingSoon" BOOLEAN NOT NULL DEFAULT 0,
+                    "leavingSoonDate" DATETIME,
+                    "leavingReason" TEXT,
+                    "customTags" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
+            await prisma.$executeRawUnsafe(`
+                CREATE UNIQUE INDEX IF NOT EXISTS "MediaContentAdvisory_ratingKey_serverId_key" ON "MediaContentAdvisory"("ratingKey", "serverId");
+            `);
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Failed to create Curation tables:", e.message || e);
         }
 
         schemaPatchCompleted = true;

@@ -17,7 +17,8 @@ import {
   User,
   Terminal,
   Film,
-  Tv
+  Tv,
+  Sparkles
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -172,6 +173,21 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                 <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   Administration
                 </div>
+                <Link href="/curation">
+                  <Button
+                    variant={pathname.startsWith("/curation") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/curation")
+                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.25)] ring-1 ring-purple-500/40 font-bold"
+                        : "text-purple-400/80 hover:text-purple-300 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
+                    )}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4 text-purple-400" />
+                    Curation Studio
+                  </Button>
+                </Link>
+
                 <Link href="/settings">
                   <Button
                     variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"}
@@ -380,6 +396,20 @@ export function MobileSidebar() {
                       <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                         Administration
                       </div>
+                      <Link href="/curation" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/curation") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/curation")
+                              ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.25)] ring-1 ring-purple-500/40 font-bold"
+                              : "text-purple-400/80 hover:text-purple-300 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
+                          )}
+                        >
+                          <Sparkles className="mr-2 h-4 w-4 text-purple-400" /> Curation Studio
+                        </Button>
+                      </Link>
+
                       <Link href="/settings" onClick={() => setIsOpen(false)}>
                         <Button
                           variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"}

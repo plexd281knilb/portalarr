@@ -12,6 +12,8 @@ export type LogCategory =
     | "DATABASE" 
     | "API" 
     | "SYSTEM"
+    | "CURATION"
+    | "SETTINGS"
     | "PLEX_HUB"; // backward compatibility
 
 export interface SystemLogEntry {

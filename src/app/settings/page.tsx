@@ -39,6 +39,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
 import EmailManagement from "@/components/email-management";
+import CurationStudio from "@/components/curation-studio";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -146,6 +147,17 @@ function SettingsPageContent() {
     const [testingAppForm, setTestingAppForm] = useState(false);
     const [appFormTestResult, setAppFormTestResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
 
+    // Curation & Metadata API Key States
+    const [tmdbKey, setTmdbKey] = useState("");
+    const [traktKey, setTraktKey] = useState("");
+    const [mdblistKey, setMdblistKey] = useState("");
+    const [showTmdbKey, setShowTmdbKey] = useState(false);
+    const [showTraktKey, setShowTraktKey] = useState(false);
+    const [showMdblistKey, setShowMdblistKey] = useState(false);
+    const [curationTestResult, setCurationTestResult] = useState<any>(null);
+    const [testingCurationKeys, setTestingCurationKeys] = useState(false);
+    const [curationSavedMsg, setCurationSavedMsg] = useState("");
+
     // Path Validation State
     const [validatingPath, setValidatingPath] = useState(false);
     const [pathResult, setPathResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
@@ -166,7 +178,7 @@ function SettingsPageContent() {
 
     const handleTestApp = async (id: string) => {
         setTestingAppId(id);
-        const res = await testAppConnectionAction(id);
+        const res: any = await testAppConnectionAction(id);
         setTestingAppId(null);
         setAppTestResults(prev => ({
             ...prev,
@@ -176,7 +188,7 @@ function SettingsPageContent() {
 
     const handleTestTautulli = async (id: string) => {
         setTestingTautulliId(id);
-        const res = await testTautulliConnectionAction(id);
+        const res: any = await testTautulliConnectionAction(id);
         setTestingTautulliId(null);
         setTautulliTestResults(prev => ({
             ...prev,
@@ -186,7 +198,7 @@ function SettingsPageContent() {
 
     const handleTestGlances = async (id: string) => {
         setTestingGlancesId(id);
-        const res = await testGlancesConnectionAction(id);
+        const res: any = await testGlancesConnectionAction(id);
         setTestingGlancesId(null);
         setGlancesTestResults(prev => ({
             ...prev,
@@ -266,6 +278,20 @@ function SettingsPageContent() {
         const res = await validateDownloadsPathAction(pathStr);
         setValidatingPath(false);
         setPathResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
+    };
+
+    const handleTestCurationKeys = async () => {
+        setTestingCurationKeys(true);
+        setCurationTestResult(null);
+        try {
+            const { testCurationApiKeysAction } = await import("@/app/curation-actions");
+            const res = await testCurationApiKeysAction(tmdbKey, traktKey, mdblistKey);
+            setCurationTestResult(res.results);
+        } catch (e: any) {
+            setCurationTestResult({ errors: [e.message] });
+        } finally {
+            setTestingCurationKeys(false);
+        }
     };
 
     const [arrMeta, setArrMeta] = useState<any>(null);
@@ -522,6 +548,9 @@ function SettingsPageContent() {
             setSystemSettings(s || {});
             setInputDownloadsPath(s?.downloadsPath || "/downloads");
             setGoogleBooksKey(s?.googleBooksApiKey || "");
+            setTmdbKey(s?.tmdbApiKey || "");
+            setTraktKey(s?.traktClientId || "");
+            setMdblistKey(s?.mdblistApiKey || "");
             if (s) {
                 setEmailSettings({
                     emailNotificationsEnabled: s.emailNotificationsEnabled ?? true,
@@ -644,6 +673,10 @@ function SettingsPageContent() {
                     <TabsTrigger value="monitoring" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80">
                         <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Monitoring & Apps</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="curation" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
+                        <Sparkles className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                        <span>Curation & Overlays</span>
                     </TabsTrigger>
                     <TabsTrigger value="beta" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
                         <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
@@ -1099,6 +1132,177 @@ function SettingsPageContent() {
                                             </p>
                                         </div>
                                         <Button type="submit" size="sm" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Settings</Button>
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                            {/* CURATION, KOMETA & AGREGARR API KEYS CARD */}
+                            <Card className="border-indigo-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg shadow-indigo-950/20">
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2 text-indigo-400">
+                                                <Sparkles className="h-5 w-5 text-indigo-400"/> Curation & Discovery API Keys
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Configure TMDb, Trakt.tv, and MDBList API keys for automated movie/TV collections, ratings badges, and theatrical vs digital release calendars.
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const { saveCurationSettingsAction } = await import("@/app/curation-actions");
+                                            const res = await saveCurationSettingsAction({
+                                                tmdbApiKey: tmdbKey,
+                                                traktClientId: traktKey,
+                                                mdblistApiKey: mdblistKey
+                                            });
+                                            if (res.success) {
+                                                setCurationSavedMsg("Curation API keys saved successfully!");
+                                                setTimeout(() => setCurationSavedMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }}
+                                        className="space-y-4"
+                                    >
+                                        {curationSavedMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-1.5">
+                                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                                <span>{curationSavedMsg}</span>
+                                            </div>
+                                        )}
+
+                                        {curationTestResult && (
+                                            <div className={`text-xs p-3 rounded-lg border space-y-1 ${curationTestResult.errors?.length === 0 ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800' : 'bg-rose-950/50 text-rose-300 border-rose-800'}`}>
+                                                <div className="font-bold flex items-center gap-1.5">
+                                                    {curationTestResult.errors?.length === 0 ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                                    <span>API Verification Results:</span>
+                                                </div>
+                                                <div className="text-[11px] space-y-0.5 pl-5">
+                                                    {tmdbKey && <div>• TMDb: {curationTestResult.tmdb ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {traktKey && <div>• Trakt: {curationTestResult.trakt ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {mdblistKey && <div>• MDBList: {curationTestResult.mdblist ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {curationTestResult.errors?.map((err: string, i: number) => (
+                                                        <div key={i} className="text-rose-400">• {err}</div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-3">
+                                            {/* TMDb API Key */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <Label className="font-semibold text-slate-200">The Movie Database (TMDb) API Key</Label>
+                                                    <a href="https://www.themoviedb.org/settings/api" target="_blank" className="text-[10px] text-primary hover:underline">
+                                                        Get Free Key ↗
+                                                    </a>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showTmdbKey ? "text" : "password"}
+                                                        value={tmdbKey}
+                                                        onChange={e => setTmdbKey(e.target.value)}
+                                                        placeholder="e.g. 3a1f8c..."
+                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowTmdbKey(!showTmdbKey)}
+                                                    >
+                                                        {showTmdbKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Powers franchise collections (MCU, Star Wars, Pixar, HBO, Netflix) and theatrical vs digital release countdowns.
+                                                </p>
+                                            </div>
+
+                                            {/* Trakt Client ID */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <Label className="font-semibold text-slate-200">Trakt.tv API Client ID</Label>
+                                                    <a href="https://trakt.tv/oauth/applications" target="_blank" className="text-[10px] text-primary hover:underline">
+                                                        Create Trakt App ↗
+                                                    </a>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showTraktKey ? "text" : "password"}
+                                                        value={traktKey}
+                                                        onChange={e => setTraktKey(e.target.value)}
+                                                        placeholder="e.g. 9b7c6..."
+                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowTraktKey(!showTraktKey)}
+                                                    >
+                                                        {showTraktKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Powers dynamic Trending This Week, Anticipated Movies, and custom public Trakt lists.
+                                                </p>
+                                            </div>
+
+                                            {/* MDBList API Key */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <Label className="font-semibold text-slate-200">MDBList API Key</Label>
+                                                    <a href="https://mdblist.com/preferences/" target="_blank" className="text-[10px] text-primary hover:underline">
+                                                        Get MDBList Key ↗
+                                                    </a>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showMdblistKey ? "text" : "password"}
+                                                        value={mdblistKey}
+                                                        onChange={e => setMdblistKey(e.target.value)}
+                                                        placeholder="e.g. key_..."
+                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowMdblistKey(!showMdblistKey)}
+                                                    >
+                                                        {showMdblistKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Powers IMDb Top 250, Oscar Best Picture Winners, and composite IMDb/Rotten Tomatoes/Metacritic ratings badges.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 pt-1">
+                                            <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs h-8">
+                                                Save Curation Keys
+                                            </Button>
+                                            <Button 
+                                                type="button" 
+                                                variant="outline" 
+                                                size="sm" 
+                                                disabled={testingCurationKeys || (!tmdbKey && !traktKey && !mdblistKey)}
+                                                onClick={handleTestCurationKeys}
+                                                className="text-xs h-8 border-slate-700 font-semibold gap-1.5"
+                                            >
+                                                {testingCurationKeys ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-indigo-400" />}
+                                                Test API Keys
+                                            </Button>
+                                        </div>
                                     </form>
                                 </CardContent>
                             </Card>
@@ -2032,6 +2236,11 @@ function SettingsPageContent() {
                             </CardContent>
                         </Card>
                     </div>
+                </TabsContent>
+
+                {/* --- TAB: CURATION & OVERLAYS (KOMETA & AGREGARR REPLACEMENT) --- */}
+                <TabsContent value="curation" className="space-y-6">
+                    <CurationStudio />
                 </TabsContent>
 
                 {/* --- TAB 4: BETA TESTING & ROADMAP --- */}

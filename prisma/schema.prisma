@@ -54,6 +54,14 @@ model Settings {
   notifyMediaRequests         Boolean   @default(true)
   notifySupportTickets        Boolean   @default(true)
   notifySendToKindle          Boolean   @default(true)
+
+  // Curation, Agregarr & Kometa (PMM) Settings
+  tmdbApiKey                  String?
+  traktClientId               String?
+  mdblistApiKey               String?
+  autoOverlaySync             Boolean   @default(true)
+  autoCollectionSync          Boolean   @default(true)
+  leavingSoonDiskThreshold    Int?      @default(10) // % free space threshold to flag leaving soon
 }
 
 model TautulliInstance {
@@ -109,6 +117,7 @@ model User {
   referredByUserId       String?
   referredBy             User?     @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
   referrals              User[]    @relation("UserReferrals")
+  contentPreference      UserContentPreference?
   convertedAt            DateTime? // When trial converted to paying subscriber
   lastLogin              DateTime? // Last time the user logged in
   createdAt              DateTime  @default(now())
@@ -239,4 +248,101 @@ model EmailTemplate {
   subject     String
   body        String
   updatedAt   DateTime @default(now()) @updatedAt
+}
+
+model MediaCollection {
+  id           String    @id @default(cuid())
+  title        String
+  summary      String?
+  sortTitle    String?
+  type         String    @default("curated") // "curated", "smart", "schedule", "dynamic", "custom"
+  category     String?
+  serverId     String?
+  sectionKey   String?
+  sourceType   String?   // "tmdb", "trakt", "mdblist", "plex_query", "manual"
+  sourceQuery  String?
+  rules        String?
+  posterUrl    String?
+  ratingKey    String?
+  itemCount    Int       @default(0)
+  autoSync     Boolean   @default(true)
+  syncInterval String    @default("daily")
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model MediaOverlayRule {
+  id              String    @id @default(cuid())
+  name            String
+  serverId        String?
+  sectionKey      String?
+  overlayType     String    @default("combined")
+  position        String    @default("top-right")
+  theme           String    @default("glass")
+  badgeStyle      String    @default("pill")
+  showResolution  Boolean   @default(true)
+  showHdr         Boolean   @default(true)
+  showAudio       Boolean   @default(true)
+  showRatings     Boolean   @default(false)
+  showLeavingSoon Boolean   @default(true)
+  enabled         Boolean   @default(true)
+  itemCount       Int       @default(0)
+  lastAppliedAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model MediaArtBackup {
+  id             String    @id @default(cuid())
+  ratingKey      String
+  serverId       String?
+  title          String?
+  originalArtUrl String?
+  backupFilePath String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([serverId, ratingKey])
+}
+
+model UserContentPreference {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  excludedGenres   String?  // JSON array
+  excludedTags     String?  // JSON array
+  maxContentRating String?  // "ALL", "PG-13", "PG", "G"
+  hideLeavingSoon  Boolean  @default(false)
+  hideHorror       Boolean  @default(false)
+  hideNsfw         Boolean  @default(false)
+  hideGore         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model MediaContentAdvisory {
+  id                    String    @id @default(cuid())
+  ratingKey             String
+  serverId              String?
+  title                 String?
+  imdbId                String?
+  tmdbId                String?
+  mpaaRating            String?
+  nudityLevel           String?
+  violenceLevel         String?
+  profanityLevel        String?
+  alcoholLevel          String?
+  frighteningLevel      String?
+  digitalReleaseDate    DateTime?
+  theatricalReleaseDate DateTime?
+  inTheaters            Boolean   @default(false)
+  isLeavingSoon         Boolean   @default(false)
+  leavingSoonDate       DateTime?
+  leavingReason         String?
+  customTags            String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([ratingKey, serverId])
 }
