@@ -41,8 +41,15 @@ if (typeof window === "undefined" && !(global as any).__loggerPatched) {
     };
 }
 
-function createDatabaseBackup(dbPath: string) {
+function getDatabaseFilePath(): string {
+    const dbUrl = process.env.DATABASE_URL || "file:./prisma/dev.db";
+    const rawPath = dbUrl.replace(/^file:/, "").trim();
+    return path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+}
+
+export function createDatabaseBackup() {
     try {
+        const dbPath = getDatabaseFilePath();
         if (!fs.existsSync(dbPath)) return;
         const size = fs.statSync(dbPath).size;
         if (size === 0) return;
@@ -64,7 +71,7 @@ function createDatabaseBackup(dbPath: string) {
         if (existingBackups.length > 0) {
             const latestBackup = path.join(backupDir, existingBackups[existingBackups.length - 1]);
             const latestStat = fs.statSync(latestBackup);
-            if (now.getTime() - latestStat.mtime.getTime() < 5 * 60 * 1000) {
+            if (now.getTime() - latestStat.mtime.getTime() < 30 * 60 * 1000) {
                 shouldBackup = false;
             }
         }
@@ -87,9 +94,15 @@ function createDatabaseBackup(dbPath: string) {
     }
 }
 
+let dbFileEnsured = false;
+
 function ensureDatabaseFile() {
+    if (dbFileEnsured) return;
+    dbFileEnsured = true;
+
     try {
-        const canonicalPath = path.join(process.cwd(), "prisma", "dev.db");
+        const canonicalPath = getDatabaseFilePath();
+        const rootPrismaPath = path.join(process.cwd(), "prisma", "dev.db");
         const legacyNestedPath = path.join(process.cwd(), "prisma", "prisma", "dev.db");
 
         const targetDir = path.dirname(canonicalPath);
@@ -100,19 +113,14 @@ function ensureDatabaseFile() {
         const canonicalExists = fs.existsSync(canonicalPath);
         const canonicalSize = canonicalExists ? fs.statSync(canonicalPath).size : 0;
 
-        const nestedExists = fs.existsSync(legacyNestedPath);
-        const nestedSize = nestedExists ? fs.statSync(legacyNestedPath).size : 0;
-
-        // If nested db has data and canonical doesn't, or nested is larger, merge/restore from nested
-        if (nestedExists && nestedSize > canonicalSize) {
-            console.log(`[DB-MIGRATION] Consolidating nested database (${nestedSize} bytes) -> canonical ${canonicalPath}`);
-            fs.copyFileSync(legacyNestedPath, canonicalPath);
-        } else if (canonicalSize === 0) {
+        // ONLY initialize if the active database is missing or empty (0 bytes)
+        if (canonicalSize === 0) {
             const candidates = [
-                path.join(process.cwd(), "dev.db"),
+                rootPrismaPath,
                 legacyNestedPath,
-                "/app/prisma/dev.db",
+                path.join(process.cwd(), "dev.db"),
                 "/app/data/dev.db",
+                "/app/prisma/dev.db",
                 "/app/dev.db"
             ];
 
@@ -120,21 +128,12 @@ function ensureDatabaseFile() {
                 if (candidate !== canonicalPath && fs.existsSync(candidate)) {
                     const candidateSize = fs.statSync(candidate).size;
                     if (candidateSize > 0) {
-                        console.log(`[DB-MIGRATION] Restoring database file from ${candidate} (${candidateSize} bytes) -> ${canonicalPath}`);
+                        console.log(`[DB-MIGRATION] Initializing database file from ${candidate} (${candidateSize} bytes) -> ${canonicalPath}`);
                         fs.copyFileSync(candidate, canonicalPath);
                         break;
                     }
                 }
             }
-        }
-
-        if (fs.existsSync(canonicalPath) && fs.statSync(canonicalPath).size > 0) {
-            createDatabaseBackup(canonicalPath);
-            const nestedDir = path.dirname(legacyNestedPath);
-            if (!fs.existsSync(nestedDir)) {
-                fs.mkdirSync(nestedDir, { recursive: true });
-            }
-            fs.copyFileSync(canonicalPath, legacyNestedPath);
         }
     } catch (err: any) {
         console.error("[DB-MIGRATION] Error during database file check:", err);
@@ -153,16 +152,16 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-let schemaPatched = false;
+let schemaPatchPromise: Promise<void> | null = null;
 
-async function ensureSchemaColumns() {
-    if (schemaPatched) return;
-    schemaPatched = true;
+export async function ensureSchemaColumns(): Promise<void> {
+    if (schemaPatchPromise) return schemaPatchPromise;
 
-    try {
-        await prisma.$queryRawUnsafe(`PRAGMA journal_mode = WAL;`).catch(() => {});
-        await prisma.$queryRawUnsafe(`PRAGMA busy_timeout = 5000;`).catch(() => {});
-        await prisma.$queryRawUnsafe(`PRAGMA synchronous = NORMAL;`).catch(() => {});
+    schemaPatchPromise = (async () => {
+        try {
+            await prisma.$queryRawUnsafe(`PRAGMA journal_mode = WAL;`).catch(() => {});
+            await prisma.$queryRawUnsafe(`PRAGMA busy_timeout = 10000;`).catch(() => {});
+            await prisma.$queryRawUnsafe(`PRAGMA synchronous = NORMAL;`).catch(() => {});
 
         // --- 1. SETTINGS TABLE ---
         try {
@@ -558,9 +557,12 @@ async function ensureSchemaColumns() {
     } catch (globalErr: any) {
         console.error("[DB-SCHEMA-AUTOFIX] Critical error in ensureSchemaColumns:", globalErr.message || globalErr);
     }
+})();
+
+return schemaPatchPromise;
 }
 
-ensureSchemaColumns();
+ensureSchemaColumns().catch(() => {});
 
 // --- BACKGROUND SCHEDULER ---
 const globalForScheduler = global as unknown as { schedulerInitialized?: boolean };
