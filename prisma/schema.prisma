@@ -45,6 +45,15 @@ model Settings {
   renewalDay         Int?      @default(1)
   billingType        String?   @default("YEARLY_PRORATED")
   requireReferralForSignup Boolean @default(false)
+
+  // Email Notification Controls
+  emailNotificationsEnabled   Boolean   @default(true)
+  notifyUserApproval          Boolean   @default(true)
+  notifyAdminNewUserRequest   Boolean   @default(true)
+  notifyPasswordReset         Boolean   @default(true)
+  notifyMediaRequests         Boolean   @default(true)
+  notifySupportTickets        Boolean   @default(true)
+  notifySendToKindle          Boolean   @default(true)
 }
 
 model TautulliInstance {

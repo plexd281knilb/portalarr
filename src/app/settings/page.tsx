@@ -5,6 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
     getSettings, saveSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
+    getEmailNotificationSettings, saveEmailNotificationSettingsAction,
     getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance, updateGlancesInstance,
     getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
@@ -30,7 +31,8 @@ import {
     Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, 
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
-    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv
+    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -400,6 +402,36 @@ function SettingsPageContent() {
         }
     };
 
+    // Email Notification Controls State
+    const [emailSettings, setEmailSettings] = useState({
+        emailNotificationsEnabled: true,
+        notifyUserApproval: true,
+        notifyAdminNewUserRequest: true,
+        notifyPasswordReset: true,
+        notifyMediaRequests: true,
+        notifySupportTickets: true,
+        notifySendToKindle: true
+    });
+    const [savingEmailSettings, setSavingEmailSettings] = useState(false);
+    const [emailSettingsMsg, setEmailSettingsMsg] = useState("");
+
+    const handleToggleEmailSetting = async (key: string, value: boolean) => {
+        const updated = { ...emailSettings, [key]: value };
+        setEmailSettings(updated);
+        setSavingEmailSettings(true);
+        setEmailSettingsMsg("");
+        try {
+            const res = await saveEmailNotificationSettingsAction(updated);
+            if (res.success) {
+                setEmailSettingsMsg("Notification preferences updated.");
+                setTimeout(() => setEmailSettingsMsg(""), 3000);
+            }
+        } catch (e) {
+            console.error("Failed to update email notification preference:", e);
+        } finally {
+            setSavingEmailSettings(false);
+        }
+    };
 
     const [dynamicModels, setDynamicModels] = useState<string[]>([]);
     const [loadingModels, setLoadingModels] = useState(false);
@@ -489,6 +521,17 @@ function SettingsPageContent() {
             setSystemSettings(s || {});
             setInputDownloadsPath(s?.downloadsPath || "/downloads");
             setGoogleBooksKey(s?.googleBooksApiKey || "");
+            if (s) {
+                setEmailSettings({
+                    emailNotificationsEnabled: s.emailNotificationsEnabled ?? true,
+                    notifyUserApproval: s.notifyUserApproval ?? true,
+                    notifyAdminNewUserRequest: s.notifyAdminNewUserRequest ?? true,
+                    notifyPasswordReset: s.notifyPasswordReset ?? true,
+                    notifyMediaRequests: s.notifyMediaRequests ?? true,
+                    notifySupportTickets: s.notifySupportTickets ?? true,
+                    notifySendToKindle: s.notifySendToKindle ?? true,
+                });
+            }
             setTautulli(t || []);
             setGlances(g || []);
             setMediaApps(m || []);
@@ -1180,7 +1223,7 @@ function SettingsPageContent() {
                                                     <Select 
                                                         value={
                                                             dynamicModels.includes(aiModelInput) ||
-                                                            (aiProviderSelect === "gemini" && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
+                                                             (aiProviderSelect === "gemini" && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
                                                             (aiProviderSelect === "openai" && ["gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"].includes(aiModelInput))
                                                                 ? aiModelInput
                                                                 : "custom"
@@ -1304,6 +1347,161 @@ function SettingsPageContent() {
                             </Card>
                         </div>
                     </div>
+
+                    {/* EMAIL NOTIFICATIONS & DISPATCH CONTROLS */}
+                    <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <CardHeader>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2 text-foreground">
+                                        <Bell className="h-5 w-5 text-amber-500" /> Email Notifications & Alert Dispatcher
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Control global outgoing email notifications and customize individual alert categories.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    {emailSettingsMsg && (
+                                        <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                            <CheckCircle2 className="h-3.5 w-3.5" /> {emailSettingsMsg}
+                                        </span>
+                                    )}
+                                    <div className="flex items-center gap-2 bg-muted/40 p-1.5 px-3 rounded-lg border border-border/50">
+                                        <Label htmlFor="master-email-toggle" className="text-xs font-semibold cursor-pointer flex items-center gap-1.5">
+                                            {emailSettings.emailNotificationsEnabled ? (
+                                                <span className="text-emerald-400 flex items-center gap-1">
+                                                    <Bell className="h-3.5 w-3.5" /> All Notifications Active
+                                                </span>
+                                            ) : (
+                                                <span className="text-red-400 flex items-center gap-1">
+                                                    <BellOff className="h-3.5 w-3.5" /> All Notifications Disabled
+                                                </span>
+                                            )}
+                                        </Label>
+                                        <Switch
+                                            id="master-email-toggle"
+                                            checked={emailSettings.emailNotificationsEnabled}
+                                            onCheckedChange={(val) => handleToggleEmailSetting("emailNotificationsEnabled", val)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {!emailSettings.emailNotificationsEnabled && (
+                                <div className="bg-red-950/30 border border-red-800/40 rounded-lg p-3 text-xs text-red-300 flex items-center gap-2">
+                                    <BellOff className="h-4 w-4 shrink-0 text-red-400" />
+                                    <span>
+                                        <strong>Master Switch Off:</strong> All automated outgoing email dispatches (approvals, new user alerts, password resets, media ready notifications, ticket alerts, and Send-to-Kindle) are completely suspended.
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 ${!emailSettings.emailNotificationsEnabled ? "opacity-50 pointer-events-none" : ""}`}>
+                                {/* 1. User Account Approvals */}
+                                <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                    <div className="space-y-1 pr-3">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <UserCheck className="h-4 w-4 text-emerald-400" /> User Account Approvals
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Email users a welcome notification when their account request is approved by an admin.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={emailSettings.notifyUserApproval}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyUserApproval", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
+                                </div>
+
+                                {/* 2. Admin New Registration Alerts */}
+                                <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                    <div className="space-y-1 pr-3">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Shield className="h-4 w-4 text-blue-400" /> New User Requests
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Send alert emails to server administrators whenever a new user registers a pending account.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={emailSettings.notifyAdminNewUserRequest}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyAdminNewUserRequest", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
+                                </div>
+
+                                {/* 3. Password Resets */}
+                                <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                    <div className="space-y-1 pr-3">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Key className="h-4 w-4 text-amber-400" /> Password Resets
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Send temporary password emails for user forgot-password and admin reset actions.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={emailSettings.notifyPasswordReset}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyPasswordReset", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
+                                </div>
+
+                                {/* 4. Media & Book Requests */}
+                                <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                    <div className="space-y-1 pr-3">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <BookOpen className="h-4 w-4 text-indigo-400" /> Media & Book Requests
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Notify users when requested books/audiobooks are ready, failed, or require admin attention.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={emailSettings.notifyMediaRequests}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyMediaRequests", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
+                                </div>
+
+                                {/* 5. Support Tickets */}
+                                <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                    <div className="space-y-1 pr-3">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <LifeBuoy className="h-4 w-4 text-cyan-400" /> Support Tickets
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Dispatch email notifications for submitted tickets, automated error reports, and admin status updates.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={emailSettings.notifySupportTickets}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifySupportTickets", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
+                                </div>
+
+                                {/* 6. Send-to-Kindle Deliveries */}
+                                <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                    <div className="space-y-1 pr-3">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Send className="h-4 w-4 text-amber-500" /> Send-to-Kindle Deliveries
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Allow users and automatic download grabbers to deliver ebook attachments directly to Kindle devices.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={emailSettings.notifySendToKindle}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifySendToKindle", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 {/* --- TAB 2: ACCESS CONTROL --- */}

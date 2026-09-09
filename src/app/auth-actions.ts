@@ -382,6 +382,11 @@ async function sendAdminNewAccountRequestEmail(user: { id: string; username: str
       return;
     }
 
+    if (settings.emailNotificationsEnabled === false || settings.notifyAdminNewUserRequest === false) {
+      console.log("[AUTH] Admin new user request email notification is disabled in settings. Skipping.");
+      return;
+    }
+
     const admins = await prisma.user.findMany({
       where: { role: "ADMIN" }
     });
@@ -443,6 +448,11 @@ export async function sendUserApprovalEmail(userEmail: string, username: string)
   try {
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
     if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass || !userEmail) {
+      return;
+    }
+
+    if (settings.emailNotificationsEnabled === false || settings.notifyUserApproval === false) {
+      console.log(`[AUTH] User approval email notification is disabled in settings. Skipping email for ${username}.`);
       return;
     }
 
@@ -576,6 +586,10 @@ export async function requestForgotPassword(formData: FormData) {
   const settings = await prisma.settings.findFirst({ where: { id: "global" } });
   if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
     return { error: "SMTP email is not configured on this server. Please contact your administrator to reset your password." };
+  }
+
+  if (settings.emailNotificationsEnabled === false || settings.notifyPasswordReset === false) {
+    return { error: "Password reset emails are currently disabled by the administrator. Please contact your admin directly for assistance." };
   }
 
   const tempPassword = "Portalarr-" + Math.random().toString(36).slice(-6) + "!";

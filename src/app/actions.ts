@@ -651,6 +651,57 @@ export async function saveSettings(formData: FormData) {
   revalidatePath("/settings");
 }
 
+export async function getEmailNotificationSettings() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
+    return {
+        emailNotificationsEnabled: settings.emailNotificationsEnabled ?? true,
+        notifyUserApproval: settings.notifyUserApproval ?? true,
+        notifyAdminNewUserRequest: settings.notifyAdminNewUserRequest ?? true,
+        notifyPasswordReset: settings.notifyPasswordReset ?? true,
+        notifyMediaRequests: settings.notifyMediaRequests ?? true,
+        notifySupportTickets: settings.notifySupportTickets ?? true,
+        notifySendToKindle: settings.notifySendToKindle ?? true
+    };
+}
+
+export async function saveEmailNotificationSettingsAction(data: {
+    emailNotificationsEnabled?: boolean;
+    notifyUserApproval?: boolean;
+    notifyAdminNewUserRequest?: boolean;
+    notifyPasswordReset?: boolean;
+    notifyMediaRequests?: boolean;
+    notifySupportTickets?: boolean;
+    notifySendToKindle?: boolean;
+}) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const updateData: any = {};
+        if (data.emailNotificationsEnabled !== undefined) updateData.emailNotificationsEnabled = data.emailNotificationsEnabled;
+        if (data.notifyUserApproval !== undefined) updateData.notifyUserApproval = data.notifyUserApproval;
+        if (data.notifyAdminNewUserRequest !== undefined) updateData.notifyAdminNewUserRequest = data.notifyAdminNewUserRequest;
+        if (data.notifyPasswordReset !== undefined) updateData.notifyPasswordReset = data.notifyPasswordReset;
+        if (data.notifyMediaRequests !== undefined) updateData.notifyMediaRequests = data.notifyMediaRequests;
+        if (data.notifySupportTickets !== undefined) updateData.notifySupportTickets = data.notifySupportTickets;
+        if (data.notifySendToKindle !== undefined) updateData.notifySendToKindle = data.notifySendToKindle;
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: updateData,
+            create: { id: "global", ...updateData }
+        });
+
+        logger.addLog("INFO", "EMAIL", `Updated email notification preferences`, JSON.stringify(updateData));
+        revalidatePath("/settings");
+        return { success: true, message: "Email notification preferences updated successfully!" };
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Failed to save notification settings: ${e.message}`);
+        return { success: false, error: e.message || "Failed to update notification settings" };
+    }
+}
+
 export async function saveJobSettings(formData: FormData) {
   await verifyAdmin();
   const autoSyncInterval = Number(formData.get("autoSyncInterval"));
@@ -1480,7 +1531,7 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
     if (status === "Acknowledged" || status === "Completed") {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
-        if (settings?.smtpHost && settings?.smtpUser) {
+        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             const transporter = nodemailer.createTransport({
                 host: settings.smtpHost,
                 port: settings.smtpPort,
@@ -2676,7 +2727,7 @@ export async function submitSupportTicket(formData: FormData) {
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
-        if (settings?.smtpHost && settings?.smtpUser) {
+        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             const transporter = nodemailer.createTransport({
                 host: settings.smtpHost,
                 port: settings.smtpPort,
@@ -2769,7 +2820,7 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 
         // Send email notification to Admin if SMTP is configured
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (settings?.smtpHost && settings?.smtpUser) {
+        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             try {
                 const transporter = nodemailer.createTransport({
                     host: settings.smtpHost,
@@ -4014,7 +4065,7 @@ export async function getBookRequests() {
 export async function sendRequestCompletionNotification(requestIdOrBook: any, matchedBook?: any) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
             return;
         }
 
@@ -4109,8 +4160,8 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
 async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, mediaType?: string, publishYear?: string | null }) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            console.log("[SMTP-NOTIFICATION] SMTP is not configured. Skipping request notification.");
+        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
+            console.log("[SMTP-NOTIFICATION] Request notifications to admins disabled or not configured.");
             return;
         }
 
@@ -7763,6 +7814,9 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
         if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
             return { success: false, error: "SMTP is not configured on this server. Please contact your administrator to configure SMTP." };
         }
+        if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
+            return { success: false, error: "Send-to-Kindle email delivery is currently disabled in Email Notification Settings." };
+        }
 
         const senderEmail = settings.smtpFrom || settings.smtpUser;
         
@@ -7921,6 +7975,9 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
         if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
             return { success: false, error: "SMTP email is not configured on this server. Please contact your administrator." };
         }
+        if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
+            return { success: false, error: "Email file delivery is currently disabled in Email Notification Settings." };
+        }
 
         const senderEmail = settings.smtpFrom || settings.smtpUser;
         
@@ -8025,6 +8082,10 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
     if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
         console.error("[AUTO-KINDLE] SMTP is not configured on this server.");
+        return;
+    }
+    if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
+        console.log(`[AUTO-KINDLE] Send-to-Kindle is disabled in notification settings. Skipping "${book.title}" for ${username}.`);
         return;
     }
 
@@ -8652,6 +8713,9 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
         if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
             return { success: false, error: "SMTP is not configured on the server. Please contact your administrator." };
+        }
+        if (settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
+            return { success: true, message: "Your access request has been recorded." };
         }
 
         const admins = await prisma.user.findMany({

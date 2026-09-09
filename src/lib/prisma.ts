@@ -255,21 +255,36 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["renewalMonth", `ALTER TABLE "Settings" ADD COLUMN "renewalMonth" INTEGER DEFAULT 1;`],
                 ["renewalDay", `ALTER TABLE "Settings" ADD COLUMN "renewalDay" INTEGER DEFAULT 1;`],
                 ["billingType", `ALTER TABLE "Settings" ADD COLUMN "billingType" TEXT DEFAULT 'YEARLY_PRORATED';`],
-                ["requireReferralForSignup", `ALTER TABLE "Settings" ADD COLUMN "requireReferralForSignup" BOOLEAN NOT NULL DEFAULT 0;`]
+                ["requireReferralForSignup", `ALTER TABLE "Settings" ADD COLUMN "requireReferralForSignup" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["emailNotificationsEnabled", `ALTER TABLE "Settings" ADD COLUMN "emailNotificationsEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["notifyUserApproval", `ALTER TABLE "Settings" ADD COLUMN "notifyUserApproval" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["notifyAdminNewUserRequest", `ALTER TABLE "Settings" ADD COLUMN "notifyAdminNewUserRequest" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["notifyPasswordReset", `ALTER TABLE "Settings" ADD COLUMN "notifyPasswordReset" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["notifyMediaRequests", `ALTER TABLE "Settings" ADD COLUMN "notifyMediaRequests" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["notifySupportTickets", `ALTER TABLE "Settings" ADD COLUMN "notifySupportTickets" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["notifySendToKindle", `ALTER TABLE "Settings" ADD COLUMN "notifySendToKindle" BOOLEAN NOT NULL DEFAULT 1;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
                 if (!cols.includes(colName)) {
-                    console.log(`[DB-SCHEMA-AUTOFIX] Adding missing '${colName}' column to Settings table...`);
-                    await prisma.$executeRawUnsafe(ddl);
+                    try {
+                        console.log(`[DB-SCHEMA-AUTOFIX] Adding missing '${colName}' column to Settings table...`);
+                        await prisma.$executeRawUnsafe(ddl);
+                    } catch (err: any) {
+                        if (!err?.message?.includes("duplicate column name")) {
+                            console.warn(`[DB-SCHEMA-AUTOFIX] Notice on column '${colName}':`, err.message);
+                        }
+                    }
                 }
             }
 
             // Ensure singleton row exists
-            await prisma.$executeRawUnsafe(`
-                INSERT OR IGNORE INTO "Settings" ("id", "theme", "refreshInterval", "autoSyncInterval", "defaultTrialDays", "yearlyPrice", "monthlyPrice", "renewalMonth", "renewalDay", "billingType")
-                VALUES ('global', 'dark', 10, 6, 14, 180, 15, 1, 1, 'YEARLY_PRORATED');
-            `);
+            try {
+                await prisma.$executeRawUnsafe(`
+                    INSERT OR IGNORE INTO "Settings" ("id", "theme", "refreshInterval", "autoSyncInterval", "defaultTrialDays", "yearlyPrice", "monthlyPrice", "renewalMonth", "renewalDay", "billingType")
+                    VALUES ('global', 'dark', 10, 6, 14, 180, 15, 1, 1, 'YEARLY_PRORATED');
+                `);
+            } catch (e) {}
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Settings table check error:", e.message || e);
         }
@@ -296,8 +311,14 @@ export async function ensureSchemaColumns(): Promise<void> {
 
             for (const [colName, ddl] of userAddCols) {
                 if (!cols.includes(colName)) {
-                    console.log(`[DB-SCHEMA-AUTOFIX] Adding missing '${colName}' column to User table...`);
-                    await prisma.$executeRawUnsafe(ddl);
+                    try {
+                        console.log(`[DB-SCHEMA-AUTOFIX] Adding missing '${colName}' column to User table...`);
+                        await prisma.$executeRawUnsafe(ddl);
+                    } catch (err: any) {
+                        if (!err?.message?.includes("duplicate column name")) {
+                            console.warn(`[DB-SCHEMA-AUTOFIX] Notice on column '${colName}':`, err.message);
+                        }
+                    }
                 }
             }
         } catch (e: any) {
