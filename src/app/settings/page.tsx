@@ -1713,7 +1713,9 @@ function SettingsPageContent() {
                                             {testingAppForm ? <Loader2 className="h-3 w-3 animate-spin text-emerald-400" /> : <Zap className="h-3 w-3 text-emerald-400" />}
                                             Test
                                         </Button>
-                                        <Button type="submit" size="sm" className="w-full h-9 font-semibold hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">{editingApp ? "Update App" : "Add Application"}</Button>
+                                        <Button type="submit" size="sm" className="flex-1 h-9 font-semibold hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">
+                                            {editingApp ? "Update App" : "Add Application"}
+                                        </Button>
                                         {editingApp && (
                                             <Button type="button" size="sm" variant="outline" className="h-9 hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingApp(null); setArrMeta(null); setNewAppType(""); setAppFormTestResult(null); }}>
                                                 <X className="h-4 w-4"/>
@@ -1780,7 +1782,7 @@ function SettingsPageContent() {
                                                 name="text" 
                                                 rows={6} 
                                                 value={betaText} 
-                                                onChange={(e) => setBetaText(e.target.value)}
+                                                onChange={(e) => setBetaText(e.target.value)} 
                                                 className="font-mono text-sm"
                                                 required 
                                                 placeholder="### Interested in Beta Testing?..." 
@@ -1892,7 +1894,7 @@ function SettingsPageContent() {
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button type="submit" className="w-full font-semibold hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
+                                        <Button type="submit" className="flex-1 font-semibold hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
                                         {editingBetaCard && <Button type="button" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingBetaCard(null); setBetaCardContent(""); }}><X className="h-4 w-4"/></Button>}
                                     </div>
                                 </form>
