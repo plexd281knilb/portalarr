@@ -1460,15 +1460,21 @@ export async function fetchPlexServerLibraries() {
     try {
         await verifyAdmin();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        if (!settings?.mainPlexToken) {
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+        if (!adminToken) {
             return { success: false, servers: [], error: "Admin Plex token not configured in settings." };
         }
-        const adminToken = decryptData(settings.mainPlexToken);
-        const servers = await getPlexServerLibrarySections(adminToken);
+        const servers = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
         return { success: true, servers };
     } catch (e: any) {
-        console.error("[PLEX-LIBRARIES-ERROR]:", e);
-        return { success: false, servers: [], error: e.message || "Failed to fetch Plex libraries" };
+        console.error("[PLEX-LIBRARIES-ERROR]:", e?.message || e, e?.stack);
+        return { success: false, servers: [], error: e?.message || "Failed to fetch Plex libraries" };
     }
 }
 
@@ -1476,10 +1482,16 @@ export async function fetchUserPlexShares() {
     try {
         await verifyAdmin();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        if (!settings?.mainPlexToken) {
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+        if (!adminToken) {
             return { success: false, shares: [] };
         }
-        const adminToken = decryptData(settings.mainPlexToken);
         const shares = await getPlexSharedServersList(adminToken);
         return { success: true, shares };
     } catch (e: any) {
@@ -1498,11 +1510,18 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
             ? user.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean)
             : (settings?.defaultPlexLibraries ? settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean) : []);
 
-        if (!settings?.mainPlexToken) {
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        if (!adminToken) {
             return { success: true, selectedKeys: savedKeys, fromPlex: false, hasPlexShare: false };
         }
 
-        const adminToken = decryptData(settings.mainPlexToken);
         const { selectedKeys, hasPlexShare } = await getUserPlexSharedLibraries(adminToken, user);
 
         // If we found live keys on Plex, sync them to SQLite
@@ -1514,7 +1533,7 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
             return { 
                 success: true, 
                 selectedKeys, 
-                fromPlex: true,
+                fromPlex: true, 
                 hasPlexShare: true 
             };
         } else {
@@ -1535,7 +1554,8 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
 export async function updateUserPlexLibraries(
     userId: string, 
     selectedKeys: (string | number)[],
-    activationType?: "APPROVED" | "TRIAL" | "30_DAYS" | "KEEP_SUSPENDED"
+    activationType?: "APPROVED" | "PERMANENT" | "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "CUSTOM" | "KEEP_SUSPENDED",
+    customDateOrDays?: string | number
 ) {
     try {
         await verifyAdmin();
@@ -1589,28 +1609,61 @@ export async function updateUserPlexLibraries(
             };
         }
 
-        // If user is suspended/expired and admin chose an activation type, update user status in DB:
-        const now = new Date();
-        if (isCurrentlySuspendedOrExpired && activationType) {
-            let newStatus = "APPROVED";
-            let trialEndsAt: Date | null = null;
-            let subscriptionEndsAt: Date | null = null;
-            let convertedAt = user.convertedAt || now;
+        // If an activation option was chosen, update status & expiration fields in SQLite
+        if (activationType) {
+            const now = new Date();
+            let newStatus = user.status;
+            let trialEndsAt: Date | null = user.trialEndsAt;
+            let subscriptionEndsAt: Date | null = user.subscriptionEndsAt;
+            let convertedAt = user.convertedAt;
 
-            if (activationType === "APPROVED") {
+            if (activationType === "APPROVED" || activationType === "PERMANENT") {
                 newStatus = "APPROVED";
                 trialEndsAt = null;
                 subscriptionEndsAt = null;
+                if (!convertedAt) convertedAt = now;
             } else if (activationType === "TRIAL") {
                 newStatus = "TRIAL";
                 const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-                const trialDays = settings?.defaultTrialDays || 14;
+                const trialDays = typeof customDateOrDays === "number" ? customDateOrDays : (settings?.defaultTrialDays || 14);
                 trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
+                subscriptionEndsAt = null;
+            } else if (activationType === "CUSTOM_TRIAL") {
+                newStatus = "TRIAL";
+                const trialDays = typeof customDateOrDays === "number" ? customDateOrDays : (parseInt(String(customDateOrDays), 10) || 7);
+                trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
+                subscriptionEndsAt = null;
+            } else if (activationType === "7_DAYS_TRIAL") {
+                newStatus = "TRIAL";
+                trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                subscriptionEndsAt = null;
+            } else if (activationType === "14_DAYS_TRIAL") {
+                newStatus = "TRIAL";
+                trialEndsAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
                 subscriptionEndsAt = null;
             } else if (activationType === "30_DAYS") {
                 newStatus = "APPROVED";
                 subscriptionEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
                 trialEndsAt = null;
+                if (!convertedAt) convertedAt = now;
+            } else if (activationType === "REST_OF_YEAR") {
+                newStatus = "APPROVED";
+                const currentYear = now.getFullYear();
+                subscriptionEndsAt = new Date(currentYear, 11, 31, 23, 59, 59);
+                trialEndsAt = null;
+                if (!convertedAt) convertedAt = now;
+            } else if (activationType === "1_YEAR") {
+                newStatus = "APPROVED";
+                subscriptionEndsAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+                trialEndsAt = null;
+                if (!convertedAt) convertedAt = now;
+            } else if (activationType === "CUSTOM" && customDateOrDays) {
+                newStatus = "APPROVED";
+                subscriptionEndsAt = typeof customDateOrDays === "number"
+                    ? new Date(now.getTime() + customDateOrDays * 24 * 60 * 60 * 1000)
+                    : new Date(customDateOrDays);
+                trialEndsAt = null;
+                if (!convertedAt) convertedAt = now;
             }
 
             await prisma.user.update({
@@ -1625,12 +1678,28 @@ export async function updateUserPlexLibraries(
         }
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        if (!settings?.mainPlexToken) {
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        if (!adminToken) {
             return { success: false, error: "Admin Plex token not configured in settings." };
         }
 
-        const adminToken = decryptData(settings.mainPlexToken);
-        const servers = await getPlexServers(adminToken);
+        let servers = await getPlexServers(adminToken);
+        if (servers.length === 0) {
+            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            servers = srvSections.map(s => ({
+                name: s.serverName,
+                clientIdentifier: s.serverId,
+                accessToken: adminToken,
+                connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+            }));
+        }
         const shares = await getPlexSharedServersList(adminToken);
         const friend = await findPlexUserFriend(adminToken, user);
 
@@ -1656,6 +1725,22 @@ export async function updateUserPlexLibraries(
             plexUsername: user.plexUsername
         };
 
+        // If KEEP_SUSPENDED was selected, do not grant access on Plex
+        if (activationType === "KEEP_SUSPENDED") {
+            for (const srv of servers) {
+                const srvId = srv.clientIdentifier;
+                const match = shares.find(s => 
+                    (s.serverId === srvId || !s.serverId || servers.length === 1) &&
+                    matchesPlexUser(matchTarget, s)
+                );
+                if (match && match.id) {
+                    await removePlexUserShare(adminToken, match.id, srvId);
+                }
+            }
+            revalidatePath("/settings/access");
+            return { success: true, message: `Saved library preferences for ${user.username} (account remains suspended).` };
+        }
+
         // For each server, update share on Plex or invite
         for (const srv of servers) {
             const srvId = srv.clientIdentifier;
@@ -1675,7 +1760,10 @@ export async function updateUserPlexLibraries(
             } else {
                 // 1 or more sections selected
                 if (match && match.id) {
-                    await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
+                    const upRes = await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
+                    if (!upRes.success) {
+                        await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
+                    }
                 } else if (targetEmail || targetUser || friendId) {
                     await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
                 }
@@ -1683,7 +1771,7 @@ export async function updateUserPlexLibraries(
         }
 
         revalidatePath("/settings/access");
-        const activatedNote = activationType && activationType !== "KEEP_SUSPENDED" ? " and activated account" : "";
+        const activatedNote = activationType ? " and activated account" : "";
         return { success: true, message: `Updated shared Plex libraries for ${user.username}${activatedNote}.` };
     } catch (e: any) {
         console.error("[UPDATE-USER-PLEX-LIBRARIES-ERROR]:", e.message || e);
@@ -1693,7 +1781,7 @@ export async function updateUserPlexLibraries(
 
 export async function setUserTrialOrSubscription(
     userId: string, 
-    type: "TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM", 
+    type: "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM", 
     customDateOrDays?: string | number
 ) {
     try {
@@ -1710,7 +1798,12 @@ export async function setUserTrialOrSubscription(
 
         if (type === "TRIAL") {
             const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-            const days = settings?.defaultTrialDays || 14;
+            const days = typeof customDateOrDays === "number" ? customDateOrDays : (settings?.defaultTrialDays || 14);
+            status = "TRIAL";
+            trialEndsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+            subscriptionEndsAt = null;
+        } else if (type === "CUSTOM_TRIAL") {
+            const days = typeof customDateOrDays === "number" ? customDateOrDays : (parseInt(String(customDateOrDays), 10) || 7);
             status = "TRIAL";
             trialEndsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
             subscriptionEndsAt = null;
@@ -1773,7 +1866,16 @@ export async function setUserTrialOrSubscription(
                 const adminToken = decryptData(settings.mainPlexToken);
                 const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
                 const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
-                const servers = await getPlexServers(adminToken);
+                let servers = await getPlexServers(adminToken);
+                if (servers.length === 0) {
+                    const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                    servers = srvSections.map(s => ({
+                        name: s.serverName,
+                        clientIdentifier: s.serverId,
+                        accessToken: adminToken,
+                        connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+                    }));
+                }
                 const shares = await getPlexSharedServersList(adminToken);
 
                 if (status === "SUSPENDED" || status === "EXPIRED") {
@@ -1855,7 +1957,10 @@ export async function setUserTrialOrSubscription(
                         );
 
                         if (match && match.id) {
-                            await updatePlexUserShareSections(adminToken, match.id, secIds, srvId);
+                            const upRes = await updatePlexUserShareSections(adminToken, match.id, secIds, srvId);
+                            if (!upRes.success) {
+                                await invitePlexFriendAndShare(adminToken, srvId, resolvedTarget, secIds, friendId);
+                            }
                         } else if (resolvedTarget || friendId) {
                             await invitePlexFriendAndShare(adminToken, srvId, resolvedTarget, secIds, friendId);
                         }

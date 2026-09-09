@@ -179,7 +179,7 @@ export async function getPlexServers(adminToken: string): Promise<PlexServerReso
                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
             },
             signal: controller.signal,
-            next: { revalidate: 120 }
+            cache: "no-store"
         });
         clearTimeout(timeoutId);
         if (!res.ok) return [];
@@ -319,34 +319,168 @@ export interface PlexServerWithSections {
     sections: PlexLibrarySection[];
 }
 
-export async function getPlexServerLibrarySections(adminToken: string): Promise<PlexServerWithSections[]> {
+export async function getPlexServerLibrarySections(adminToken: string, customPlexUrl?: string): Promise<PlexServerWithSections[]> {
     if (!adminToken) return [];
-    let servers = await getPlexServers(adminToken);
-    
-    // If getPlexServers returned 0, try legacy /api/servers to discover servers
-    if (servers.length === 0) {
-        try {
-            const srvXmlRes = await fetch(`https://plex.tv/api/servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
-                headers: { "X-Plex-Token": adminToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-            });
-            if (srvXmlRes.ok) {
-                const srvXml = await srvXmlRes.text();
-                const srvMatches = srvXml.matchAll(/<Server\b([^>]*?)(?:\/>|>[\s\S]*?<\/Server>)/gi);
-                for (const sm of srvMatches) {
-                    const attrs = sm[1] || "";
-                    const machineIdentifier = attrs.match(/\bmachineIdentifier="([^"]*)"/i)?.[1] || "";
-                    const name = attrs.match(/\bname="([^"]*)"/i)?.[1] || "Plex Server";
-                    if (machineIdentifier) {
-                        servers.push({
-                            name,
-                            clientIdentifier: machineIdentifier,
-                            accessToken: adminToken,
-                            connections: []
-                        });
+
+    // 1. Cloud discovery from canonical https://plex.tv/api/servers and https://plex.tv/pms/servers.xml
+    // Plex Cloud stores every library section (<Section id="1" title="Movies" type="movie" />)
+    // for all servers owned by the admin, regardless of whether direct IP connection is accessible!
+    const cloudServersMap = new Map<string, { serverId: string; serverName: string; directUrl?: string; sections: PlexLibrarySection[] }>();
+
+    const parseServerXml = (xml: string) => {
+        const srvBlocks = xml.matchAll(/<Server\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Server>)/gi);
+        for (const sb of srvBlocks) {
+            const attrs = sb[1] || "";
+            const inner = sb[2] || "";
+            const machineId = attrs.match(/\bmachineIdentifier=["']?([^"'\s>]+)["']?/i)?.[1] || "";
+            const name = attrs.match(/\bname=["']([^"']*)["']/i)?.[1] || "Plex Server";
+            const host = attrs.match(/\baddress=["']?([^"'\s>]+)["']?/i)?.[1] || attrs.match(/\bhost=["']?([^"'\s>]+)["']?/i)?.[1] || "";
+            const port = attrs.match(/\bport=["']?([^"'\s>]+)["']?/i)?.[1] || "32400";
+            const scheme = attrs.match(/\bscheme=["']?([^"'\s>]+)["']?/i)?.[1] || "http";
+            const directUrl = host ? `${scheme}://${host}:${port}` : undefined;
+
+            const sections: PlexLibrarySection[] = [];
+            if (inner) {
+                const secMatches = inner.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
+                for (const sm of secMatches) {
+                    const sAttrs = sm[1] || "";
+                    const id = parseInt(sAttrs.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1] || sAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "0", 10);
+                    const key = sAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || String(id);
+                    const title = sAttrs.match(/\btitle=["']([^"']*)["']/i)?.[1] || "Untitled Library";
+                    const type = sAttrs.match(/\btype=["']([^"']*)["']/i)?.[1] || "movie";
+                    if (!isNaN(id) && id > 0) {
+                        sections.push({ id, key, title, type });
                     }
                 }
             }
-        } catch (e) {}
+            if (machineId) {
+                const existing = cloudServersMap.get(machineId);
+                if (!existing) {
+                    cloudServersMap.set(machineId, { serverId: machineId, serverName: name, directUrl, sections });
+                } else if (sections.length > 0 && existing.sections.length === 0) {
+                    existing.sections = sections;
+                }
+            }
+        }
+    };
+
+    try {
+        const srvXmlRes = await fetch(`https://plex.tv/api/servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+            headers: { 
+                "Accept": "application/xml, text/xml, */*",
+                "X-Plex-Token": adminToken, 
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" 
+            },
+            cache: "no-store"
+        });
+        if (srvXmlRes.ok) {
+            parseServerXml(await srvXmlRes.text());
+        }
+    } catch (cloudErr) {
+        console.warn("[PLEX-API] Failed to fetch cloud servers XML from api/servers:", cloudErr);
+    }
+
+    if (cloudServersMap.size === 0) {
+        try {
+            const pmsXmlRes = await fetch(`https://plex.tv/pms/servers.xml?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+                headers: { 
+                    "Accept": "application/xml, text/xml, */*",
+                    "X-Plex-Token": adminToken, 
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" 
+                },
+                cache: "no-store"
+            });
+            if (pmsXmlRes.ok) {
+                parseServerXml(await pmsXmlRes.text());
+            }
+        } catch (pmsErr) {}
+    }
+
+    // Also supplement sections from /api/v2/shared_servers if available
+    try {
+        const v2Res = await fetch("https://plex.tv/api/v2/shared_servers", {
+            headers: {
+                "Accept": "application/json",
+                "X-Plex-Token": adminToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            },
+            cache: "no-store"
+        });
+        if (v2Res.ok) {
+            const v2Data = await v2Res.json();
+            if (Array.isArray(v2Data)) {
+                for (const item of v2Data) {
+                    const mId = item.machineIdentifier || item.server?.machineIdentifier || item.server_id;
+                    const sName = item.server?.name || item.serverName || "Plex Server";
+                    const itemSections: PlexLibrarySection[] = [];
+                    const rawSecs = item.sections || item.library_sections || [];
+                    if (Array.isArray(rawSecs)) {
+                        for (const s of rawSecs) {
+                            const id = parseInt(String(s.id || s.key || 0), 10);
+                            const key = String(s.key || id);
+                            const title = s.title || `Library ${id}`;
+                            const type = s.type || "movie";
+                            if (id > 0) {
+                                itemSections.push({ id, key, title, type });
+                            }
+                        }
+                    }
+                    if (mId && itemSections.length > 0) {
+                        const existing = cloudServersMap.get(mId);
+                        if (!existing) {
+                            cloudServersMap.set(mId, { serverId: mId, serverName: sName, sections: itemSections });
+                        } else {
+                            for (const sec of itemSections) {
+                                if (!existing.sections.some(x => x.id === sec.id)) {
+                                    existing.sections.push(sec);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (v2Err) {}
+
+    // 2. Fetch server resources from /api/v2/resources
+    let servers = await getPlexServers(adminToken);
+
+    // If getPlexServers returned 0, populate from cloudServersMap
+    if (servers.length === 0 && cloudServersMap.size > 0) {
+        for (const [mId, cSrv] of cloudServersMap.entries()) {
+            servers.push({
+                name: cSrv.serverName,
+                clientIdentifier: mId,
+                accessToken: adminToken,
+                connections: cSrv.directUrl ? [{ uri: cSrv.directUrl, local: true, relay: false, address: "", port: 32400 }] : []
+            });
+        }
+    }
+
+    // 3. Lookup configured mainPlexUrl or MediaApp URLs from DB
+    const dbPlexUrls: string[] = [];
+    if (customPlexUrl) {
+        dbPlexUrls.push(customPlexUrl);
+    }
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (settings?.mainPlexUrl) dbPlexUrls.push(settings.mainPlexUrl);
+        const plexApps = await prisma.mediaApp.findMany({ where: { type: "plex" } });
+        for (const app of plexApps) {
+            if (app.url && !dbPlexUrls.includes(app.url)) dbPlexUrls.push(app.url);
+        }
+    } catch (dbErr) {}
+
+    // If still 0 servers discovered, synthesize from configured DB URLs
+    if (servers.length === 0 && dbPlexUrls.length > 0) {
+        for (let i = 0; i < dbPlexUrls.length; i++) {
+            servers.push({
+                name: i === 0 ? "Main Plex Server" : `Plex Server ${i + 1}`,
+                clientIdentifier: `plex-configured-${i + 1}`,
+                accessToken: adminToken,
+                connections: [{ uri: dbPlexUrls[i], local: true, relay: false, address: "", port: 32400 }]
+            });
+        }
     }
 
     const results: PlexServerWithSections[] = [];
@@ -355,11 +489,39 @@ export async function getPlexServerLibrarySections(adminToken: string): Promise<
         const token = srv.accessToken || adminToken;
         let sectionsFound = false;
 
+        // Build candidate connection URLs for direct PMS access
+        const candidates: string[] = [];
+        // 1. Configured DB URLs (fast local LAN)
+        for (const u of dbPlexUrls) {
+            if (u && !candidates.includes(u)) candidates.push(u);
+        }
+        // 2. Direct LAN IP:port from connections (bypasses .plex.direct DNS rebinding!)
         for (const conn of srv.connections) {
+            if (conn.address && conn.port) {
+                const httpUrl = `http://${conn.address}:${conn.port}`;
+                if (!candidates.includes(httpUrl)) candidates.push(httpUrl);
+            }
+        }
+        // 3. Cloud directUrl
+        const cloudSrv = cloudServersMap.get(srv.clientIdentifier);
+        if (cloudSrv?.directUrl && !candidates.includes(cloudSrv.directUrl)) {
+            candidates.push(cloudSrv.directUrl);
+        }
+        // 4. Other connection URIs (.plex.direct, https, relay)
+        for (const conn of srv.connections) {
+            if (conn.uri && !candidates.includes(conn.uri)) candidates.push(conn.uri);
+            if (conn.address && conn.port) {
+                const httpsUrl = `https://${conn.address}:${conn.port}`;
+                if (!candidates.includes(httpsUrl)) candidates.push(httpsUrl);
+            }
+        }
+
+        // Try direct PMS connections
+        for (const candUrl of candidates) {
             try {
-                const cleanBase = conn.uri.replace(/\/+$/, "");
+                const cleanBase = candUrl.replace(/\/+$/, "");
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const timeoutId = setTimeout(() => controller.abort(), 2500);
 
                 const res = await fetch(`${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`, {
                     headers: {
@@ -375,9 +537,13 @@ export async function getPlexServerLibrarySections(adminToken: string): Promise<
                 if (res.ok) {
                     const contentType = res.headers.get("content-type") || "";
                     let sections: PlexLibrarySection[] = [];
+                    let serverMachineId = srv.clientIdentifier;
 
                     if (contentType.includes("json")) {
                         const data = await res.json();
+                        if (data.MediaContainer?.machineIdentifier) {
+                            serverMachineId = data.MediaContainer.machineIdentifier;
+                        }
                         const rawDirs = data.MediaContainer?.Directory || [];
                         const dirs = Array.isArray(rawDirs) ? rawDirs : [rawDirs];
                         sections = dirs.map((d: any) => ({
@@ -391,6 +557,8 @@ export async function getPlexServerLibrarySections(adminToken: string): Promise<
                         })).filter((s: PlexLibrarySection) => s.id > 0);
                     } else {
                         const xmlText = await res.text();
+                        const mIdMatch = xmlText.match(/\bmachineIdentifier=["']?([^"'\s>]+)["']?/i)?.[1];
+                        if (mIdMatch) serverMachineId = mIdMatch;
                         const dirMatches = xmlText.matchAll(/<Directory\b([^>]*?)(?:\/>|>[\s\S]*?<\/Directory>)/gi);
                         for (const dm of dirMatches) {
                             const dAttrs = dm[1] || "";
@@ -411,7 +579,7 @@ export async function getPlexServerLibrarySections(adminToken: string): Promise<
 
                     if (sections.length > 0) {
                         results.push({
-                            serverId: srv.clientIdentifier,
+                            serverId: serverMachineId,
                             serverName: srv.name,
                             serverUrl: cleanBase,
                             sections
@@ -425,49 +593,81 @@ export async function getPlexServerLibrarySections(adminToken: string): Promise<
             }
         }
 
-        // Fallback: If direct PMS connection failed or returned no sections, query plex.tv server shared_servers XML!
+        // Fallback 1: Use cloud library sections directly from https://plex.tv/api/servers!
+        if (!sectionsFound && cloudSrv && cloudSrv.sections.length > 0) {
+            results.push({
+                serverId: srv.clientIdentifier,
+                serverName: srv.name || cloudSrv.serverName,
+                serverUrl: cloudSrv.directUrl || srv.connections[0]?.uri || "",
+                sections: cloudSrv.sections
+            });
+            sectionsFound = true;
+        }
+
+        // Fallback 2: Query plex.tv server shared_servers/new XML and shared_servers XML
         if (!sectionsFound && srv.clientIdentifier) {
-            try {
-                const tvRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srv.clientIdentifier)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
-                    headers: {
-                        "Accept": "application/xml, text/xml, */*",
-                        "X-Plex-Token": adminToken,
-                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                    },
-                    cache: "no-store"
-                });
-                if (tvRes.ok) {
-                    const xml = await tvRes.text();
-                    const secMap = new Map<number, PlexLibrarySection>();
-                    const secMatches = xml.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
-                    for (const sm of secMatches) {
-                        const sAttrs = sm[1] || "";
-                        const secId = parseInt(sAttrs.match(/\bid="([^"]*)"/i)?.[1] || sAttrs.match(/\bkey="([^"]*)"/i)?.[1] || "", 10);
-                        const title = sAttrs.match(/\btitle="([^"]*)"/i)?.[1] || `Section ${secId}`;
-                        const type = sAttrs.match(/\btype="([^"]*)"/i)?.[1] || "movie";
-                        if (!isNaN(secId) && secId > 0 && !secMap.has(secId)) {
-                            secMap.set(secId, {
-                                id: secId,
-                                key: String(secId),
-                                title,
-                                type
+            const urlsToTry = [
+                `https://plex.tv/api/servers/${encodeURIComponent(srv.clientIdentifier)}/shared_servers/new?X-Plex-Token=${encodeURIComponent(adminToken)}`,
+                `https://plex.tv/api/servers/${encodeURIComponent(srv.clientIdentifier)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`
+            ];
+            for (const tvUrl of urlsToTry) {
+                if (sectionsFound) break;
+                try {
+                    const tvRes = await fetch(tvUrl, {
+                        headers: {
+                            "Accept": "application/xml, text/xml, */*",
+                            "X-Plex-Token": adminToken,
+                            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                        },
+                        cache: "no-store"
+                    });
+                    if (tvRes.ok) {
+                        const xml = await tvRes.text();
+                        const secMap = new Map<number, PlexLibrarySection>();
+                        const secMatches = xml.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
+                        for (const sm of secMatches) {
+                            const sAttrs = sm[1] || "";
+                            const secId = parseInt(sAttrs.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1] || sAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "", 10);
+                            const title = sAttrs.match(/\btitle=["']([^"']*)["']/i)?.[1] || `Section ${secId}`;
+                            const type = sAttrs.match(/\btype=["']([^"']*)["']/i)?.[1] || "movie";
+                            if (!isNaN(secId) && secId > 0 && !secMap.has(secId)) {
+                                secMap.set(secId, {
+                                    id: secId,
+                                    key: String(secId),
+                                    title,
+                                    type
+                                });
+                            }
+                        }
+                        if (secMap.size > 0) {
+                            results.push({
+                                serverId: srv.clientIdentifier,
+                                serverName: srv.name,
+                                serverUrl: srv.connections[0]?.uri || "",
+                                sections: Array.from(secMap.values())
                             });
+                            sectionsFound = true;
+                            break;
                         }
                     }
-                    if (secMap.size > 0) {
-                        results.push({
-                            serverId: srv.clientIdentifier,
-                            serverName: srv.name,
-                            serverUrl: srv.connections[0]?.uri || "",
-                            sections: Array.from(secMap.values())
-                        });
-                    }
+                } catch (tvErr) {
+                    console.warn(`[PLEX-API] Fallback plex.tv section lookup failed for ${srv.clientIdentifier}:`, tvErr);
                 }
-            } catch (tvErr) {
-                console.warn(`[PLEX-API] Fallback plex.tv section lookup failed for ${srv.clientIdentifier}:`, tvErr);
             }
         }
     }));
+
+    // Ensure any cloud server that was not in getPlexServers is added if it has sections
+    for (const [mId, cSrv] of cloudServersMap.entries()) {
+        if (!results.some(r => r.serverId === mId) && cSrv.sections.length > 0) {
+            results.push({
+                serverId: mId,
+                serverName: cSrv.serverName,
+                serverUrl: cSrv.directUrl || "",
+                sections: cSrv.sections
+            });
+        }
+    }
 
     return results;
 }
@@ -873,52 +1073,57 @@ export async function invitePlexFriendAndShare(
         } catch (fErr) {}
     }
 
+    // 0. Pre-check: if user already has a share on this server, update it directly!
+    try {
+        const existing = await getPlexSharedServersList(adminToken);
+        const match = existing.find(s => 
+            (s.serverId === serverId || !s.serverId) &&
+            matchesPlexUser({ id: numInvitedId, email: cleanTarget, username: cleanTarget }, s)
+        );
+        if (match && match.id) {
+            return await updatePlexUserShareSections(adminToken, String(match.id), sectionIds, serverId);
+        }
+    } catch (e) {}
+
     let success = false;
     let shareId: string | number | undefined = undefined;
     let errorMsg = "";
 
-    // 1. Direct Canonical Server Endpoint: POST https://plex.tv/api/servers/{serverId}/shared_servers
+    // 1. Direct Canonical Rails Server Endpoint: POST https://plex.tv/api/servers/{serverId}/shared_servers
     if (serverId) {
         try {
-            const payload: any = {
-                server_id: serverId,
-                shared_server: {
-                    library_section_ids: sectionIds,
-                    ...(numInvitedId ? { invited_id: numInvitedId } : {}),
-                    ...(cleanTarget ? { invited_email: cleanTarget } : {})
-                },
-                sharing_settings: {}
-            };
+            const queryParams = new URLSearchParams({
+                "library_section_ids": sectionIds.join(","),
+                "allLibraries": "0",
+                "X-Plex-Token": adminToken
+            });
+            if (cleanTarget) queryParams.set("invited_email", cleanTarget);
+            if (numInvitedId) queryParams.set("invited_id", String(numInvitedId));
 
-            const url = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`;
+            const xmlBody = `<SharedServer${cleanTarget ? ` invited_email="${cleanTarget}"` : ""}>${sectionIds.map(id => `<Section id="${id}"/>`).join("")}</SharedServer>`;
+            const url = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers?${queryParams.toString()}`;
+
             const res = await fetch(url, {
                 method: "POST",
                 headers: {
-                    "Accept": "application/json, application/xml, text/xml, */*",
-                    "Content-Type": "application/json",
+                    "Accept": "application/xml, text/xml, application/json, */*",
+                    "Content-Type": "application/xml",
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
-                body: JSON.stringify(payload)
+                body: xmlBody
             });
 
             if (res.ok) {
                 success = true;
                 const text = await res.text();
-                if (text.startsWith("{")) {
-                    try {
-                        const json = JSON.parse(text);
-                        shareId = json.id || json.shared_server?.id;
-                    } catch (je) {}
-                } else {
-                    const matchId = text.match(/\bid="([^"]*)"/i)?.[1];
-                    if (matchId) shareId = matchId;
-                }
+                const matchId = text.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1];
+                if (matchId) shareId = matchId;
             } else {
                 const errText = await res.text().catch(() => "");
                 errorMsg = `Server endpoint error (${res.status}): ${errText || res.statusText}`;
 
-                // If already shared or conflict, update their existing share
+                // If already shared or conflict, update existing share
                 if (res.status === 400 || res.status === 409 || res.status === 422 || errText.toLowerCase().includes("already")) {
                     const existing = await getPlexSharedServersList(adminToken);
                     const match = existing.find(s => 
@@ -939,16 +1144,20 @@ export async function invitePlexFriendAndShare(
     if (!success) {
         try {
             const payload: any = {
-                invited_email: cleanTarget,
-                library_section_ids: sectionIds,
+                machineIdentifier: serverId,
+                librarySectionIds: sectionIds,
                 librarySectionIDs: sectionIds,
+                allLibraries: false,
                 all_libraries: false,
-                allLibraries: false
+                settings: {
+                    allowTuners: 0,
+                    allowSync: 0
+                }
             };
-            if (numInvitedId) payload.invited_id = numInvitedId;
-            if (serverId) {
-                payload.machine_identifier = serverId;
-                payload.server_id = serverId;
+            if (numInvitedId) payload.invitedId = numInvitedId;
+            if (cleanTarget) {
+                payload.invitedEmail = cleanTarget;
+                payload.email = cleanTarget;
             }
 
             const res = await fetch("https://plex.tv/api/v2/shared_servers", {
@@ -1024,22 +1233,17 @@ export async function updatePlexUserShareSections(
     // 1. Canonical Rails Server PUT endpoint: PUT https://plex.tv/api/servers/{serverId}/shared_servers/{shareId}
     if (serverId) {
         try {
-            const payload = {
-                server_id: serverId,
-                shared_server: {
-                    library_section_ids: librarySectionIds
-                }
-            };
-            const url = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers/${encodeURIComponent(String(shareId))}?X-Plex-Token=${encodeURIComponent(adminToken)}`;
+            const xmlBody = `<SharedServer>${librarySectionIds.map(id => `<Section id="${id}"/>`).join("")}</SharedServer>`;
+            const url = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers/${encodeURIComponent(String(shareId))}?library_section_ids=${librarySectionIds.join(",")}&allLibraries=0&X-Plex-Token=${encodeURIComponent(adminToken)}`;
             const res = await fetch(url, {
                 method: "PUT",
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
-                    "Content-Type": "application/json",
+                    "Content-Type": "application/xml",
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
-                body: JSON.stringify(payload)
+                body: xmlBody
             });
             if (res.ok) {
                 success = true;
@@ -1064,10 +1268,10 @@ export async function updatePlexUserShareSections(
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
                 body: JSON.stringify({
-                    library_section_ids: librarySectionIds,
+                    librarySectionIds: librarySectionIds,
                     librarySectionIDs: librarySectionIds,
-                    all_libraries: false,
-                    allLibraries: false
+                    allLibraries: false,
+                    all_libraries: false
                 })
             });
 
@@ -1082,7 +1286,7 @@ export async function updatePlexUserShareSections(
         }
     }
 
-    // 3. Fallback query param URL on direct server endpoint
+    // 3. Fallback POST with query param URL on direct server endpoint
     if (!success && serverId) {
         try {
             const xmlUrl = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers/${encodeURIComponent(String(shareId))}?library_section_ids=${librarySectionIds.join(",")}&allLibraries=0&X-Plex-Token=${encodeURIComponent(adminToken)}`;
