@@ -330,7 +330,9 @@ export default function AccessSettingsPage() {
         try {
             const res = await fetchUserPlexLibrariesAction(user.id);
             if (res.success && Array.isArray(res.selectedKeys)) {
-                setUserSelectedKeys(normalizeKeyList(res.selectedKeys));
+                if (res.hasPlexShare || initialKeys.length === 0) {
+                    setUserSelectedKeys(normalizeKeyList(res.selectedKeys));
+                }
             }
         } catch (e) {
             console.warn("Could not query Plex for user libraries:", e);

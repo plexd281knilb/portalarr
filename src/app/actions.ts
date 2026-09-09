@@ -16,7 +16,8 @@ import {
     getUserPlexSharedLibraries,
     invitePlexFriendAndShare,
     updatePlexUserShareSections,
-    removePlexUserShare
+    removePlexUserShare,
+    matchesPlexUser
 } from "@/lib/plex";
 import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
@@ -1256,10 +1257,30 @@ export async function approveAppUser(id: string) {
 export async function rejectAppUser(id: string) {
     await verifyAdmin();
     try {
+        const user = await prisma.user.findUnique({ where: { id } });
         await prisma.user.update({
             where: { id },
             data: { status: "REJECTED" }
         });
+
+        if (user) {
+            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+            if (settings?.mainPlexToken) {
+                try {
+                    const adminToken = decryptData(settings.mainPlexToken);
+                    const shares = await getPlexSharedServersList(adminToken);
+                    const matchedShares = shares.filter(s => matchesPlexUser(user, s));
+                    for (const share of matchedShares) {
+                        if (share.id) {
+                            await removePlexUserShare(adminToken, share.id, share.serverId);
+                        }
+                    }
+                } catch (plexErr) {
+                    console.warn("[REJECT-PLEX-REVOKE-WARNING]:", plexErr);
+                }
+            }
+        }
+
         revalidatePath("/settings/access");
         revalidatePath("/settings");
         return { success: true };
@@ -1272,6 +1293,25 @@ export async function rejectAppUser(id: string) {
 export async function deleteAppUser(id: string) {
     await verifyAdmin();
     try {
+        const user = await prisma.user.findUnique({ where: { id } });
+        if (user) {
+            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+            if (settings?.mainPlexToken) {
+                try {
+                    const adminToken = decryptData(settings.mainPlexToken);
+                    const shares = await getPlexSharedServersList(adminToken);
+                    const matchedShares = shares.filter(s => matchesPlexUser(user, s));
+                    for (const share of matchedShares) {
+                        if (share.id) {
+                            await removePlexUserShare(adminToken, share.id, share.serverId);
+                        }
+                    }
+                } catch (plexErr) {
+                    console.warn("[DELETE-PLEX-REVOKE-WARNING]:", plexErr);
+                }
+            }
+        }
+
         await prisma.user.delete({ where: { id } });
         revalidatePath("/settings/access");
         revalidatePath("/settings");
@@ -1453,31 +1493,40 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
         if (!user) return { success: false, error: "User not found" };
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const savedKeys = user.plexLibrarySectionIds 
+            ? user.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean)
+            : (settings?.defaultPlexLibraries ? settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean) : []);
+
         if (!settings?.mainPlexToken) {
-            const saved = user.plexLibrarySectionIds 
-                ? user.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean)
-                : [];
-            return { success: true, selectedKeys: saved, fromPlex: false };
+            return { success: true, selectedKeys: savedKeys, fromPlex: false, hasPlexShare: false };
         }
 
         const adminToken = decryptData(settings.mainPlexToken);
-        const { selectedKeys } = await getUserPlexSharedLibraries(adminToken, user);
+        const { selectedKeys, hasPlexShare } = await getUserPlexSharedLibraries(adminToken, user);
 
         // If we found live keys on Plex, sync them to SQLite
-        if (selectedKeys.length > 0 || user.plexLibrarySectionIds !== "") {
+        if (hasPlexShare) {
             await prisma.user.update({
                 where: { id: userId },
                 data: { plexLibrarySectionIds: selectedKeys.join(",") }
             });
+            return { 
+                success: true, 
+                selectedKeys, 
+                fromPlex: true,
+                hasPlexShare: true 
+            };
+        } else {
+            // User share not found on Plex or user suspended: preserve savedKeys without wiping SQLite
+            return {
+                success: true,
+                selectedKeys: savedKeys,
+                fromPlex: false,
+                hasPlexShare: false
+            };
         }
-
-        return { 
-            success: true, 
-            selectedKeys, 
-            fromPlex: true 
-        };
     } catch (e: any) {
-        console.error("[FETCH-USER-PLEX-LIBRARIES-ERROR]:", e);
+        console.error("[FETCH-USER-PLEX-LIBRARIES-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to query Plex libraries" };
     }
 }
@@ -1543,24 +1592,29 @@ export async function updateUserPlexLibraries(userId: string, selectedKeys: (str
 
             // Find matching share for this user on this server
             const match = shares.find(s => 
-                (s.serverId === srvId || !s.serverId || servers.length === 1) && (
-                    (s.user.email && s.user.email.toLowerCase() === targetEmail) ||
-                    (s.user.username && s.user.username.toLowerCase() === targetUser) ||
-                    (s.invitedEmail && s.invitedEmail.toLowerCase() === targetEmail)
-                )
+                (s.serverId === srvId || !s.serverId || servers.length === 1) &&
+                matchesPlexUser(user, s)
             );
 
-            if (match && match.id) {
-                await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
-            } else if (targetSectionIds.length > 0 && (targetEmail || targetUser)) {
-                await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds);
+            if (targetSectionIds.length === 0) {
+                // If 0 sections selected for this server, revoke access / remove share
+                if (match && match.id) {
+                    await removePlexUserShare(adminToken, match.id, srvId);
+                }
+            } else {
+                // 1 or more sections selected
+                if (match && match.id) {
+                    await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
+                } else if (targetEmail || targetUser) {
+                    await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds);
+                }
             }
         }
 
         revalidatePath("/settings/access");
         return { success: true, message: `Updated shared Plex libraries for ${user.username}.` };
     } catch (e: any) {
-        console.error("[UPDATE-USER-PLEX-LIBRARIES-ERROR]:", e);
+        console.error("[UPDATE-USER-PLEX-LIBRARIES-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to update user libraries" };
     }
 }
@@ -1640,55 +1694,92 @@ export async function setUserTrialOrSubscription(
             }
         });
 
-        // Sync Plex sharing state: if suspended or expired, clear library sections; if active, restore
+        // Sync Plex sharing state: if suspended or expired, revoke Plex shares; if active, restore
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         if (settings?.mainPlexToken) {
-            const adminToken = decryptData(settings.mainPlexToken);
-            const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
-            const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
-            const servers = await getPlexServers(adminToken);
-            const shares = await getPlexSharedServersList(adminToken);
+            try {
+                const adminToken = decryptData(settings.mainPlexToken);
+                const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
+                const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
+                const servers = await getPlexServers(adminToken);
+                const shares = await getPlexSharedServersList(adminToken);
 
-            const rawKeys = (user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
-            const serverSectionsMap = new Map<string, number[]>();
-
-            for (const key of rawKeys) {
-                if (key.includes(":")) {
-                    const [srvId, secStr] = key.split(":");
-                    const secId = parseInt(secStr, 10);
-                    if (!isNaN(secId)) {
-                        const list = serverSectionsMap.get(srvId) || [];
-                        list.push(secId);
-                        serverSectionsMap.set(srvId, list);
+                if (status === "SUSPENDED" || status === "EXPIRED") {
+                    // Revoke Plex shares across all servers
+                    const matchedShares = shares.filter(s => matchesPlexUser(user, s));
+                    for (const share of matchedShares) {
+                        const srvId = share.serverId || servers[0]?.clientIdentifier;
+                        if (share.id) {
+                            await removePlexUserShare(adminToken, share.id, srvId);
+                        }
                     }
-                } else {
-                    const secId = parseInt(key, 10);
-                    if (!isNaN(secId) && servers.length > 0) {
-                        const primaryId = servers[0].clientIdentifier;
-                        const list = serverSectionsMap.get(primaryId) || [];
-                        list.push(secId);
-                        serverSectionsMap.set(primaryId, list);
-                    }
-                }
-            }
 
-            for (const share of shares) {
-                const isUserMatch = (
-                    (share.user.email && share.user.email.toLowerCase() === targetEmail) ||
-                    (share.user.username && share.user.username.toLowerCase() === targetUser) ||
-                    (share.invitedEmail && share.invitedEmail.toLowerCase() === targetEmail)
-                );
-                if (isUserMatch && share.id) {
-                    const srvId = share.serverId || (servers[0]?.clientIdentifier);
-                    if (status === "SUSPENDED" || status === "EXPIRED") {
-                        await updatePlexUserShareSections(adminToken, share.id, [], srvId);
-                    } else if (status === "APPROVED" || status === "TRIAL") {
-                        const secIds = srvId ? (serverSectionsMap.get(srvId) || []) : [];
-                        if (secIds.length > 0) {
-                            await updatePlexUserShareSections(adminToken, share.id, secIds, srvId);
+                    // Terminate any active sessions on Plex immediately
+                    try {
+                        const activeServers = await getPlexActiveSessions(adminToken);
+                        for (const srv of activeServers) {
+                            for (const sess of srv.sessions) {
+                                const sessUser = (sess.User?.title || sess.username || "").toLowerCase().trim();
+                                if (
+                                    (targetUser && sessUser === targetUser) ||
+                                    (targetEmail && sessUser === targetEmail) ||
+                                    (user.plexUsername && sessUser === user.plexUsername.toLowerCase().trim())
+                                ) {
+                                    const sessionKey = sess.Session?.id || sess.sessionKey || sess.ratingKey;
+                                    const sessionId = sess.Session?.id || sess.sessionKey;
+                                    if (sessionKey) {
+                                        await terminatePlexServerSession(srv.serverUrl, srv.token, sessionKey, sessionId, "Account access suspended.");
+                                    }
+                                }
+                            }
+                        }
+                    } catch (killErr) {
+                        console.warn("[SUSPEND-KILL-SESSIONS-WARNING]:", killErr);
+                    }
+                } else if (status === "APPROVED" || status === "TRIAL") {
+                    // Restore Plex shares with configured library sections
+                    const rawKeys = (user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    const serverSectionsMap = new Map<string, number[]>();
+
+                    for (const key of rawKeys) {
+                        if (key.includes(":")) {
+                            const [srvId, secStr] = key.split(":");
+                            const secId = parseInt(secStr, 10);
+                            if (!isNaN(secId)) {
+                                const list = serverSectionsMap.get(srvId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(srvId, list);
+                            }
+                        } else {
+                            const secId = parseInt(key, 10);
+                            if (!isNaN(secId) && servers.length > 0) {
+                                const primaryId = servers[0].clientIdentifier;
+                                const list = serverSectionsMap.get(primaryId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(primaryId, list);
+                            }
+                        }
+                    }
+
+                    for (const srv of servers) {
+                        const srvId = srv.clientIdentifier;
+                        const secIds = serverSectionsMap.get(srvId) || [];
+                        if (secIds.length === 0) continue;
+
+                        const match = shares.find(s => 
+                            (s.serverId === srvId || !s.serverId || servers.length === 1) &&
+                            matchesPlexUser(user, s)
+                        );
+
+                        if (match && match.id) {
+                            await updatePlexUserShareSections(adminToken, match.id, secIds, srvId);
+                        } else if (targetEmail || targetUser) {
+                            await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, secIds);
                         }
                     }
                 }
+            } catch (plexSyncErr: any) {
+                console.warn("[SET-TRIAL-PLEX-SYNC-WARNING]:", plexSyncErr.message || plexSyncErr);
             }
         }
 
@@ -1696,7 +1787,7 @@ export async function setUserTrialOrSubscription(
         revalidatePath("/settings");
         return { success: true, message: `Updated access status for ${user.username} to ${status}.` };
     } catch (e: any) {
-        console.error("[SET-TRIAL-SUBSCRIPTION-ERROR]:", e);
+        console.error("[SET-TRIAL-SUBSCRIPTION-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to update trial or subscription" };
     }
 }
@@ -8966,19 +9057,51 @@ export async function syncPlexFriendsInternal() {
             }
             const userLibraryKeyStr = Array.from(new Set(userLibraryKeys)).join(",");
 
-            // Match existing user by email or username (case-insensitive)
-            let existingUser = dbUsers.find(u => 
-                (fEmail && u.email.toLowerCase() === fEmail) ||
-                (fUsername && u.username.toLowerCase() === fUsername.toLowerCase())
-            );
+            // Match existing user by email or username or plexEmail or plexUsername (case-insensitive & alphanumeric)
+            const cleanAlnum = (str?: string | null) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            const fEmailAlnum = cleanAlnum(fEmail);
+            const fUserAlnum = cleanAlnum(fUsername);
+
+            let existingUser = dbUsers.find(u => {
+                const uEmail = (u.email || "").toLowerCase().trim();
+                const uUser = (u.username || "").toLowerCase().trim();
+                const uPlexEmail = (u.plexEmail || "").toLowerCase().trim();
+                const uPlexUser = (u.plexUsername || "").toLowerCase().trim();
+
+                const directMatch = (fEmail && (uEmail === fEmail || uPlexEmail === fEmail)) ||
+                                    (fUsername && (uUser === fUsername.toLowerCase() || uPlexUser === fUsername.toLowerCase())) ||
+                                    (fEmail && uUser === fEmail) ||
+                                    (fUsername && uEmail === fUsername.toLowerCase());
+                if (directMatch) return true;
+
+                // Alphanumeric fallback if length >= 3
+                if (fUserAlnum && fUserAlnum.length >= 3) {
+                    if (cleanAlnum(uUser) === fUserAlnum || cleanAlnum(uPlexUser) === fUserAlnum) return true;
+                }
+                if (fEmailAlnum && fEmailAlnum.length >= 3) {
+                    if (cleanAlnum(uEmail) === fEmailAlnum || cleanAlnum(uPlexEmail) === fEmailAlnum) return true;
+                }
+                return false;
+            });
 
             if (existingUser) {
                 // Update existing user details/status/libraries if needed
                 let needsUpdate = false;
                 const updateData: any = {};
 
-                if (existingUser.role !== "ADMIN" && existingUser.status !== "APPROVED") {
+                // Only promote PENDING users to APPROVED. Never un-suspend or un-expire or approve rejected!
+                if (existingUser.status === "PENDING" && existingUser.role !== "ADMIN") {
                     updateData.status = "APPROVED";
+                    needsUpdate = true;
+                }
+
+                if (fEmail && existingUser.plexEmail !== fEmail) {
+                    updateData.plexEmail = fEmail;
+                    needsUpdate = true;
+                }
+
+                if (fUsername && existingUser.plexUsername !== fUsername) {
+                    updateData.plexUsername = fUsername;
                     needsUpdate = true;
                 }
 
@@ -8990,7 +9113,14 @@ export async function syncPlexFriendsInternal() {
                     }
                 }
 
-                if (userLibraryKeyStr && existingUser.plexLibrarySectionIds !== userLibraryKeyStr) {
+                // Sync libraries only if user is active (not suspended, expired, or rejected)
+                if (
+                    existingUser.status !== "SUSPENDED" && 
+                    existingUser.status !== "EXPIRED" && 
+                    existingUser.status !== "REJECTED" &&
+                    userLibraryKeyStr && 
+                    existingUser.plexLibrarySectionIds !== userLibraryKeyStr
+                ) {
                     updateData.plexLibrarySectionIds = userLibraryKeyStr;
                     needsUpdate = true;
                 }
@@ -9030,6 +9160,8 @@ export async function syncPlexFriendsInternal() {
                         password: hashedPassword,
                         role: "USER",
                         status: "APPROVED",
+                        plexEmail: fEmail || null,
+                        plexUsername: fUsername || null,
                         plexLibrarySectionIds: userLibraryKeyStr
                     }
                 });
@@ -9045,7 +9177,9 @@ export async function syncPlexFriendsInternal() {
             
             const isListedInPlex = 
                 (user.email && activePlexEmails.has(user.email.toLowerCase())) ||
-                (user.username && activePlexUsernames.has(user.username.toLowerCase()));
+                (user.username && activePlexUsernames.has(user.username.toLowerCase())) ||
+                (user.plexEmail && activePlexEmails.has(user.plexEmail.toLowerCase())) ||
+                (user.plexUsername && activePlexUsernames.has(user.plexUsername.toLowerCase()));
 
             if (!isListedInPlex && user.status === "APPROVED") {
                 await prisma.user.update({
