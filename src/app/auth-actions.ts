@@ -172,64 +172,75 @@ export async function getSession() {
 
 // --- 6. PLEX CALLBACK (AUTO-PROVISION & SYNC) ---
 export async function handlePlexCallback(authToken: string, rawUsername: string, rawEmail: string, isSetupMode: boolean = false) {
-  rawEmail = (rawEmail || "").trim().toLowerCase();
-  rawUsername = (rawUsername || (rawEmail ? rawEmail.split('@')[0] : "")).trim();
+  let plexEmail = (rawEmail || "").trim().toLowerCase();
+  let plexUsername = (rawUsername || "").trim();
+  let plexUserId = "";
 
-  console.log(`[AUTH] Processing Plex login for: username="${rawUsername}", email="${rawEmail}"`);
+  console.log(`[AUTH] Processing Plex login for: username="${plexUsername}", email="${plexEmail}"`);
 
-  if (!rawEmail && !rawUsername) {
-    return { error: "Plex account profile is missing email and username details." };
-  }
-
-  // Check if user already exists in Portalarr
-  const allUsers = await prisma.user.findMany();
-  let user = allUsers.find(
-    (u) =>
-      (rawEmail && u.email.toLowerCase() === rawEmail) ||
-      (rawUsername && u.username.toLowerCase() === rawUsername.toLowerCase())
-  );
-
-  // Load global settings for admin Plex token
-  const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-  let adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-  if (!adminToken && authToken) {
-    adminToken = authToken;
-  }
-
-  if (!adminToken) {
-      return { error: "The Server Admin must configure their Plex Token in Settings before new users can sign in with Plex." };
-  }
-
-  // Verify access to the Plex Server (Check if Owner or Friend)
-  let isAdminOwner = false;
+  // 1. Fetch authenticated user profile directly from Plex using the fresh authToken
   try {
-    const adminRes = await fetch("https://plex.tv/api/v2/user", {
+    const userRes = await fetch("https://plex.tv/api/v2/user", {
       headers: {
         "Accept": "application/json",
-        "X-Plex-Token": adminToken,
+        "X-Plex-Token": authToken,
         "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
       }
     });
-    if (adminRes.ok) {
-      const adminProfile = await adminRes.json();
-      const adminUserObj = adminProfile.user || adminProfile;
-      const adminEmail = (adminUserObj.email || "").toLowerCase().trim();
-      const adminUsername = (adminUserObj.username || adminUserObj.title || "").toLowerCase().trim();
-
-      if (
-        (adminEmail && rawEmail && adminEmail === rawEmail) ||
-        (adminUsername && rawUsername && adminUsername === rawUsername.toLowerCase())
-      ) {
-        isAdminOwner = true;
-        console.log(`[AUTH] User identified as Plex Server Owner.`);
-      }
+    if (userRes.ok) {
+      const userProfile = await userRes.json();
+      const uObj = userProfile.user || userProfile;
+      if (uObj.email) plexEmail = uObj.email.trim().toLowerCase();
+      if (uObj.username || uObj.title) plexUsername = (uObj.username || uObj.title).trim();
+      if (uObj.id) plexUserId = String(uObj.id);
     }
   } catch (err) {
-    console.warn("[AUTH] Failed to fetch admin Plex profile for owner verification:", err);
+    console.warn("[AUTH] Failed to fetch Plex profile with authToken:", err);
   }
 
-  // If owner logged in and Plex token is not saved yet, save token automatically
-  if (isAdminOwner && authToken && (!settings?.mainPlexToken)) {
+  if (!plexEmail && !plexUsername) {
+    return { error: "Plex account profile is missing email and username details." };
+  }
+
+  // 2. Discover if logging-in account owns a Plex Media Server
+  let ownsPlexServer = false;
+  try {
+    const resRes = await fetch("https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1", {
+      headers: {
+        "Accept": "application/json",
+        "X-Plex-Token": authToken,
+        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+      }
+    });
+    if (resRes.ok) {
+      const resources = await resRes.json();
+      if (Array.isArray(resources)) {
+        ownsPlexServer = resources.some((r: any) => 
+          r.provides && r.provides.includes("server") && (r.owned === true || r.owned === "1" || r.isOwner === true)
+        );
+      }
+    }
+  } catch (rErr) {
+    console.warn("[AUTH] Failed to fetch Plex resources for owner check:", rErr);
+  }
+
+  // 3. Find existing user in database
+  const allUsers = await prisma.user.findMany();
+  let user = allUsers.find(
+    (u) =>
+      (plexEmail && u.email.toLowerCase() === plexEmail) ||
+      (plexUsername && u.username.toLowerCase() === plexUsername.toLowerCase()) ||
+      (plexEmail && u.plexEmail && u.plexEmail.toLowerCase() === plexEmail) ||
+      (plexUsername && u.plexUsername && u.plexUsername.toLowerCase() === plexUsername.toLowerCase())
+  );
+
+  const totalDbAdmins = allUsers.filter(u => u.role === "ADMIN").length;
+  const isExistingAdmin = user?.role === "ADMIN";
+  const isFirstUserSetup = allUsers.length === 0 || totalDbAdmins === 0 || isSetupMode;
+  const isAdminOwner = ownsPlexServer || isExistingAdmin || isFirstUserSetup;
+
+  // 4. If Admin/Server Owner logs in, automatically save and refresh Admin Plex Token in settings!
+  if (isAdminOwner && authToken) {
     try {
       const encryptedToken = encryptData(authToken);
       await prisma.settings.upsert({
@@ -237,64 +248,84 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
         update: { mainPlexToken: encryptedToken },
         create: { id: "global", mainPlexToken: encryptedToken }
       });
-      console.log("[AUTH] Automatically saved Admin Plex Token to global settings.");
+      console.log(`[AUTH] Automatically saved/refreshed Admin Plex Token in settings for ${plexUsername || plexEmail}.`);
     } catch (saveErr) {
       console.error("[AUTH] Failed to auto-save Admin Plex Token:", saveErr);
     }
   }
 
-  // Check if logging-in user is a verified Plex Friend across all endpoints
-  let isFriend = false;
-  if (!isAdminOwner) {
-    const serverFriends = await getPlexServerFriends(adminToken);
-    isFriend = serverFriends.some((f) => 
-        (rawEmail && f.email.toLowerCase() === rawEmail) ||
-        (rawUsername && f.username.toLowerCase() === rawUsername.toLowerCase())
-    );
+  // Load effective admin token for friend verification
+  const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+  let adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+  if (!adminToken && authToken && isAdminOwner) {
+    adminToken = authToken;
   }
 
-  // If user already exists in DB:
+  // Check if logging-in user is a verified Plex Friend across all endpoints
+  let isFriend = false;
+  if (!isAdminOwner && adminToken) {
+    try {
+      const serverFriends = await getPlexServerFriends(adminToken);
+      isFriend = serverFriends.some((f) => 
+        (plexEmail && f.email && f.email.toLowerCase() === plexEmail) ||
+        (plexUsername && f.username && f.username.toLowerCase() === plexUsername.toLowerCase())
+      );
+    } catch (fErr) {
+      console.warn("[AUTH] Error checking Plex friends list:", fErr);
+    }
+  }
+
+  // 5. If user already exists in DB:
   if (user) {
-    console.log(`[AUTH] Existing user matched: ${user.username} (${user.id}) status=${user.status}`);
-    
-    // If status is REJECTED, but they ARE verified as Owner or Plex Friend, auto-reapprove!
-    if (user.status === "REJECTED") {
-      if (isAdminOwner || isFriend) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { status: "APPROVED" }
-        });
-        console.log(`[AUTH] Verified Plex friend/owner auto-reapproved: ${user.username}`);
-      } else {
-        return { error: "Your account request was declined by the administrator." };
-      }
+    console.log(`[AUTH] Existing user matched: ${user.username} (${user.id}) status=${user.status} role=${user.role}`);
+
+    const updateData: any = {};
+    if (plexEmail && user.plexEmail !== plexEmail) updateData.plexEmail = plexEmail;
+    if (plexUsername && user.plexUsername !== plexUsername) updateData.plexUsername = plexUsername;
+
+    if (isAdminOwner) {
+      updateData.role = "ADMIN";
+      updateData.status = "APPROVED";
+    } else if (isFriend && (user.status === "PENDING" || user.status === "REJECTED")) {
+      updateData.status = "APPROVED";
     }
 
-    // If admin logs in with Plex, refresh mainPlexToken in global settings
-    if (user.role === "ADMIN" && authToken) {
-      try {
-        const encryptedToken = encryptData(authToken);
-        await prisma.settings.upsert({
-          where: { id: "global" },
-          update: { mainPlexToken: encryptedToken },
-          create: { id: "global", mainPlexToken: encryptedToken }
-        });
-        console.log(`[AUTH] Refreshed Admin Plex Token in settings for ${user.username}.`);
-      } catch (e) {
-        console.warn("[AUTH] Failed to refresh Admin Plex Token:", e);
-      }
+    if (Object.keys(updateData).length > 0) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: updateData
+      });
     }
+
+    // Check account status
+    if (user.status === "REJECTED" && !isAdminOwner && !isFriend) {
+      return { error: "Your account request was declined by the administrator." };
+    }
+    if (user.status === "PENDING" && !isAdminOwner && !isFriend) {
+      return { error: "Your account is currently pending administrator approval." };
+    }
+    if (user.status === "SUSPENDED" || user.status === "EXPIRED") {
+      // Allow them into the portal so proxy/client displays access renewal or suspended state
+    }
+
+    if (isAdminOwner) {
+      import("./actions").then(({ syncPlexFriendsInternal }) => {
+        syncPlexFriendsInternal().catch(e => console.error("[AUTH] Post-login Plex sync error:", e));
+      });
+    }
+
     await createSession(user.id, user.username, user.role, user.status);
     return { success: true };
   }
 
+  // 6. New User: Must be Plex Server Owner or verified Friend to auto-provision
   if (!isAdminOwner && !isFriend) {
-    console.warn(`[AUTH] BLOCKED: ${rawUsername || rawEmail} is not on the shared Plex friends list.`);
-    return { error: "Access Denied. You do not have access to this Plex Server." };
+    console.warn(`[AUTH] BLOCKED: ${plexUsername || plexEmail} is not on the shared Plex friends list.`);
+    return { error: "Access Denied. You are not on the shared Plex friends list. If you are requesting access to ebooks & audiobooks, please create an account on the Register tab." };
   }
 
   // Generate safe, collision-free username
-  let baseUsername = rawUsername || (rawEmail ? rawEmail.split('@')[0] : "plex_user");
+  let baseUsername = plexUsername || (plexEmail ? plexEmail.split('@')[0] : "plex_user");
   baseUsername = baseUsername.replace(/[^a-zA-Z0-9_\-]/g, "_");
   if (!baseUsername) baseUsername = "plex_user";
 
@@ -306,7 +337,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
   }
 
   // Generate safe, collision-free email
-  let safeEmail = rawEmail;
+  let safeEmail = plexEmail;
   if (!safeEmail || allUsers.some((u) => u.email.toLowerCase() === safeEmail.toLowerCase())) {
     safeEmail = `${safeUsername.toLowerCase()}@plex.local`;
   }
@@ -314,7 +345,6 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
   const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
   const hashedPassword = await hash(randomPassword, 10);
 
-  // If server owner, assign ADMIN + APPROVED, otherwise USER + APPROVED (since friend list verified)
   const role = isAdminOwner ? "ADMIN" : "USER";
   const status = "APPROVED";
 
@@ -324,7 +354,9 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
       email: safeEmail,
       password: hashedPassword,
       role,
-      status
+      status,
+      plexEmail: plexEmail || null,
+      plexUsername: plexUsername || null
     }
   });
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
-    getSettings, saveSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction,
+    getSettings, saveSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
     getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance, updateGlancesInstance,
     getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
@@ -16,6 +16,7 @@ import {
     testTautulliConfigAction, testGlancesConfigAction, testMediaAppConfigAction,
     getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI, runAiBatchMetadataScanner, testFolderPermissions, fetchAvailableAiModels
 } from "@/app/actions";
+import { getPlexPin, checkPlexPin } from "@/app/plex-auth";
 import { testArrConfig } from "@/app/arr-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ import {
     Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, 
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
-    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap
+    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -324,6 +325,80 @@ function SettingsPageContent() {
     const [testAiResult, setTestAiResult] = useState<any>(null);
     const [testAiErr, setTestAiErr] = useState("");
     const [saveAiMsg, setSaveAiMsg] = useState("");
+
+    // Plex Admin Token Linking States
+    const [isLinkingPlex, setIsLinkingPlex] = useState(false);
+    const [plexLinkMsg, setPlexLinkMsg] = useState<string | null>(null);
+    const [plexLinkErr, setPlexLinkErr] = useState<string | null>(null);
+
+    const handleAutoLinkPlexToken = async () => {
+        setIsLinkingPlex(true);
+        setPlexLinkMsg(null);
+        setPlexLinkErr(null);
+
+        const popup = window.open("about:blank", "PlexAuth", "width=600,height=700");
+        if (!popup) {
+            setPlexLinkErr("Popup blocked. Please allow popups for this site in your browser.");
+            setIsLinkingPlex(false);
+            return;
+        }
+
+        try {
+            setPlexLinkMsg("Requesting authorization PIN from Plex...");
+            const pin = await getPlexPin();
+            const authUrl = `https://app.plex.tv/auth/#!?clientID=portalarr-custom-dashboard-app&code=${pin.code}&context[device][product]=Portalarr`;
+            popup.location.href = authUrl;
+            setPlexLinkMsg("Waiting for sign-in in popup...");
+
+            let isProcessing = false;
+            let elapsedTime = 0;
+
+            const pollInterval = setInterval(async () => {
+                if (isProcessing) return;
+                elapsedTime += 2;
+
+                if (elapsedTime > 180) {
+                    clearInterval(pollInterval);
+                    try { if (!popup.closed) popup.close(); } catch (e) {}
+                    setPlexLinkErr("Plex sign-in timed out. Please try again.");
+                    setPlexLinkMsg(null);
+                    setIsLinkingPlex(false);
+                    return;
+                }
+
+                try {
+                    const token = await checkPlexPin(pin.id);
+                    if (token && !isProcessing) {
+                        isProcessing = true;
+                        clearInterval(pollInterval);
+                        try { if (!popup.closed) popup.close(); } catch (e) {}
+
+                        setPlexLinkMsg("Saving Admin Plex Token...");
+                        const res = await autoLinkAdminPlexTokenAction(token);
+                        setIsLinkingPlex(false);
+
+                        if (res.success) {
+                            setPlexLinkMsg(res.message || "Admin Plex Token linked successfully!");
+                            setPlexLinkErr(null);
+                            const tokenInput = document.getElementById("mainPlexToken") as HTMLInputElement;
+                            if (tokenInput) tokenInput.value = token;
+                            loadAllData();
+                        } else {
+                            setPlexLinkErr(res.error || "Failed to link Plex Token.");
+                            setPlexLinkMsg(null);
+                        }
+                    }
+                } catch (pollErr: any) {
+                    // Ignore transient network errors during poll
+                }
+            }, 2000);
+        } catch (err: any) {
+            try { if (!popup.closed) popup.close(); } catch (e) {}
+            setPlexLinkErr(err.message || "Failed to initiate Plex sign-in.");
+            setPlexLinkMsg(null);
+            setIsLinkingPlex(false);
+        }
+    };
 
 
     const [dynamicModels, setDynamicModels] = useState<string[]>([]);
@@ -699,8 +774,31 @@ function SettingsPageContent() {
                                                 {showPlexKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                             </Button>
                                         </div>
+                                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleAutoLinkPlexToken}
+                                                disabled={isLinkingPlex}
+                                                className="text-xs gap-1.5 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 hover:border-amber-500 font-semibold transition-all duration-200"
+                                            >
+                                                {isLinkingPlex ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Tv className="h-3.5 w-3.5" />}
+                                                {isLinkingPlex ? "Connecting to Plex..." : "Sign in with Plex to Auto-Link Token"}
+                                            </Button>
+                                            {plexLinkMsg && (
+                                                <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                                    <CheckCircle2 className="h-3.5 w-3.5" /> {plexLinkMsg}
+                                                </span>
+                                            )}
+                                            {plexLinkErr && (
+                                                <span className="text-xs text-destructive font-medium flex items-center gap-1">
+                                                    <XCircle className="h-3.5 w-3.5" /> {plexLinkErr}
+                                                </span>
+                                            )}
+                                        </div>
                                         <p className="text-[10px] text-muted-foreground mt-1">
-                                            Sign in to Plex Web, open the XML for any media item, and copy the <code>X-Plex-Token</code> from the URL. <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" className="text-primary hover:underline">Read the official guide</a>.
+                                            Click the button above to sign in with Plex and automatically link your server owner token, or paste your <code>X-Plex-Token</code> manually. <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" className="text-primary hover:underline">Read the official guide</a>.
                                         </p>
                                     </div>
 

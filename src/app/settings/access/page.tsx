@@ -215,7 +215,7 @@ export default function AccessSettingsPage() {
         const res = await syncPlexFriendsAction();
         setSyncingPlex(false);
         if (res.success) {
-            setSyncMessage(`Synced ${res.totalFriends} Plex friends (${res.addedCount} added, ${res.updatedCount} updated, ${res.revokedCount} revoked).`);
+            setSyncMessage(`Synced ${res.totalFriends} Plex friends (${res.addedCount} added, ${res.updatedCount} updated).`);
             loadUsers();
             loadLibraries();
         } else {
@@ -722,7 +722,7 @@ export default function AccessSettingsPage() {
                                     <span>Plex Friends Auto-Sync</span>
                                 </div>
                                 <p className="text-xs text-muted-foreground max-w-xl">
-                                    Scans your Plex server for friends and automatically provisions approved accounts for them. Updates user details when emails change, and revokes access if users are removed from your Plex server.
+                                    Scans your Plex server for friends and automatically provisions approved accounts for them. Updates user details when usernames or emails change without affecting non-Plex registered users.
                                 </p>
                                 {syncMessage && (
                                     <div className="text-xs text-[#e5a00d] pt-1 font-medium">

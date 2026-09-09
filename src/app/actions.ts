@@ -9522,43 +9522,85 @@ export async function syncPlexFriendsInternal() {
             }
         }
 
-        // Revoke access for users no longer in Plex friends list (excluding ADMIN accounts)
-        for (const user of dbUsers) {
-            if (user.role === "ADMIN") continue;
-            
-            const isListedInPlex = 
-                (user.email && activePlexEmails.has(user.email.toLowerCase())) ||
-                (user.username && activePlexUsernames.has(user.username.toLowerCase())) ||
-                (user.plexEmail && activePlexEmails.has(user.plexEmail.toLowerCase())) ||
-                (user.plexUsername && activePlexUsernames.has(user.plexUsername.toLowerCase()));
-
-            if (!isListedInPlex && user.status === "APPROVED") {
-                await prisma.user.update({
-                    where: { id: user.id },
-                    data: { status: "REJECTED" }
-                });
-                revokedCount++;
-            }
-        }
-
         await prisma.settings.upsert({
             where: { id: "global" },
             update: { lastAutoSync: new Date() },
             create: { id: "global", lastAutoSync: new Date() }
         });
 
-        console.log(`[PLEX-SYNC] Completed. Friends: ${friendsList.length}, Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}`);
+        logger.addLog("SUCCESS", "PLEX", `[PLEX-SYNC] Completed friends sync. Added: ${addedCount}, Updated: ${updatedCount}`, `Friends discovered: ${friendsList.length}`);
+        console.log(`[PLEX-SYNC] Completed. Friends: ${friendsList.length}, Added: ${addedCount}, Updated: ${updatedCount}`);
         return {
             success: true,
             totalFriends: friendsList.length,
             addedCount,
             updatedCount,
-            revokedCount
+            revokedCount: 0
         };
 
     } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `[PLEX-SYNC] Error during Plex friends sync: ${e.message}`);
         console.error("[PLEX-SYNC] Error during Plex friends sync:", e.message || e);
         return { success: false, error: e.message || "Failed to sync Plex friends" };
+    }
+}
+
+export async function autoLinkAdminPlexTokenAction(authToken: string) {
+    await verifyAdmin();
+    if (!authToken) return { success: false, error: "No Plex authentication token provided." };
+
+    try {
+        const res = await fetch("https://plex.tv/api/v2/user", {
+            headers: {
+                "Accept": "application/json",
+                "X-Plex-Token": authToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            }
+        });
+
+        if (!res.ok) {
+            return { success: false, error: `Failed to validate token with Plex.tv (HTTP ${res.status}).` };
+        }
+
+        const profile = await res.json();
+        const userObj = profile.user || profile;
+        const plexUsername = userObj.username || userObj.title || "";
+        const plexEmail = userObj.email || "";
+
+        const encryptedToken = encryptData(authToken);
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { mainPlexToken: encryptedToken },
+            create: { id: "global", mainPlexToken: encryptedToken }
+        });
+
+        const adminUser = await verifyAdmin();
+        if (adminUser?.id) {
+            await prisma.user.update({
+                where: { id: adminUser.id },
+                data: {
+                    plexEmail: plexEmail || undefined,
+                    plexUsername: plexUsername || undefined
+                }
+            });
+        }
+
+        logger.addLog("SUCCESS", "PLEX", `[AUTH] Admin Plex Token successfully linked and saved for "${plexUsername}" (${plexEmail})`);
+
+        // Trigger background sync
+        syncPlexFriendsInternal().catch(e => console.warn("[PLEX-SYNC] Background sync warning:", e));
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        return { 
+            success: true, 
+            message: `Admin Plex Token successfully linked to account "${plexUsername || plexEmail}"!`,
+            username: plexUsername,
+            email: plexEmail
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `[AUTH] Error linking Admin Plex Token: ${e.message}`);
+        return { success: false, error: e.message || "Failed to link Plex Token" };
     }
 }
 
