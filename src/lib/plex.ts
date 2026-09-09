@@ -583,47 +583,64 @@ export async function getPlexCloudServersMap(
         }
     } catch (e) {}
 
-    // 3. For any owned server lacking sections, query /api/servers/{serverId}/shared_servers
+    // 3. For all owned servers, query canonical server XML https://plex.tv/api/servers/{machineId}
+    // This returns the exact cloud section IDs (e.g. 134414382) and local keys (e.g. 1) matching python-plexapi specification
     try {
         const ownedServers = await getPlexServers(adminToken).catch(() => []);
         for (const srv of ownedServers) {
             const srvId = srv.clientIdentifier;
             if (!srvId) continue;
-            let existingRecord = cloudMap.get(srvId);
-            if (!existingRecord) {
-                for (const [k, v] of cloudMap.entries()) {
-                    if (k.toLowerCase() === srvId.toLowerCase()) {
-                        existingRecord = v;
-                        break;
-                    }
-                }
-            }
-            if (!existingRecord || existingRecord.sections.length === 0) {
-                try {
-                    const shRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srvId)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
-                        headers: {
-                            "Accept": "application/xml, text/xml, */*",
-                            "X-Plex-Token": adminToken,
-                            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                        },
-                        cache: "no-store"
-                    });
-                    if (shRes.ok) {
-                        const shXml = await shRes.text();
-                        const secMatches = shXml.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
-                        for (const sm of secMatches) {
-                            const scAttrs = sm[1] || "";
-                            const secId = parseInt(scAttrs.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1] || "0", 10);
-                            const secKey = scAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "";
-                            const secTitle = scAttrs.match(/\btitle=["']([^"']*)["']/i)?.[1] || "";
-                            const secType = scAttrs.match(/\btype=["']([^"']*)["']/i)?.[1] || "";
-                            if (secId > 0 || secKey) {
-                                recordSection(srvId, srv.name || "", secId, secKey, secTitle, secType);
-                            }
+            // 3a. Canonical server XML
+            try {
+                const srvRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srvId)}?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+                    headers: {
+                        "Accept": "application/xml, text/xml, */*",
+                        "X-Plex-Token": adminToken,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    },
+                    cache: "no-store"
+                });
+                if (srvRes.ok) {
+                    const srvXml = await srvRes.text();
+                    const secMatches = srvXml.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
+                    for (const sm of secMatches) {
+                        const scAttrs = sm[1] || "";
+                        const secId = parseInt(scAttrs.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1] || "0", 10);
+                        const secKey = scAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "";
+                        const secTitle = scAttrs.match(/\btitle=["']([^"']*)["']/i)?.[1] || "";
+                        const secType = scAttrs.match(/\btype=["']([^"']*)["']/i)?.[1] || "";
+                        if (secId > 0 || secKey) {
+                            recordSection(srvId, srv.name || "", secId, secKey, secTitle, secType);
                         }
                     }
-                } catch (shErr) {}
-            }
+                }
+            } catch (srvErr) {}
+
+            // 3b. Shared servers XML fallback
+            try {
+                const shRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srvId)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+                    headers: {
+                        "Accept": "application/xml, text/xml, */*",
+                        "X-Plex-Token": adminToken,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    },
+                    cache: "no-store"
+                });
+                if (shRes.ok) {
+                    const shXml = await shRes.text();
+                    const secMatches = shXml.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
+                    for (const sm of secMatches) {
+                        const scAttrs = sm[1] || "";
+                        const secId = parseInt(scAttrs.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1] || "0", 10);
+                        const secKey = scAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "";
+                        const secTitle = scAttrs.match(/\btitle=["']([^"']*)["']/i)?.[1] || "";
+                        const secType = scAttrs.match(/\btype=["']([^"']*)["']/i)?.[1] || "";
+                        if (secId > 0 || secKey) {
+                            recordSection(srvId, srv.name || "", secId, secKey, secTitle, secType);
+                        }
+                    }
+                }
+            } catch (shErr) {}
         }
     } catch (e) {}
 
@@ -973,8 +990,11 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                             const key = parseInt(scAttrs.match(/\bkey="([^"]*)"/i)?.[1] || "0", 10);
                             const shared = scAttrs.match(/\bshared="([^"]*)"/i)?.[1] === "1";
                             if (shared || allLibraries) {
-                                if (id > 0) secIds.push(id);
-                                if (key > 0 && key !== id) secIds.push(key);
+                                if (id > 0) {
+                                    secIds.push(id);
+                                } else if (key > 0) {
+                                    secIds.push(key);
+                                }
                             }
                         }
                     }
@@ -1042,8 +1062,11 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                             const secKey = parseInt(sAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "0", 10);
                             const isShared = sAttrs.match(/\bshared=["']?([^"'\s>]+)["']?/i)?.[1] === "1";
                             if (isShared || allLibraries) {
-                                if (!isNaN(secId) && secId > 0) sectionIds.push(secId);
-                                if (!isNaN(secKey) && secKey > 0 && secKey !== secId) sectionIds.push(secKey);
+                                if (!isNaN(secId) && secId > 0) {
+                                    sectionIds.push(secId);
+                                } else if (!isNaN(secKey) && secKey > 0) {
+                                    sectionIds.push(secKey);
+                                }
                             }
                         }
                     }
@@ -1367,17 +1390,13 @@ export async function resolveServerSectionIds(
         );
 
         if (matchedSec) {
-            // Push canonical cloud ID (> 1,000,000)
-            if (matchedSec.id > 0 && !resolved.includes(matchedSec.id)) {
-                resolved.push(matchedSec.id);
-            }
-            // ALSO push local PMS key if distinct and > 0 (e.g. 1, 2, 3...)
-            const numKey = parseInt(matchedSec.key, 10);
-            if (!isNaN(numKey) && numKey > 0 && !resolved.includes(numKey)) {
-                resolved.push(numKey);
+            // Use canonical cloud ID (> 1,000,000) when available; otherwise fall back to key or inputId. NEVER push both!
+            const targetId = matchedSec.id > 0 ? matchedSec.id : (parseInt(matchedSec.key, 10) || inputId);
+            if (targetId > 0 && !resolved.includes(targetId)) {
+                resolved.push(targetId);
             }
         } else {
-            if (!resolved.includes(inputId)) {
+            if (inputId > 0 && !resolved.includes(inputId)) {
                 resolved.push(inputId);
             }
         }
@@ -1452,8 +1471,7 @@ export async function invitePlexFriendAndShare(
             };
             if (numInvitedId) {
                 sharedServerPayload.invited_id = numInvitedId;
-            }
-            if (cleanTarget) {
+            } else if (cleanTarget) {
                 sharedServerPayload.invited_email = cleanTarget;
             }
 
@@ -1486,8 +1504,14 @@ export async function invitePlexFriendAndShare(
                 logger.addLog("SUCCESS", "PLEX", `[GRANT/SHARE] Rails POST succeeded (HTTP 200) on server "${serverId}" for "${cleanTarget}"`, `Share ID: ${shareId || 'N/A'}`);
             } else {
                 const errText = await res.text().catch(() => "");
-                errorMsg = `Server POST error (${res.status}): ${errText || res.statusText}`;
-                logger.addLog("WARN", "PLEX", `[GRANT/SHARE] Rails POST returned HTTP ${res.status} on server "${serverId}": ${errText.slice(0, 300)}`);
+                const cleanErr = errText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                
+                if (res.status === 404) {
+                    errorMsg = `Plex user or library section not found (404). Ensure "${cleanTarget}" is a valid registered Plex.tv account, or verify their exact Plex username/email.`;
+                } else {
+                    errorMsg = `Server POST error (${res.status}): ${cleanErr || res.statusText}`;
+                }
+                logger.addLog("WARN", "PLEX", `[GRANT/SHARE] Rails POST returned HTTP ${res.status} on server "${serverId}": ${cleanErr || errText.slice(0, 300)}`);
 
                 // If already shared or conflict, update existing share
                 if (res.status === 400 || res.status === 409 || res.status === 422 || errText.toLowerCase().includes("already")) {
@@ -1516,8 +1540,11 @@ export async function invitePlexFriendAndShare(
                 "allLibraries": "0",
                 "X-Plex-Token": adminToken
             });
-            if (cleanTarget) queryParams.set("invited_email", cleanTarget);
-            if (numInvitedId) queryParams.set("invited_id", String(numInvitedId));
+            if (numInvitedId) {
+                queryParams.set("invited_id", String(numInvitedId));
+            } else if (cleanTarget) {
+                queryParams.set("invited_email", cleanTarget);
+            }
 
             const url = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers?${queryParams.toString()}`;
             const res = await fetch(url, {
@@ -1533,55 +1560,11 @@ export async function invitePlexFriendAndShare(
                 logger.addLog("SUCCESS", "PLEX", `[GRANT/SHARE] Rails query param POST succeeded on server "${serverId}" for "${cleanTarget}"`);
             } else {
                 const qErrText = await res.text().catch(() => "");
-                logger.addLog("WARN", "PLEX", `[GRANT/SHARE] Rails query param POST returned HTTP ${res.status}: ${qErrText.slice(0, 300)}`);
+                const cleanQErr = qErrText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                logger.addLog("WARN", "PLEX", `[GRANT/SHARE] Rails query param POST returned HTTP ${res.status}: ${cleanQErr || qErrText.slice(0, 300)}`);
             }
         } catch (e: any) {
             logger.addLog("WARN", "PLEX", `[GRANT/SHARE] Exception in Rails query param POST: ${e.message}`);
-        }
-    }
-
-    // 3. Modern plex.tv v2 API endpoint: POST https://plex.tv/api/v2/shared_servers
-    if (!success) {
-        try {
-            const payload: any = {
-                machineIdentifier: serverId,
-                librarySectionIds: sectionIds,
-                librarySectionIDs: sectionIds,
-                allLibraries: false,
-                all_libraries: false
-            };
-            if (numInvitedId) payload.invitedId = numInvitedId;
-            if (cleanTarget) {
-                payload.invitedEmail = cleanTarget;
-                payload.email = cleanTarget;
-            }
-
-            const res = await fetch("https://plex.tv/api/v2/shared_servers", {
-                method: "POST",
-                headers: {
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                    "X-Plex-Token": adminToken,
-                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (res.ok) {
-                const data = await res.json().catch(() => null);
-                logger.addLog("SUCCESS", "PLEX", `[GRANT/SHARE] Modern v2 API share succeeded for "${cleanTarget}"`, `Share ID: ${data?.id || 'N/A'}`);
-                return {
-                    success: true,
-                    shareId: data?.id,
-                    message: `Successfully granted Plex library access to ${cleanTarget || 'user'} (${sectionIds.length} libraries).`
-                };
-            } else {
-                const v2ErrText = await res.text().catch(() => "");
-                logger.addLog("ERROR", "PLEX", `[GRANT/SHARE] Modern v2 API share failed with HTTP ${res.status}: ${v2ErrText.slice(0, 300)}`, `Payload: ${JSON.stringify(payload)}`);
-                if (!errorMsg) errorMsg = `v2 POST error (${res.status}): ${v2ErrText || res.statusText}`;
-            }
-        } catch (e: any) {
-            logger.addLog("ERROR", "PLEX", `[GRANT/SHARE] Exception in v2 POST: ${e.message}`);
         }
     }
 

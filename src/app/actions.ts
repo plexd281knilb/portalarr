@@ -712,9 +712,10 @@ export async function sendTestEmailAction() {
                 </div>
             `
         });
+        logger.addLog("SUCCESS", "EMAIL", `Test email successfully dispatched to ${settings.smtpUser}!`, `Host: ${settings.smtpHost}:${settings.smtpPort || 587} | Sender: ${senderEmail}`);
         return { success: true, message: `Test email successfully dispatched to ${settings.smtpUser}!` };
     } catch (e: any) {
-        console.error("Test email dispatch failed:", e);
+        logger.addLog("ERROR", "EMAIL", `Test email dispatch failed: ${e.message}`, e.stack || String(e));
         return { success: false, error: e.message || "Failed to dispatch test email." };
     }
 }
@@ -982,26 +983,35 @@ export async function testMediaAppConfigAction(type: string, rawUrl: string, raw
                     cache: "no-store"
                 });
 
+                const isDownloadClient = ["prowlarr", "sabnzbd", "qbittorrent", "nzbget"].includes(appType);
+                const cat: "DOWNLOAD" | "APPS" = isDownloadClient ? "DOWNLOAD" : "APPS";
+
                 if (res.ok) {
                     clearTimeout(timeoutId);
                     if (appType === "sabnzbd") {
                         const sabJson = await res.json().catch(() => null);
                         if (sabJson && sabJson.status === false && sabJson.error) {
+                            logger.addLog("ERROR", cat, `SABnzbd error: ${sabJson.error}`, `URL: ${cleanBase}`);
                             return { success: false, error: `SABnzbd: ${sabJson.error}` };
                         }
                     }
+                    logger.addLog("SUCCESS", cat, `Successfully connected to ${type || "App"}!`, `URL: ${cleanBase}`);
                     return { success: true, message: `Successfully connected to ${type || "App"}!` };
                 }
 
                 if (res.status === 401 || res.status === 403) {
                     clearTimeout(timeoutId);
                     if (appType === "qbittorrent") {
+                        const qbitErr = "Authentication required (HTTP 403). If WebUI authentication is enabled, enter username:password in the API Key field.";
+                        logger.addLog("ERROR", cat, `qBittorrent: ${qbitErr}`, `URL: ${cleanBase}`);
                         return { 
                             success: false, 
-                            error: "Authentication required (HTTP 403). If WebUI authentication is enabled, enter username:password in the API Key field." 
+                            error: qbitErr 
                         };
                     }
-                    return { success: false, error: `Authentication failed (HTTP ${res.status}): Invalid API Key / Credentials` };
+                    const authErr = `Authentication failed (HTTP ${res.status}): Invalid API Key / Credentials`;
+                    logger.addLog("ERROR", cat, authErr, `URL: ${cleanBase}`);
+                    return { success: false, error: authErr };
                 }
 
                 lastError = `HTTP ${res.status}: ${res.statusText || "Bad Request"}`;
@@ -1014,9 +1024,16 @@ export async function testMediaAppConfigAction(type: string, rawUrl: string, raw
             }
         }
         clearTimeout(timeoutId);
+        const isDownloadClient = ["prowlarr", "sabnzbd", "qbittorrent", "nzbget"].includes(appType);
+        const cat: "DOWNLOAD" | "APPS" = isDownloadClient ? "DOWNLOAD" : "APPS";
+        logger.addLog("ERROR", cat, `Failed connection test to ${type || "App"}: ${lastError}`, `URL: ${cleanBase}`);
         return { success: false, error: lastError };
     } catch (e: any) {
-        return { success: false, error: e.name === "AbortError" ? "Connection timed out after 7s" : (e.message || "Failed to connect") };
+        const isDownloadClient = ["prowlarr", "sabnzbd", "qbittorrent", "nzbget"].includes(appType);
+        const cat: "DOWNLOAD" | "APPS" = isDownloadClient ? "DOWNLOAD" : "APPS";
+        const errMsg = e.name === "AbortError" ? "Connection timed out after 7s" : (e.message || "Failed to connect");
+        logger.addLog("ERROR", cat, `Failed connection test to ${type || "App"}: ${errMsg}`, `URL: ${cleanBase}`);
+        return { success: false, error: errMsg };
     }
 }
 
@@ -1052,21 +1069,26 @@ export async function testTautulliConfigAction(rawUrl: string, rawApiKey: string
         clearTimeout(timeoutId);
 
         if (!result.ok) {
-            return { success: false, error: result.error || "Failed to connect to Tautulli" };
+            const err = result.error || "Failed to connect to Tautulli";
+            logger.addLog("ERROR", "TAUTULLI", `Failed to connect to Tautulli: ${err}`, `URL: ${cleanBase} | Key: ${maskToken(apiKey)}`);
+            return { success: false, error: err };
         }
 
         const serverName = result.data?.pms_name || result.data?.server_name;
+        const msg = serverName 
+            ? `Connected to Tautulli! Connected server: "${serverName}"`
+            : "Successfully connected to Tautulli!";
+        logger.addLog("SUCCESS", "TAUTULLI", msg, `URL: ${cleanBase} | Key: ${maskToken(apiKey)}`);
         return { 
             success: true, 
-            message: serverName 
-                ? `Connected to Tautulli! Connected server: "${serverName}"`
-                : "Successfully connected to Tautulli!"
+            message: msg
         };
     } catch (e: any) {
-        if (e.name === "AbortError") {
-            return { success: false, error: "Connection timed out after 7s. Please check host, port, or firewall." };
-        }
-        return { success: false, error: e.message || "Failed to connect to Tautulli" };
+        const errMsg = e.name === "AbortError" 
+            ? "Connection timed out after 7s. Please check host, port, or firewall." 
+            : (e.message || "Failed to connect to Tautulli");
+        logger.addLog("ERROR", "TAUTULLI", `Failed to connect to Tautulli: ${errMsg}`, `URL: ${cleanBase} | Key: ${maskToken(apiKey)}`);
+        return { success: false, error: errMsg };
     }
 }
 
@@ -1122,10 +1144,13 @@ export async function testGlancesConfigAction(rawUrl: string) {
             clearTimeout(timeoutId);
 
             if (res.ok) {
+                logger.addLog("SUCCESS", "APPS", "Successfully connected to Glances server!", `URL: ${baseGlances}`);
                 return { success: true, message: "Successfully connected to Glances server!" };
             }
             if (res.status === 401 || res.status === 403) {
-                return { success: false, error: `Authentication required (HTTP ${res.status}). Please check Glances credentials.` };
+                const authErr = `Authentication required (HTTP ${res.status}). Please check Glances credentials.`;
+                logger.addLog("ERROR", "APPS", `Glances: ${authErr}`, `URL: ${baseGlances}`);
+                return { success: false, error: authErr };
             }
             lastError = `HTTP ${res.status}: ${res.statusText || "Not Found"}`;
         } catch (e: any) {
@@ -1137,6 +1162,7 @@ export async function testGlancesConfigAction(rawUrl: string) {
         }
     }
 
+    logger.addLog("ERROR", "APPS", `Failed to connect to Glances server: ${lastError}`, `URL: ${baseGlances}`);
     return { success: false, error: lastError };
 }
 
@@ -1157,11 +1183,14 @@ export async function validateDownloadsPathAction(pathStr: string) {
     if (!pathStr) return { success: false, error: "Path is empty" };
     try {
         if (!fs.existsSync(pathStr)) {
+            logger.addLog("WARN", "DOWNLOAD", `Downloads directory does not exist: "${pathStr}"`);
             return { success: false, exists: false, error: `Directory "${pathStr}" does not exist on disk.` };
         }
         const entries = fs.readdirSync(pathStr);
+        logger.addLog("SUCCESS", "DOWNLOAD", `Downloads folder validated: "${pathStr}" (${entries.length} items found).`);
         return { success: true, exists: true, message: `Directory exists with ${entries.length} items.` };
     } catch (e: any) {
+        logger.addLog("ERROR", "DOWNLOAD", `Failed to access downloads folder "${pathStr}": ${e.message || "Cannot access directory"}`);
         return { success: false, error: e.message || "Cannot access directory" };
     }
 }
@@ -1766,6 +1795,22 @@ export async function updateUserPlexLibraries(
             plexUsername: user.plexUsername
         };
 
+        // If user is the Plex Server Owner, owner already has full, unrestricted access to all servers.
+        const ownerUser = await getPlexOwnerUser(adminToken);
+        const isOwner = ownerUser && matchesPlexUser(matchTarget, {
+            id: "",
+            serverId: "",
+            librarySectionIds: [],
+            user: ownerUser,
+            invitedEmail: ownerUser.email
+        });
+
+        if (isOwner) {
+            logger.addLog("INFO", "PLEX", `[ACTION] User "${user.username}" is the Plex Server Owner. All server libraries are inherently accessible on Plex. Skipping cloud share creation.`);
+            revalidatePath("/settings/access");
+            return { success: true, message: `Saved library preferences for ${user.username} (Server Owner has unrestricted Plex access).` };
+        }
+
         // If KEEP_SUSPENDED was selected, do not grant access on Plex
         if (activationType === "KEEP_SUSPENDED") {
             for (const srv of servers) {
@@ -2038,6 +2083,21 @@ export async function setUserTrialOrSubscription(
                         plexEmail: user.plexEmail,
                         plexUsername: user.plexUsername
                     };
+
+                    const ownerUser = await getPlexOwnerUser(adminToken);
+                    const isOwner = ownerUser && matchesPlexUser(matchTarget, {
+                        id: "",
+                        serverId: "",
+                        librarySectionIds: [],
+                        user: ownerUser,
+                        invitedEmail: ownerUser.email
+                    });
+
+                    if (isOwner) {
+                        logger.addLog("INFO", "PLEX", `[ACTION] User "${user.username}" is the Plex Server Owner. Skipping cloud share sync.`);
+                        revalidatePath("/settings/access");
+                        return { success: true, message: `Updated access status for ${user.username} to ${status} (Owner has unrestricted Plex access).` };
+                    }
 
                     for (const srv of servers) {
                         const srvId = srv.clientIdentifier;
@@ -11126,10 +11186,10 @@ export async function getUserPlexHubData() {
                     tautulliUserId = match.user_id;
                 }
             } else if (!usersResult.ok && usersResult.error) {
-                console.warn(`[PLEX-HUB] Could not fetch users for Tautulli "${t.name}": ${usersResult.error}`);
+                console.warn(`[TAUTULLI] Could not fetch users for Tautulli "${t.name}": ${usersResult.error}`);
             }
         } catch (e: any) {
-            console.warn(`[PLEX-HUB] Failed to fetch users for Tautulli "${t.name}":`, e.message || e);
+            console.warn(`[TAUTULLI] Failed to fetch users for Tautulli "${t.name}":`, e.message || e);
         }
         
         // 1. Active Streams from Tautulli
@@ -11232,7 +11292,7 @@ export async function getUserPlexHubData() {
                     }
                 }
             } else if (!actResult.ok && actResult.error) {
-                console.warn(`[PLEX-HUB] Could not fetch activity for Tautulli "${t.name}": ${actResult.error}`);
+                console.warn(`[TAUTULLI] Could not fetch activity for Tautulli "${t.name}": ${actResult.error}`);
                 if (!existingKey || !serverMap.has(existingKey)) {
                     serverMap.set(normTName || t.id, {
                         id: t.id,
@@ -11245,7 +11305,7 @@ export async function getUserPlexHubData() {
                 }
             }
         } catch (e: any) {
-            console.warn(`[PLEX-HUB] Failed to fetch activity for "${t.name}":`, e.message || e);
+            console.warn(`[TAUTULLI] Failed to fetch activity for "${t.name}":`, e.message || e);
         }
 
         // 2. Watch History from this Tautulli instance (STRICTLY GATED TO MATCHED USER)
@@ -11573,7 +11633,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
             );
 
             if (termResult.success) {
-                logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on Plex server "${serverUrl}".`);
+                logger.addLog("INFO", "PLEX", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on Plex server "${serverUrl}".`);
                 return { success: true, message: "Stream terminated successfully." };
             } else {
                 return { success: false, error: termResult.message || "Failed to terminate stream" };
@@ -11659,7 +11719,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         }
 
         if (killed) {
-            logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on server "${instance.name}".`);
+            logger.addLog("INFO", "TAUTULLI", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on server "${instance.name}".`);
             return { success: true, message: "Stream terminated successfully." };
         } else {
             return { success: false, error: "Failed to terminate stream on server" };
