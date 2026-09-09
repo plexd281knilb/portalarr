@@ -163,6 +163,18 @@ export async function ensureSchemaColumns(): Promise<void> {
             await prisma.$queryRawUnsafe(`PRAGMA busy_timeout = 10000;`).catch(() => {});
             await prisma.$queryRawUnsafe(`PRAGMA synchronous = NORMAL;`).catch(() => {});
 
+            // Auto-recover any failed/incomplete migrations in _prisma_migrations so Prisma never gets stuck in P3009/P3018
+            try {
+                await prisma.$executeRawUnsafe(`
+                    UPDATE "_prisma_migrations" 
+                    SET "finished_at" = COALESCE("finished_at", CURRENT_TIMESTAMP), 
+                        "applied_steps_count" = CASE WHEN "applied_steps_count" = 0 THEN 1 ELSE "applied_steps_count" END
+                    WHERE "finished_at" IS NULL AND "rolled_back_at" IS NULL;
+                `);
+            } catch (migErr) {
+                // Ignore if table does not exist
+            }
+
         // --- 1. SETTINGS TABLE ---
         try {
             await prisma.$executeRawUnsafe(`
