@@ -22,6 +22,7 @@ import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolve
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 import { encryptData, decryptData } from "@/lib/encryption";
+import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { logger } from "@/lib/logger";
 import fs from "fs";
 import path from "path";
@@ -1474,8 +1475,8 @@ export async function updateUserPlexLibraries(userId: string, sectionIds: number
 
 export async function setUserTrialOrSubscription(
     userId: string, 
-    type: "TRIAL" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM", 
-    customDate?: string
+    type: "TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM", 
+    customDateOrDays?: string | number
 ) {
     try {
         await verifyAdmin();
@@ -1495,6 +1496,20 @@ export async function setUserTrialOrSubscription(
             status = "TRIAL";
             trialEndsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
             subscriptionEndsAt = null;
+        } else if (type === "7_DAYS_TRIAL") {
+            status = "TRIAL";
+            trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            subscriptionEndsAt = null;
+        } else if (type === "14_DAYS_TRIAL") {
+            status = "TRIAL";
+            trialEndsAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+            subscriptionEndsAt = null;
+        } else if (type === "REST_OF_YEAR") {
+            status = "APPROVED";
+            const currentYear = now.getFullYear();
+            subscriptionEndsAt = new Date(currentYear, 11, 31, 23, 59, 59);
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
         } else if (type === "30_DAYS") {
             status = "APPROVED";
             subscriptionEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -1514,9 +1529,11 @@ export async function setUserTrialOrSubscription(
             status = "SUSPENDED";
         } else if (type === "EXPIRED") {
             status = "EXPIRED";
-        } else if (type === "CUSTOM" && customDate) {
+        } else if (type === "CUSTOM" && customDateOrDays) {
             status = "APPROVED";
-            subscriptionEndsAt = new Date(customDate);
+            subscriptionEndsAt = typeof customDateOrDays === "number"
+                ? new Date(now.getTime() + customDateOrDays * 24 * 60 * 60 * 1000)
+                : new Date(customDateOrDays);
             trialEndsAt = null;
             if (!convertedAt) convertedAt = now;
         }
@@ -1651,8 +1668,15 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         const defaultPlexLibraries = (formData.get("defaultPlexLibraries") as string)?.trim() || "";
         const paymentPaypal = (formData.get("paymentPaypal") as string)?.trim() || "";
         const paymentVenmo = (formData.get("paymentVenmo") as string)?.trim() || "";
+        const paymentCashApp = (formData.get("paymentCashApp") as string)?.trim() || "";
+        const paymentZelle = (formData.get("paymentZelle") as string)?.trim() || "";
         const paymentInstructions = (formData.get("paymentInstructions") as string) || "";
         const subscriptionPrice = (formData.get("subscriptionPrice") as string)?.trim() || "";
+        const yearlyPrice = parseFloat((formData.get("yearlyPrice") as string) || "180") || 180;
+        const monthlyPrice = parseFloat((formData.get("monthlyPrice") as string) || "15") || (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const renewalMonth = parseInt((formData.get("renewalMonth") as string) || "1", 10) || 1;
+        const renewalDay = parseInt((formData.get("renewalDay") as string) || "1", 10) || 1;
+        const billingType = (formData.get("billingType") as string)?.trim() || "YEARLY_PRORATED";
         const requireReferralForSignup = formData.get("requireReferralForSignup") === "true";
 
         await prisma.settings.upsert({
@@ -1662,8 +1686,15 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
                 defaultPlexLibraries,
                 paymentPaypal,
                 paymentVenmo,
+                paymentCashApp,
+                paymentZelle,
                 paymentInstructions,
                 subscriptionPrice,
+                yearlyPrice,
+                monthlyPrice,
+                renewalMonth,
+                renewalDay,
+                billingType,
                 requireReferralForSignup
             },
             create: {
@@ -1672,8 +1703,15 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
                 defaultPlexLibraries,
                 paymentPaypal,
                 paymentVenmo,
+                paymentCashApp,
+                paymentZelle,
                 paymentInstructions,
                 subscriptionPrice,
+                yearlyPrice,
+                monthlyPrice,
+                renewalMonth,
+                renewalDay,
+                billingType,
                 requireReferralForSignup
             }
         });
@@ -1689,17 +1727,40 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
 export async function getPaymentAndTrialSettings() {
     try {
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const defaultTrialDays = settings?.defaultTrialDays ?? 14;
+        const yearlyPrice = settings?.yearlyPrice ?? 180;
+        const monthlyPrice = settings?.monthlyPrice ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const renewalMonth = settings?.renewalMonth ?? 1;
+        const renewalDay = settings?.renewalDay ?? 1;
+
+        const proratedPreview = calculateProratedBilling({
+            startDate: new Date(),
+            trialDays: defaultTrialDays,
+            yearlyPrice,
+            monthlyPrice,
+            renewalMonth,
+            renewalDay
+        });
+
         return {
             success: true,
             settings: {
-                defaultTrialDays: settings?.defaultTrialDays ?? 14,
+                defaultTrialDays,
                 defaultPlexLibraries: settings?.defaultPlexLibraries ?? "",
                 paymentPaypal: settings?.paymentPaypal ?? "",
                 paymentVenmo: settings?.paymentVenmo ?? "",
+                paymentCashApp: settings?.paymentCashApp ?? "",
+                paymentZelle: settings?.paymentZelle ?? "",
                 paymentInstructions: settings?.paymentInstructions ?? "",
-                subscriptionPrice: settings?.subscriptionPrice ?? "",
+                subscriptionPrice: settings?.subscriptionPrice ?? `$${yearlyPrice} / year`,
+                yearlyPrice,
+                monthlyPrice,
+                renewalMonth,
+                renewalDay,
+                billingType: settings?.billingType ?? "YEARLY_PRORATED",
                 requireReferralForSignup: Boolean(settings?.requireReferralForSignup)
-            }
+            },
+            proratedPreview
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -1899,17 +1960,40 @@ export async function getPublicJoinConfig(refCode?: string) {
             }
         }
 
+        const defaultTrialDays = settings?.defaultTrialDays ?? 14;
+        const yearlyPrice = settings?.yearlyPrice ?? 180;
+        const monthlyPrice = settings?.monthlyPrice ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const renewalMonth = settings?.renewalMonth ?? 1;
+        const renewalDay = settings?.renewalDay ?? 1;
+
+        const proratedBilling = calculateProratedBilling({
+            startDate: new Date(),
+            trialDays: defaultTrialDays,
+            yearlyPrice,
+            monthlyPrice,
+            renewalMonth,
+            renewalDay
+        });
+
         return {
             success: true,
             config: {
-                defaultTrialDays: settings?.defaultTrialDays ?? 14,
+                defaultTrialDays,
                 paymentPaypal: settings?.paymentPaypal ?? "",
                 paymentVenmo: settings?.paymentVenmo ?? "",
+                paymentCashApp: settings?.paymentCashApp ?? "",
+                paymentZelle: settings?.paymentZelle ?? "",
                 paymentInstructions: settings?.paymentInstructions ?? "",
-                subscriptionPrice: settings?.subscriptionPrice ?? "",
+                subscriptionPrice: settings?.subscriptionPrice ?? `$${yearlyPrice} / year`,
+                yearlyPrice,
+                monthlyPrice,
+                renewalMonth,
+                renewalDay,
+                billingType: settings?.billingType ?? "YEARLY_PRORATED",
                 requireReferralForSignup: Boolean(settings?.requireReferralForSignup),
                 referrerName,
-                validReferral
+                validReferral,
+                proratedBilling
             }
         };
     } catch (e: any) {

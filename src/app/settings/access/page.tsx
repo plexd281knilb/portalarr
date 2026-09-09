@@ -21,6 +21,7 @@ import {
     savePaymentAndTrialSettings
 } from "@/app/actions";
 import { changeUserPassword } from "@/app/auth-actions";
+import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +35,7 @@ import {
     Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, 
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
-    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy
+    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
@@ -74,8 +75,15 @@ export default function AccessSettingsPage() {
         defaultPlexLibraries: "",
         paymentPaypal: "",
         paymentVenmo: "",
+        paymentCashApp: "",
+        paymentZelle: "",
         paymentInstructions: "",
-        subscriptionPrice: "",
+        subscriptionPrice: "$180 / year",
+        yearlyPrice: 180,
+        monthlyPrice: 15,
+        renewalMonth: 1,
+        renewalDay: 1,
+        billingType: "YEARLY_PRORATED",
         requireReferralForSignup: false
     });
     const [defaultSelectedSections, setDefaultSelectedSections] = useState<number[]>([]);
@@ -317,7 +325,7 @@ export default function AccessSettingsPage() {
 
     // Handle Trial & Subscription updates
     const handleSetTrialOrSub = async (
-        type: "TRIAL" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED"
+        type: "TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED"
     ) => {
         if (!subModalUser) return;
         setSubActionLoading(true);
@@ -369,14 +377,21 @@ export default function AccessSettingsPage() {
         formData.append("defaultPlexLibraries", defaultSelectedSections.join(","));
         formData.append("paymentPaypal", paymentSettings.paymentPaypal);
         formData.append("paymentVenmo", paymentSettings.paymentVenmo);
+        formData.append("paymentCashApp", paymentSettings.paymentCashApp);
+        formData.append("paymentZelle", paymentSettings.paymentZelle);
         formData.append("paymentInstructions", paymentSettings.paymentInstructions);
         formData.append("subscriptionPrice", paymentSettings.subscriptionPrice);
+        formData.append("yearlyPrice", String(paymentSettings.yearlyPrice));
+        formData.append("monthlyPrice", String(paymentSettings.monthlyPrice));
+        formData.append("renewalMonth", String(paymentSettings.renewalMonth));
+        formData.append("renewalDay", String(paymentSettings.renewalDay));
+        formData.append("billingType", paymentSettings.billingType);
         formData.append("requireReferralForSignup", String(paymentSettings.requireReferralForSignup));
 
         const res = await savePaymentAndTrialSettings(formData);
         setSavingSettings(false);
         if (res.success) {
-            setSettingsSuccessMsg(res.message || "Settings saved successfully!");
+            setSettingsSuccessMsg(res.message || "Payment & Trial settings saved successfully!");
         } else {
             setSettingsErrMsg(res.error || "Failed to save settings.");
         }
@@ -414,12 +429,22 @@ export default function AccessSettingsPage() {
     // Flatten all sections across servers
     const allSections = serverLibraries.flatMap(s => s.sections || []);
 
+    // Live calculation for preview
+    const liveProrated = calculateProratedBilling({
+        startDate: new Date(),
+        trialDays: paymentSettings.defaultTrialDays,
+        yearlyPrice: paymentSettings.yearlyPrice,
+        monthlyPrice: paymentSettings.monthlyPrice,
+        renewalMonth: paymentSettings.renewalMonth,
+        renewalDay: paymentSettings.renewalDay
+    });
+
     return (
         <div className="space-y-6 max-w-5xl">
             <div>
                 <h3 className="text-xl font-bold tracking-tight text-emerald-400">Access Control & User Directory</h3>
                 <p className="text-sm text-muted-foreground">
-                    Provision accounts, manage Plex library access, configure trial periods & subscriptions, and track member referrals.
+                    Provision accounts, manage Plex library access, configure prorated annual subscriptions & trials, and track member referrals.
                 </p>
             </div>
 
@@ -1051,10 +1076,10 @@ export default function AccessSettingsPage() {
                     <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                                <Sparkles className="h-5 w-5 text-emerald-400" /> Wizarr-Style Onboarding & Payment Settings
+                                <Sparkles className="h-5 w-5 text-emerald-400" /> Wizarr-Style Onboarding, Trials & Prorated Yearly Billing
                             </CardTitle>
                             <CardDescription>
-                                Configure default trial length, pre-assigned Plex libraries for new joiners, payment gateways (PayPal / Venmo), and subscription details.
+                                Configure custom trial days, yearly/monthly subscription pricing, annual January 1st proration, and payment gateways.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -1072,64 +1097,224 @@ export default function AccessSettingsPage() {
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold">Default Free Trial Duration (Days)</Label>
-                                        <Input 
-                                            type="number"
-                                            min="1"
-                                            max="365"
-                                            value={paymentSettings.defaultTrialDays}
-                                            onChange={(e) => setPaymentSettings({ ...paymentSettings, defaultTrialDays: parseInt(e.target.value, 10) || 14 })}
-                                            className="bg-background/60"
-                                            required
-                                        />
-                                        <p className="text-[11px] text-muted-foreground">Prospective users signing up via invite links receive this trial length automatically.</p>
+                                {/* PRICING & TRIAL SETTINGS */}
+                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                                        <Calculator className="h-4 w-4" />
+                                        <span>Subscription & Trial Customization</span>
                                     </div>
 
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold">Subscription Rate / Price Display</Label>
-                                        <Input 
-                                            placeholder="e.g. $10 / month or $100 / year"
-                                            value={paymentSettings.subscriptionPrice}
-                                            onChange={(e) => setPaymentSettings({ ...paymentSettings, subscriptionPrice: e.target.value })}
-                                            className="bg-background/60"
-                                        />
-                                        <p className="text-[11px] text-muted-foreground">Displayed on the onboarding screen and expired trial paywall.</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Free Trial Duration (Days)</Label>
+                                            <Input 
+                                                type="number"
+                                                min="1"
+                                                max="365"
+                                                value={paymentSettings.defaultTrialDays}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, defaultTrialDays: parseInt(e.target.value, 10) || 14 })}
+                                                className="bg-background/60 font-mono"
+                                                required
+                                            />
+                                            <p className="text-[11px] text-muted-foreground">e.g. 7 or 14 days free pass.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Yearly Subscription Rate ($)</Label>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    value={paymentSettings.yearlyPrice}
+                                                    onChange={(e) => {
+                                                        const y = parseFloat(e.target.value) || 0;
+                                                        const m = y > 0 ? Math.round((y / 12) * 100) / 100 : 0;
+                                                        setPaymentSettings({ ...paymentSettings, yearlyPrice: y, monthlyPrice: m, subscriptionPrice: `$${y} / year` });
+                                                    }}
+                                                    className="pl-9 bg-background/60 font-mono"
+                                                    required
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Full annual payment (e.g. $180/yr).</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Monthly Breakdown Rate ($)</Label>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={paymentSettings.monthlyPrice}
+                                                    onChange={(e) => setPaymentSettings({ ...paymentSettings, monthlyPrice: parseFloat(e.target.value) || 0 })}
+                                                    className="pl-9 bg-background/60 font-mono"
+                                                    required
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Calculated proration rate (e.g. $15/mo).</p>
+                                        </div>
+                                    </div>
+
+                                    {/* ANNUAL RENEWAL DATE CONFIG */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-border/30">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Annual Billing Renewal Date</Label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <Select 
+                                                    value={String(paymentSettings.renewalMonth)} 
+                                                    onValueChange={(val) => setPaymentSettings({ ...paymentSettings, renewalMonth: parseInt(val, 10) })}
+                                                >
+                                                    <SelectTrigger className="bg-background/80 text-xs"><SelectValue placeholder="Month" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="1">January</SelectItem>
+                                                        <SelectItem value="2">February</SelectItem>
+                                                        <SelectItem value="3">March</SelectItem>
+                                                        <SelectItem value="4">April</SelectItem>
+                                                        <SelectItem value="5">May</SelectItem>
+                                                        <SelectItem value="6">June</SelectItem>
+                                                        <SelectItem value="7">July</SelectItem>
+                                                        <SelectItem value="8">August</SelectItem>
+                                                        <SelectItem value="9">September</SelectItem>
+                                                        <SelectItem value="10">October</SelectItem>
+                                                        <SelectItem value="11">November</SelectItem>
+                                                        <SelectItem value="12">December</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+
+                                                <Select 
+                                                    value={String(paymentSettings.renewalDay)} 
+                                                    onValueChange={(val) => setPaymentSettings({ ...paymentSettings, renewalDay: parseInt(val, 10) })}
+                                                >
+                                                    <SelectTrigger className="bg-background/80 text-xs"><SelectValue placeholder="Day" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="1">1st of the month</SelectItem>
+                                                        <SelectItem value="15">15th of the month</SelectItem>
+                                                        <SelectItem value="28">28th of the month</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Default: Yearly payments renew on January 1st.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Subscription Display Label</Label>
+                                            <Input 
+                                                placeholder="e.g. $180 / year ($15/mo)"
+                                                value={paymentSettings.subscriptionPrice}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, subscriptionPrice: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                            <p className="text-[11px] text-muted-foreground">Rendered on user paywalls and cards.</p>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-border/40">
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold">PayPal Username or Me Link</Label>
-                                        <Input 
-                                            placeholder="e.g. paypal.me/YourUsername or admin@example.com"
-                                            value={paymentSettings.paymentPaypal}
-                                            onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentPaypal: e.target.value })}
-                                            className="bg-background/60"
-                                        />
+                                {/* LIVE PRORATED CALCULATION PREVIEW BOX */}
+                                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/30 via-emerald-900/20 to-transparent border border-emerald-500/30 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                                            <Sparkles className="h-4 w-4" />
+                                            <span>Live Prorated Billing Calculation Preview</span>
+                                        </div>
+                                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px]">
+                                            Dynamic Engine
+                                        </Badge>
                                     </div>
 
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold">Venmo Handle</Label>
-                                        <Input 
-                                            placeholder="e.g. @YourVenmoHandle"
-                                            value={paymentSettings.paymentVenmo}
-                                            onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentVenmo: e.target.value })}
-                                            className="bg-background/60"
-                                        />
+                                    <div className="text-xs space-y-1.5 text-muted-foreground">
+                                        <p>
+                                            If a prospective user signs up today (<strong className="text-foreground">{format(new Date(), "MMM d, yyyy")}</strong>) with a <strong className="text-foreground">{paymentSettings.defaultTrialDays}-day trial</strong> (free through <strong className="text-foreground">{format(new Date(liveProrated.trialEndDate), "MMM d, yyyy")}</strong>):
+                                        </p>
+                                        
+                                        <div className="p-3 rounded-xl bg-background/60 border border-border/40 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-foreground font-medium">
+                                            <div>
+                                                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Remaining in {liveProrated.trialEndYear}:</span>
+                                                <span className="text-emerald-400 font-bold text-sm">
+                                                    ${liveProrated.amountDueNow}
+                                                </span>
+                                                <span className="text-muted-foreground text-[11px] block">
+                                                    {liveProrated.remainingMonthsText} @ ${liveProrated.monthlyRate}/mo
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Next Annual Renewal:</span>
+                                                <span className="text-foreground font-bold text-sm">
+                                                    ${liveProrated.yearlyRate} / year
+                                                </span>
+                                                <span className="text-muted-foreground text-[11px] block">
+                                                    Due on {liveProrated.nextRenewalDate}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-[11px] text-muted-foreground/90 italic pt-1">
+                                            Summary displayed to user: "{liveProrated.breakdownSummary}"
+                                        </p>
                                     </div>
                                 </div>
 
-                                <div className="space-y-1.5 pt-2 border-t border-border/40">
-                                    <Label className="text-xs font-semibold">Custom Payment & Subscription Instructions</Label>
-                                    <Textarea 
-                                        rows={3}
-                                        placeholder="e.g. Send payment via Friends & Family. Please include your username in the transaction note so your subscription can be activated immediately!"
-                                        value={paymentSettings.paymentInstructions}
-                                        onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentInstructions: e.target.value })}
-                                        className="bg-background/60 text-xs"
-                                    />
+                                {/* PAYMENT GATEWAYS & HANDLES */}
+                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
+                                        <CreditCard className="h-4 w-4 text-emerald-400" />
+                                        <span>Custom Payment Gateways & Handles</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">PayPal Username or Me Link</Label>
+                                            <Input 
+                                                placeholder="e.g. paypal.me/YourUsername or admin@example.com"
+                                                value={paymentSettings.paymentPaypal}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentPaypal: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Venmo Handle</Label>
+                                            <Input 
+                                                placeholder="e.g. @YourVenmoHandle"
+                                                value={paymentSettings.paymentVenmo}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentVenmo: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">CashApp Tag</Label>
+                                            <Input 
+                                                placeholder="e.g. $YourCashtag"
+                                                value={paymentSettings.paymentCashApp}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentCashApp: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Zelle Email or Phone</Label>
+                                            <Input 
+                                                placeholder="e.g. payments@example.com or (555) 123-4567"
+                                                value={paymentSettings.paymentZelle}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentZelle: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5 pt-2 border-t border-border/30">
+                                        <Label className="text-xs font-semibold">Custom Payment & Subscription Instructions</Label>
+                                        <Textarea 
+                                            rows={3}
+                                            placeholder="e.g. Send payment via Friends & Family. Please include your username in the transaction note so your subscription can be activated immediately!"
+                                            value={paymentSettings.paymentInstructions}
+                                            onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentInstructions: e.target.value })}
+                                            className="bg-background/60 text-xs"
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* DEFAULT PLEX LIBRARIES SELECTION */}
@@ -1379,9 +1564,19 @@ export default function AccessSettingsPage() {
                                         variant="outline" 
                                         disabled={subActionLoading}
                                         className="h-9 text-xs font-semibold justify-start gap-2 border-blue-500/30 hover:bg-blue-500/10 text-blue-400"
-                                        onClick={() => handleSetTrialOrSub("TRIAL")}
+                                        onClick={() => handleSetTrialOrSub("7_DAYS_TRIAL")}
                                     >
-                                        <Timer className="h-3.5 w-3.5" /> Grant 14-Day Trial
+                                        <Timer className="h-3.5 w-3.5" /> 7-Day Trial
+                                    </Button>
+
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        disabled={subActionLoading}
+                                        className="h-9 text-xs font-semibold justify-start gap-2 border-blue-500/30 hover:bg-blue-500/10 text-blue-400"
+                                        onClick={() => handleSetTrialOrSub("14_DAYS_TRIAL")}
+                                    >
+                                        <Timer className="h-3.5 w-3.5" /> 14-Day Trial
                                     </Button>
 
                                     <Button 
@@ -1389,9 +1584,9 @@ export default function AccessSettingsPage() {
                                         variant="outline" 
                                         disabled={subActionLoading}
                                         className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400"
-                                        onClick={() => handleSetTrialOrSub("30_DAYS")}
+                                        onClick={() => handleSetTrialOrSub("REST_OF_YEAR")}
                                     >
-                                        <DollarSign className="h-3.5 w-3.5" /> Add 30 Days Sub
+                                        <Calendar className="h-3.5 w-3.5" /> Rest of {new Date().getFullYear()}
                                     </Button>
 
                                     <Button 
@@ -1401,7 +1596,7 @@ export default function AccessSettingsPage() {
                                         className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400"
                                         onClick={() => handleSetTrialOrSub("1_YEAR")}
                                     >
-                                        <CheckCircle2 className="h-3.5 w-3.5" /> Add 1 Year Sub
+                                        <CheckCircle2 className="h-3.5 w-3.5" /> Add 1 Full Year
                                     </Button>
 
                                     <Button 
@@ -1418,10 +1613,10 @@ export default function AccessSettingsPage() {
                                         type="button" 
                                         variant="outline" 
                                         disabled={subActionLoading}
-                                        className="h-9 text-xs font-semibold justify-start gap-2 border-purple-500/30 hover:bg-purple-500/10 text-purple-400 col-span-2"
+                                        className="h-9 text-xs font-semibold justify-start gap-2 border-purple-500/30 hover:bg-purple-500/10 text-purple-400"
                                         onClick={handleMarkUserConverted}
                                     >
-                                        <Trophy className="h-3.5 w-3.5 text-purple-400" /> Mark as Paid Conversion (Awards Referral)
+                                        <Trophy className="h-3.5 w-3.5 text-purple-400" /> Mark Converted
                                     </Button>
 
                                     <Button 

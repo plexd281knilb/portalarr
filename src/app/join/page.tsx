@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { 
     Sparkles, Gift, CheckCircle2, ChevronRight, ChevronLeft, Tv, Tv2, 
     Flame, Monitor, Smartphone, Globe, Shield, User, Mail, Lock, 
-    Loader2, AlertCircle, CreditCard, DollarSign, ArrowRight, Play, ExternalLink, Check
+    Loader2, AlertCircle, CreditCard, DollarSign, ArrowRight, Play, ExternalLink, Check, Copy, Calendar
 } from "lucide-react";
 
 function JoinWizardContent() {
@@ -23,6 +23,14 @@ function JoinWizardContent() {
     const [step, setStep] = useState(1);
     const [loadingConfig, setLoadingConfig] = useState(true);
     const [config, setConfig] = useState<any>(null);
+    const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
+
+    const handleCopy = (text: string, key: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        setCopiedHandle(key);
+        setTimeout(() => setCopiedHandle(null), 2000);
+    };
 
     // Form registration state
     const [username, setUsername] = useState("");
@@ -205,6 +213,26 @@ function JoinWizardContent() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* TRANSPARENT PRORATED PRICING BANNER */}
+                            {config?.proratedBilling && (
+                                <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-between gap-3 text-xs">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-1.5 bg-purple-500/20 text-purple-300 rounded-lg shrink-0">
+                                            <Calendar className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-purple-200">Prorated Annual Plan</p>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Only pay for remaining months ({config.proratedBilling.remainingMonthsText}): <strong className="text-foreground">{config.proratedBilling.amountDueText}</strong>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs shrink-0 font-bold">
+                                        ${config.proratedBilling.yearlyRate}/yr (Jan 1)
+                                    </Badge>
+                                </div>
+                            )}
                         </CardContent>
 
                         <CardFooter className="pt-2 pb-6 flex justify-center">
@@ -512,44 +540,135 @@ function JoinWizardContent() {
                         </CardHeader>
 
                         <CardContent className="space-y-4">
-                            {/* PAYMENT INFO BOX */}
+                            {/* PRORATED SUBSCRIPTION BREAKDOWN */}
                             <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3 text-xs">
-                                <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                                <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
                                     <div className="flex items-center gap-2 font-bold text-foreground">
                                         <CreditCard className="h-4 w-4 text-emerald-400" />
-                                        <span>Permanent Subscription Details</span>
+                                        <span>Annual Subscription & Prorated Billing</span>
                                     </div>
-                                    {config?.subscriptionPrice && (
-                                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold">
-                                            {config.subscriptionPrice}
-                                        </Badge>
-                                    )}
+                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold">
+                                        ${config?.yearlyPrice ?? 180} / year
+                                    </Badge>
                                 </div>
 
-                                <p className="text-muted-foreground leading-relaxed">
-                                    When your trial completes, you can renew and support server maintenance via PayPal or Venmo:
-                                </p>
+                                {config?.proratedBilling ? (
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Free Trial</span>
+                                                <p className="font-bold text-purple-300 text-sm">{config.proratedBilling.trialDays} Days</p>
+                                                <p className="text-[10px] text-muted-foreground">Ends in {config.proratedBilling.trialEndMonthName}</p>
+                                            </div>
+                                            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">1st Year Prorated</span>
+                                                <p className="font-bold text-emerald-400 text-sm">{config.proratedBilling.amountDueText}</p>
+                                                <p className="text-[10px] text-muted-foreground">{config.proratedBilling.remainingMonthsText}</p>
+                                            </div>
+                                            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1">
+                                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Renewal</span>
+                                                <p className="font-bold text-blue-300 text-sm">${config.proratedBilling.yearlyRate} / yr</p>
+                                                <p className="text-[10px] text-muted-foreground">Renews {config.proratedBilling.nextRenewalDate}</p>
+                                            </div>
+                                        </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-xs">
-                                    {config?.paymentPaypal && (
-                                        <div className="p-2.5 rounded-xl bg-background/60 border border-border/30 flex items-center justify-between">
-                                            <span className="text-muted-foreground font-sans text-[11px]">PayPal:</span>
-                                            <span className="font-bold text-foreground truncate">{config.paymentPaypal}</span>
-                                        </div>
-                                    )}
-                                    {config?.paymentVenmo && (
-                                        <div className="p-2.5 rounded-xl bg-background/60 border border-border/30 flex items-center justify-between">
-                                            <span className="text-muted-foreground font-sans text-[11px]">Venmo:</span>
-                                            <span className="font-bold text-foreground truncate">{config.paymentVenmo}</span>
-                                        </div>
-                                    )}
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                            {config.proratedBilling.breakdownSummary}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <p className="text-muted-foreground leading-relaxed">
+                                        When your trial completes, you can renew your full subscription to keep uninterrupted access.
+                                    </p>
+                                )}
+
+                                {/* PAYMENT METHODS GRID */}
+                                <div className="space-y-2 pt-2 border-t border-border/40">
+                                    <p className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                                        <DollarSign className="h-3.5 w-3.5 text-primary" /> Supported Payment Methods
+                                    </p>
+                                    
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-xs">
+                                        {config?.paymentPaypal && (
+                                            <div className="p-2.5 rounded-xl bg-background/70 border border-border/40 flex items-center justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">PayPal</span>
+                                                    <span className="font-bold text-foreground truncate block">{config.paymentPaypal}</span>
+                                                </div>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
+                                                    onClick={() => handleCopy(config.paymentPaypal, "paypal")}
+                                                >
+                                                    {copiedHandle === "paypal" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {config?.paymentVenmo && (
+                                            <div className="p-2.5 rounded-xl bg-background/70 border border-border/40 flex items-center justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">Venmo</span>
+                                                    <span className="font-bold text-foreground truncate block">{config.paymentVenmo}</span>
+                                                </div>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
+                                                    onClick={() => handleCopy(config.paymentVenmo, "venmo")}
+                                                >
+                                                    {copiedHandle === "venmo" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {config?.paymentCashApp && (
+                                            <div className="p-2.5 rounded-xl bg-background/70 border border-border/40 flex items-center justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">Cash App</span>
+                                                    <span className="font-bold text-foreground truncate block">{config.paymentCashApp}</span>
+                                                </div>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
+                                                    onClick={() => handleCopy(config.paymentCashApp, "cashapp")}
+                                                >
+                                                    {copiedHandle === "cashapp" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {config?.paymentZelle && (
+                                            <div className="p-2.5 rounded-xl bg-background/70 border border-border/40 flex items-center justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">Zelle</span>
+                                                    <span className="font-bold text-foreground truncate block">{config.paymentZelle}</span>
+                                                </div>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
+                                                    onClick={() => handleCopy(config.paymentZelle, "zelle")}
+                                                >
+                                                    {copiedHandle === "zelle" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {config?.paymentInstructions && (
-                                    <p className="text-[11px] text-muted-foreground/90 italic pt-1 whitespace-pre-wrap">
+                                    <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
                                         {config.paymentInstructions}
-                                    </p>
+                                    </div>
                                 )}
+
+                                <p className="text-[11px] text-muted-foreground italic pt-1">
+                                    💡 When submitting payment, please include your username <strong className="text-foreground">({username || "your account name"})</strong> in the note or memo.
+                                </p>
                             </div>
                         </CardContent>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
-import { getUserReferralInfo } from "@/app/actions";
+import { getUserReferralInfo, getPublicJoinConfig } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { 
     User, Mail, KeyRound, CheckCircle2, XCircle, Loader2, ShieldCheck, 
-    MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink
+    MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
+    CreditCard, Calendar
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
@@ -19,8 +20,17 @@ import { format, differenceInDays } from "date-fns";
 export default function UserProfilePage() {
     const [user, setUser] = useState<any>(null);
     const [referralInfo, setReferralInfo] = useState<any>(null);
+    const [paymentConfig, setPaymentConfig] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [copied, setCopied] = useState(false);
+    const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
+
+    const handleCopy = (text: string, key: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        setCopiedHandle(key);
+        setTimeout(() => setCopiedHandle(null), 2000);
+    };
 
     // Change Password State
     const [passCurrent, setPassCurrent] = useState("");
@@ -38,6 +48,10 @@ export default function UserProfilePage() {
                 const ref = await getUserReferralInfo();
                 if (ref?.success) {
                     setReferralInfo(ref);
+                }
+                const pConfig = await getPublicJoinConfig();
+                if (pConfig?.success && pConfig.config) {
+                    setPaymentConfig(pConfig.config);
                 }
             } catch (e) {
                 console.error(e);
@@ -119,7 +133,7 @@ export default function UserProfilePage() {
                                 <Gift className="h-5 w-5 text-purple-400" /> Invite Friends & Share Media
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Give your friends a free 14-day pass to try out the media server. Track their trial progress and subscription rewards below.
+                                Give your friends a free {paymentConfig?.defaultTrialDays || 14}-day pass to try out the media server. Track their trial progress and subscription rewards below.
                             </CardDescription>
                         </div>
                         <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit">
@@ -165,6 +179,158 @@ export default function UserProfilePage() {
                 </CardContent>
             </Card>
 
+            {/* SUBSCRIPTION & RENEWAL CARD */}
+            <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <CreditCard className="h-5 w-5 text-emerald-400" /> Subscription & Prorated Billing
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Transparent annual billing renewing on January 1st with prorated first-year rates.
+                            </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold w-fit">
+                            ${paymentConfig?.yearlyPrice ?? 180} / year
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {isTrial && paymentConfig?.proratedBilling ? (
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Trial Status</span>
+                                    <p className="font-bold text-blue-400 text-sm">{daysLeft} Days Left</p>
+                                    <p className="text-[10px] text-muted-foreground">Ends {user?.trialEndsAt ? format(new Date(user.trialEndsAt), "MMM d, yyyy") : ""}</p>
+                                </div>
+                                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">1st Year Prorated</span>
+                                    <p className="font-bold text-emerald-400 text-sm">{paymentConfig.proratedBilling.amountDueText}</p>
+                                    <p className="text-[10px] text-muted-foreground">{paymentConfig.proratedBilling.remainingMonthsText}</p>
+                                </div>
+                                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Renewal</span>
+                                    <p className="font-bold text-purple-300 text-sm">${paymentConfig.proratedBilling.yearlyRate} / yr</p>
+                                    <p className="text-[10px] text-muted-foreground">Renews {paymentConfig.proratedBilling.nextRenewalDate}</p>
+                                </div>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                {paymentConfig.proratedBilling.breakdownSummary}
+                            </p>
+                        </div>
+                    ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
+                        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1 text-xs">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Active Annual Subscription</span>
+                            <p className="font-bold text-emerald-400 text-sm">
+                                Valid until {format(new Date(user.subscriptionEndsAt), "MMMM d, yyyy")}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                                Renews at ${paymentConfig?.yearlyPrice ?? 180}/year for the following calendar year.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] text-xs space-y-1">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Access Level</span>
+                            <p className="font-bold text-foreground">
+                                {user?.role === "ADMIN" ? "Server Administrator" : "Permanent Access"}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                                Unrestricted lifetime access with full library and request privileges.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* PAYMENT HANDLES */}
+                    <div className="space-y-2 pt-2 border-t border-border/40">
+                        <p className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                            <DollarSign className="h-3.5 w-3.5 text-primary" /> Supported Payment Methods
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                            {paymentConfig?.paymentPaypal && (
+                                <div className="p-2.5 rounded-xl bg-background/80 border border-border/40 flex items-center justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">PayPal</span>
+                                        <span className="font-bold text-foreground truncate block">{paymentConfig.paymentPaypal}</span>
+                                    </div>
+                                    <Button 
+                                        type="button" 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
+                                        onClick={() => handleCopy(paymentConfig.paymentPaypal, "paypal")}
+                                    >
+                                        {copiedHandle === "paypal" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
+                            )}
+                            {paymentConfig?.paymentVenmo && (
+                                <div className="p-2.5 rounded-xl bg-background/80 border border-border/40 flex items-center justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">Venmo</span>
+                                        <span className="font-bold text-foreground truncate block">{paymentConfig.paymentVenmo}</span>
+                                    </div>
+                                    <Button 
+                                        type="button" 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
+                                        onClick={() => handleCopy(paymentConfig.paymentVenmo, "venmo")}
+                                    >
+                                        {copiedHandle === "venmo" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
+                            )}
+                            {paymentConfig?.paymentCashApp && (
+                                <div className="p-2.5 rounded-xl bg-background/80 border border-border/40 flex items-center justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">Cash App</span>
+                                        <span className="font-bold text-foreground truncate block">{paymentConfig.paymentCashApp}</span>
+                                    </div>
+                                    <Button 
+                                        type="button" 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
+                                        onClick={() => handleCopy(paymentConfig.paymentCashApp, "cashapp")}
+                                    >
+                                        {copiedHandle === "cashapp" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
+                            )}
+                            {paymentConfig?.paymentZelle && (
+                                <div className="p-2.5 rounded-xl bg-background/80 border border-border/40 flex items-center justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">Zelle</span>
+                                        <span className="font-bold text-foreground truncate block">{paymentConfig.paymentZelle}</span>
+                                    </div>
+                                    <Button 
+                                        type="button" 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
+                                        onClick={() => handleCopy(paymentConfig.paymentZelle, "zelle")}
+                                    >
+                                        {copiedHandle === "zelle" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {paymentConfig?.paymentInstructions && (
+                        <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[11px] text-muted-foreground/90 whitespace-pre-wrap">
+                            {paymentConfig.paymentInstructions}
+                        </div>
+                    )}
+
+                    <p className="text-[11px] text-muted-foreground italic pt-1">
+                        💡 When making a payment, remember to include your username <strong className="text-foreground">({user?.username})</strong> in the payment memo.
+                    </p>
+                </CardContent>
+            </Card>
+
             <div className="grid gap-6 md:grid-cols-2">
                 {/* ACCOUNT INFORMATION CARD */}
                 <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
@@ -206,7 +372,7 @@ export default function UserProfilePage() {
                             <div className="flex items-center gap-2 pt-0.5">
                                 {isTrial ? (
                                     <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500/40 gap-1.5 text-xs font-bold">
-                                        <Timer className="h-3.5 w-3.5" /> 14-Day Free Trial ({daysLeft} days remaining)
+                                        <Timer className="h-3.5 w-3.5" /> {paymentConfig?.defaultTrialDays || 14}-Day Free Trial ({daysLeft} days remaining)
                                     </Badge>
                                 ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
                                     <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">

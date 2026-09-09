@@ -35,8 +35,15 @@ model Settings {
   defaultPlexLibraries String?
   paymentPaypal      String?
   paymentVenmo       String?
+  paymentCashApp     String?
+  paymentZelle       String?
   paymentInstructions String?
   subscriptionPrice  String?
+  yearlyPrice        Float?    @default(180)
+  monthlyPrice       Float?    @default(15)
+  renewalMonth       Int?      @default(1)
+  renewalDay         Int?      @default(1)
+  billingType        String?   @default("YEARLY_PRORATED")
   requireReferralForSignup Boolean @default(false)
 }
 
