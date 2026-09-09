@@ -1514,7 +1514,7 @@ export async function updateUserPlexLibraries(userId: string, selectedKeys: (str
         }
 
         // Save composite keys into user record in SQLite
-        const savedStr = stringKeys.join(",");
+        const savedStr = Array.from(new Set(stringKeys)).join(",");
         await prisma.user.update({
             where: { id: userId },
             data: { plexLibrarySectionIds: savedStr }
@@ -1527,7 +1527,7 @@ export async function updateUserPlexLibraries(userId: string, selectedKeys: (str
 
             // Find matching share for this user on this server
             const match = shares.find(s => 
-                (s.serverId === srvId || !s.serverId) && (
+                (s.serverId === srvId || !s.serverId || servers.length === 1) && (
                     (s.user.email && s.user.email.toLowerCase() === targetEmail) ||
                     (s.user.username && s.user.username.toLowerCase() === targetUser) ||
                     (s.invitedEmail && s.invitedEmail.toLowerCase() === targetEmail)
@@ -1535,7 +1535,7 @@ export async function updateUserPlexLibraries(userId: string, selectedKeys: (str
             );
 
             if (match && match.id) {
-                await updatePlexUserShareSections(adminToken, match.id, targetSectionIds);
+                await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
             } else if (targetSectionIds.length > 0 && (targetEmail || targetUser)) {
                 await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds);
             }
@@ -1663,13 +1663,13 @@ export async function setUserTrialOrSubscription(
                     (share.invitedEmail && share.invitedEmail.toLowerCase() === targetEmail)
                 );
                 if (isUserMatch && share.id) {
+                    const srvId = share.serverId || (servers[0]?.clientIdentifier);
                     if (status === "SUSPENDED" || status === "EXPIRED") {
-                        await updatePlexUserShareSections(adminToken, share.id, []);
+                        await updatePlexUserShareSections(adminToken, share.id, [], srvId);
                     } else if (status === "APPROVED" || status === "TRIAL") {
-                        const srvId = share.serverId || (servers[0]?.clientIdentifier);
                         const secIds = srvId ? (serverSectionsMap.get(srvId) || []) : [];
                         if (secIds.length > 0) {
-                            await updatePlexUserShareSections(adminToken, share.id, secIds);
+                            await updatePlexUserShareSections(adminToken, share.id, secIds, srvId);
                         }
                     }
                 }
@@ -8876,18 +8876,21 @@ export async function syncPlexFriendsInternal() {
 
             const userLibraryKeys: string[] = [];
             for (const share of userMatchedShares) {
-                const srv = serversWithSections.find(sv => sv.serverId === share.serverId);
+                const srv = serversWithSections.find(sv => sv.serverId === share.serverId) || (serversWithSections.length === 1 ? serversWithSections[0] : null);
                 if (srv) {
-                    if (share.allLibraries || (share.librarySectionIds.length === 0 && srv.sections.length > 0)) {
+                    if (share.allLibraries) {
                         for (const sec of srv.sections) {
-                            userLibraryKeys.push(`${share.serverId}:${sec.id}`);
+                            userLibraryKeys.push(`${srv.serverId}:${sec.id}`);
                         }
                     } else {
                         for (const secId of share.librarySectionIds) {
-                            userLibraryKeys.push(`${share.serverId}:${secId}`);
+                            const secExists = srv.sections.some(s => s.id === secId);
+                            if (secExists) {
+                                userLibraryKeys.push(`${srv.serverId}:${secId}`);
+                            }
                         }
                     }
-                } else {
+                } else if (share.serverId) {
                     for (const secId of share.librarySectionIds) {
                         userLibraryKeys.push(`${share.serverId}:${secId}`);
                     }

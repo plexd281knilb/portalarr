@@ -344,6 +344,7 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
     if (!adminToken) return [];
     const items: PlexSharedServerItem[] = [];
 
+    // 1. Fetch JSON from https://plex.tv/api/v2/shared_servers
     try {
         const res = await fetch("https://plex.tv/api/v2/shared_servers", {
             headers: {
@@ -358,26 +359,48 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
             const data = await res.json();
             if (Array.isArray(data)) {
                 for (const item of data) {
-                    const rawUser = item.user || {};
-                    const rawSections = item.library_section_ids || item.librarySectionIds || [];
-                    const sectionIds = Array.isArray(rawSections) 
-                        ? rawSections.map((s: any) => parseInt(s, 10)).filter((n: number) => !isNaN(n))
-                        : (typeof rawSections === "string" ? rawSections.split(",").map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n)) : []);
+                    const rawUser = item.user || item.invited || {};
+                    
+                    // Extract section IDs from all possible v2 API payload variations
+                    let sectionIds: number[] = [];
+                    if (Array.isArray(item.library_section_ids)) {
+                        sectionIds = item.library_section_ids.map((s: any) => parseInt(s, 10)).filter((n: number) => !isNaN(n));
+                    } else if (Array.isArray(item.librarySectionIDs)) {
+                        sectionIds = item.librarySectionIDs.map((s: any) => parseInt(s, 10)).filter((n: number) => !isNaN(n));
+                    } else if (Array.isArray(item.librarySectionIds)) {
+                        sectionIds = item.librarySectionIds.map((s: any) => parseInt(s, 10)).filter((n: number) => !isNaN(n));
+                    } else if (Array.isArray(item.sections)) {
+                        sectionIds = item.sections.map((s: any) => {
+                            if (typeof s === 'object' && s !== null) {
+                                return parseInt(s.id || s.key, 10);
+                            }
+                            return parseInt(s, 10);
+                        }).filter((n: number) => !isNaN(n));
+                    } else if (typeof item.library_section_ids === "string") {
+                        sectionIds = item.library_section_ids.split(",").map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n));
+                    }
 
-                    const isAll = Boolean(item.all_libraries || item.allLibraries || (Array.isArray(item.sections) && item.sections.length > 0 && sectionIds.length === 0));
+                    const isAll = Boolean(
+                        item.all_libraries === true || 
+                        item.allLibraries === true || 
+                        item.all_libraries === 1 || 
+                        item.allLibraries === 1 || 
+                        item.all_libraries === "1" || 
+                        item.allLibraries === "1"
+                    );
 
                     items.push({
                         id: item.id,
-                        serverId: item.machine_identifier || item.machineIdentifier || item.server_id || "",
+                        serverId: item.machine_identifier || item.machineIdentifier || item.server_id || item.serverId || "",
                         serverName: item.server_name || item.serverName,
                         user: {
-                            id: rawUser.id,
-                            email: rawUser.email || item.email || item.invitedEmail,
+                            id: rawUser.id || item.user_id || item.userID,
+                            email: rawUser.email || item.email || item.invitedEmail || item.invited_email,
                             username: rawUser.username || rawUser.title || item.username || item.title,
-                            title: rawUser.title || rawUser.username,
-                            thumb: rawUser.thumb
+                            title: rawUser.title || rawUser.username || item.title || item.username,
+                            thumb: rawUser.thumb || item.thumb
                         },
-                        invitedEmail: item.invited_email || item.invitedEmail || rawUser.email,
+                        invitedEmail: item.invited_email || item.invitedEmail || rawUser.email || item.email,
                         librarySectionIds: sectionIds,
                         allLibraries: isAll,
                         accepted: Boolean(item.accepted ?? true)
@@ -387,6 +410,89 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
         }
     } catch (e) {
         console.warn("[PLEX-API] Failed to fetch shared_servers list:", e);
+    }
+
+    // 2. Fetch legacy XML /api/users to complement/enrich library sections
+    try {
+        const xmlRes = await fetch(`https://plex.tv/api/users?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+            cache: "no-store"
+        });
+        if (xmlRes.ok) {
+            const xmlText = await xmlRes.text();
+            const userBlocks = xmlText.match(/<User\b[\s\S]*?<\/User>/gi) || [];
+            for (const block of userBlocks) {
+                const userEmail = block.match(/\bemail="([^"]*)"/i)?.[1] || "";
+                const username = block.match(/\busername="([^"]*)"/i)?.[1] || block.match(/\btitle="([^"]*)"/i)?.[1] || "";
+                const userThumb = block.match(/\bthumb="([^"]*)"/i)?.[1] || "";
+
+                const serverBlocks = block.match(/<Server\b[\s\S]*?<\/Server>/gi) || [];
+                for (const srvBlock of serverBlocks) {
+                    const shareId = srvBlock.match(/\bid="([^"]*)"/i)?.[1] || "";
+                    const machineIdentifier = srvBlock.match(/\bmachineIdentifier="([^"]*)"/i)?.[1] || srvBlock.match(/\bserverId="([^"]*)"/i)?.[1] || "";
+                    const srvName = srvBlock.match(/\bname="([^"]*)"/i)?.[1] || "";
+                    const allLibsAttr = srvBlock.match(/\ballLibraries="([^"]*)"/i)?.[1];
+                    const isAll = allLibsAttr === "1";
+
+                    const sectionIds: number[] = [];
+                    const secMatches = srvBlock.matchAll(/<Section\s+[^>]*\bid="([^"]*)"[^>]*\bkey="([^"]*)"[^>]*\bshared="([^"]*)"/gi);
+                    for (const sm of secMatches) {
+                        const secId = parseInt(sm[1] || sm[2], 10);
+                        const isShared = sm[3] === "1" || sm[3] === "true";
+                        if (!isNaN(secId) && (isShared || isAll)) {
+                            sectionIds.push(secId);
+                        }
+                    }
+
+                    if (sectionIds.length === 0) {
+                        const allSecMatches = srvBlock.matchAll(/<Section\s+[^>]*\bid="([^"]*)"/gi);
+                        for (const asm of allSecMatches) {
+                            const secId = parseInt(asm[1], 10);
+                            if (!isNaN(secId)) {
+                                sectionIds.push(secId);
+                            }
+                        }
+                    }
+
+                    if (userEmail || username) {
+                        const existingIdx = items.findIndex(it => 
+                            (it.id && shareId && String(it.id) === String(shareId)) ||
+                            (machineIdentifier && it.serverId === machineIdentifier && (
+                                (it.user.email && it.user.email.toLowerCase() === userEmail.toLowerCase()) ||
+                                (it.user.username && it.user.username.toLowerCase() === username.toLowerCase())
+                            ))
+                        );
+
+                        if (existingIdx >= 0) {
+                            if (!items[existingIdx].serverId && machineIdentifier) {
+                                items[existingIdx].serverId = machineIdentifier;
+                            }
+                            if (items[existingIdx].librarySectionIds.length === 0 && sectionIds.length > 0) {
+                                items[existingIdx].librarySectionIds = sectionIds;
+                            }
+                            items[existingIdx].allLibraries = items[existingIdx].allLibraries || isAll;
+                        } else {
+                            items.push({
+                                id: shareId,
+                                serverId: machineIdentifier,
+                                serverName: srvName,
+                                user: {
+                                    email: userEmail,
+                                    username: username,
+                                    title: username,
+                                    thumb: userThumb
+                                },
+                                invitedEmail: userEmail,
+                                librarySectionIds: sectionIds,
+                                allLibraries: isAll,
+                                accepted: true
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[PLEX-API] Failed to fetch legacy XML users list:", e);
     }
 
     return items;
@@ -418,21 +524,31 @@ export async function getUserPlexSharedLibraries(
     const selectedKeys: string[] = [];
 
     for (const share of matchedShares) {
-        const srvId = share.serverId;
-        const server = serversWithSections.find(srv => srv.serverId === srvId);
+        let srvId = share.serverId;
+        let server = serversWithSections.find(srv => srv.serverId === srvId);
+
+        // Fall back to primary server if single server exists
+        if (!server && serversWithSections.length === 1) {
+            server = serversWithSections[0];
+            srvId = server.serverId;
+        }
 
         if (server) {
-            if (share.allLibraries || (share.librarySectionIds.length === 0 && server.sections.length > 0)) {
+            if (share.allLibraries) {
                 // All libraries on this server
                 for (const sec of server.sections) {
                     selectedKeys.push(`${srvId}:${sec.id}`);
                 }
             } else {
+                // Only explicitly shared library sections for this server
                 for (const secId of share.librarySectionIds) {
-                    selectedKeys.push(`${srvId}:${secId}`);
+                    const secExists = server.sections.some(s => s.id === secId);
+                    if (secExists) {
+                        selectedKeys.push(`${srvId}:${secId}`);
+                    }
                 }
             }
-        } else {
+        } else if (srvId) {
             for (const secId of share.librarySectionIds) {
                 selectedKeys.push(`${srvId}:${secId}`);
             }
@@ -461,7 +577,10 @@ export async function invitePlexFriendAndShare(
     try {
         const payload: any = {
             invited_email: cleanTarget,
-            library_section_ids: sectionIds
+            library_section_ids: sectionIds,
+            librarySectionIDs: sectionIds,
+            all_libraries: false,
+            allLibraries: false
         };
         if (serverId) {
             payload.machine_identifier = serverId;
@@ -491,12 +610,14 @@ export async function invitePlexFriendAndShare(
             if (errText.includes("already") || res.status === 409) {
                 const existing = await getPlexSharedServersList(adminToken);
                 const match = existing.find(s => 
-                    (s.user.email && s.user.email.toLowerCase() === cleanTarget.toLowerCase()) ||
-                    (s.user.username && s.user.username.toLowerCase() === cleanTarget.toLowerCase()) ||
-                    (s.invitedEmail && s.invitedEmail.toLowerCase() === cleanTarget.toLowerCase())
+                    (s.serverId === serverId || !s.serverId) && (
+                        (s.user.email && s.user.email.toLowerCase() === cleanTarget.toLowerCase()) ||
+                        (s.user.username && s.user.username.toLowerCase() === cleanTarget.toLowerCase()) ||
+                        (s.invitedEmail && s.invitedEmail.toLowerCase() === cleanTarget.toLowerCase())
+                    )
                 );
                 if (match && match.id) {
-                    return await updatePlexUserShareSections(adminToken, String(match.id), sectionIds);
+                    return await updatePlexUserShareSections(adminToken, String(match.id), sectionIds, serverId);
                 }
             }
         }
@@ -507,7 +628,7 @@ export async function invitePlexFriendAndShare(
     // 2. Fallback to server direct XML endpoint
     if (serverId) {
         try {
-            const xmlUrl = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers?invited_email=${encodeURIComponent(cleanTarget)}&library_section_ids=${sectionIds.join(",")}`;
+            const xmlUrl = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers?invited_email=${encodeURIComponent(cleanTarget)}&library_section_ids=${sectionIds.join(",")}&allLibraries=0`;
             const res = await fetch(xmlUrl, {
                 method: "POST",
                 headers: {
@@ -535,10 +656,14 @@ export async function invitePlexFriendAndShare(
 export async function updatePlexUserShareSections(
     adminToken: string, 
     shareId: string | number, 
-    librarySectionIds: number[]
+    librarySectionIds: number[],
+    serverId?: string
 ): Promise<{ success: boolean; message?: string; error?: string }> {
     if (!adminToken) return { success: false, error: "Missing Plex Admin Token." };
     if (!shareId) return { success: false, error: "Missing Plex Share ID." };
+
+    let success = false;
+    let errorMsg = "";
 
     try {
         const res = await fetch(`https://plex.tv/api/v2/shared_servers/${encodeURIComponent(String(shareId))}`, {
@@ -550,26 +675,51 @@ export async function updatePlexUserShareSections(
                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
             },
             body: JSON.stringify({
-                library_section_ids: librarySectionIds
+                library_section_ids: librarySectionIds,
+                librarySectionIDs: librarySectionIds,
+                all_libraries: false,
+                allLibraries: false
             })
         });
 
         if (res.ok) {
-            return {
-                success: true,
-                message: `Updated Plex library shares (${librarySectionIds.length} libraries enabled).`
-            };
+            success = true;
         } else {
             const errText = await res.text().catch(() => "");
-            return {
-                success: false,
-                error: `Plex API returned error (${res.status}): ${errText || res.statusText}`
-            };
+            errorMsg = `Plex API returned error (${res.status}): ${errText || res.statusText}`;
         }
     } catch (e: any) {
+        errorMsg = e.message || "Network error updating Plex share";
+    }
+
+    // Fallback to direct XML endpoint if machine_identifier/serverId is provided
+    if (!success && serverId) {
+        try {
+            const xmlUrl = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers/${encodeURIComponent(String(shareId))}?library_section_ids=${librarySectionIds.join(",")}&allLibraries=0`;
+            const res = await fetch(xmlUrl, {
+                method: "PUT",
+                headers: {
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (res.ok) {
+                success = true;
+            }
+        } catch (e: any) {
+            console.warn("[PLEX-API] Fallback XML update share error:", e);
+        }
+    }
+
+    if (success) {
+        return {
+            success: true,
+            message: `Updated Plex library shares (${librarySectionIds.length} libraries enabled).`
+        };
+    } else {
         return {
             success: false,
-            error: e.message || "Failed to update Plex shared libraries."
+            error: errorMsg || "Failed to update Plex shared libraries."
         };
     }
 }

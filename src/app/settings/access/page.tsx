@@ -306,19 +306,33 @@ export default function AccessSettingsPage() {
         }
     };
 
-    const handleToggleUserSection = (uniqueKey: string) => {
-        setUserSelectedKeys(prev => 
-            prev.includes(uniqueKey) ? prev.filter(k => k !== uniqueKey) : [...prev, uniqueKey]
-        );
+    const isSectionSelected = (serverId: string, sectionId: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        return userSelectedKeys.includes(fullKey) || (serverLibraries.length === 1 && userSelectedKeys.includes(rawKey));
+    };
+
+    const handleToggleUserSection = (serverId: string, sectionId: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        setUserSelectedKeys(prev => {
+            const isSelected = prev.includes(fullKey) || (serverLibraries.length === 1 && prev.includes(rawKey));
+            if (isSelected) {
+                return prev.filter(k => k !== fullKey && k !== rawKey);
+            } else {
+                return [...prev.filter(k => k !== rawKey), fullKey];
+            }
+        });
     };
 
     const handleToggleAllServerSections = (serverId: string, selectAll: boolean) => {
         const server = serverLibraries.find(s => s.serverId === serverId);
         if (!server) return;
         const serverKeys = (server.sections || []).map((sec: any) => `${serverId}:${sec.id}`);
+        const serverRawIds = (server.sections || []).map((sec: any) => String(sec.id));
         
         setUserSelectedKeys(prev => {
-            const otherServerKeys = prev.filter(k => !k.startsWith(`${serverId}:`));
+            const otherServerKeys = prev.filter(k => !k.startsWith(`${serverId}:`) && !serverRawIds.includes(k));
             return selectAll ? [...otherServerKeys, ...serverKeys] : otherServerKeys;
         });
     };
@@ -331,13 +345,39 @@ export default function AccessSettingsPage() {
         setUserSelectedKeys([]);
     };
 
+    const isDefaultSelected = (serverId: string, sectionId: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        return defaultSelectedKeys.includes(fullKey) || (serverLibraries.length === 1 && defaultSelectedKeys.includes(rawKey));
+    };
+
+    const handleToggleDefaultSection = (serverId: string, sectionId: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        setDefaultSelectedKeys(prev => {
+            const isSelected = prev.includes(fullKey) || (serverLibraries.length === 1 && prev.includes(rawKey));
+            if (isSelected) {
+                return prev.filter(k => k !== fullKey && k !== rawKey);
+            } else {
+                return [...prev.filter(k => k !== rawKey), fullKey];
+            }
+        });
+    };
+
     const handleSaveUserLibraries = async () => {
         if (!libModalUser) return;
         setSavingUserLibs(true);
         setLibSuccessMsg("");
         setLibErrMsg("");
 
-        const res = await updateUserPlexLibraries(libModalUser.id, userSelectedKeys);
+        // Normalize keys before saving
+        const normalizedKeys = userSelectedKeys.map(k => {
+            if (k.includes(":")) return k;
+            if (serverLibraries.length > 0) return `${serverLibraries[0].serverId}:${k}`;
+            return k;
+        });
+
+        const res = await updateUserPlexLibraries(libModalUser.id, normalizedKeys);
         setSavingUserLibs(false);
         if (res.success) {
             setLibSuccessMsg(res.message || "Plex libraries updated successfully!");
@@ -1376,7 +1416,7 @@ export default function AccessSettingsPage() {
                                             {serverLibraries.map((srv) => {
                                                 const srvSections = srv.sections || [];
                                                 const srvSelectedCount = srvSections.filter((sec: any) => 
-                                                    defaultSelectedKeys.includes(`${srv.serverId}:${sec.id}`)
+                                                    isDefaultSelected(srv.serverId, sec.id)
                                                 ).length;
                                                 const allSrvSelected = srvSections.length > 0 && srvSelectedCount === srvSections.length;
 
@@ -1397,8 +1437,9 @@ export default function AccessSettingsPage() {
                                                                 className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                                                                 onClick={() => {
                                                                     const srvKeys = srvSections.map((sec: any) => `${srv.serverId}:${sec.id}`);
+                                                                    const srvRawIds = srvSections.map((sec: any) => String(sec.id));
                                                                     setDefaultSelectedKeys(prev => {
-                                                                        const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`));
+                                                                        const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`) && !srvRawIds.includes(k));
                                                                         return allSrvSelected ? otherKeys : [...otherKeys, ...srvKeys];
                                                                     });
                                                                 }}
@@ -1410,10 +1451,14 @@ export default function AccessSettingsPage() {
                                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                             {srvSections.map((sec: any) => {
                                                                 const uniqueKey = `${srv.serverId}:${sec.id}`;
-                                                                const isChecked = defaultSelectedKeys.includes(uniqueKey);
+                                                                const isChecked = isDefaultSelected(srv.serverId, sec.id);
                                                                 return (
                                                                     <label 
                                                                         key={uniqueKey} 
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            handleToggleDefaultSection(srv.serverId, sec.id);
+                                                                        }}
                                                                         className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
                                                                             isChecked ? "bg-primary/15 border-primary/40 text-foreground font-semibold" : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground"
                                                                         }`}
@@ -1421,12 +1466,8 @@ export default function AccessSettingsPage() {
                                                                         <input 
                                                                             type="checkbox"
                                                                             checked={isChecked}
-                                                                            onChange={() => {
-                                                                                setDefaultSelectedKeys(prev => 
-                                                                                    prev.includes(uniqueKey) ? prev.filter(x => x !== uniqueKey) : [...prev, uniqueKey]
-                                                                                );
-                                                                            }}
-                                                                            className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 shrink-0"
+                                                                            onChange={() => {}}
+                                                                            className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 shrink-0 pointer-events-none"
                                                                         />
                                                                         <span className="truncate">{sec.title}</span>
                                                                         <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
@@ -1504,7 +1545,10 @@ export default function AccessSettingsPage() {
 
                             <div className="flex items-center justify-between text-xs">
                                 <span className="text-muted-foreground font-semibold">
-                                    {userSelectedKeys.length} of {totalLibrariesCount} libraries selected
+                                    {allUniqueKeys.filter(k => {
+                                        const [srvId, secId] = k.split(":");
+                                        return isSectionSelected(srvId, secId);
+                                    }).length} of {totalLibrariesCount} libraries selected
                                 </span>
                                 <div className="flex gap-2">
                                     <Button 
@@ -1537,7 +1581,7 @@ export default function AccessSettingsPage() {
                                     serverLibraries.map((server) => {
                                         const serverSections = server.sections || [];
                                         const serverSelectedCount = serverSections.filter((sec: any) => 
-                                            userSelectedKeys.includes(`${server.serverId}:${sec.id}`)
+                                            isSectionSelected(server.serverId, sec.id)
                                         ).length;
                                         const allServerSelected = serverSections.length > 0 && serverSelectedCount === serverSections.length;
 
@@ -1565,11 +1609,11 @@ export default function AccessSettingsPage() {
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                     {serverSections.map((sec: any) => {
                                                         const uniqueKey = `${server.serverId}:${sec.id}`;
-                                                        const isChecked = userSelectedKeys.includes(uniqueKey);
+                                                        const isChecked = isSectionSelected(server.serverId, sec.id);
                                                         return (
                                                             <div 
                                                                 key={uniqueKey} 
-                                                                onClick={() => handleToggleUserSection(uniqueKey)}
+                                                                onClick={() => handleToggleUserSection(server.serverId, sec.id)}
                                                                 className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                                                                     isChecked 
                                                                         ? "bg-primary/15 border-primary/50 text-foreground font-semibold shadow-sm" 
