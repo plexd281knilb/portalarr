@@ -18,7 +18,7 @@ import {
     updatePlexUserShareSections,
     removePlexUserShare
 } from "@/lib/plex";
-import prisma from "@/lib/prisma";
+import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
@@ -555,6 +555,7 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
 
 export async function getSettings() {
     await verifyAdmin();
+    await ensureSchemaColumns();
     const settings = await prisma.settings.findFirst() || {} as any;
     
     if (settings.smtpPass) settings.smtpPass = decryptData(settings.smtpPass);
@@ -565,6 +566,7 @@ export async function getSettings() {
 
 export async function saveSettings(formData: FormData) {
   await verifyAdmin();
+  await ensureSchemaColumns();
   const smtpHost = formData.get("smtpHost") as string;
   const smtpPort = formData.get("smtpPort") as string;
   const smtpUser = formData.get("smtpUser") as string;
@@ -1104,6 +1106,7 @@ import { sendUserApprovalEmail, createSession } from "@/app/auth-actions";
 export async function getAppUsers() {
     try {
         await verifyAdmin();
+        await ensureSchemaColumns();
         return await prisma.user.findMany({
             orderBy: { createdAt: 'desc' },
             select: { 
@@ -1139,6 +1142,7 @@ export async function getAppUsers() {
     } catch (e) {
         const user = await verifyUser().catch(() => null);
         if (user) {
+            await ensureSchemaColumns();
             return await prisma.user.findMany({
                 orderBy: { createdAt: 'desc' },
                 select: { 
@@ -1705,6 +1709,7 @@ export async function markUserConverted(userId: string) {
 export async function getReferralStats() {
     try {
         await verifyAdmin();
+        await ensureSchemaColumns();
         const users = await prisma.user.findMany({
             select: {
                 id: true,
@@ -1721,39 +1726,41 @@ export async function getReferralStats() {
                 _count: {
                     select: { referrals: true }
                 }
-            }
+            },
+            orderBy: { createdAt: "desc" }
         });
 
-        const totalReferred = users.filter(u => u.referredByUserId).length;
-        const totalTrials = users.filter(u => u.referredByUserId && (u.status === "TRIAL" || u.trialEndsAt)).length;
-        const totalConversions = users.filter(u => u.referredByUserId && u.convertedAt).length;
+        // Compute leaderboard and statistics
+        const userMap = new Map<string, any>();
+        let totalTrials = 0;
+        let totalConverted = 0;
 
-        // Leaderboard
-        const referrersMap = new Map<string, { username: string; totalReferrals: number; trials: number; conversions: number }>();
         for (const u of users) {
-            if (u.referredBy) {
-                const rId = u.referredBy.id;
-                const existing = referrersMap.get(rId) || {
-                    username: u.referredBy.username,
-                    totalReferrals: 0,
-                    trials: 0,
-                    conversions: 0
-                };
-                existing.totalReferrals++;
-                if (u.status === "TRIAL" || u.trialEndsAt) existing.trials++;
-                if (u.convertedAt) existing.conversions++;
-                referrersMap.set(rId, existing);
+            if (u.status === "TRIAL") totalTrials++;
+            if (u.convertedAt || (u.status === "APPROVED" && u.referredByUserId)) totalConverted++;
+
+            const count = u._count?.referrals || 0;
+            if (count > 0) {
+                userMap.set(u.id, {
+                    id: u.id,
+                    username: u.username,
+                    referralCode: u.referralCode,
+                    totalReferred: count,
+                    convertedCount: users.filter(x => x.referredByUserId === u.id && (x.status === "APPROVED" || x.convertedAt)).length
+                });
             }
         }
 
-        const leaderboard = Array.from(referrersMap.values()).sort((a, b) => b.conversions - a.conversions || b.totalReferrals - a.totalReferrals);
+        const leaderboard = Array.from(userMap.values())
+            .sort((a, b) => b.totalReferred - a.totalReferred)
+            .slice(0, 10);
 
         return {
             success: true,
             stats: {
-                totalReferred,
+                totalUsers: users.length,
                 totalTrials,
-                totalConversions,
+                totalConverted,
                 leaderboard
             }
         };
@@ -1765,6 +1772,7 @@ export async function getReferralStats() {
 export async function savePaymentAndTrialSettings(formData: FormData) {
     try {
         await verifyAdmin();
+        await ensureSchemaColumns();
         const defaultTrialDays = parseInt((formData.get("defaultTrialDays") as string) || "14", 10) || 14;
         const defaultPlexLibraries = (formData.get("defaultPlexLibraries") as string)?.trim() || "";
         const paymentPaypal = (formData.get("paymentPaypal") as string)?.trim() || "";
@@ -1827,6 +1835,7 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
 
 export async function getPaymentAndTrialSettings() {
     try {
+        await ensureSchemaColumns();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const defaultTrialDays = settings?.defaultTrialDays ?? 14;
         const yearlyPrice = settings?.yearlyPrice ?? 180;
@@ -9869,34 +9878,147 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
 }
 
 export async function getSystemLogsAction() {
-    return logger.getLogs();
+    try {
+        return logger.getLogs();
+    } catch (e: any) {
+        console.error("Error retrieving system logs:", e);
+        return [];
+    }
 }
 
 export async function clearSystemLogsAction() {
-    await verifyAdmin();
-    logger.clearLogs();
-    return { success: true };
+    try {
+        await verifyAdmin();
+        logger.clearLogs();
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to clear logs" };
+    }
 }
 
 export async function dumpEntireDatabaseAction() {
-    await verifyAdmin();
-    const libraries = await prisma.library.findMany();
-    const books = await prisma.book.findMany();
-    const requests = await prisma.bookRequest.findMany();
-    const users = await prisma.user.findMany({ select: { id: true, username: true, role: true, status: true } });
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
 
-    logger.addLog("SYSTEM", "DATABASE", `=================== DUMPING ENTIRE SQLITE DATABASE ===================`);
-    logger.addLog("SYSTEM", "DATABASE", `📚 Libraries Count: ${libraries.length}`);
-    libraries.forEach(l => logger.addLog("INFO", "DATABASE", `  - [Lib ID: ${l.id}] Name: "${l.name}" | Path: "${l.path}" | MediaType: ${l.mediaType}`));
-    
-    logger.addLog("SYSTEM", "DATABASE", `📖 Books Count: ${books.length}`);
-    books.forEach(b => logger.addLog("INFO", "DATABASE", `  - [Book ID: ${b.id}] Title: "${b.title}" | Author: "${b.author}" | Path: "${b.filePath}" | Size: ${(((b.fileSize || 0)) / 1024 / 1024).toFixed(2)} MB`));
-    
-    logger.addLog("SYSTEM", "DATABASE", `👥 Users Count: ${users.length}`);
-    users.forEach(u => logger.addLog("INFO", "DATABASE", `  - [User ID: ${u.id}] Username: "${u.username}" | Role: ${u.role} | Status: ${u.status}`));
+        const dbUrl = process.env.DATABASE_URL || "";
+        const rawPath = dbUrl.replace("file:", "").trim();
+        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+        const targetExists = fs.existsSync(targetPath);
+        const targetSize = targetExists ? fs.statSync(targetPath).size : 0;
 
-    logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
-    return { librariesCount: libraries.length, booksCount: books.length, usersCount: users.length };
+        const [
+            settings,
+            tautulliList,
+            glancesList,
+            mediaAppsList,
+            servicesList,
+            libraries,
+            users,
+            requests,
+            failedReleases,
+            ticketCount,
+            betaCardCount
+        ] = await Promise.all([
+            prisma.settings.findFirst().catch(() => null),
+            prisma.tautulliInstance.findMany().catch(() => []),
+            prisma.glancesInstance.findMany().catch(() => []),
+            prisma.mediaApp.findMany().catch(() => []),
+            prisma.service.findMany().catch(() => []),
+            prisma.library.findMany({
+                include: {
+                    _count: { select: { books: true } }
+                }
+            }).catch(() => []),
+            prisma.user.findMany({
+                select: {
+                    id: true,
+                    username: true,
+                    email: true,
+                    role: true,
+                    status: true,
+                    kindleEmail: true,
+                    referralCode: true,
+                    referredByUserId: true,
+                    trialEndsAt: true,
+                    convertedAt: true,
+                    createdAt: true
+                },
+                orderBy: { createdAt: "desc" }
+            }).catch(() => []),
+            prisma.bookRequest.findMany({
+                orderBy: { createdAt: "desc" },
+                take: 50
+            }).catch(() => []),
+            prisma.failedRelease.findMany({
+                orderBy: { createdAt: "desc" },
+                take: 20
+            }).catch(() => []),
+            prisma.supportTicket.count().catch(() => 0),
+            prisma.betaCard.count().catch(() => 0)
+        ]);
+
+        const totalBooks = libraries.reduce((acc, l) => acc + (l._count?.books || 0), 0);
+
+        logger.addLog("SYSTEM", "DATABASE", `=================== DUMPING ENTIRE SQLITE DATABASE ===================`);
+        logger.addLog("INFO", "DATABASE", `📁 Database File: ${targetPath} | Size: ${(targetSize / 1024 / 1024).toFixed(2)} MB | Exists: ${targetExists}`);
+        
+        // Settings Summary
+        if (settings) {
+            logger.addLog("INFO", "DATABASE", `⚙️ Settings: SMTP Host="${settings.smtpHost || 'None'}" | Port=${settings.smtpPort || 'None'} | From="${settings.smtpFrom || 'None'}" | Downloads="${settings.downloadsPath || '/downloads'}" | AI Provider="${settings.aiProvider || 'default'}" (Model: ${settings.aiModel || 'default'}) | TrialDays=${settings.defaultTrialDays} | YearlyPrice=$${settings.yearlyPrice} | Renewal=${settings.renewalMonth}/${settings.renewalDay} | Billing=${settings.billingType || 'YEARLY_PRORATED'}`);
+        } else {
+            logger.addLog("WARN", "DATABASE", `⚙️ Settings: No global settings record found.`);
+        }
+
+        // Instances & Apps
+        logger.addLog("INFO", "DATABASE", `🔌 Connected Services: Tautulli (${tautulliList.length}) | Glances (${glancesList.length}) | MediaApps (${mediaAppsList.length}) | Services (${servicesList.length}) | Tickets (${ticketCount}) | BetaCards (${betaCardCount})`);
+        tautulliList.forEach(t => logger.addLog("INFO", "DATABASE", `  - [Tautulli] Name: "${t.name}" | URL: "${t.url}"`));
+        glancesList.forEach(g => logger.addLog("INFO", "DATABASE", `  - [Glances] Name: "${g.name}" | URL: "${g.url}"`));
+        mediaAppsList.forEach(m => logger.addLog("INFO", "DATABASE", `  - [MediaApp] Type: ${m.type} | Name: "${m.name}" | URL: "${m.url}"`));
+
+        // Libraries & Books Breakdown
+        logger.addLog("INFO", "DATABASE", `📚 Libraries Count: ${libraries.length} (Total Books: ${totalBooks})`);
+        libraries.forEach(l => {
+            logger.addLog("INFO", "DATABASE", `  - [Library: ${l.name}] (ID: ${l.id}) | MediaType: ${l.mediaType} | Books: ${l._count?.books || 0} | Path: "${l.path}" | Allowed: "${l.allowedUsers || '*'}"`);
+        });
+
+        // Users
+        logger.addLog("INFO", "DATABASE", `👥 Users Count: ${users.length}`);
+        users.forEach(u => {
+            const trialInfo = u.status === "TRIAL" ? ` | TrialEnds: ${u.trialEndsAt?.toISOString() || 'N/A'}` : "";
+            const refInfo = u.referredByUserId ? ` | RefBy: ${u.referredByUserId}` : "";
+            logger.addLog("INFO", "DATABASE", `  - [User: ${u.username}] Email: "${u.email}" | Role: ${u.role} | Status: ${u.status}${trialInfo}${refInfo} | Kindle: "${u.kindleEmail || 'None'}"`);
+        });
+
+        // Requests
+        logger.addLog("INFO", "DATABASE", `📥 Book Requests Count (Recent 50): ${requests.length}`);
+        requests.forEach(r => {
+            logger.addLog("INFO", "DATABASE", `  - [Request: ${r.title}] Author: "${r.author || ''}" | MediaType: ${r.mediaType} | RequestedBy: "${r.requestedBy}" | Status: ${r.status}`);
+        });
+
+        if (failedReleases.length > 0) {
+            logger.addLog("INFO", "DATABASE", `⚠️ Failed Releases Count: ${failedReleases.length}`);
+            failedReleases.forEach(f => logger.addLog("INFO", "DATABASE", `  - [Failed Release] "${f.releaseTitle}" | Protocol: ${f.protocol} | Reason: ${f.reason || 'Unknown'}`));
+        }
+
+        logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
+        
+        return {
+            success: true,
+            summary: {
+                targetPath,
+                targetSize,
+                librariesCount: libraries.length,
+                totalBooks,
+                usersCount: users.length,
+                requestsCount: requests.length,
+                servicesCount: tautulliList.length + glancesList.length + mediaAppsList.length
+            }
+        };
+    } catch (e: any) {
+        console.error("dumpEntireDatabaseAction error:", e);
+        return { success: false, error: e.message || "Failed to dump database" };
+    }
 }
 
 

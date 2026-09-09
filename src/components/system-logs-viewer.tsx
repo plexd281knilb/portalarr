@@ -23,6 +23,7 @@ export default function SystemLogsViewer() {
     const [levelFilter, setLevelFilter] = useState<string>("ALL");
     const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
     const [copied, setCopied] = useState(false);
+    const [dumping, setDumping] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const fetchLogs = async () => {
@@ -62,11 +63,17 @@ export default function SystemLogsViewer() {
     };
 
     const handleDumpDatabase = async () => {
+        setDumping(true);
         try {
-            await dumpEntireDatabaseAction();
-            fetchLogs();
+            const res = await dumpEntireDatabaseAction();
+            if (res && !res.success && res.error) {
+                console.error("Failed to dump database:", res.error);
+            }
+            await fetchLogs();
         } catch (e) {
             console.error("Failed to dump database:", e);
+        } finally {
+            setDumping(false);
         }
     };
 
@@ -169,10 +176,11 @@ export default function SystemLogsViewer() {
                             variant="outline" 
                             size="sm" 
                             onClick={handleDumpDatabase}
+                            disabled={dumping}
                             className="border-cyan-700 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200"
                         >
-                            <Database className="h-3.5 w-3.5 mr-1.5 text-cyan-400" />
-                            Dump Database
+                            <Database className={`h-3.5 w-3.5 mr-1.5 text-cyan-400 ${dumping ? "animate-spin" : ""}`} />
+                            {dumping ? "Dumping..." : "Dump Database"}
                         </Button>
 
                         <Button 
