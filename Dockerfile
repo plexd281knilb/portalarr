@@ -57,5 +57,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Run migrations using the globally installed prisma CLI with automatic recovery from stuck migrations
-CMD ["sh", "-c", "prisma migrate resolve --applied 20260908210000_add_prorated_billing_fields 2>/dev/null || true; prisma migrate deploy 2>/dev/null || true; node server.js"]
+# Run server directly; ensureSchemaColumns automatically migrates SQLite schema safely at startup
+CMD ["node", "server.js"]

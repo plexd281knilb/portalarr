@@ -115,7 +115,21 @@ function ensureDatabaseFile() {
 
         // ONLY initialize if the active database is missing or empty (0 bytes)
         if (canonicalSize === 0) {
+            const backupDir = path.join(targetDir, "backups");
+            const backupCandidates: string[] = [];
+            if (fs.existsSync(backupDir)) {
+                try {
+                    const files = fs.readdirSync(backupDir)
+                        .filter(f => f.startsWith("dev_backup_") && f.endsWith(".db"))
+                        .map(f => path.join(backupDir, f))
+                        .filter(f => fs.existsSync(f) && fs.statSync(f).size > 0)
+                        .sort((a, b) => fs.statSync(b).mtime.getTime() - fs.statSync(a).mtime.getTime());
+                    backupCandidates.push(...files);
+                } catch (e) {}
+            }
+
             const candidates = [
+                ...backupCandidates,
                 rootPrismaPath,
                 legacyNestedPath,
                 path.join(process.cwd(), "dev.db"),

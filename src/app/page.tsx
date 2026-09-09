@@ -37,13 +37,13 @@ export default async function UserLandingPage() {
     } catch (e) {}
   }
 
-  // Fetch all dynamic content
+  // Fetch all dynamic content safely
   const [apps, betaText, roadmapText, alertBanner, hasAccess] = await Promise.all([
-      getPublicMediaApps(),
-      getBetaDashboardText(),
-      getRoadmapText(),
-      getAlertBanner(),
-      isLoggedIn ? checkUserLibraryAccess() : Promise.resolve(false)
+      getPublicMediaApps().catch(() => []),
+      getBetaDashboardText().catch(() => ""),
+      getRoadmapText().catch(() => ""),
+      getAlertBanner().catch(() => ({ enabled: false, text: "" })),
+      isLoggedIn ? checkUserLibraryAccess().catch(() => false) : Promise.resolve(false)
   ]);
 
   const requestApps = apps.filter(app => 

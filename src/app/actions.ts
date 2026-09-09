@@ -2177,13 +2177,19 @@ export async function sendManualEmail(formData: FormData) {
 // ============================================================================
 
 export async function getPublicMediaApps() {
-    const apps = await prisma.mediaApp.findMany();
-    return apps.map(app => ({
-        id: app.id,
-        name: app.name,
-        type: app.type,
-        externalUrl: app.externalUrl 
-    }));
+    try {
+        await ensureSchemaColumns();
+        const apps = await prisma.mediaApp.findMany().catch(() => []);
+        return apps.map(app => ({
+            id: app.id,
+            name: app.name,
+            type: app.type,
+            externalUrl: app.externalUrl 
+        }));
+    } catch (e) {
+        console.error("getPublicMediaApps error:", e);
+        return [];
+    }
 }
 
 export async function submitSupportTicket(formData: FormData) {
@@ -2364,214 +2370,226 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 }
 
 export async function getActiveDownloads() {
-    const apps = await prisma.mediaApp.findMany({
-        where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent", "qbittorrent", "SABnzbd", "NZBGet"] } }
-    });
+    try {
+        await ensureSchemaColumns();
+        const apps = await prisma.mediaApp.findMany({
+            where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent", "qbittorrent", "SABnzbd", "NZBGet"] } }
+        }).catch(() => []);
 
-    const results = await Promise.all(apps.map(async (app) => {
-        let data: any = { 
-            id: app.id, 
-            type: app.type, 
-            name: app.name, 
-            online: false,
-            queue: []
-        };
+        const results = await Promise.all(apps.map(async (app) => {
+            let data: any = { 
+                id: app.id, 
+                type: app.type, 
+                name: app.name, 
+                online: false,
+                queue: []
+            };
 
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); 
-            let clean = cleanUrl(app.url || "").trim();
-            if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-                clean = `http://${clean}`;
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); 
+                let clean = cleanUrl(app.url || "").trim();
+                if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+                    clean = `http://${clean}`;
+                }
+                const cleanBase = clean.replace(/\/api\/?$/, "");
+                const decryptedKey = app.apiKey ? decryptData(app.apiKey as string) : "";
+                const appType = app.type.toLowerCase();
+
+                if (appType === "qbittorrent") {
+                    const res = await fetch(`${cleanBase}/api/v2/torrents/info?filter=downloading`, { 
+                        signal: controller.signal, 
+                        cache: "no-store" 
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (res.ok) {
+                        const torrents = await res.json();
+                        if (Array.isArray(torrents)) {
+                            data.online = true;
+                            data.queue = torrents.map((t: any) => {
+                                const sizeMb = t.size ? Math.round(t.size / (1024 * 1024)) : 0;
+                                const leftMb = t.amount_left ? Math.round(t.amount_left / (1024 * 1024)) : 0;
+                                const pct = t.progress ? (t.progress * 100).toFixed(1) : "0";
+                                const etaSec = t.eta || 0;
+                                const mins = Math.floor(etaSec / 60);
+                                const secs = etaSec % 60;
+                                const timeleftStr = etaSec > 0 ? `${mins}m ${secs}s` : "Unknown";
+
+                                return {
+                                    filename: t.name || "Unknown Torrent",
+                                    percentage: pct,
+                                    timeleft: timeleftStr,
+                                    mb: sizeMb,
+                                    mbleft: leftMb
+                                };
+                            });
+                        }
+                    }
+                } else if (appType === "nzbget") {
+                    let authHeader: Record<string, string> = { "Content-Type": "application/json" };
+                    if (decryptedKey && decryptedKey.includes(":")) {
+                        authHeader["Authorization"] = `Basic ${Buffer.from(decryptedKey).toString("base64")}`;
+                    }
+                    const res = await fetch(`${cleanBase}/jsonrpc`, {
+                        method: "POST",
+                        headers: authHeader,
+                        body: JSON.stringify({ method: "listgroups", params: [0] }),
+                        signal: controller.signal,
+                        cache: "no-store"
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (json && Array.isArray(json.result)) {
+                            data.online = true;
+                            data.queue = json.result.map((grp: any) => {
+                                const totalMb = grp.FileSizeMB || 0;
+                                const leftMb = grp.RemainingSizeMB || 0;
+                                const pct = totalMb > 0 ? (((totalMb - leftMb) / totalMb) * 100).toFixed(1) : "0";
+                                return {
+                                    filename: grp.NZBName || "Unknown Download",
+                                    percentage: pct,
+                                    timeleft: "In Progress",
+                                    mb: totalMb,
+                                    mbleft: leftMb
+                                };
+                            });
+                        }
+                    }
+                } else {
+                    const res = await fetch(`${cleanBase}/api?mode=queue&output=json&apikey=${encodeURIComponent(decryptedKey)}`, { 
+                        signal: controller.signal, 
+                        cache: "no-store" 
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (json.queue) {
+                            data.online = true;
+                            data.queue = (json.queue.slots || []).map((slot: any) => ({
+                                filename: slot.filename || "Unknown Download",
+                                percentage: slot.percentage || "0",
+                                timeleft: slot.timeleft || "0:00",
+                                mb: slot.mb || 0,
+                                mbleft: slot.mbleft || 0
+                            }));
+                        }
+                    }
+                }
+                return data;
+            } catch (e) {
+                return data;
             }
-            const cleanBase = clean.replace(/\/api\/?$/, "");
-            const decryptedKey = app.apiKey ? decryptData(app.apiKey as string) : "";
-            const appType = app.type.toLowerCase();
+        }));
 
-            if (appType === "qbittorrent") {
-                const res = await fetch(`${cleanBase}/api/v2/torrents/info?filter=downloading`, { 
-                    signal: controller.signal, 
-                    cache: "no-store" 
-                });
-                clearTimeout(timeoutId);
-
-                if (res.ok) {
-                    const torrents = await res.json();
-                    if (Array.isArray(torrents)) {
-                        data.online = true;
-                        data.queue = torrents.map((t: any) => {
-                            const sizeMb = t.size ? Math.round(t.size / (1024 * 1024)) : 0;
-                            const leftMb = t.amount_left ? Math.round(t.amount_left / (1024 * 1024)) : 0;
-                            const pct = t.progress ? (t.progress * 100).toFixed(1) : "0";
-                            const etaSec = t.eta || 0;
-                            const mins = Math.floor(etaSec / 60);
-                            const secs = etaSec % 60;
-                            const timeleftStr = etaSec > 0 ? `${mins}m ${secs}s` : "Unknown";
-
-                            return {
-                                filename: t.name || "Unknown Torrent",
-                                percentage: pct,
-                                timeleft: timeleftStr,
-                                mb: sizeMb,
-                                mbleft: leftMb
-                            };
-                        });
-                    }
-                }
-            } else if (appType === "nzbget") {
-                let authHeader: Record<string, string> = { "Content-Type": "application/json" };
-                if (decryptedKey && decryptedKey.includes(":")) {
-                    authHeader["Authorization"] = `Basic ${Buffer.from(decryptedKey).toString("base64")}`;
-                }
-                const res = await fetch(`${cleanBase}/jsonrpc`, {
-                    method: "POST",
-                    headers: authHeader,
-                    body: JSON.stringify({ method: "listgroups", params: [0] }),
-                    signal: controller.signal,
-                    cache: "no-store"
-                });
-                clearTimeout(timeoutId);
-
-                if (res.ok) {
-                    const json = await res.json();
-                    if (json && Array.isArray(json.result)) {
-                        data.online = true;
-                        data.queue = json.result.map((grp: any) => {
-                            const totalMb = grp.FileSizeMB || 0;
-                            const leftMb = grp.RemainingSizeMB || 0;
-                            const pct = totalMb > 0 ? (((totalMb - leftMb) / totalMb) * 100).toFixed(1) : "0";
-                            return {
-                                filename: grp.NZBName || "Unknown Download",
-                                percentage: pct,
-                                timeleft: "In Progress",
-                                mb: totalMb,
-                                mbleft: leftMb
-                            };
-                        });
-                    }
-                }
-            } else {
-                const res = await fetch(`${cleanBase}/api?mode=queue&output=json&apikey=${encodeURIComponent(decryptedKey)}`, { 
-                    signal: controller.signal, 
-                    cache: "no-store" 
-                });
-                clearTimeout(timeoutId);
-
-                if (res.ok) {
-                    const json = await res.json();
-                    if (json.queue) {
-                        data.online = true;
-                        data.queue = (json.queue.slots || []).map((slot: any) => ({
-                            filename: slot.filename || "Unknown Download",
-                            percentage: slot.percentage || "0",
-                            timeleft: slot.timeleft || "0:00",
-                            mb: slot.mb || 0,
-                            mbleft: slot.mbleft || 0
-                        }));
-                    }
-                }
-            }
-            return data;
-        } catch (e) {
-            return data;
-        }
-    }));
-
-    return results;
+        return results;
+    } catch (e) {
+        console.error("getActiveDownloads error:", e);
+        return [];
+    }
 }
 
 export async function getLandingStats() {
-    const [tautulli, glances, apps] = await Promise.all([
-        prisma.tautulliInstance.findMany(),
-        prisma.glancesInstance.findMany(),
-        prisma.mediaApp.findMany()
-    ]);
+    try {
+        await ensureSchemaColumns();
+        const [tautulli, glances, apps] = await Promise.all([
+            prisma.tautulliInstance.findMany().catch(() => []),
+            prisma.glancesInstance.findMany().catch(() => []),
+            prisma.mediaApp.findMany().catch(() => [])
+        ]);
 
-    let streamStats: { name: string, count: number }[] = [];
-    let serverStats: any[] = [];
-    let downApps: string[] = [];
+        let streamStats: { name: string, count: number }[] = [];
+        let serverStats: any[] = [];
+        let downApps: string[] = [];
 
-    await Promise.all(tautulli.map(async (t) => {
-        let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
-        const apiKey = decryptData(t.apiKey);
-        const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+        await Promise.all(tautulli.map(async (t) => {
+            let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
+            const apiKey = decryptData(t.apiKey);
+            const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
 
-        try {
-            const res = await fetch(fullUrl, { next: { revalidate: 10 } });
-            
-            if (!res.ok) {
+            try {
+                const res = await fetch(fullUrl, { next: { revalidate: 10 } });
+                
+                if (!res.ok) {
+                    streamStats.push({ name: t.name, count: 0 }); 
+                    return;
+                }
+                
+                const data = await res.json();
+                const count = data.response?.data?.stream_count ? Number(data.response.data.stream_count) : 0;
+                streamStats.push({ name: t.name, count: count });
+
+            } catch (e: any) { 
                 streamStats.push({ name: t.name, count: 0 }); 
-                return;
             }
+        }));
+
+        await Promise.all(glances.map(async (g) => {
+            let clean = cleanUrl(g.url?.trim() || "");
+            if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+                clean = `http://${clean}`;
+            }
+            const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
             
-            const data = await res.json();
-            const count = data.response?.data?.stream_count ? Number(data.response.data.stream_count) : 0;
-            streamStats.push({ name: t.name, count: count });
-
-        } catch (e: any) { 
-            streamStats.push({ name: t.name, count: 0 }); 
-        }
-    }));
-
-    await Promise.all(glances.map(async (g) => {
-        let clean = cleanUrl(g.url?.trim() || "");
-        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-            clean = `http://${clean}`;
-        }
-        const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
-        
-        const fetchGlancesMetric = async (endpoint: string) => {
-            const versions = [4, 3, 2]; 
-            for (const v of versions) {
+            const fetchGlancesMetric = async (endpoint: string) => {
+                const versions = [4, 3, 2]; 
+                for (const v of versions) {
+                    try {
+                        const url = `${baseGlances}/api/${v}/${endpoint}`;
+                        const res = await fetch(url, { next: { revalidate: 10 } });
+                        if (res.ok) return await res.json();
+                    } catch (e) { }
+                }
                 try {
-                    const url = `${baseGlances}/api/${v}/${endpoint}`;
+                    const url = `${baseGlances}/${endpoint}`;
                     const res = await fetch(url, { next: { revalidate: 10 } });
                     if (res.ok) return await res.json();
                 } catch (e) { }
-            }
+                throw new Error(`Failed`);
+            };
+
             try {
-                const url = `${baseGlances}/${endpoint}`;
-                const res = await fetch(url, { next: { revalidate: 10 } });
-                if (res.ok) return await res.json();
-            } catch (e) { }
-            throw new Error(`Failed`);
-        };
-
-        try {
-            const cpu = await fetchGlancesMetric("cpu");
-            const mem = await fetchGlancesMetric("mem");
-            
-            const cpuTotal = typeof cpu?.total === 'number' 
-                ? Math.round(cpu.total) 
-                : (typeof cpu?.user === 'number' ? Math.round(cpu.user + (cpu.system || 0)) : (typeof cpu === 'number' ? Math.round(cpu) : 0));
+                const cpu = await fetchGlancesMetric("cpu");
+                const mem = await fetchGlancesMetric("mem");
                 
-            const ramPercent = typeof mem?.percent === 'number' 
-                ? Math.round(mem.percent) 
-                : (mem?.total && mem?.used ? Math.round((mem.used / mem.total) * 100) : (typeof mem === 'number' ? Math.round(mem) : 0));
+                const cpuTotal = typeof cpu?.total === 'number' 
+                    ? Math.round(cpu.total) 
+                    : (typeof cpu?.user === 'number' ? Math.round(cpu.user + (cpu.system || 0)) : (typeof cpu === 'number' ? Math.round(cpu) : 0));
+                    
+                const ramPercent = typeof mem?.percent === 'number' 
+                    ? Math.round(mem.percent) 
+                    : (mem?.total && mem?.used ? Math.round((mem.used / mem.total) * 100) : (typeof mem === 'number' ? Math.round(mem) : 0));
 
-            serverStats.push({ 
-                name: g.name, 
-                cpu: cpuTotal, 
-                ram: ramPercent, 
-                online: true 
-            });
-        } catch (e: any) {
-            serverStats.push({ name: g.name, online: false });
-        }
-    }));
+                serverStats.push({ 
+                    name: g.name, 
+                    cpu: cpuTotal, 
+                    ram: ramPercent, 
+                    online: true 
+                });
+            } catch (e: any) {
+                serverStats.push({ name: g.name, online: false });
+            }
+        }));
 
-    await Promise.all(apps.map(async (app) => {
-        try {
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 2000); 
-            await fetch(app.url, { signal: controller.signal, mode: 'no-cors' });
-            clearTimeout(id);
-        } catch (e) {
-            downApps.push(app.name);
-        }
-    }));
+        await Promise.all(apps.map(async (app) => {
+            try {
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), 2000); 
+                await fetch(app.url, { signal: controller.signal, mode: 'no-cors' });
+                clearTimeout(id);
+            } catch (e) {
+                downApps.push(app.name);
+            }
+        }));
 
-    return { streamStats, serverStats, downApps };
+        return { streamStats, serverStats, downApps };
+    } catch (e) {
+        console.error("getLandingStats error:", e);
+        return { streamStats: [], serverStats: [], downApps: [] };
+    }
 }
 
 // ============================================================================
@@ -2579,8 +2597,13 @@ export async function getLandingStats() {
 // ============================================================================
 
 export async function getBetaDashboardText() {
-    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-    return settings?.betaDashboardText || "### Interested in Beta Testing?\nWe are rolling out new features. Click below to see what we are currently testing and how you can get access!";
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+        return settings?.betaDashboardText || "### Interested in Beta Testing?\nWe are rolling out new features. Click below to see what we are currently testing and how you can get access!";
+    } catch (e) {
+        return "### Interested in Beta Testing?\nWe are rolling out new features. Click below to see what we are currently testing and how you can get access!";
+    }
 }
 
 export async function updateBetaDashboardText(formData: FormData) {
@@ -2596,7 +2619,12 @@ export async function updateBetaDashboardText(formData: FormData) {
 }
 
 export async function getBetaCards() {
-    return await prisma.betaCard.findMany({ orderBy: { createdAt: 'desc' } });
+    try {
+        await ensureSchemaColumns();
+        return await prisma.betaCard.findMany({ orderBy: { createdAt: 'desc' } }).catch(() => []);
+    } catch (e) {
+        return [];
+    }
 }
 
 export async function createBetaCard(formData: FormData) {
@@ -2653,8 +2681,13 @@ export async function getRoadmapText(): Promise<string> {
     } catch (e) {
         console.warn("Failed to read roadmap.md from disk:", e);
     }
-    const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
-    return settings?.roadmapText || "# 🗺️ Portalarr Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+        return settings?.roadmapText || "# 🗺️ Portalarr Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+    } catch (e) {
+        return "# 🗺️ Portalarr Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+    }
 }
 
 export async function updateRoadmapText(formData: FormData) {
@@ -2889,11 +2922,19 @@ export async function saveEbooksUserGuide(content: string) {
 // ============================================================================
 
 export async function getAlertBanner() {
-    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-    return {
-        enabled: settings?.alertBannerEnabled || false,
-        text: settings?.alertBannerText || "⚠️ **System Maintenance:** Expected downtime this weekend."
-    };
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+        return {
+            enabled: settings?.alertBannerEnabled || false,
+            text: settings?.alertBannerText || "⚠️ **System Maintenance:** Expected downtime this weekend."
+        };
+    } catch (e) {
+        return {
+            enabled: false,
+            text: ""
+        };
+    }
 }
 
 export async function updateAlertBanner(formData: FormData) {
@@ -2918,6 +2959,7 @@ async function verifyUser() {
     const session = cookieStore.get("session")?.value;
     if (!session) throw new Error("Unauthorized");
     try {
+        await ensureSchemaColumns();
         const { payload } = await jwtVerify(session, getJwtSecret());
         const userId = (payload.userId || payload.id) as string;
         const username = (payload.username || "") as string;
@@ -2928,7 +2970,7 @@ async function verifyUser() {
             dbUser = await prisma.user.findUnique({
                 where: { id: userId },
                 select: { id: true, username: true, email: true, role: true, status: true }
-            });
+            }).catch(() => null);
         }
         if (!dbUser && (username || email)) {
             const conditions = [];
@@ -2940,7 +2982,7 @@ async function verifyUser() {
             dbUser = await prisma.user.findFirst({
                 where: { OR: conditions },
                 select: { id: true, username: true, email: true, role: true, status: true }
-            });
+            }).catch(() => null);
         }
 
         if (dbUser) {
@@ -8107,19 +8149,25 @@ export async function toggleMonitorSeries(requestId: string, monitor?: boolean) 
 
 
 export async function getPublicSmtpFromEmail() {
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings) return "";
-    return settings.smtpFrom || settings.smtpUser || "";
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        if (!settings) return "";
+        return settings.smtpFrom || settings.smtpUser || "";
+    } catch (e) {
+        return "";
+    }
 }
 
 export async function checkUserLibraryAccess(): Promise<boolean> {
     try {
+        await ensureSchemaColumns();
         const session = await verifyUser();
         if (session.role === "ADMIN") return true;
 
         const username = (session.username as string).toLowerCase();
         
-        const libs = await prisma.library.findMany();
+        const libs = await prisma.library.findMany().catch(() => []);
 
         const filtered = libs.filter(lib => {
             const restricted = (lib.restrictedUsers || "").split(",").map(u => u.trim().toLowerCase());
@@ -10183,19 +10231,21 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
 }
 
 export async function getUserPlexHubData() {
-    let user: any = null;
     try {
-        user = await verifyUser();
-    } catch (e) {
-        return { success: false, error: "Unauthorized" };
-    }
-    if (!user) {
-        return { success: false, error: "Unauthorized" };
-    }
+        await ensureSchemaColumns();
+        let user: any = null;
+        try {
+            user = await verifyUser();
+        } catch (e) {
+            return { success: false, error: "Unauthorized" };
+        }
+        if (!user) {
+            return { success: false, error: "Unauthorized" };
+        }
 
-    const isAdmin = user.role === "ADMIN";
-    const settings = await prisma.settings.findFirst();
-    const tautulli = await prisma.tautulliInstance.findMany();
+        const isAdmin = user.role === "ADMIN";
+        const settings = await prisma.settings.findFirst().catch(() => null);
+        const tautulli = await prisma.tautulliInstance.findMany().catch(() => []);
     
     const safeUsername = String(user?.username || "");
     const safeEmail = String(user?.email || "");
@@ -10727,6 +10777,10 @@ export async function getUserPlexHubData() {
             kindleDeliveries: userKindleLogs.length
         }
     };
+    } catch (e: any) {
+        console.error("getUserPlexHubData error:", e);
+        return { success: false, error: e.message || "Failed to load Plex Hub data" };
+    }
 }
 
 export async function killUserStream(instanceId: string, sessionKey: string) {
