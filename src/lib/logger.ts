@@ -2,9 +2,16 @@ export interface SystemLogEntry {
     id: string;
     timestamp: string;
     level: "INFO" | "WARN" | "ERROR" | "SUCCESS" | "SYSTEM";
-    category: "SCANNER" | "API" | "COVER" | "DOWNLOAD" | "KINDLE" | "SYSTEM" | "DATABASE" | "PLEX_HUB";
+    category: "SCANNER" | "API" | "COVER" | "DOWNLOAD" | "KINDLE" | "SYSTEM" | "DATABASE" | "PLEX_HUB" | "PLEX";
     message: string;
     details?: string;
+}
+
+export function maskToken(token?: string | null): string {
+    if (!token) return "none";
+    const clean = token.trim();
+    if (clean.length <= 6) return "***";
+    return `${clean.slice(0, 3)}...${clean.slice(-3)}`;
 }
 
 const originalConsoleLog = console.log;
@@ -26,7 +33,7 @@ const logFilePath = getLogFilePath();
 
 class SystemLogger {
     private logs: SystemLogEntry[] = [];
-    private maxLogs = 2000;
+    private maxLogs = 5000;
     private writeCount = 0;
 
     constructor() {
@@ -35,7 +42,7 @@ class SystemLogger {
 
     public addLog(
         level: "INFO" | "WARN" | "ERROR" | "SUCCESS" | "SYSTEM",
-        category: "SCANNER" | "API" | "COVER" | "DOWNLOAD" | "KINDLE" | "SYSTEM" | "DATABASE" | "PLEX_HUB",
+        category: "SCANNER" | "API" | "COVER" | "DOWNLOAD" | "KINDLE" | "SYSTEM" | "DATABASE" | "PLEX_HUB" | "PLEX",
         message: string,
         details?: string,
         preventConsoleOutput = false
@@ -136,7 +143,8 @@ if (!globalLogger.consoleIntercepted) {
         if (match) {
             const rawCategory = match[1].toUpperCase();
             cleanMsg = match[2];
-            if (rawCategory.includes("SCANNER") || rawCategory.includes("MOBI") || rawCategory.includes("FILE")) category = "SCANNER";
+            if (rawCategory.includes("PLEX")) category = "PLEX";
+            else if (rawCategory.includes("SCANNER") || rawCategory.includes("MOBI") || rawCategory.includes("FILE")) category = "SCANNER";
             else if (rawCategory.includes("API") || rawCategory.includes("AUTH") || rawCategory.includes("GET-LIBRARY") || rawCategory.includes("SERIES")) category = "API";
             else if (rawCategory.includes("COVER")) category = "COVER";
             else if (rawCategory.includes("DOWNLOAD") || rawCategory.includes("GRAB") || rawCategory.includes("RE-GRAB")) category = "DOWNLOAD";

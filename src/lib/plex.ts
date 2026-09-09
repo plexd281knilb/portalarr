@@ -1,5 +1,6 @@
 import { decryptData } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
+import { logger, maskToken } from "@/lib/logger";
 
 export interface PlexFriendItem {
     id?: number | string;
@@ -703,16 +704,25 @@ export async function getPlexServerLibrarySections(adminToken: string, customPle
                             sections
                         });
                         sectionsFound = true;
+                        logger.addLog("SUCCESS", "PLEX", `✅ Loaded ${sections.length} library sections directly from "${srv.name}" (${cleanBase})`, `Sections: ${sections.map(s => `"${s.title}" (ID: ${s.id}, Key: ${s.key})`).join(", ")}`);
                         break;
                     }
+                } else {
+                    const text = await res.text().catch(() => "");
+                    if (res.status === 401) {
+                        logger.addLog("ERROR", "PLEX", `❌ PMS 401 Unauthorized on ${cleanBase}: Not authorized. Make sure the server is signed in and claimed by the account for this token (${maskToken(token)}).`, `Response: ${text.slice(0, 300)}`);
+                    } else {
+                        logger.addLog("WARN", "PLEX", `PMS HTTP ${res.status} on ${cleanBase}/library/sections: ${text.slice(0, 200)}`);
+                    }
                 }
-            } catch (e) {
+            } catch (e: any) {
                 // Try next connection candidate
             }
         }
 
         // Fallback 1: Use cloud library sections directly from https://plex.tv/api/servers!
         if (!sectionsFound && cloudSrv && cloudSrv.sections.length > 0) {
+            logger.addLog("INFO", "PLEX", `Using Cloud library sections for "${srv.name}" (${cloudSrv.sections.length} sections found in cloud metadata)`);
             results.push({
                 serverId: srv.clientIdentifier,
                 serverName: srv.name || cloudSrv.serverName,
@@ -1323,6 +1333,7 @@ export async function resolveServerSectionIds(
             resolved.push(mapped);
         }
     }
+    logger.addLog("INFO", "PLEX", `[SECTION-MAP] Server "${serverId}": input=${JSON.stringify(inputSectionIds)} -> resolved=${JSON.stringify(resolved)}`, `Discovered Cloud Section Map: ${Array.from(idMap.entries()).map(([k, v]) => `${k}=>${v}`).join(", ") || 'direct'}`);
     return resolved;
 }
 
@@ -1354,6 +1365,8 @@ export async function invitePlexFriendAndShare(
         } catch (fErr) {}
     }
 
+    logger.addLog("INFO", "PLEX", `[GRANT/SHARE] Starting share for "${cleanTarget}" on server "${serverId}"`, `Target: "${cleanTarget}" | FriendID: ${numInvitedId || 'none'} | Sections: ${JSON.stringify(sectionIds)}`);
+
     // 0. Pre-check: if user already has a share on this server, update it directly!
     try {
         const existing = await getPlexSharedServersList(adminToken);
@@ -1362,6 +1375,7 @@ export async function invitePlexFriendAndShare(
             matchesPlexUser({ id: numInvitedId, email: cleanTarget, username: cleanTarget }, s)
         );
         if (match && match.id) {
+            logger.addLog("INFO", "PLEX", `[GRANT/SHARE] User "${cleanTarget}" already has existing share ID ${match.id} on server "${serverId}". Redirecting to update share.`);
             return await updatePlexUserShareSections(adminToken, String(match.id), sectionIds, serverId);
         }
     } catch (e) {}
@@ -1410,9 +1424,11 @@ export async function invitePlexFriendAndShare(
                 success = true;
                 const data = await res.json().catch(() => null);
                 if (data?.id) shareId = data.id;
+                logger.addLog("SUCCESS", "PLEX", `[GRANT/SHARE] Rails POST succeeded (HTTP 200) on server "${serverId}" for "${cleanTarget}"`, `Share ID: ${shareId || 'N/A'}`);
             } else {
                 const errText = await res.text().catch(() => "");
                 errorMsg = `Server POST error (${res.status}): ${errText || res.statusText}`;
+                logger.addLog("WARN", "PLEX", `[GRANT/SHARE] Rails POST returned HTTP ${res.status} on server "${serverId}": ${errText.slice(0, 300)}`);
 
                 // If already shared or conflict, update existing share
                 if (res.status === 400 || res.status === 409 || res.status === 422 || errText.toLowerCase().includes("already")) {
@@ -1422,12 +1438,14 @@ export async function invitePlexFriendAndShare(
                         matchesPlexUser({ id: numInvitedId, email: cleanTarget, username: cleanTarget }, s)
                     );
                     if (match && match.id) {
+                        logger.addLog("INFO", "PLEX", `[GRANT/SHARE] Found existing share ID ${match.id} after HTTP ${res.status}. Updating share.`);
                         return await updatePlexUserShareSections(adminToken, String(match.id), sectionIds, serverId);
                     }
                 }
             }
         } catch (e: any) {
             errorMsg = e.message || "Network error in server direct invite";
+            logger.addLog("WARN", "PLEX", `[GRANT/SHARE] Exception in Rails POST: ${e.message}`);
         }
     }
 
@@ -1453,8 +1471,14 @@ export async function invitePlexFriendAndShare(
             });
             if (res.ok) {
                 success = true;
+                logger.addLog("SUCCESS", "PLEX", `[GRANT/SHARE] Rails query param POST succeeded on server "${serverId}" for "${cleanTarget}"`);
+            } else {
+                const qErrText = await res.text().catch(() => "");
+                logger.addLog("WARN", "PLEX", `[GRANT/SHARE] Rails query param POST returned HTTP ${res.status}: ${qErrText.slice(0, 300)}`);
             }
-        } catch (e) {}
+        } catch (e: any) {
+            logger.addLog("WARN", "PLEX", `[GRANT/SHARE] Exception in Rails query param POST: ${e.message}`);
+        }
     }
 
     // 3. Modern plex.tv v2 API endpoint: POST https://plex.tv/api/v2/shared_servers
@@ -1486,16 +1510,24 @@ export async function invitePlexFriendAndShare(
 
             if (res.ok) {
                 const data = await res.json().catch(() => null);
+                logger.addLog("SUCCESS", "PLEX", `[GRANT/SHARE] Modern v2 API share succeeded for "${cleanTarget}"`, `Share ID: ${data?.id || 'N/A'}`);
                 return {
                     success: true,
                     shareId: data?.id,
                     message: `Successfully granted Plex library access to ${cleanTarget || 'user'} (${sectionIds.length} libraries).`
                 };
+            } else {
+                const v2ErrText = await res.text().catch(() => "");
+                logger.addLog("ERROR", "PLEX", `[GRANT/SHARE] Modern v2 API share failed with HTTP ${res.status}: ${v2ErrText.slice(0, 300)}`, `Payload: ${JSON.stringify(payload)}`);
+                if (!errorMsg) errorMsg = `v2 POST error (${res.status}): ${v2ErrText || res.statusText}`;
             }
-        } catch (e: any) {}
+        } catch (e: any) {
+            logger.addLog("ERROR", "PLEX", `[GRANT/SHARE] Exception in v2 POST: ${e.message}`);
+        }
     }
 
     if (success) {
+        logger.addLog("SUCCESS", "PLEX", `[GRANT/SHARE] Successfully granted Plex library access to "${cleanTarget}" (${sectionIds.length} libraries)`);
         return {
             success: true,
             shareId,
@@ -1503,6 +1535,7 @@ export async function invitePlexFriendAndShare(
         };
     }
 
+    logger.addLog("ERROR", "PLEX", `❌ [GRANT/SHARE] Failed to share libraries with "${cleanTarget}" on server "${serverId}": ${errorMsg}`);
     return {
         success: false,
         error: errorMsg || `Could not share Plex libraries with ${cleanTarget || 'user'}.`
@@ -1527,6 +1560,8 @@ export async function updatePlexUserShareSections(
     const resolvedSectionIds = serverId 
         ? await resolveServerSectionIds(adminToken, serverId, librarySectionIds)
         : librarySectionIds;
+
+    logger.addLog("INFO", "PLEX", `[UPDATE-SHARE] Updating share ID ${shareId} on server "${serverId || 'unknown'}" with sections: ${JSON.stringify(resolvedSectionIds)}`);
 
     let success = false;
     let errorMsg = "";
@@ -1553,12 +1588,15 @@ export async function updatePlexUserShareSections(
             });
             if (res.ok) {
                 success = true;
+                logger.addLog("SUCCESS", "PLEX", `[UPDATE-SHARE] Rails PUT succeeded (HTTP 200) for share ID ${shareId}`);
             } else {
                 const text = await res.text().catch(() => "");
                 errorMsg = `Server PUT error (${res.status}): ${text || res.statusText}`;
+                logger.addLog("WARN", "PLEX", `[UPDATE-SHARE] Rails PUT returned HTTP ${res.status} for share ID ${shareId}: ${text.slice(0, 300)}`);
             }
         } catch (e: any) {
             errorMsg = e.message || "Network error in server share PUT";
+            logger.addLog("WARN", "PLEX", `[UPDATE-SHARE] Exception in Rails PUT: ${e.message}`);
         }
     }
 
@@ -1576,8 +1614,13 @@ export async function updatePlexUserShareSections(
             });
             if (res.ok) {
                 success = true;
+                logger.addLog("SUCCESS", "PLEX", `[UPDATE-SHARE] Rails query param PUT succeeded for share ID ${shareId}`);
+            } else {
+                logger.addLog("WARN", "PLEX", `[UPDATE-SHARE] Rails query param PUT returned HTTP ${res.status} for share ID ${shareId}`);
             }
-        } catch (e) {}
+        } catch (e: any) {
+            logger.addLog("WARN", "PLEX", `[UPDATE-SHARE] Exception in Rails query param PUT: ${e.message}`);
+        }
     }
 
     // 3. Modern plex.tv v2 API endpoint: PUT https://plex.tv/api/v2/shared_servers/{shareId}
@@ -1601,21 +1644,26 @@ export async function updatePlexUserShareSections(
 
             if (res.ok) {
                 success = true;
+                logger.addLog("SUCCESS", "PLEX", `[UPDATE-SHARE] Modern v2 PUT succeeded for share ID ${shareId}`);
             } else if (!success) {
                 const errText = await res.text().catch(() => "");
                 errorMsg = `v2 PUT error (${res.status}): ${errText || res.statusText}`;
+                logger.addLog("ERROR", "PLEX", `[UPDATE-SHARE] Modern v2 PUT failed with HTTP ${res.status} for share ID ${shareId}: ${errText.slice(0, 300)}`);
             }
         } catch (e: any) {
             if (!success) errorMsg = e.message || "Network error updating Plex share";
+            logger.addLog("ERROR", "PLEX", `[UPDATE-SHARE] Exception in v2 PUT: ${e.message}`);
         }
     }
 
     if (success) {
+        logger.addLog("SUCCESS", "PLEX", `[UPDATE-SHARE] Successfully updated share ID ${shareId} (${resolvedSectionIds.length} libraries enabled)`);
         return {
             success: true,
             message: `Updated Plex library shares (${resolvedSectionIds.length} libraries enabled).`
         };
     } else {
+        logger.addLog("ERROR", "PLEX", `❌ [UPDATE-SHARE] Failed to update share ID ${shareId}: ${errorMsg}`);
         return {
             success: false,
             error: errorMsg || "Failed to update Plex shared libraries."
@@ -1630,6 +1678,8 @@ export async function removePlexUserShare(
 ): Promise<{ success: boolean; message?: string; error?: string }> {
     if (!adminToken) return { success: false, error: "Missing Plex Admin Token." };
     if (!shareId) return { success: false, error: "Missing Plex Share ID." };
+
+    logger.addLog("INFO", "PLEX", `[REMOVE-SHARE] Removing Plex share ID ${shareId} on server "${serverId || 'all'}"`);
 
     let success = false;
     let errorMsg = "";
@@ -1647,11 +1697,14 @@ export async function removePlexUserShare(
             });
             if (res.ok) {
                 success = true;
+                logger.addLog("SUCCESS", "PLEX", `[REMOVE-SHARE] Server XML DELETE succeeded for share ID ${shareId}`);
             } else {
                 errorMsg = `Server endpoint error (${res.status}): ${res.statusText}`;
+                logger.addLog("WARN", "PLEX", `[REMOVE-SHARE] Server XML DELETE returned HTTP ${res.status} for share ID ${shareId}`);
             }
         } catch (e: any) {
             errorMsg = e.message || "Network error deleting server share";
+            logger.addLog("WARN", "PLEX", `[REMOVE-SHARE] Exception in server XML DELETE: ${e.message}`);
         }
     }
 
@@ -1668,21 +1721,26 @@ export async function removePlexUserShare(
 
         if (res.ok) {
             success = true;
+            logger.addLog("SUCCESS", "PLEX", `[REMOVE-SHARE] Modern v2 DELETE succeeded for share ID ${shareId}`);
         } else if (!success) {
             const errText = await res.text().catch(() => "");
             errorMsg = `v2 endpoint error (${res.status}): ${errText || res.statusText}`;
+            logger.addLog("ERROR", "PLEX", `[REMOVE-SHARE] Modern v2 DELETE returned HTTP ${res.status} for share ID ${shareId}: ${errText.slice(0, 300)}`);
         }
     } catch (e: any) {
         if (!success) errorMsg = e.message || "Network error deleting v2 share";
+        logger.addLog("ERROR", "PLEX", `[REMOVE-SHARE] Exception in v2 DELETE: ${e.message}`);
     }
 
     if (success) {
+        logger.addLog("SUCCESS", "PLEX", `[REMOVE-SHARE] Successfully removed Plex share ID ${shareId}`);
         return {
             success: true,
             message: "Plex share removed successfully."
         };
     }
 
+    logger.addLog("ERROR", "PLEX", `❌ [REMOVE-SHARE] Failed to remove Plex share ID ${shareId}: ${errorMsg}`);
     return {
         success: false,
         error: errorMsg || "Failed to remove Plex share."

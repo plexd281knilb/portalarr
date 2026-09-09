@@ -26,7 +26,7 @@ import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolve
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
-import { logger } from "@/lib/logger";
+import { logger, maskToken } from "@/lib/logger";
 import fs from "fs";
 import path from "path";
 
@@ -1781,6 +1781,9 @@ export async function updateUserPlexLibraries(
             return { success: true, message: `Saved library preferences for ${user.username} (account remains suspended).` };
         }
 
+        const shareErrors: string[] = [];
+        logger.addLog("INFO", "PLEX", `[ACTION] updateUserPlexLibrariesAction for "${user.username}" (Status: ${user.status}, Activation: ${activationType || 'NONE'})`, `Target Servers: ${servers.length} | Selected Keys: ${JSON.stringify(selectedKeys)}`);
+
         // For each server, update share on Plex or invite
         for (const srv of servers) {
             const srvId = srv.clientIdentifier;
@@ -1813,22 +1816,37 @@ export async function updateUserPlexLibraries(
                 // If 0 sections selected for this server, revoke access / remove share
                 const userExplicitlySelectedZero = selectedKeys.length === 0 || serverSectionsMap.has(srvId);
                 if (userExplicitlySelectedZero && match && match.id) {
-                    await removePlexUserShare(adminToken, match.id, srvId);
+                    const remRes = await removePlexUserShare(adminToken, match.id, srvId);
+                    if (!remRes.success) {
+                        shareErrors.push(`Revoke on "${srv.name}": ${remRes.error}`);
+                    }
                 }
             } else {
                 // 1 or more sections selected
                 if (match && match.id) {
                     const upRes = await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
                     if (!upRes.success) {
-                        await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
+                        const invRes = await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
+                        if (!invRes.success) {
+                            shareErrors.push(`Update on "${srv.name}": ${invRes.error || upRes.error}`);
+                        }
                     }
                 } else if (targetEmail || targetUser || friendId) {
-                    await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
+                    const invRes = await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
+                    if (!invRes.success) {
+                        shareErrors.push(`Share on "${srv.name}": ${invRes.error}`);
+                    }
                 }
             }
         }
 
         revalidatePath("/settings/access");
+        if (shareErrors.length > 0) {
+            return {
+                success: false,
+                error: `Could not push library shares to Plex: ${shareErrors.join("; ")}. Check System Logs (Plex filter) for details.`
+            };
+        }
         const activatedNote = activationType ? " and activated account" : "";
         return { success: true, message: `Updated shared Plex libraries for ${user.username}${activatedNote}.` };
     } catch (e: any) {
@@ -1917,6 +1935,8 @@ export async function setUserTrialOrSubscription(
             }
         });
 
+        logger.addLog("INFO", "PLEX", `[ACTION] setUserTrialOrSubscription: Setting "${user.username}" to ${type} (New status: ${status})`);
+
         // Sync Plex sharing state: if suspended or expired, revoke Plex shares; if active, restore
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         if (settings?.mainPlexToken) {
@@ -1937,6 +1957,7 @@ export async function setUserTrialOrSubscription(
                 const shares = await getPlexSharedServersList(adminToken);
 
                 if (status === "SUSPENDED" || status === "EXPIRED") {
+                    logger.addLog("INFO", "PLEX", `[SUSPEND-PLEX-SYNC] Revoking Plex shares for suspended user "${user.username}" across ${servers.length} servers`);
                     // Revoke Plex shares across all servers
                     const matchedShares = shares.filter(s => matchesPlexUser(user, s));
                     for (const share of matchedShares) {
@@ -1971,6 +1992,7 @@ export async function setUserTrialOrSubscription(
                 } else if (status === "APPROVED" || status === "TRIAL") {
                     // Restore Plex shares with configured library sections
                     const rawKeys = (user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    logger.addLog("INFO", "PLEX", `[SET-TRIAL-PLEX-SYNC] Restoring/Granting libraries for "${user.username}" across ${servers.length} servers`, `Library Keys: ${rawKeys.join(",") || 'none'}`);
                     const serverSectionsMap = new Map<string, number[]>();
 
                     for (const key of rawKeys) {
@@ -2025,6 +2047,7 @@ export async function setUserTrialOrSubscription(
                     }
                 }
             } catch (plexSyncErr: any) {
+                logger.addLog("ERROR", "PLEX", `[SET-TRIAL-PLEX-SYNC] Failed to sync Plex access for "${user.username}": ${plexSyncErr.message}`);
                 console.warn("[SET-TRIAL-PLEX-SYNC-WARNING]:", plexSyncErr.message || plexSyncErr);
             }
         }
@@ -10514,13 +10537,150 @@ export async function restoreDatabaseBackupAction(backupFileName: string) {
     }
 }
 
+export async function runPlexDiagnosticsAction() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            logger.addLog("ERROR", "PLEX", "❌ Plex Diagnostics: No Admin Plex Token configured in Portalarr Settings!");
+            return { success: false, error: "No Plex Admin Token configured in Portalarr Settings." };
+        }
 
+        let adminToken = "";
+        try {
+            adminToken = decryptData(settings.mainPlexToken);
+        } catch (e: any) {
+            logger.addLog("ERROR", "PLEX", `❌ Plex Diagnostics: Failed to decrypt Admin Plex Token: ${e.message}`);
+            return { success: false, error: "Failed to decrypt token." };
+        }
 
+        if (!adminToken) {
+            logger.addLog("ERROR", "PLEX", "❌ Plex Diagnostics: Admin Plex Token is empty after decryption.");
+            return { success: false, error: "Decrypted Plex Token is empty." };
+        }
 
+        const masked = maskToken(adminToken);
+        logger.addLog("SYSTEM", "PLEX", `=================== STARTING PLEX FULL DIAGNOSTIC AUDIT ===================`);
+        logger.addLog("INFO", "PLEX", `🔑 Using Decrypted Plex Token: ${masked}`);
 
+        // 1. Verify User on plex.tv
+        let plexUser: any = null;
+        try {
+            const userRes = await fetch("https://plex.tv/api/v2/user", {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (userRes.ok) {
+                plexUser = await userRes.json();
+                logger.addLog("SUCCESS", "PLEX", `👤 Plex Account Verified: "${plexUser.username || plexUser.title}" (Email: ${plexUser.email || 'None'}, ID: ${plexUser.id || 'N/A'})`, `Subscription: ${plexUser.subscriptionDescription || plexUser.subscription?.status || 'Active'}`);
+            } else {
+                const errText = await userRes.text().catch(() => "");
+                logger.addLog("ERROR", "PLEX", `❌ Failed to authenticate token with plex.tv/api/v2/user (HTTP ${userRes.status}): ${errText}`);
+            }
+        } catch (uErr: any) {
+            logger.addLog("ERROR", "PLEX", `❌ Network exception querying plex.tv/api/v2/user: ${uErr.message}`);
+        }
 
+        // 2. Discover Servers via /api/v2/resources
+        let resourcesList: any[] = [];
+        try {
+            const resRes = await fetch("https://plex.tv/api/v2/resources?includeHttps=1", {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (resRes.ok) {
+                const allRes = await resRes.json();
+                resourcesList = (Array.isArray(allRes) ? allRes : []).filter((r: any) => 
+                    r.provides && typeof r.provides === "string" && r.provides.includes("server")
+                );
+                logger.addLog("INFO", "PLEX", `🖥️ Discovered ${resourcesList.length} Plex Server Resources on account "${plexUser?.username || 'admin'}":`);
+                resourcesList.forEach(s => {
+                    const conns = (s.connections || []).map((c: any) => `${c.uri} (${c.local ? 'Local' : 'Remote'}${c.relay ? ', Relay' : ''})`).join(" | ");
+                    logger.addLog(s.owned ? "SUCCESS" : "WARN", "PLEX", `  - [Server: ${s.name}] Identifier: ${s.clientIdentifier} | Owned: ${s.owned} | Platform: ${s.platform || 'Unknown'}`, `Connections: ${conns || 'None'}`);
+                });
+            } else {
+                logger.addLog("WARN", "PLEX", `⚠️ Failed to fetch /api/v2/resources (HTTP ${resRes.status})`);
+            }
+        } catch (rErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Network error querying /api/v2/resources: ${rErr.message}`);
+        }
 
+        // 3. Inspect Canonical servers XML (https://plex.tv/api/servers)
+        try {
+            const srvXmlRes = await fetch(`https://plex.tv/api/servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+                headers: {
+                    "Accept": "application/xml, text/xml, */*",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (srvXmlRes.ok) {
+                const xml = await srvXmlRes.text();
+                logger.addLog("INFO", "PLEX", `☁️ Cloud Servers XML Endpoint (https://plex.tv/api/servers) HTTP 200 OK:`, `Payload: ${xml.slice(0, 400)}...`);
+            } else {
+                const errText = await srvXmlRes.text().catch(() => "");
+                logger.addLog("WARN", "PLEX", `⚠️ Cloud Servers XML returned HTTP ${srvXmlRes.status}: ${errText}`);
+            }
+        } catch (xErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Cloud Servers XML query error: ${xErr.message}`);
+        }
 
+        // 4. Test Library Sections on each Server & Direct PMS Reachability
+        try {
+            const sectionsData = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            logger.addLog("INFO", "PLEX", `📚 Evaluated Library Sections across all servers (${sectionsData.length} servers):`);
+            sectionsData.forEach(srv => {
+                const secStr = srv.sections.map(s => `"${s.title}" [ID: ${s.id}, Key: ${s.key}, Type: ${s.type}]`).join(", ");
+                logger.addLog(srv.sections.length > 0 ? "SUCCESS" : "WARN", "PLEX", `  - [${srv.serverName}] (ID: ${srv.serverId}): ${srv.sections.length} Libraries found`, `Sections: ${secStr || 'No sections discovered'}`);
+            });
+        } catch (secErr: any) {
+            logger.addLog("ERROR", "PLEX", `❌ Error evaluating server library sections: ${secErr.message}`);
+        }
+
+        // 5. Inspect Plex Friends
+        try {
+            const friends = await getPlexServerFriends(adminToken);
+            logger.addLog("INFO", "PLEX", `👥 Plex Friends: Found ${friends.length} friends on Plex account:`);
+            friends.slice(0, 25).forEach(f => {
+                logger.addLog("INFO", "PLEX", `  - Friend: "${f.username}" | Email: "${f.email}" | ID: ${f.id || 'N/A'}`);
+            });
+            if (friends.length > 25) {
+                logger.addLog("INFO", "PLEX", `  ... and ${friends.length - 25} more friends.`);
+            }
+        } catch (fErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Error fetching Plex friends: ${fErr.message}`);
+        }
+
+        // 6. Inspect Active Shares (Shared Servers)
+        try {
+            const shares = await getPlexSharedServersList(adminToken);
+            logger.addLog("INFO", "PLEX", `🤝 Plex Active Shares: Found ${shares.length} shared server entries:`);
+            shares.forEach(sh => {
+                const uName = sh.user?.username || sh.invitedEmail || "unknown";
+                const uEmail = sh.user?.email || sh.invitedEmail || "none";
+                const secIds = (sh.librarySectionIds || []).join(", ");
+                logger.addLog("INFO", "PLEX", `  - Share ID: ${sh.id} | User: "${uName}" (${uEmail}) | ServerId: "${sh.serverId || 'all'}" | Sections: [${secIds || 'none'}] | AllLibraries: ${sh.allLibraries ? 'Yes' : 'No'}`);
+            });
+        } catch (shErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Error fetching Plex shares: ${shErr.message}`);
+        }
+
+        logger.addLog("SYSTEM", "PLEX", `=================== PLEX DIAGNOSTIC AUDIT COMPLETED ===================`);
+        return { success: true, message: "Plex Diagnostics completed. Check System Logs (Plex filter) for the full audit report." };
+    } catch (e: any) {
+        console.error("runPlexDiagnosticsAction error:", e);
+        return { success: false, error: e.message || "Failed to run Plex diagnostics" };
+    }
+}
 
 export async function fetchAvailableAiModels(provider: string, apiKey: string) {
     await verifyAdmin();

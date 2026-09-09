@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { getSystemLogsAction, clearSystemLogsAction, dumpEntireDatabaseAction } from "@/app/actions";
+import { getSystemLogsAction, clearSystemLogsAction, dumpEntireDatabaseAction, runPlexDiagnosticsAction } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { 
     Terminal, RefreshCw, Trash2, Search, CheckCircle2, 
-    AlertTriangle, XCircle, Info, Copy, Check, Pause, Play, Database
+    AlertTriangle, XCircle, Info, Copy, Check, Pause, Play, Database,
+    Download, Tv, FileText
 } from "lucide-react";
 
 import { SystemLogEntry } from "@/lib/logger";
@@ -24,6 +25,7 @@ export default function SystemLogsViewer() {
     const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
     const [copied, setCopied] = useState(false);
     const [dumping, setDumping] = useState(false);
+    const [runningPlexDiag, setRunningPlexDiag] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const fetchLogs = async () => {
@@ -60,6 +62,37 @@ export default function SystemLogsViewer() {
         navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleDownload = () => {
+        const text = logs
+            .map(l => `[${l.timestamp}] [${l.category}] [${l.level}] ${l.message}${l.details ? ` | ${l.details}` : ""}`)
+            .join("\n");
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `portalarr_system_logs_${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleRunPlexDiagnostics = async () => {
+        setRunningPlexDiag(true);
+        try {
+            const res = await runPlexDiagnosticsAction();
+            if (res && !res.success && res.error) {
+                console.error("Failed to run Plex diagnostics:", res.error);
+            }
+            setCategoryFilter("PLEX");
+            await fetchLogs();
+        } catch (e) {
+            console.error("Failed to run Plex diagnostics:", e);
+        } finally {
+            setRunningPlexDiag(false);
+        }
     };
 
     const handleDumpDatabase = async () => {
@@ -106,6 +139,8 @@ export default function SystemLogsViewer() {
 
     const getCategoryBadge = (category: string) => {
         const colors: Record<string, string> = {
+            PLEX: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+            PLEX_HUB: "bg-amber-500/20 text-amber-300 border-amber-500/30",
             SCANNER: "bg-purple-500/20 text-purple-300 border-purple-500/30",
             API: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
             COVER: "bg-pink-500/20 text-pink-300 border-pink-500/30",
@@ -175,6 +210,29 @@ export default function SystemLogsViewer() {
                         <Button 
                             variant="outline" 
                             size="sm" 
+                            onClick={handleDownload}
+                            className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
+                            title="Download complete system log file as a text document"
+                        >
+                            <Download className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
+                            Download
+                        </Button>
+
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleRunPlexDiagnostics}
+                            disabled={runningPlexDiag}
+                            className="border-amber-700 bg-amber-950/80 hover:bg-amber-900 text-amber-200 font-medium"
+                            title="Run a deep audit of your Plex Token, Server connections, library sections, and user shares"
+                        >
+                            <Tv className={`h-3.5 w-3.5 mr-1.5 text-amber-400 ${runningPlexDiag ? "animate-spin" : ""}`} />
+                            {runningPlexDiag ? "Auditing Plex..." : "Plex Diagnostics"}
+                        </Button>
+
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
                             onClick={handleDumpDatabase}
                             disabled={dumping}
                             className="border-cyan-700 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200"
@@ -200,7 +258,7 @@ export default function SystemLogsViewer() {
                     <div className="relative flex-1 min-w-[220px]">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
                         <Input
-                            placeholder="Filter logs by keyword, book title, library ID..."
+                            placeholder="Filter logs by keyword, Plex user, book title, library ID..."
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="pl-9 bg-slate-900/90 border-slate-800 text-xs text-slate-200 placeholder:text-slate-500"
@@ -223,18 +281,22 @@ export default function SystemLogsViewer() {
                         ))}
                     </div>
 
-                    <div className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-lg border border-slate-800 text-xs">
-                        {["ALL", "SCANNER", "API", "COVER", "DOWNLOAD", "DATABASE"].map(cat => (
+                    <div className="flex flex-wrap items-center gap-1 bg-slate-900/80 p-1 rounded-lg border border-slate-800 text-xs">
+                        {["ALL", "PLEX", "SCANNER", "API", "COVER", "DOWNLOAD", "DATABASE", "SYSTEM"].map(cat => (
                             <button
                                 key={cat}
                                 onClick={() => setCategoryFilter(cat)}
-                                className={`px-2 py-1 rounded text-[11px] font-mono transition-colors ${
+                                className={`px-2.5 py-1 rounded text-[11px] font-mono transition-colors ${
                                     categoryFilter === cat
-                                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
-                                        : "text-slate-400 hover:text-slate-200"
+                                        ? (cat === "PLEX"
+                                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold"
+                                            : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold")
+                                        : (cat === "PLEX"
+                                            ? "text-amber-400/80 hover:text-amber-300 font-semibold"
+                                            : "text-slate-400 hover:text-slate-200")
                                 }`}
                             >
-                                {cat}
+                                {cat === "PLEX" ? "📺 PLEX" : cat}
                             </button>
                         ))}
                     </div>
