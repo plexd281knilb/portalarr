@@ -595,6 +595,22 @@ export async function ensureSchemaColumns(): Promise<void> {
             console.error("[DB-SCHEMA-AUTOFIX] Failed to create or seed FeatureSuggestion tables:", e.message || e);
         }
 
+        // --- 10. EMAIL TEMPLATE TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "EmailTemplate" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "description" TEXT,
+                    "subject" TEXT NOT NULL,
+                    "body" TEXT NOT NULL,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Failed to create EmailTemplate table:", e.message || e);
+        }
+
         schemaPatchCompleted = true;
     } catch (globalErr: any) {
         console.error("[DB-SCHEMA-AUTOFIX] Critical error in ensureSchemaColumns:", globalErr.message || globalErr);

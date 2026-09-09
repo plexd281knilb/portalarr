@@ -10,6 +10,7 @@ import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
+import { renderEmailTemplate } from "@/lib/email-templates";
 
 // --- 1. SETUP CHECK ---
 export async function checkSystemInitialized() {
@@ -405,38 +406,21 @@ async function sendAdminNewAccountRequestEmail(user: { id: string; username: str
       }
     });
 
-    const mailOptions = {
+    const appUrl = await getAppUrl();
+    const { subject, html } = await renderEmailTemplate("admin_new_user", {
+      username: user.username,
+      email: user.email,
+      status: "PENDING APPROVAL",
+      appUrl,
+      accessUrl: `${appUrl}/settings/access`
+    });
+
+    await transporter.sendMail({
       from: senderEmail,
       to: recipientEmails.join(", "),
-      subject: `👤 New Account Request: ${user.username}`,
-      html: `
-        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-          <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">New Account Request</h2>
-          <p style="font-size: 15px; color: #475569;">A new user has registered a temporary account and is awaiting your approval to access Portalarr.</p>
-          
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-              <tr>
-                <td style="padding: 6px 0; font-weight: bold; width: 120px; color: #64748b;">Username:</td>
-                <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${user.username}</td>
-              </tr>
-              <tr>
-                <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Email:</td>
-                <td style="padding: 6px 0; color: #0f172a;">${user.email}</td>
-              </tr>
-              <tr>
-                <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Status:</td>
-                <td style="padding: 6px 0; color: #d97706; font-weight: bold;">PENDING APPROVAL</td>
-              </tr>
-            </table>
-          </div>
-
-          <p style="font-size: 14px; color: #475569;">You can review and approve this user in your Portalarr Dashboard under <strong>Settings &gt; Access Control</strong>.</p>
-        </div>
-      `
-    };
-
-    await transporter.sendMail(mailOptions);
+      subject,
+      html
+    });
     console.log(`[AUTH] Account request notification email sent to admins for ${user.username}`);
   } catch (err) {
     console.error("[AUTH] Error sending account request email:", err);
@@ -468,21 +452,18 @@ export async function sendUserApprovalEmail(userEmail: string, username: string)
     });
 
     const appUrl = await getAppUrl();
+    const { subject, html } = await renderEmailTemplate("user_approval", {
+      username,
+      email: userEmail,
+      appUrl,
+      loginUrl: `${appUrl}/login`
+    });
+
     await transporter.sendMail({
       from: senderEmail,
       to: userEmail,
-      subject: `🎉 Your Portalarr Account has been Approved!`,
-      html: `
-        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px;">
-          <h2 style="color: #0f172a; margin-top: 0;">Account Approved!</h2>
-          <p>Hi <strong>${username}</strong>,</p>
-          <p>Great news! Your account request for Portalarr has been approved by the administrator.</p>
-          <p>You can now sign in and access media requests and services.</p>
-          <div style="margin-top: 20px; text-align: center;">
-            <a href="${appUrl}/login" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Log in to Portalarr</a>
-          </div>
-        </div>
-      `
+      subject,
+      html
     });
   } catch (err) {
     console.error("[AUTH] Failed to send approval email to user:", err);
@@ -612,23 +593,20 @@ export async function requestForgotPassword(formData: FormData) {
       }
     });
 
+    const appUrl = await getAppUrl();
+    const { subject, html } = await renderEmailTemplate("password_reset", {
+      username: user.username,
+      email: user.email,
+      tempPassword,
+      appUrl,
+      loginUrl: `${appUrl}/login`
+    });
+
     await transporter.sendMail({
       from: senderEmail,
       to: user.email,
-      subject: `🔑 Temporary Password for Portalarr`,
-      html: `
-        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-          <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">Temporary Password Request</h2>
-          <p style="font-size: 15px; color: #475569;">Hi <strong>${user.username}</strong>,</p>
-          <p style="font-size: 15px; color: #475569;">We received a password reset request for your Portalarr account. Here is your temporary password:</p>
-          
-          <div style="background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 20px; font-weight: bold; text-align: center; letter-spacing: 2px; color: #0f172a; margin: 20px 0;">
-            ${tempPassword}
-          </div>
-
-          <p style="font-size: 14px; color: #475569;">Please log in with this temporary password and update your password in your settings or profile.</p>
-        </div>
-      `
+      subject,
+      html
     });
     console.log(`[AUTH] Sent temporary password email to ${user.email} (${user.username})`);
   } catch (err: any) {

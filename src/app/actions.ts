@@ -28,6 +28,7 @@ import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { logger, maskToken } from "@/lib/logger";
+import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, getDefaultEmailTemplate, wrapInPortalarrEmailLayout } from "@/lib/email-templates";
 import fs from "fs";
 import path from "path";
 
@@ -656,13 +657,16 @@ export async function getEmailNotificationSettings() {
     await ensureSchemaColumns();
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
     return {
-        emailNotificationsEnabled: settings.emailNotificationsEnabled ?? true,
-        notifyUserApproval: settings.notifyUserApproval ?? true,
-        notifyAdminNewUserRequest: settings.notifyAdminNewUserRequest ?? true,
-        notifyPasswordReset: settings.notifyPasswordReset ?? true,
-        notifyMediaRequests: settings.notifyMediaRequests ?? true,
-        notifySupportTickets: settings.notifySupportTickets ?? true,
-        notifySendToKindle: settings.notifySendToKindle ?? true
+        success: true,
+        settings: {
+            emailNotificationsEnabled: settings.emailNotificationsEnabled ?? true,
+            notifyUserApproval: settings.notifyUserApproval ?? true,
+            notifyAdminNewUserRequest: settings.notifyAdminNewUserRequest ?? true,
+            notifyPasswordReset: settings.notifyPasswordReset ?? true,
+            notifyMediaRequests: settings.notifyMediaRequests ?? true,
+            notifySupportTickets: settings.notifySupportTickets ?? true,
+            notifySendToKindle: settings.notifySendToKindle ?? true
+        }
     };
 }
 
@@ -699,6 +703,386 @@ export async function saveEmailNotificationSettingsAction(data: {
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Failed to save notification settings: ${e.message}`);
         return { success: false, error: e.message || "Failed to update notification settings" };
+    }
+}
+
+// ============================================================================
+// --- EMAIL NOTIFICATION TEMPLATES & MASS BROADCAST ACTIONS ---
+// ============================================================================
+
+export async function getEmailTemplatesAction() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const customTemplates = await prisma.emailTemplate.findMany().catch(() => []);
+        const customMap = new Map(customTemplates.map(t => [t.id, t]));
+
+        const results = DEFAULT_EMAIL_TEMPLATES.map(def => {
+            const custom = customMap.get(def.id);
+            return {
+                id: def.id,
+                name: def.name,
+                description: def.description,
+                category: def.category,
+                subject: custom?.subject || def.defaultSubject,
+                body: custom?.body || def.defaultBody,
+                defaultSubject: def.defaultSubject,
+                defaultBody: def.defaultBody,
+                isCustom: !!custom,
+                updatedAt: custom?.updatedAt?.toISOString() || null,
+                variables: def.variables
+            };
+        });
+
+        return { success: true, templates: results };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to load email templates", templates: [] };
+    }
+}
+
+export async function saveEmailTemplateAction(id: string, subject: string, body: string) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    if (!id || !subject?.trim() || !body?.trim()) {
+        return { success: false, error: "Template ID, subject, and body are required." };
+    }
+
+    const defaultDef = getDefaultEmailTemplate(id);
+    const name = defaultDef?.name || id;
+    const description = defaultDef?.description || "";
+
+    try {
+        await prisma.emailTemplate.upsert({
+            where: { id },
+            update: { subject: subject.trim(), body: body.trim(), updatedAt: new Date() },
+            create: { id, name, description, subject: subject.trim(), body: body.trim() }
+        });
+
+        logger.addLog("INFO", "EMAIL", `Saved customized email template "${name}" (${id})`);
+        revalidatePath("/settings");
+        return { success: true, message: `Template "${name}" saved successfully!` };
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Failed to save template ${id}: ${e.message}`);
+        return { success: false, error: e.message || "Failed to save template" };
+    }
+}
+
+export async function resetEmailTemplateAction(id: string) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        await prisma.emailTemplate.delete({
+            where: { id }
+        }).catch(() => {});
+
+        const defaultDef = getDefaultEmailTemplate(id);
+        logger.addLog("INFO", "EMAIL", `Reset email template "${defaultDef?.name || id}" to default`);
+        revalidatePath("/settings");
+        return { 
+            success: true, 
+            message: `Template reset to default!`,
+            defaultSubject: defaultDef?.defaultSubject || "",
+            defaultBody: defaultDef?.defaultBody || ""
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to reset template" };
+    }
+}
+
+export async function sendTestEmailTemplateAction(id: string, customSubject?: string, customBody?: string) {
+    const session: any = await verifyAdmin();
+    await ensureSchemaColumns();
+    const adminUser = await prisma.user.findFirst({
+        where: { id: session.userId }
+    });
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+        return { success: false, error: "SMTP settings not configured on this server. Please configure SMTP in General & Email settings." };
+    }
+
+    const recipientEmail = adminUser?.email || settings.smtpUser;
+    if (!recipientEmail) {
+        return { success: false, error: "No email address found for the current administrator." };
+    }
+
+    const defaultDef = getDefaultEmailTemplate(id);
+    if (!defaultDef) {
+        return { success: false, error: "Unknown template identifier" };
+    }
+
+    // Build mock variables map from sample values
+    const mockVars: Record<string, string> = {};
+    for (const v of defaultDef.variables) {
+        const cleanKey = v.key.replace(/^\{|\}$/g, "");
+        mockVars[cleanKey] = v.sampleValue;
+    }
+    mockVars.username = adminUser?.username || "admin_user";
+    mockVars.email = recipientEmail;
+
+    const appUrl = await getAppUrl();
+    mockVars.appUrl = appUrl;
+    mockVars.portalName = "Portalarr";
+
+    let subject = customSubject || defaultDef.defaultSubject;
+    let body = customBody || defaultDef.defaultBody;
+
+    // If no custom provided, check database
+    if (!customSubject && !customBody) {
+        const saved = await prisma.emailTemplate.findUnique({ where: { id } }).catch(() => null);
+        if (saved) {
+            if (saved.subject) subject = saved.subject;
+            if (saved.body) body = saved.body;
+        }
+    }
+
+    for (const [k, val] of Object.entries(mockVars)) {
+        const reg = new RegExp(`\\{${k}\\}`, "g");
+        subject = subject.replace(reg, val);
+        body = body.replace(reg, val);
+    }
+
+    const isFullDoc = body.includes("<html") || body.includes("<!DOCTYPE");
+    const html = isFullDoc ? body : wrapInPortalarrEmailLayout({
+        title: subject,
+        contentHtml: body,
+        appUrl
+    });
+
+    try {
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        await transporter.sendMail({
+            from: senderEmail,
+            to: recipientEmail,
+            subject: `[PREVIEW TEST] ${subject}`,
+            html
+        });
+
+        logger.addLog("INFO", "EMAIL", `Sent template preview test email for "${defaultDef.name}" to ${recipientEmail}`);
+        return { success: true, message: `Preview test email successfully sent to ${recipientEmail}!` };
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Preview test email failed: ${e.message}`);
+        return { success: false, error: e.message || "Failed to send preview test email" };
+    }
+}
+
+export async function getBroadcastUsersAction() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                kindleEmail: true,
+                role: true,
+                status: true,
+                createdAt: true,
+                lastLogin: true
+            },
+            orderBy: { username: "asc" }
+        });
+        return { success: true, users };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to load users", users: [] };
+    }
+}
+
+export async function sendBroadcastEmailAction(payload: {
+    userIds: string[];
+    subject: string;
+    body: string;
+    isCustomHtml?: boolean;
+}) {
+    const session: any = await verifyAdmin();
+    await ensureSchemaColumns();
+
+    if (!payload.userIds || payload.userIds.length === 0) {
+        return { success: false, error: "Please select at least one recipient user." };
+    }
+    if (!payload.subject || !payload.subject.trim()) {
+        return { success: false, error: "Email subject cannot be blank." };
+    }
+    if (!payload.body || !payload.body.trim()) {
+        return { success: false, error: "Email body cannot be blank." };
+    }
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+        return { success: false, error: "SMTP settings not configured on this server. Please configure SMTP in General & Email settings." };
+    }
+
+    const users = await prisma.user.findMany({
+        where: { id: { in: payload.userIds } }
+    });
+
+    if (users.length === 0) {
+        return { success: false, error: "No matching users found for the selected IDs." };
+    }
+
+    const senderEmail = settings.smtpFrom || settings.smtpUser;
+    const transporter = nodemailer.createTransport({
+        host: settings.smtpHost,
+        port: settings.smtpPort || 587,
+        secure: settings.smtpPort === 465,
+        auth: {
+            user: settings.smtpUser,
+            pass: decryptData(settings.smtpPass)
+        }
+    });
+
+    const appUrl = await getAppUrl();
+    const isFullDoc = payload.isCustomHtml && (payload.body.includes("<html") || payload.body.includes("<!DOCTYPE"));
+
+    let sentCount = 0;
+    let failCount = 0;
+    const failures: { username: string; email: string; error: string }[] = [];
+
+    // Dispatch each email INDIVIDUALLY to guarantee privacy & personalization
+    for (const user of users) {
+        if (!user.email || !user.email.includes("@")) {
+            failCount++;
+            failures.push({ username: user.username, email: user.email || "(no email)", error: "Missing or invalid email address" });
+            continue;
+        }
+
+        const userVars: Record<string, string> = {
+            username: user.username,
+            email: user.email,
+            kindleEmail: user.kindleEmail || "",
+            role: user.role || "USER",
+            status: user.status || "APPROVED",
+            appUrl,
+            loginUrl: `${appUrl}/login`,
+            portalName: "Portalarr"
+        };
+
+        let personalizedSubject = payload.subject;
+        let personalizedBody = payload.body;
+
+        for (const [k, v] of Object.entries(userVars)) {
+            const reg = new RegExp(`\\{${k}\\}`, "g");
+            personalizedSubject = personalizedSubject.replace(reg, v);
+            personalizedBody = personalizedBody.replace(reg, v);
+        }
+
+        const personalizedHtml = isFullDoc ? personalizedBody : wrapInPortalarrEmailLayout({
+            title: personalizedSubject,
+            contentHtml: personalizedBody,
+            appUrl
+        });
+
+        try {
+            await transporter.sendMail({
+                from: senderEmail,
+                to: user.email,
+                subject: personalizedSubject,
+                html: personalizedHtml
+            });
+            sentCount++;
+        } catch (mailErr: any) {
+            failCount++;
+            failures.push({
+                username: user.username,
+                email: user.email,
+                error: mailErr.message || "Failed to send email"
+            });
+        }
+    }
+
+    logger.addLog(
+        failCount === 0 ? "SUCCESS" : "WARN",
+        "EMAIL",
+        `[MASS-BROADCAST] Broadcast dispatch finished: ${sentCount} sent, ${failCount} failed. Subject: "${payload.subject}" (by ${session?.username || "admin"})`
+    );
+
+    return {
+        success: true,
+        total: users.length,
+        sent: sentCount,
+        failed: failCount,
+        failures
+    };
+}
+
+export async function sendTestBroadcastEmailAction(payload: { subject: string; body: string; isCustomHtml?: boolean }) {
+    const session: any = await verifyAdmin();
+    await ensureSchemaColumns();
+    const adminUser = await prisma.user.findFirst({ where: { id: session.userId } });
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+        return { success: false, error: "SMTP settings not configured on this server." };
+    }
+
+    const recipientEmail = adminUser?.email || settings.smtpUser;
+    if (!recipientEmail) {
+        return { success: false, error: "No email address found for the current administrator." };
+    }
+
+    const appUrl = await getAppUrl();
+    const mockVars: Record<string, string> = {
+        username: adminUser?.username || "Admin (Preview)",
+        email: recipientEmail,
+        kindleEmail: adminUser?.kindleEmail || "admin_kindle@kindle.com",
+        role: adminUser?.role || "ADMIN",
+        status: adminUser?.status || "APPROVED",
+        appUrl,
+        loginUrl: `${appUrl}/login`,
+        portalName: "Portalarr"
+    };
+
+    let personalizedSubject = payload.subject || "Portalarr Broadcast Test";
+    let personalizedBody = payload.body || "<p>This is a test broadcast email message.</p>";
+
+    for (const [k, v] of Object.entries(mockVars)) {
+        const reg = new RegExp(`\\{${k}\\}`, "g");
+        personalizedSubject = personalizedSubject.replace(reg, v);
+        personalizedBody = personalizedBody.replace(reg, v);
+    }
+
+    const isFullDoc = payload.isCustomHtml && (personalizedBody.includes("<html") || personalizedBody.includes("<!DOCTYPE"));
+    const personalizedHtml = isFullDoc ? personalizedBody : wrapInPortalarrEmailLayout({
+        title: personalizedSubject,
+        contentHtml: personalizedBody,
+        appUrl
+    });
+
+    try {
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        await transporter.sendMail({
+            from: senderEmail,
+            to: recipientEmail,
+            subject: `[BROADCAST TEST] ${personalizedSubject}`,
+            html: personalizedHtml
+        });
+
+        logger.addLog("INFO", "EMAIL", `Sent broadcast test preview email to ${recipientEmail}`);
+        return { success: true, message: `Test email successfully delivered to ${recipientEmail}!` };
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Broadcast test failed: ${e.message}`);
+        return { success: false, error: e.message || "Failed to send test email" };
     }
 }
 
@@ -1532,24 +1916,31 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
         if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
+            const senderEmail = settings.smtpFrom || settings.smtpUser;
             const transporter = nodemailer.createTransport({
                 host: settings.smtpHost,
-                port: settings.smtpPort,
+                port: settings.smtpPort || 587,
                 secure: settings.smtpPort === 465, 
                 auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
             } as any);
 
-            let emailText = `Hi ${ticket.name},\n\nYour support ticket status has been updated to: ${status}.\n\n`;
-            if (adminComment) {
-                emailText += `Admin Reply:\n${adminComment}\n\n`;
-            }
-            emailText += `--- Original Issue ---\n${ticket.issue}\n\nThanks,\nPortalarr Support`;
+            const appUrl = await getAppUrl();
+            const adminCommentBlock = adminComment ? `<div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 12px; margin: 16px 0;"><strong>Admin Reply:</strong><br/>${adminComment}</div>` : "";
+            const { subject, html } = await renderEmailTemplate("ticket_update", {
+                name: ticket.name,
+                email: ticket.email,
+                status,
+                issue: ticket.issue,
+                adminComment: adminComment || "",
+                adminCommentBlock,
+                appUrl
+            });
 
             await transporter.sendMail({
-                from: `"Portalarr" <${settings.smtpUser}>`,
+                from: senderEmail,
                 to: ticket.email,
-                subject: `Support Ticket Update: ${status}`,
-                text: emailText
+                subject,
+                html
             });
         }
     }
@@ -2736,33 +3127,25 @@ export async function submitSupportTicket(formData: FormData) {
             } as any);
 
             const appUrl = await getAppUrl();
-            const htmlContent = `
-                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-                    <h2 style="color: #0f172a;">New Support Ticket</h2>
-                    <p><strong>User:</strong> ${name} (<a href="mailto:${email}">${email}</a>)</p>
-                    
-                    <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0; border-radius: 4px;">
-                        <h4 style="margin-top: 0; color: #475569;">Issue:</h4>
-                        <p style="white-space: pre-wrap; margin-bottom: 0;">${issue}</p>
-                    </div>
-
-                    <h4 style="color: #475569; margin-bottom: 10px;">Quick Actions</h4>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <a href="${appUrl}/settings/access?search=${encodeURIComponent(email)}" style="display: inline-block; padding: 8px 12px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Manage User Access</a>
-                        <a href="${appUrl}/radarr" style="display: inline-block; padding: 8px 12px; background-color: #eab308; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Radarr (Movies)</a>
-                        <a href="${appUrl}/sonarr" style="display: inline-block; padding: 8px 12px; background-color: #06b6d4; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Sonarr (Shows)</a>
-                        <a href="${appUrl}/admin/tickets" style="display: inline-block; padding: 8px 12px; background-color: #64748b; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">View Tickets Dashboard</a>
-                    </div>
-                </div>
-            `;
+            const senderEmail = settings.smtpFrom || settings.smtpUser;
+            const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                name,
+                email,
+                pageUrl: "/",
+                errorTitle: `New Ticket from ${name}`,
+                errorMessage: issue,
+                userNoteBlock: "",
+                ticketsUrl: `${appUrl}/admin/tickets`,
+                appUrl
+            });
 
             await transporter.sendMail({
-                from: `"Support" <${settings.smtpUser}>`,
+                from: senderEmail,
                 to: settings.smtpUser, 
                 replyTo: email,
-                subject: `New Ticket from ${name}`,
+                subject,
                 text: `User: ${name} (${email})\n\nIssue:\n${issue}\n\nQuick Actions:\nManage User: ${appUrl}/settings/access?search=${encodeURIComponent(email)}\nTickets: ${appUrl}/admin/tickets`,
-                html: htmlContent
+                html
             });
         }
         revalidatePath("/");
@@ -2824,41 +3207,33 @@ export async function submitAutoErrorTicketAction(errorPayload: {
             try {
                 const transporter = nodemailer.createTransport({
                     host: settings.smtpHost,
-                    port: settings.smtpPort,
+                    port: settings.smtpPort || 587,
                     secure: settings.smtpPort === 465,
                     auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
                 } as any);
 
                 const appUrl = await getAppUrl();
-                const htmlContent = `
-                    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-                        <h2 style="color: #dc2626; display: flex; align-items: center; gap: 8px;">
-                            🚨 Automated Error Report Ticket
-                        </h2>
-                        <p><strong>User:</strong> ${name} (<a href="mailto:${email}">${email}</a>)</p>
-                        <p><strong>Page:</strong> <code>${errorPayload.pageUrl || "/"}</code></p>
-                        
-                        <div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 20px 0; border-radius: 4px;">
-                            <h4 style="margin-top: 0; color: #991b1b;">Error:</h4>
-                            <pre style="white-space: pre-wrap; word-break: break-all; color: #7f1d1d; font-family: monospace; font-size: 13px;">${errorPayload.errorMessage}</pre>
-                            ${errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : ""}
-                        </div>
+                const senderEmail = settings.smtpFrom || settings.smtpUser;
+                const userNoteBlock = errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : "";
 
-                        <h4 style="color: #475569; margin-bottom: 10px;">Quick Actions</h4>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <a href="${appUrl}/admin/tickets" style="display: inline-block; padding: 8px 12px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">View Tickets Dashboard</a>
-                            <a href="${appUrl}/settings/access?search=${encodeURIComponent(email)}" style="display: inline-block; padding: 8px 12px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Manage User Access</a>
-                        </div>
-                    </div>
-                `;
+                const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                    name,
+                    email,
+                    pageUrl: errorPayload.pageUrl || "/",
+                    errorTitle: errorPayload.errorTitle || "System Error",
+                    errorMessage: errorPayload.errorMessage,
+                    userNoteBlock,
+                    ticketsUrl: `${appUrl}/admin/tickets`,
+                    appUrl
+                });
 
                 await transporter.sendMail({
-                    from: `"Portalarr Error Alert" <${settings.smtpUser}>`,
+                    from: senderEmail,
                     to: settings.smtpUser,
                     replyTo: email,
-                    subject: `🚨 [Error Ticket] ${errorPayload.errorTitle || "System Error"} reported by ${name}`,
+                    subject,
                     text: formattedIssue,
-                    html: htmlContent
+                    html
                 });
             } catch (mailErr: any) {
                 console.error("[AUTO-TICKET] Failed to send email alert for ticket:", mailErr.message || mailErr);
@@ -4114,43 +4489,24 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
 
         const actionText = isAudiobook ? "🎧 Listen in Player" : "📖 Read in Browser";
 
-        const mailOptions = {
+        const { subject, html } = await renderEmailTemplate("media_ready", {
+            username: requester.username,
+            title,
+            author,
+            mediaType: isAudiobook ? "audiobook" : "ebook",
+            mediaLabel,
+            actionUrl: actionLink,
+            actionText,
+            coverUrl: cleanCoverUrl || "",
+            appUrl
+        });
+
+        await transporter.sendMail({
             from: senderEmail,
             to: requester.email,
-            subject: `🎉 Your ${mediaLabel} is Ready: ${title}`,
-            html: `
-                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <span style="display: inline-block; font-size: 11px; font-weight: bold; letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; background: ${isAudiobook ? '#fef3c7' : '#dbeafe'}; color: ${isAudiobook ? '#b45309' : '#1e40af'};">
-                            ${isAudiobook ? '🎧 Audiobook Ready' : '📖 Ebook Ready'}
-                        </span>
-                        <h2 style="color: #0f172a; margin: 12px 0 4px 0; font-size: 22px; font-weight: 800;">Your Request has Arrived!</h2>
-                        <p style="color: #64748b; font-size: 14px; margin: 0;">Hi <strong>${requester.username}</strong>, your requested media was successfully downloaded and imported into the library.</p>
-                    </div>
-
-                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 20px 0; display: flex; gap: 16px; align-items: center;">
-                        ${cleanCoverUrl ? `<img src="${cleanCoverUrl}" alt="${title}" style="width: 70px; height: 100px; object-fit: cover; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);" />` : ''}
-                        <div>
-                            <h3 style="margin: 0 0 4px 0; font-size: 16px; color: #0f172a; font-weight: 700;">${title}</h3>
-                            <p style="margin: 0 0 4px 0; font-size: 13px; color: #475569;">by <strong>${author}</strong></p>
-                            ${request.series ? `<p style="margin: 0; font-size: 12px; color: #64748b;">Series: <em>${request.series}</em> ${request.volumeNumber ? `#${request.volumeNumber}` : ''}</p>` : ''}
-                        </div>
-                    </div>
-
-                    <div style="text-align: center; margin: 28px 0 16px 0;">
-                        <a href="${actionLink}" style="background-color: ${isAudiobook ? '#d97706' : '#2563eb'}; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-                            ${actionText}
-                        </a>
-                    </div>
-
-                    <p style="text-align: center; font-size: 12px; color: #94a3b8; margin-top: 24px;">
-                        Portalarr Media Server • <a href="${appUrl}/library" style="color: #64748b; text-decoration: underline;">View Library</a>
-                    </p>
-                </div>
-            `
-        };
-
-        await transporter.sendMail(mailOptions);
+            subject,
+            html
+        });
         console.log(`[SMTP-NOTIFICATION] Sent request completion email to ${requester.email} for "${title}"`);
     } catch (e: any) {
         console.error("[SMTP-NOTIFICATION] Failed to send request completion email:", e.message || e);
@@ -4176,9 +4532,6 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
 
         const isAudiobook = request.mediaType === "audiobook";
         const mediaLabel = isAudiobook ? "Audiobook" : "Ebook";
-        const mediaBadge = isAudiobook
-            ? `<span style="font-size: 11px; font-weight: bold; padding: 2px 8px; background-color: #fef3c7; color: #b45309; border-radius: 4px;">🎧 AUDIOBOOK</span>`
-            : `<span style="font-size: 11px; font-weight: bold; padding: 2px 8px; background-color: #dbeafe; color: #1e40af; border-radius: 4px;">📖 EBOOK</span>`;
 
         const senderEmail = settings.smtpFrom || settings.smtpUser;
         const transporter = nodemailer.createTransport({
@@ -4191,65 +4544,27 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
             }
         });
 
+        const appUrl = await getAppUrl();
+        const { subject, html } = await renderEmailTemplate("media_request_admin", {
+            title: request.title,
+            author: request.author || "Unknown Author",
+            mediaType: request.mediaType || "ebook",
+            mediaLabel,
+            requestedBy: request.requestedBy,
+            type: request.type || "book",
+            publishYear: request.publishYear || "",
+            manageUrl: `${appUrl}/library?tab=requests`,
+            appUrl
+        });
+
         for (const admin of admins) {
             if (!admin.email) continue;
-            
-            let detailsHtml = "";
-            if (request.type === "checklist") {
-                detailsHtml = `
-                    <p>Multiple ${isAudiobook ? "audiobooks" : "books"} were requested from a checklist by <strong>${request.requestedBy}</strong>:</p>
-                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 6px; font-family: monospace; white-space: pre-wrap; line-height: 1.5;">${request.author}</div>
-                `;
-            } else {
-                detailsHtml = `
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
-                        <tr style="background-color: #f8fafc;">
-                            <td style="padding: 10px; font-weight: bold; width: 120px; border: 1px solid #e2e8f0;">Title:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>${request.title}</strong></td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Author:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${request.author || "Unknown Author"}</td>
-                        </tr>
-                        <tr style="background-color: #f8fafc;">
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Format:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${mediaBadge}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Requested By:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><code>${request.requestedBy}</code></td>
-                        </tr>
-                        <tr style="background-color: #f8fafc;">
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Type:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><span style="text-transform: uppercase; font-size: 11px; font-weight: bold; padding: 2px 6px; background-color: #e2e8f0; color: #334155; border-radius: 4px;">${request.type}</span></td>
-                        </tr>
-                        ${request.publishYear ? `
-                        <tr>
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Publish Year:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${request.publishYear}</td>
-                        </tr>
-                        ` : ""}
-                    </table>
-                `;
-            }
-
-            const appUrl = await getAppUrl();
-            const mailOptions = {
+            await transporter.sendMail({
                 from: senderEmail,
                 to: admin.email,
-                subject: `${isAudiobook ? "🎧 New Audiobook Request" : "📚 New Ebook Request"}: ${request.title}`,
-                html: `
-                    <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                        <h2 style="color: ${isAudiobook ? "#d97706" : "#4f46e5"}; margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">${isAudiobook ? "New Audiobook Request 🎧" : "New Ebook Request 📖"}</h2>
-                        ${detailsHtml}
-                        <div style="margin-top: 25px; text-align: center;">
-                            <a href="${appUrl}/library?tab=requests" style="background-color: ${isAudiobook ? "#d97706" : "#4f46e5"}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Manage Requests</a>
-                        </div>
-                    </div>
-                `
-            };
-
-            await transporter.sendMail(mailOptions);
+                subject,
+                html
+            });
         }
         console.log(`[SMTP-NOTIFICATION] Request notification sent successfully for "${request.title}" (${mediaLabel})`);
     } catch (e: any) {
@@ -7895,42 +8210,22 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
 
             if (user.email) {
                 try {
-                    const failMailOptions = {
+                    const appUrl = await getAppUrl();
+                    const { subject, html } = await renderEmailTemplate("kindle_failed", {
+                        title: book.title,
+                        kindleEmail: user.kindleEmail,
+                        senderEmail,
+                        errorMessage: e.message || "Unknown SMTP delivery error",
+                        fileSizeMb: String(validation.fileSizeMb || 0),
+                        appUrl
+                    });
+
+                    await transporter.sendMail({
                         from: senderEmail,
                         to: user.email,
-                        subject: `❌ Failed to Deliver Ebook to Kindle: ${book.title}`,
-                        html: `
-                            <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                                <h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
-                                <p>We attempted to send <strong>${book.title}</strong> to your Kindle email (<code>${user.kindleEmail}</code>), but the SMTP server rejected the delivery.</p>
-                                
-                                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                                
-                                <h3 style="color: #0f172a; margin-bottom: 8px;">Troubleshooting Steps:</h3>
-                                <ol style="line-height: 1.6; padding-left: 20px;">
-                                    <li>
-                                        <strong>Approve our Sender Address:</strong> Amazon will silently reject or bounce emails from addresses they don't recognize. 
-                                        Make sure you have added our server sender address to your approved list:
-                                        <br />
-                                        <code style="background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; display: inline-block; margin-top: 4px; color: #0f172a;">${senderEmail}</code>
-                                    </li>
-                                    <li style="margin-top: 10px;">
-                                        <strong>How to authorize:</strong>
-                                        <ul style="padding-left: 20px; margin-top: 4px;">
-                                            <li>Log into your Amazon Account.</li>
-                                            <li>Go to <em>Manage Your Content and Devices</em> &rarr; <em>Preferences</em>.</li>
-                                            <li>Scroll down to <em>Approved Personal Document E-mail List</em> and add the address above.</li>
-                                        </ul>
-                                    </li>
-                                    <li style="margin-top: 10px;">
-                                        <strong>Technical error detail:</strong>
-                                        <pre style="background: #f1f5f9; padding: 10px; border-radius: 4px; font-size: 12px; overflow-x: auto; color: #ef4444; border: 1px solid #fecaca; margin-top: 4px;">${e.message || "Unknown SMTP delivery error"}</pre>
-                                    </li>
-                                </ol>
-                            </div>
-                        `
-                    };
-                    await transporter.sendMail(failMailOptions);
+                        subject,
+                        html
+                    });
                 } catch (err) {
                     console.error("Failed to send Kindle failure email to personal address:", err);
                 }
@@ -8165,36 +8460,22 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
 
         if (user.email) {
             try {
-                const failMailOptions = {
+                const appUrl = await getAppUrl();
+                const { subject, html } = await renderEmailTemplate("kindle_failed", {
+                    title: book.title,
+                    kindleEmail: user.kindleEmail,
+                    senderEmail,
+                    errorMessage: e.message || "Unknown SMTP Error",
+                    fileSizeMb: String(validation.fileSizeMb || 0),
+                    appUrl
+                });
+
+                await transporter.sendMail({
                     from: senderEmail,
                     to: user.email,
-                    subject: `❌ Failed to Deliver Ebook to Kindle: ${book.title}`,
-                    html: `
-                        <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                            <h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
-                            <p>We attempted to automatically deliver your requested book <strong>"${book.title}"</strong> to your Kindle, but the email transmission failed.</p>
-                            
-                            <div style="background-color: #f8fafc; border-left: 4px solid #ef4444; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px;">
-                                <strong>Error Details:</strong><br/>
-                                ${e.message || "Unknown SMTP Error"}
-                            </div>
-                            
-                            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                            
-                            <h3 style="margin-bottom: 8px;">Troubleshooting Checklist:</h3>
-                            <ol style="padding-left: 20px; line-height: 1.6;">
-                                <li>
-                                    <strong>Add Approved Sender:</strong> Ensure the portal's public sender address <strong><code>${senderEmail}</code></strong> is added to your approved list in your Amazon account:
-                                    <br/>
-                                    <span style="color: #64748b; font-size: 12px;">Amazon.com &rarr; Preferences &rarr; Personal Document Settings &rarr; Approved Personal Document E-mail List</span>
-                                </li>
-                                <li><strong>Check File Size:</strong> Kindle has a 50MB email file size limit. Your book size is <code>${validation.fileSizeMb} MB</code>.</li>
-                                <li><strong>Verify Kindle Email:</strong> Double-check that your Kindle address (currently configured as <code>${user.kindleEmail}</code>) is exactly correct in your library settings.</li>
-                            </ol>
-                        </div>
-                    `
-                };
-                await transporter.sendMail(failMailOptions);
+                    subject,
+                    html
+                });
             } catch (err) {
                 console.error("[AUTO-KINDLE] Failed to send troubleshooting email:", err);
             }
@@ -8739,45 +9020,22 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
             }
         });
 
-        const mailOptions = {
-            from: senderEmail,
-            to: recipientEmails.join(", "),
-            subject: `🚨 Library Access Request from ${user.username}`,
-            html: `
-                <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                    <h2 style="color: #0f172a; margin-top: 0;">Library Access Request</h2>
-                    <p>The user <strong>${user.username}</strong> has requested access to the Book Library.</p>
-                    
-                    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                    
-                    <h3 style="color: #0f172a; margin-bottom: 8px;">User Details:</h3>
-                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-                        <tr>
-                            <td style="padding: 6px 0; font-weight: bold; width: 150px;">Username:</td>
-                            <td style="padding: 6px 0;">${user.username}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 6px 0; font-weight: bold;">Personal Email:</td>
-                            <td style="padding: 6px 0;"><code>${user.email || "Not Provided"}</code></td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 6px 0; font-weight: bold;">Send-to-Kindle:</td>
-                            <td style="padding: 6px 0;"><code>${user.kindleEmail || "Not Provided"}</code></td>
-                        </tr>
-                    </table>
-
-                    <h3 style="color: #0f172a; margin-bottom: 8px;">How to Approve:</h3>
-                    <p style="line-height: 1.6;">
-                        To grant access to this user, log into Portalarr and open the Book Library Manage tab. 
-                        Edit the library you want them to access (e.g. <em>Wife's Bookshelf</em> or <em>Kids' Bookshelf</em>), 
-                        and add their username <strong><code>${user.username}</code></strong> to the <strong>Allowed Users</strong> list.
-                    </p>
-                </div>
-            `
-        };
+        const appUrl = await getAppUrl();
+        const { subject, html } = await renderEmailTemplate("library_access_request", {
+            username: user.username,
+            email: user.email || "Not Provided",
+            kindleEmail: user.kindleEmail || "Not Provided",
+            accessUrl: `${appUrl}/settings/access`,
+            appUrl
+        });
 
         try {
-            await transporter.sendMail(mailOptions);
+            await transporter.sendMail({
+                from: senderEmail,
+                to: recipientEmails.join(", "),
+                subject,
+                html
+            });
             return { success: true };
         } catch (e: any) {
             console.error("Failed to email admin about access request:", e);

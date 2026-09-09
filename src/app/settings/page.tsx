@@ -38,6 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
+import EmailManagement from "@/components/email-management";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -628,23 +629,27 @@ function SettingsPageContent() {
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
                 <TabsList className="flex flex-wrap items-center w-full max-w-5xl h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
-                    <TabsTrigger value="general" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80">
+                    <TabsTrigger value="general" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80">
                         <Sliders className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>General & Email</span>
+                        <span>General & Setup</span>
                     </TabsTrigger>
-                    <TabsTrigger value="access" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="access" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
                         <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Access Control</span>
                     </TabsTrigger>
-                    <TabsTrigger value="monitoring" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="emails" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:bg-muted/80">
+                        <Mail className="h-4 w-4 text-amber-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                        <span>Broadcast & Emails</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="monitoring" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80">
                         <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Monitoring & Apps</span>
                     </TabsTrigger>
-                    <TabsTrigger value="beta" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="beta" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
                         <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Beta & Announcements</span>
                     </TabsTrigger>
-                    <TabsTrigger value="logs" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="logs" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
                         <Terminal className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Live System Logs</span>
                     </TabsTrigger>
@@ -1509,7 +1514,12 @@ function SettingsPageContent() {
                     <AccessSettingsPage />
                 </TabsContent>
 
-                {/* --- TAB 3: MONITORING & APPS --- */}
+                {/* --- TAB 3: BROADCAST & EMAIL TEMPLATES --- */}
+                <TabsContent value="emails" className="space-y-4">
+                    <EmailManagement />
+                </TabsContent>
+
+                {/* --- TAB 4: MONITORING & APPS --- */}
                 <TabsContent value="monitoring" className="space-y-6">
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {/* TAUTULLI INSTANCES */}

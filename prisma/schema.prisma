@@ -231,3 +231,12 @@ model FeatureVote {
 
   @@unique([suggestionId, username])
 }
+
+model EmailTemplate {
+  id          String   @id // e.g. "user_approval", "password_reset", etc.
+  name        String
+  description String?
+  subject     String
+  body        String
+  updatedAt   DateTime @default(now()) @updatedAt
+}
