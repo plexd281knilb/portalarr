@@ -145,7 +145,25 @@ if (!globalLogger.consoleIntercepted) {
             else category = "SYSTEM";
         }
 
-        const details = args.length > 1 ? args.slice(1).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(" ") : undefined;
+        const formatArg = (a: any) => {
+            if (!a) return String(a);
+            if (a instanceof Error) {
+                return a.stack || `${a.name}: ${a.message}`;
+            }
+            if (typeof a === 'object') {
+                if (a.message || a.stack) {
+                    return `${a.name || 'Error'}: ${a.message} ${a.stack || ''}`;
+                }
+                try {
+                    return JSON.stringify(a);
+                } catch {
+                    return String(a);
+                }
+            }
+            return String(a);
+        };
+
+        const details = args.length > 1 ? args.slice(1).map(formatArg).join(" ") : undefined;
         
         logger.addLog(level, category, cleanMsg, details, true);
     };

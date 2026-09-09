@@ -113,40 +113,59 @@ export default function AccessSettingsPage() {
 
     const loadUsers = async () => {
         setLoading(true);
-        const data = await getAppUsers();
-        setUsers(data || []);
-        setLoading(false);
+        try {
+            const data = await getAppUsers();
+            setUsers(data || []);
+        } catch (e) {
+            console.error("loadUsers error:", e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const loadLibraries = async () => {
         setLoadingLibraries(true);
-        const res = await fetchPlexServerLibraries();
-        if (res.success && res.servers) {
-            setServerLibraries(res.servers);
+        try {
+            const res = await fetchPlexServerLibraries();
+            if (res && res.success && res.servers) {
+                setServerLibraries(res.servers);
+            }
+        } catch (e) {
+            console.error("loadLibraries error:", e);
+        } finally {
+            setLoadingLibraries(false);
         }
-        setLoadingLibraries(false);
     };
 
     const loadReferrals = async () => {
         setLoadingReferrals(true);
-        const res = await getReferralStats();
-        if (res.success && res.stats) {
-            setReferralStats(res.stats);
+        try {
+            const res = await getReferralStats();
+            if (res && res.success && res.stats) {
+                setReferralStats(res.stats);
+            }
+        } catch (e) {
+            console.error("loadReferrals error:", e);
+        } finally {
+            setLoadingReferrals(false);
         }
-        setLoadingReferrals(false);
     };
 
     const loadPaymentSettings = async () => {
-        const res = await getPaymentAndTrialSettings();
-        if (res.success && res.settings) {
-            setPaymentSettings(res.settings);
-            if (res.settings.defaultPlexLibraries) {
-                const keys = res.settings.defaultPlexLibraries
-                    .split(",")
-                    .map((s: string) => s.trim())
-                    .filter(Boolean);
-                setDefaultSelectedKeys(keys);
+        try {
+            const res = await getPaymentAndTrialSettings();
+            if (res && res.success && res.settings) {
+                setPaymentSettings(res.settings);
+                if (res.settings.defaultPlexLibraries) {
+                    const keys = res.settings.defaultPlexLibraries
+                        .split(",")
+                        .map((s: string) => s.trim())
+                        .filter(Boolean);
+                    setDefaultSelectedKeys(keys);
+                }
             }
+        } catch (e) {
+            console.error("loadPaymentSettings error:", e);
         }
     };
 
@@ -278,18 +297,32 @@ export default function AccessSettingsPage() {
         setLibErrMsg("");
         setLoadingUserLibs(true);
 
+        const normalizeKeyList = (keys: string[]) => {
+            return keys.map(k => {
+                if (k.includes(":")) return k;
+                const matchedServer = serverLibraries.find(s => (s.sections || []).some((sec: any) => String(sec.id) === k));
+                if (matchedServer) {
+                    return `${matchedServer.serverId}:${k}`;
+                }
+                if (serverLibraries.length > 0) {
+                    return `${serverLibraries[0].serverId}:${k}`;
+                }
+                return k;
+            });
+        };
+
         // Pre-fill initial keys from user record or onboarding default
         let initialKeys: string[] = [];
         if (user.plexLibrarySectionIds) {
-            initialKeys = user.plexLibrarySectionIds
+            initialKeys = normalizeKeyList(user.plexLibrarySectionIds
                 .split(",")
                 .map((s: string) => s.trim())
-                .filter(Boolean);
+                .filter(Boolean));
         } else if (paymentSettings.defaultPlexLibraries) {
-            initialKeys = paymentSettings.defaultPlexLibraries
+            initialKeys = normalizeKeyList(paymentSettings.defaultPlexLibraries
                 .split(",")
                 .map((s: string) => s.trim())
-                .filter(Boolean);
+                .filter(Boolean));
         }
         setUserSelectedKeys(initialKeys);
 
@@ -297,7 +330,7 @@ export default function AccessSettingsPage() {
         try {
             const res = await fetchUserPlexLibrariesAction(user.id);
             if (res.success && Array.isArray(res.selectedKeys)) {
-                setUserSelectedKeys(res.selectedKeys);
+                setUserSelectedKeys(normalizeKeyList(res.selectedKeys));
             }
         } catch (e) {
             console.warn("Could not query Plex for user libraries:", e);
@@ -309,15 +342,21 @@ export default function AccessSettingsPage() {
     const isSectionSelected = (serverId: string, sectionId: number | string) => {
         const fullKey = `${serverId}:${sectionId}`;
         const rawKey = String(sectionId);
-        return userSelectedKeys.includes(fullKey) || (serverLibraries.length === 1 && userSelectedKeys.includes(rawKey));
+        if (userSelectedKeys.includes(fullKey)) return true;
+        if (userSelectedKeys.includes(rawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        return false;
     };
 
     const handleToggleUserSection = (serverId: string, sectionId: number | string) => {
         const fullKey = `${serverId}:${sectionId}`;
         const rawKey = String(sectionId);
         setUserSelectedKeys(prev => {
-            const isSelected = prev.includes(fullKey) || (serverLibraries.length === 1 && prev.includes(rawKey));
-            if (isSelected) {
+            const isCurrentlySelected = isSectionSelected(serverId, sectionId);
+            if (isCurrentlySelected) {
                 return prev.filter(k => k !== fullKey && k !== rawKey);
             } else {
                 return [...prev.filter(k => k !== rawKey), fullKey];
@@ -348,15 +387,21 @@ export default function AccessSettingsPage() {
     const isDefaultSelected = (serverId: string, sectionId: number | string) => {
         const fullKey = `${serverId}:${sectionId}`;
         const rawKey = String(sectionId);
-        return defaultSelectedKeys.includes(fullKey) || (serverLibraries.length === 1 && defaultSelectedKeys.includes(rawKey));
+        if (defaultSelectedKeys.includes(fullKey)) return true;
+        if (defaultSelectedKeys.includes(rawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        return false;
     };
 
     const handleToggleDefaultSection = (serverId: string, sectionId: number | string) => {
         const fullKey = `${serverId}:${sectionId}`;
         const rawKey = String(sectionId);
         setDefaultSelectedKeys(prev => {
-            const isSelected = prev.includes(fullKey) || (serverLibraries.length === 1 && prev.includes(rawKey));
-            if (isSelected) {
+            const isCurrentlySelected = isDefaultSelected(serverId, sectionId);
+            if (isCurrentlySelected) {
                 return prev.filter(k => k !== fullKey && k !== rawKey);
             } else {
                 return [...prev.filter(k => k !== rawKey), fullKey];

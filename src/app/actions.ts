@@ -52,8 +52,10 @@ async function fetchWithRetry(url: string, options: any = {}, retries = 3) {
 }
 
 async function verifyAdmin() {
-    const user = await verifyUser();
-    if (user.role !== "ADMIN" || (user.status && user.status !== "APPROVED")) {
+    const user: any = await verifyUser();
+    const role = String(user?.role || "").toUpperCase();
+    const status = String(user?.status || "APPROVED").toUpperCase();
+    if (role !== "ADMIN" || (status !== "APPROVED" && status !== "TRIAL")) {
         throw new Error("Unauthorized");
     }
     return user;
@@ -554,14 +556,19 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
 // ============================================================================
 
 export async function getSettings() {
-    await verifyAdmin();
-    await ensureSchemaColumns();
-    const settings = await prisma.settings.findFirst() || {} as any;
-    
-    if (settings.smtpPass) settings.smtpPass = decryptData(settings.smtpPass);
-    if (settings.mainPlexToken) settings.mainPlexToken = decryptData(settings.mainPlexToken);
-    
-    return settings;
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst() || {} as any;
+        
+        if (settings.smtpPass) settings.smtpPass = decryptData(settings.smtpPass);
+        if (settings.mainPlexToken) settings.mainPlexToken = decryptData(settings.mainPlexToken);
+        
+        return settings;
+    } catch (e: any) {
+        console.error("[GET-SETTINGS-ERROR]:", e);
+        return {} as any;
+    }
 }
 
 export async function saveSettings(formData: FormData) {
@@ -697,10 +704,15 @@ export async function updateTautulliInstance(formData: FormData) {
 }
 
 export async function getTautulliInstances() {
-    await verifyAdmin();
-    const instances = await prisma.tautulliInstance.findMany();
-    // Decrypt before sending to the UI
-    return instances.map(i => ({ ...i, apiKey: decryptData(i.apiKey) }));
+    try {
+        await verifyAdmin();
+        const instances = await prisma.tautulliInstance.findMany();
+        // Decrypt before sending to the UI
+        return instances.map(i => ({ ...i, apiKey: decryptData(i.apiKey) }));
+    } catch (e: any) {
+        console.error("[GET-TAUTULLI-INSTANCES-ERROR]:", e);
+        return [];
+    }
 }
 
 export async function addGlancesInstance(formData: FormData) {
@@ -734,15 +746,25 @@ export async function updateGlancesInstance(formData: FormData) {
 }
 
 export async function getGlancesInstances() {
-    await verifyAdmin();
-    return await prisma.glancesInstance.findMany();
+    try {
+        await verifyAdmin();
+        return await prisma.glancesInstance.findMany();
+    } catch (e: any) {
+        console.error("[GET-GLANCES-INSTANCES-ERROR]:", e);
+        return [];
+    }
 }
 
 export async function getMediaApps() {
-    await verifyAdmin();
-    const apps = await prisma.mediaApp.findMany();
-    // Decrypt before sending to the UI
-    return apps.map(app => ({ ...app, apiKey: decryptData(app.apiKey as string) }));
+    try {
+        await verifyAdmin();
+        const apps = await prisma.mediaApp.findMany();
+        // Decrypt before sending to the UI
+        return apps.map(app => ({ ...app, apiKey: decryptData(app.apiKey as string) }));
+    } catch (e: any) {
+        console.error("[GET-MEDIA-APPS-ERROR]:", e);
+        return [];
+    }
 }
 
 export async function addMediaApp(formData: FormData) {
@@ -1139,10 +1161,9 @@ export async function getAppUsers() {
                 }
             }
         });
-    } catch (e) {
-        const user = await verifyUser().catch(() => null);
-        if (user) {
-            await ensureSchemaColumns();
+    } catch (e: any) {
+        console.error("[GET-APP-USERS-ERROR]:", e);
+        try {
             return await prisma.user.findMany({
                 orderBy: { createdAt: 'desc' },
                 select: { 
@@ -1161,22 +1182,13 @@ export async function getAppUsers() {
                     plexLibrarySectionIds: true,
                     referralCode: true,
                     referredByUserId: true,
-                    convertedAt: true,
-                    referredBy: {
-                        select: {
-                            id: true,
-                            username: true
-                        }
-                    },
-                    _count: {
-                        select: {
-                            referrals: true
-                        }
-                    }
+                    convertedAt: true
                 }
             });
+        } catch (innerErr) {
+            console.error("[GET-APP-USERS-FALLBACK-ERROR]:", innerErr);
+            return [];
         }
-        return [];
     }
 }
 
@@ -2959,7 +2971,6 @@ async function verifyUser() {
     const session = cookieStore.get("session")?.value;
     if (!session) throw new Error("Unauthorized");
     try {
-        await ensureSchemaColumns();
         const { payload } = await jwtVerify(session, getJwtSecret());
         const userId = (payload.userId || payload.id) as string;
         const username = (payload.username || "") as string;
@@ -10049,6 +10060,33 @@ export async function dumpEntireDatabaseAction() {
             failedReleases.forEach(f => logger.addLog("INFO", "DATABASE", `  - [Failed Release] "${f.releaseTitle}" | Protocol: ${f.protocol} | Reason: ${f.reason || 'Unknown'}`));
         }
 
+        // Available Backups
+        const backupDir = path.join(path.dirname(targetPath), "backups");
+        let availableBackups: { name: string; size: number; mtime: string }[] = [];
+        if (fs.existsSync(backupDir)) {
+            try {
+                availableBackups = fs.readdirSync(backupDir)
+                    .filter(f => f.startsWith("dev_backup_") && f.endsWith(".db"))
+                    .map(f => {
+                        const full = path.join(backupDir, f);
+                        const stat = fs.statSync(full);
+                        return {
+                            name: f,
+                            size: stat.size,
+                            mtime: stat.mtime.toISOString()
+                        };
+                    })
+                    .sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime());
+            } catch (e) {}
+        }
+
+        if (availableBackups.length > 0) {
+            logger.addLog("INFO", "DATABASE", `💾 Found ${availableBackups.length} Automatic Database Backups in ${backupDir}:`);
+            availableBackups.forEach(b => {
+                logger.addLog("INFO", "DATABASE", `  - [Backup] ${b.name} (${(b.size / 1024 / 1024).toFixed(2)} MB, saved: ${b.mtime})`);
+            });
+        }
+
         logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
         
         return {
@@ -10060,12 +10098,43 @@ export async function dumpEntireDatabaseAction() {
                 totalBooks,
                 usersCount: users.length,
                 requestsCount: requests.length,
-                servicesCount: tautulliList.length + glancesList.length + mediaAppsList.length
+                servicesCount: tautulliList.length + glancesList.length + mediaAppsList.length,
+                availableBackupsCount: availableBackups.length,
+                latestBackup: availableBackups[0]?.name || null
             }
         };
     } catch (e: any) {
         console.error("dumpEntireDatabaseAction error:", e);
         return { success: false, error: e.message || "Failed to dump database" };
+    }
+}
+
+export async function restoreDatabaseBackupAction(backupFileName: string) {
+    try {
+        await verifyAdmin();
+        const dbUrl = process.env.DATABASE_URL || "";
+        const rawPath = dbUrl.replace("file:", "").trim();
+        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+        const backupDir = path.join(path.dirname(targetPath), "backups");
+        const safeName = path.basename(backupFileName);
+        const backupFile = path.join(backupDir, safeName);
+
+        if (!fs.existsSync(backupFile)) {
+            return { success: false, error: "Backup file not found." };
+        }
+
+        // Create safety snapshot before restoring
+        if (fs.existsSync(targetPath)) {
+            const safetyFile = path.join(backupDir, `dev_backup_pre_restore_${Date.now()}.db`);
+            fs.copyFileSync(targetPath, safetyFile);
+        }
+
+        fs.copyFileSync(backupFile, targetPath);
+        logger.addLog("SYSTEM", "DATABASE", `♻️ Database successfully restored from backup: ${safeName}`);
+        return { success: true, message: `Database restored from ${safeName}. Please reload the dashboard.` };
+    } catch (e: any) {
+        console.error("restoreDatabaseBackupAction error:", e);
+        return { success: false, error: e.message || "Failed to restore backup." };
     }
 }
 

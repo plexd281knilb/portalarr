@@ -399,15 +399,15 @@ function SettingsPageContent() {
 
         try {
             const [u, s, t, g, m, bt, bc, rt, ab, ai] = await Promise.all([
-                getAppUsers(),
-                getSettings(),
-                getTautulliInstances(),
-                getGlancesInstances(),
-                getMediaApps(),
-                getBetaDashboardText(), 
-                getBetaCards(),
-                getRoadmapText(),
-                getAlertBanner(),
+                getAppUsers().catch(err => { console.error("getAppUsers error:", err); return []; }),
+                getSettings().catch(err => { console.error("getSettings error:", err); return {}; }),
+                getTautulliInstances().catch(err => { console.error("getTautulliInstances error:", err); return []; }),
+                getGlancesInstances().catch(err => { console.error("getGlancesInstances error:", err); return []; }),
+                getMediaApps().catch(err => { console.error("getMediaApps error:", err); return []; }),
+                getBetaDashboardText().catch(() => ""), 
+                getBetaCards().catch(() => []),
+                getRoadmapText().catch(() => ""),
+                getAlertBanner().catch(() => ({ enabled: false, text: "" })),
                 getAiAgentSettings().catch(() => null)
             ]);
             setUsers(u || []);

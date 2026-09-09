@@ -128,21 +128,12 @@ function ensureDatabaseFile() {
                 } catch (e) {}
             }
 
-            const candidates = [
-                ...backupCandidates,
-                rootPrismaPath,
-                legacyNestedPath,
-                path.join(process.cwd(), "dev.db"),
-                "/app/data/dev.db",
-                "/app/prisma/dev.db",
-                "/app/dev.db"
-            ];
-
-            for (const candidate of candidates) {
+            // Strictly prioritize actual backups created from this installation
+            for (const candidate of backupCandidates) {
                 if (candidate !== canonicalPath && fs.existsSync(candidate)) {
                     const candidateSize = fs.statSync(candidate).size;
                     if (candidateSize > 0) {
-                        console.log(`[DB-MIGRATION] Initializing database file from ${candidate} (${candidateSize} bytes) -> ${canonicalPath}`);
+                        console.log(`[DB-RECOVERY] Restoring database file from backup ${candidate} (${candidateSize} bytes) -> ${canonicalPath}`);
                         fs.copyFileSync(candidate, canonicalPath);
                         break;
                     }
@@ -167,8 +158,10 @@ export const prisma =
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 let schemaPatchPromise: Promise<void> | null = null;
+let schemaPatchCompleted = false;
 
 export async function ensureSchemaColumns(): Promise<void> {
+    if (schemaPatchCompleted) return;
     if (schemaPatchPromise) return schemaPatchPromise;
 
     schemaPatchPromise = (async () => {
@@ -580,8 +573,12 @@ export async function ensureSchemaColumns(): Promise<void> {
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Failed to create or seed FeatureSuggestion tables:", e.message || e);
         }
+
+        schemaPatchCompleted = true;
     } catch (globalErr: any) {
         console.error("[DB-SCHEMA-AUTOFIX] Critical error in ensureSchemaColumns:", globalErr.message || globalErr);
+    } finally {
+        schemaPatchPromise = null;
     }
 })();
 
