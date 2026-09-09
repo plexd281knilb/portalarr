@@ -68,6 +68,56 @@ function cleanUrl(url: string): string {
     return url.replace(/\/$/, ""); 
 }
 
+async function fetchTautulliApiJson(url: string, signal?: AbortSignal, nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
+    try {
+        const fetchOpts: any = { signal };
+        if (nextOptions) {
+            fetchOpts.next = nextOptions;
+        } else {
+            fetchOpts.cache = "no-store";
+        }
+
+        const res = await fetch(url, fetchOpts);
+        if (!res.ok) {
+            return { ok: false, data: null, error: `HTTP ${res.status}: ${res.statusText || "Request failed"}` };
+        }
+
+        const contentType = res.headers.get("content-type") || "";
+        const text = await res.text();
+        const trimmed = (text || "").trim();
+
+        if (!trimmed) {
+            return { ok: false, data: null, error: "Empty response received from server" };
+        }
+
+        if (trimmed.startsWith("<") || contentType.includes("html") || contentType.includes("xml")) {
+            return { 
+                ok: false, 
+                data: null, 
+                error: "Server returned HTML/XML instead of JSON. Ensure URL points to Tautulli (port 8181 by default), not Plex (port 32400) or a WebGUI." 
+            };
+        }
+
+        let json: any;
+        try {
+            json = JSON.parse(trimmed);
+        } catch (parseErr: any) {
+            return { ok: false, data: null, error: `Malformed JSON received: ${parseErr.message}` };
+        }
+
+        if (json.response?.result === "error") {
+            return { ok: false, data: null, error: json.response.message || "Tautulli API error" };
+        }
+
+        return { ok: true, data: json.response?.data ?? json.response ?? json };
+    } catch (e: any) {
+        if (e.name === "AbortError") {
+            return { ok: false, data: null, error: "Connection timed out" };
+        }
+        return { ok: false, data: null, error: e.message || "Network error" };
+    }
+}
+
 function isForeignLanguage(title: string): boolean {
     const titleLower = title.toLowerCase();
     const foreignPatterns = [
@@ -997,30 +1047,20 @@ export async function testTautulliConfigAction(rawUrl: string, rawApiKey: string
 
         // Tautulli API v2 uses cmd=get_server_info, cmd=status, or cmd=get_activity
         const testUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_server_info`;
-        const res = await fetch(testUrl, { signal: controller.signal, cache: "no-store" });
+        const result = await fetchTautulliApiJson(testUrl, controller.signal);
         clearTimeout(timeoutId);
 
-        if (!res.ok) {
-            return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
+        if (!result.ok) {
+            return { success: false, error: result.error || "Failed to connect to Tautulli" };
         }
 
-        const data = await res.json().catch(() => null);
-        if (data && data.response) {
-            if (data.response.result === "error") {
-                return { success: false, error: data.response.message || "Invalid Tautulli API Key" };
-            }
-            if (data.response.result === "success") {
-                const serverName = data.response.data?.pms_name || data.response.data?.server_name;
-                return { 
-                    success: true, 
-                    message: serverName 
-                        ? `Connected to Tautulli! Connected server: "${serverName}"`
-                        : "Successfully connected to Tautulli!"
-                };
-            }
-        }
-
-        return { success: true, message: "Successfully connected to Tautulli!" };
+        const serverName = result.data?.pms_name || result.data?.server_name;
+        return { 
+            success: true, 
+            message: serverName 
+                ? `Connected to Tautulli! Connected server: "${serverName}"`
+                : "Successfully connected to Tautulli!"
+        };
     } catch (e: any) {
         if (e.name === "AbortError") {
             return { success: false, error: "Connection timed out after 7s. Please check host, port, or firewall." };
@@ -2820,17 +2860,13 @@ export async function getLandingStats() {
             const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
 
             try {
-                const res = await fetch(fullUrl, { next: { revalidate: 10 } });
-                
-                if (!res.ok) {
-                    streamStats.push({ name: t.name, count: 0 }); 
-                    return;
+                const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 10 });
+                if (actResult.ok && actResult.data) {
+                    const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
+                    streamStats.push({ name: t.name, count });
+                } else {
+                    streamStats.push({ name: t.name, count: 0 });
                 }
-                
-                const data = await res.json();
-                const count = data.response?.data?.stream_count ? Number(data.response.data.stream_count) : 0;
-                streamStats.push({ name: t.name, count: count });
-
             } catch (e: any) { 
                 streamStats.push({ name: t.name, count: 0 }); 
             }
@@ -10843,23 +10879,21 @@ export async function getUserPlexHubData() {
         const normTName = t.name.toLowerCase().replace(/^tautulli\s*[-_:]*\s*/i, "").replace(/[^a-z0-9]/g, "");
         const existingKey = normTName ? Array.from(serverMap.keys()).find(k => k === normTName || (k.length > 2 && normTName.includes(k)) || (normTName.length > 2 && k.includes(normTName))) : null;
         
-        if (existingKey && serverMap.has(existingKey)) {
-            const existing = serverMap.get(existingKey)!;
-            existing.tautulli = true;
-            existing.type = "Direct PMS + Tautulli";
-        } else {
-            serverMap.set(normTName || t.id, {
-                id: t.id,
-                name: t.name,
-                type: "Tautulli Monitor",
-                directPms: false,
-                tautulli: true,
-                online: true
-            });
-        }
         const cleanBase = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
         const apiKey = decryptData(t.apiKey);
-        if (!apiKey) return;
+        if (!apiKey) {
+            if (!existingKey || !serverMap.has(existingKey)) {
+                serverMap.set(normTName || t.id, {
+                    id: t.id,
+                    name: t.name,
+                    type: "Tautulli Monitor",
+                    directPms: false,
+                    tautulli: true,
+                    online: false
+                });
+            }
+            return;
+        }
 
         // Find matching user in this Tautulli instance to get exact user_id
         let tautulliUserId: string | number | null = null;
@@ -10869,12 +10903,11 @@ export async function getUserPlexHubData() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3500);
             const usersUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_users`;
-            const usersRes = await fetch(usersUrl, { signal: controller.signal, next: { revalidate: 120 } });
+            const usersResult = await fetchTautulliApiJson(usersUrl, controller.signal, { revalidate: 120 });
             clearTimeout(timeoutId);
 
-            if (usersRes.ok) {
-                const usersJson = await usersRes.json();
-                const tUsers = usersJson.response?.data || [];
+            if (usersResult.ok && Array.isArray(usersResult.data)) {
+                const tUsers = usersResult.data;
                 const match = tUsers.find((u: any) => {
                     const uName = (u.username || "").toLowerCase().trim();
                     const uEmail = (u.email || "").toLowerCase().trim();
@@ -10894,9 +10927,11 @@ export async function getUserPlexHubData() {
                     tautulliMatchedUser = match;
                     tautulliUserId = match.user_id;
                 }
+            } else if (!usersResult.ok && usersResult.error) {
+                console.warn(`[PLEX-HUB] Could not fetch users for Tautulli "${t.name}": ${usersResult.error}`);
             }
-        } catch (e) {
-            console.warn(`[PLEX-HUB] Failed to fetch users for Tautulli ${t.name}:`, e);
+        } catch (e: any) {
+            console.warn(`[PLEX-HUB] Failed to fetch users for Tautulli "${t.name}":`, e.message || e);
         }
         
         // 1. Active Streams from Tautulli
@@ -10904,12 +10939,28 @@ export async function getUserPlexHubData() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3500);
             const activityUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
-            const res = await fetch(activityUrl, { signal: controller.signal, cache: "no-store" });
+            const actResult = await fetchTautulliApiJson(activityUrl, controller.signal);
             clearTimeout(timeoutId);
 
-            if (res.ok) {
-                const json = await res.json();
-                const sessions = json.response?.data?.sessions || [];
+            if (actResult.ok && actResult.data) {
+                // Verified online Tautulli instance
+                if (existingKey && serverMap.has(existingKey)) {
+                    const existing = serverMap.get(existingKey)!;
+                    existing.tautulli = true;
+                    existing.type = "Direct PMS + Tautulli";
+                    existing.online = true;
+                } else {
+                    serverMap.set(normTName || t.id, {
+                        id: t.id,
+                        name: t.name,
+                        type: "Tautulli Monitor",
+                        directPms: false,
+                        tautulli: true,
+                        online: true
+                    });
+                }
+
+                const sessions = actResult.data.sessions || [];
                 
                 for (const s of sessions) {
                     const sessionKey = String(s.session_key || "");
@@ -10982,9 +11033,21 @@ export async function getUserPlexHubData() {
                         });
                     }
                 }
+            } else if (!actResult.ok && actResult.error) {
+                console.warn(`[PLEX-HUB] Could not fetch activity for Tautulli "${t.name}": ${actResult.error}`);
+                if (!existingKey || !serverMap.has(existingKey)) {
+                    serverMap.set(normTName || t.id, {
+                        id: t.id,
+                        name: t.name,
+                        type: "Tautulli Monitor",
+                        directPms: false,
+                        tautulli: true,
+                        online: false
+                    });
+                }
             }
-        } catch (e) {
-            console.warn(`[PLEX-HUB] Failed to fetch activity for ${t.name}:`, e);
+        } catch (e: any) {
+            console.warn(`[PLEX-HUB] Failed to fetch activity for "${t.name}":`, e.message || e);
         }
 
         // 2. Watch History from this Tautulli instance (STRICTLY GATED TO MATCHED USER)
@@ -10994,12 +11057,11 @@ export async function getUserPlexHubData() {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3500);
                 const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${histUserParam}&length=20`;
-                const histRes = await fetch(histUrl, { signal: controller.signal, next: { revalidate: 30 } });
+                const histResult = await fetchTautulliApiJson(histUrl, controller.signal, { revalidate: 30 });
                 clearTimeout(timeoutId);
 
-                if (histRes.ok) {
-                    const histJson = await histRes.json();
-                    const rows = histJson.response?.data?.data || [];
+                if (histResult.ok && histResult.data) {
+                    const rows = histResult.data.data || (Array.isArray(histResult.data) ? histResult.data : []);
                     
                     rows.forEach((r: any) => {
                         const rawThumb = r.thumb || r.parent_thumb || r.grandparent_thumb || r.art || (r.rating_key ? `/library/metadata/${r.rating_key}/thumb` : "");
@@ -11042,12 +11104,11 @@ export async function getUserPlexHubData() {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3500);
                 const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&${statsUserParam}`;
-                const statsRes = await fetch(statsUrl, { signal: controller.signal, next: { revalidate: 60 } });
+                const statsResult = await fetchTautulliApiJson(statsUrl, controller.signal, { revalidate: 60 });
                 clearTimeout(timeoutId);
 
-                if (statsRes.ok) {
-                    const statsJson = await statsRes.json();
-                    const data = statsJson.response?.data || [];
+                if (statsResult.ok && statsResult.data) {
+                    const data = Array.isArray(statsResult.data) ? statsResult.data : (statsResult.data.data || []);
                     const allTime = data.find((d: any) => d.query_days === 0) || data[data.length - 1];
                     if (allTime) {
                         const totalSec = Number(allTime.total_time || 0);
@@ -11272,7 +11333,13 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                 return { success: false, error: "Could not reach Plex Media Server to verify session" };
             }
 
-            const data = await res.json();
+            const text = await res.text();
+            let data: any = null;
+            try {
+                data = JSON.parse(text);
+            } catch {
+                return { success: false, error: "Plex Media Server returned non-JSON response" };
+            }
             const rawSessions = data.MediaContainer?.Metadata || [];
             const sessions = Array.isArray(rawSessions) ? rawSessions : [rawSessions];
             
@@ -11333,12 +11400,11 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
     // 1. Fetch current activity to strictly verify ownership
     try {
         const activityUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
-        const res = await fetch(activityUrl, { cache: "no-store" });
-        if (!res.ok) {
-            return { success: false, error: "Could not reach server to verify session" };
+        const actResult = await fetchTautulliApiJson(activityUrl);
+        if (!actResult.ok || !actResult.data) {
+            return { success: false, error: actResult.error || "Could not reach server to verify session" };
         }
-        const json = await res.json();
-        const sessions = json.response?.data?.sessions || [];
+        const sessions = actResult.data.sessions || [];
         const targetSession = sessions.find((s: any) => 
             String(s.session_key || "") === String(sessionKey) ||
             String(s.session_id || "") === String(sessionKey)
@@ -11366,15 +11432,9 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         const sessionKeyParam = targetSession.session_key ? `&session_key=${encodeURIComponent(String(targetSession.session_key))}` : `&session_key=${encodeURIComponent(sessionKey)}`;
         const sessionIdParam = targetSession.session_id ? `&session_id=${encodeURIComponent(String(targetSession.session_id))}` : "";
         const killUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=terminate_session${sessionKeyParam}${sessionIdParam}&message=${encodeURIComponent("Stream ended by user via Portalarr My Plex Hub")}`;
-        const killRes = await fetch(killUrl);
+        const killResult = await fetchTautulliApiJson(killUrl);
         
-        let killed = false;
-        if (killRes.ok) {
-            const killJson = await killRes.json().catch(() => null);
-            if (killJson?.response?.result === "success") {
-                killed = true;
-            }
-        }
+        let killed = killResult.ok;
 
         // If Tautulli termination returned failure and adminToken is available, try terminating directly on Plex
         if (!killed && adminToken) {
@@ -11400,7 +11460,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
             } catch (e) {}
         }
 
-        if (killed || killRes.ok) {
+        if (killed) {
             logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on server "${instance.name}".`);
             return { success: true, message: "Stream terminated successfully." };
         } else {
