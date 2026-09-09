@@ -13,6 +13,7 @@ import {
     terminatePlexServerSession,
     getPlexServerLibrarySections,
     getPlexSharedServersList,
+    getUserPlexSharedLibraries,
     invitePlexFriendAndShare,
     updatePlexUserShareSections,
     removePlexUserShare
@@ -1429,39 +1430,114 @@ export async function fetchUserPlexShares() {
     }
 }
 
-export async function updateUserPlexLibraries(userId: string, sectionIds: number[]) {
+export async function fetchUserPlexLibrariesAction(userId: string) {
     try {
         await verifyAdmin();
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return { success: false, error: "User not found" };
 
-        const sectionStr = sectionIds.join(",");
-        await prisma.user.update({
-            where: { id: userId },
-            data: { plexLibrarySectionIds: sectionStr }
-        });
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            const saved = user.plexLibrarySectionIds 
+                ? user.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean)
+                : [];
+            return { success: true, selectedKeys: saved, fromPlex: false };
+        }
+
+        const adminToken = decryptData(settings.mainPlexToken);
+        const { selectedKeys } = await getUserPlexSharedLibraries(adminToken, user);
+
+        // If we found live keys on Plex, sync them to SQLite
+        if (selectedKeys.length > 0 || user.plexLibrarySectionIds !== "") {
+            await prisma.user.update({
+                where: { id: userId },
+                data: { plexLibrarySectionIds: selectedKeys.join(",") }
+            });
+        }
+
+        return { 
+            success: true, 
+            selectedKeys, 
+            fromPlex: true 
+        };
+    } catch (e: any) {
+        console.error("[FETCH-USER-PLEX-LIBRARIES-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to query Plex libraries" };
+    }
+}
+
+export async function updateUserPlexLibraries(userId: string, selectedKeys: (string | number)[]) {
+    try {
+        await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found" };
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        if (settings?.mainPlexToken) {
-            const adminToken = decryptData(settings.mainPlexToken);
-            const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
-            const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
+        if (!settings?.mainPlexToken) {
+            return { success: false, error: "Admin Plex token not configured in settings." };
+        }
 
-            const shares = await getPlexSharedServersList(adminToken);
+        const adminToken = decryptData(settings.mainPlexToken);
+        const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
+        const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
+
+        const servers = await getPlexServers(adminToken);
+        const shares = await getPlexSharedServersList(adminToken);
+
+        // Group selectedKeys by serverId
+        const serverSectionsMap = new Map<string, number[]>();
+        const stringKeys: string[] = [];
+
+        for (const rawKey of selectedKeys) {
+            const strKey = String(rawKey).trim();
+            if (!strKey) continue;
+            stringKeys.push(strKey);
+
+            if (strKey.includes(":")) {
+                const [srvId, secStr] = strKey.split(":");
+                const secId = parseInt(secStr, 10);
+                if (!isNaN(secId)) {
+                    const list = serverSectionsMap.get(srvId) || [];
+                    list.push(secId);
+                    serverSectionsMap.set(srvId, list);
+                }
+            } else {
+                // Legacy plain integer: assign to primary server
+                const secId = parseInt(strKey, 10);
+                if (!isNaN(secId) && servers.length > 0) {
+                    const primaryId = servers[0].clientIdentifier;
+                    const list = serverSectionsMap.get(primaryId) || [];
+                    list.push(secId);
+                    serverSectionsMap.set(primaryId, list);
+                }
+            }
+        }
+
+        // Save composite keys into user record in SQLite
+        const savedStr = stringKeys.join(",");
+        await prisma.user.update({
+            where: { id: userId },
+            data: { plexLibrarySectionIds: savedStr }
+        });
+
+        // For each server, update share on Plex or invite
+        for (const srv of servers) {
+            const srvId = srv.clientIdentifier;
+            const targetSectionIds = serverSectionsMap.get(srvId) || [];
+
+            // Find matching share for this user on this server
             const match = shares.find(s => 
-                (s.user.email && s.user.email.toLowerCase() === targetEmail) ||
-                (s.user.username && s.user.username.toLowerCase() === targetUser) ||
-                (s.invitedEmail && s.invitedEmail.toLowerCase() === targetEmail)
+                (s.serverId === srvId || !s.serverId) && (
+                    (s.user.email && s.user.email.toLowerCase() === targetEmail) ||
+                    (s.user.username && s.user.username.toLowerCase() === targetUser) ||
+                    (s.invitedEmail && s.invitedEmail.toLowerCase() === targetEmail)
+                )
             );
 
             if (match && match.id) {
-                await updatePlexUserShareSections(adminToken, match.id, sectionIds);
-            } else if (targetEmail || targetUser) {
-                const servers = await getPlexServers(adminToken);
-                const primaryServer = servers[0];
-                if (primaryServer) {
-                    await invitePlexFriendAndShare(adminToken, primaryServer.clientIdentifier, targetEmail || targetUser, sectionIds);
-                }
+                await updatePlexUserShareSections(adminToken, match.id, targetSectionIds);
+            } else if (targetSectionIds.length > 0 && (targetEmail || targetUser)) {
+                await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds);
             }
         }
 
@@ -1554,22 +1630,47 @@ export async function setUserTrialOrSubscription(
             const adminToken = decryptData(settings.mainPlexToken);
             const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
             const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
+            const servers = await getPlexServers(adminToken);
             const shares = await getPlexSharedServersList(adminToken);
-            const match = shares.find(s => 
-                (s.user.email && s.user.email.toLowerCase() === targetEmail) ||
-                (s.user.username && s.user.username.toLowerCase() === targetUser) ||
-                (s.invitedEmail && s.invitedEmail.toLowerCase() === targetEmail)
-            );
 
-            if (match && match.id) {
-                if (status === "SUSPENDED" || status === "EXPIRED") {
-                    await updatePlexUserShareSections(adminToken, match.id, []);
-                } else if (status === "APPROVED" || status === "TRIAL") {
-                    const sectionIds = user.plexLibrarySectionIds 
-                        ? user.plexLibrarySectionIds.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
-                        : (settings.defaultPlexLibraries ? settings.defaultPlexLibraries.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : []);
-                    if (sectionIds.length > 0) {
-                        await updatePlexUserShareSections(adminToken, match.id, sectionIds);
+            const rawKeys = (user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+            const serverSectionsMap = new Map<string, number[]>();
+
+            for (const key of rawKeys) {
+                if (key.includes(":")) {
+                    const [srvId, secStr] = key.split(":");
+                    const secId = parseInt(secStr, 10);
+                    if (!isNaN(secId)) {
+                        const list = serverSectionsMap.get(srvId) || [];
+                        list.push(secId);
+                        serverSectionsMap.set(srvId, list);
+                    }
+                } else {
+                    const secId = parseInt(key, 10);
+                    if (!isNaN(secId) && servers.length > 0) {
+                        const primaryId = servers[0].clientIdentifier;
+                        const list = serverSectionsMap.get(primaryId) || [];
+                        list.push(secId);
+                        serverSectionsMap.set(primaryId, list);
+                    }
+                }
+            }
+
+            for (const share of shares) {
+                const isUserMatch = (
+                    (share.user.email && share.user.email.toLowerCase() === targetEmail) ||
+                    (share.user.username && share.user.username.toLowerCase() === targetUser) ||
+                    (share.invitedEmail && share.invitedEmail.toLowerCase() === targetEmail)
+                );
+                if (isUserMatch && share.id) {
+                    if (status === "SUSPENDED" || status === "EXPIRED") {
+                        await updatePlexUserShareSections(adminToken, share.id, []);
+                    } else if (status === "APPROVED" || status === "TRIAL") {
+                        const srvId = share.serverId || (servers[0]?.clientIdentifier);
+                        const secIds = srvId ? (serverSectionsMap.get(srvId) || []) : [];
+                        if (secIds.length > 0) {
+                            await updatePlexUserShareSections(adminToken, share.id, secIds);
+                        }
                     }
                 }
             }
@@ -1877,8 +1978,8 @@ export async function registerTrialUserFromInvite(data: {
             userReferralCode = `${refSlug}-${Math.random().toString(36).substring(2, 6)}`;
         }
 
-        const defaultSections = settings?.defaultPlexLibraries 
-            ? settings.defaultPlexLibraries.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+        const rawDefaultKeys = settings?.defaultPlexLibraries 
+            ? settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean)
             : [];
 
         const newUser = await prisma.user.create({
@@ -1891,7 +1992,7 @@ export async function registerTrialUserFromInvite(data: {
                 trialEndsAt,
                 plexEmail: cleanPlex.includes("@") ? cleanPlex : null,
                 plexUsername: !cleanPlex.includes("@") ? cleanPlex : null,
-                plexLibrarySectionIds: defaultSections.join(","),
+                plexLibrarySectionIds: rawDefaultKeys.join(","),
                 referralCode: userReferralCode,
                 referredByUserId: referrer?.id || null
             }
@@ -1902,14 +2003,39 @@ export async function registerTrialUserFromInvite(data: {
             try {
                 const adminToken = decryptData(settings.mainPlexToken);
                 const servers = await getPlexServers(adminToken);
-                const primaryServer = servers[0];
-                if (primaryServer) {
-                    await invitePlexFriendAndShare(
-                        adminToken, 
-                        primaryServer.clientIdentifier, 
-                        cleanPlex, 
-                        defaultSections
-                    );
+
+                const serverSectionsMap = new Map<string, number[]>();
+                for (const key of rawDefaultKeys) {
+                    if (key.includes(":")) {
+                        const [srvId, secStr] = key.split(":");
+                        const secId = parseInt(secStr, 10);
+                        if (!isNaN(secId)) {
+                            const list = serverSectionsMap.get(srvId) || [];
+                            list.push(secId);
+                            serverSectionsMap.set(srvId, list);
+                        }
+                    } else {
+                        const secId = parseInt(key, 10);
+                        if (!isNaN(secId) && servers.length > 0) {
+                            const primaryId = servers[0].clientIdentifier;
+                            const list = serverSectionsMap.get(primaryId) || [];
+                            list.push(secId);
+                            serverSectionsMap.set(primaryId, list);
+                        }
+                    }
+                }
+
+                for (const server of servers) {
+                    const srvId = server.clientIdentifier;
+                    const sections = serverSectionsMap.get(srvId) || [];
+                    if (sections.length > 0) {
+                        await invitePlexFriendAndShare(
+                            adminToken, 
+                            srvId, 
+                            cleanPlex, 
+                            sections
+                        );
+                    }
                 }
             } catch (plexErr: any) {
                 console.warn("[AUTO-PLEX-INVITE-WARNING]:", plexErr.message || plexErr);
@@ -8689,9 +8815,13 @@ export async function syncPlexFriendsInternal() {
 
         const adminToken = decryptData(settings.mainPlexToken);
 
-        // Fetch all Plex Friends & Shared Users across API endpoints
-        const friendsList = await getPlexServerFriends(adminToken);
-        console.log(`[PLEX-SYNC] Fetched ${friendsList.length} Plex friends from server.`);
+        // Fetch all Plex Friends, Shared Servers & Sections across API endpoints
+        const [friendsList, sharesList, serversWithSections] = await Promise.all([
+            getPlexServerFriends(adminToken),
+            getPlexSharedServersList(adminToken),
+            getPlexServerLibrarySections(adminToken)
+        ]);
+        console.log(`[PLEX-SYNC] Fetched ${friendsList.length} Plex friends and ${sharesList.length} share records from server.`);
 
         // Fetch Plex Admin Owner profile
         let adminPlexProfile: any = null;
@@ -8734,6 +8864,37 @@ export async function syncPlexFriendsInternal() {
             if (fEmail) activePlexEmails.add(fEmail);
             if (fUsername) activePlexUsernames.add(fUsername.toLowerCase());
 
+            // Determine shared library sections for this friend
+            const userMatchedShares = sharesList.filter(s => {
+                const sEmail = (s.user.email || s.invitedEmail || "").toLowerCase().trim();
+                const sUser = (s.user.username || s.user.title || "").toLowerCase().trim();
+                return (fEmail && sEmail === fEmail) ||
+                       (fUsername && sUser === fUsername.toLowerCase()) ||
+                       (fEmail && sUser === fEmail) ||
+                       (fUsername && sEmail === fUsername.toLowerCase());
+            });
+
+            const userLibraryKeys: string[] = [];
+            for (const share of userMatchedShares) {
+                const srv = serversWithSections.find(sv => sv.serverId === share.serverId);
+                if (srv) {
+                    if (share.allLibraries || (share.librarySectionIds.length === 0 && srv.sections.length > 0)) {
+                        for (const sec of srv.sections) {
+                            userLibraryKeys.push(`${share.serverId}:${sec.id}`);
+                        }
+                    } else {
+                        for (const secId of share.librarySectionIds) {
+                            userLibraryKeys.push(`${share.serverId}:${secId}`);
+                        }
+                    }
+                } else {
+                    for (const secId of share.librarySectionIds) {
+                        userLibraryKeys.push(`${share.serverId}:${secId}`);
+                    }
+                }
+            }
+            const userLibraryKeyStr = Array.from(new Set(userLibraryKeys)).join(",");
+
             // Match existing user by email or username (case-insensitive)
             let existingUser = dbUsers.find(u => 
                 (fEmail && u.email.toLowerCase() === fEmail) ||
@@ -8741,7 +8902,7 @@ export async function syncPlexFriendsInternal() {
             );
 
             if (existingUser) {
-                // Update existing user details/status if needed
+                // Update existing user details/status/libraries if needed
                 let needsUpdate = false;
                 const updateData: any = {};
 
@@ -8756,6 +8917,11 @@ export async function syncPlexFriendsInternal() {
                         updateData.email = fEmail;
                         needsUpdate = true;
                     }
+                }
+
+                if (userLibraryKeyStr && existingUser.plexLibrarySectionIds !== userLibraryKeyStr) {
+                    updateData.plexLibrarySectionIds = userLibraryKeyStr;
+                    needsUpdate = true;
                 }
 
                 if (needsUpdate) {
@@ -8792,7 +8958,8 @@ export async function syncPlexFriendsInternal() {
                         email: safeEmail,
                         password: hashedPassword,
                         role: "USER",
-                        status: "APPROVED"
+                        status: "APPROVED",
+                        plexLibrarySectionIds: userLibraryKeyStr
                     }
                 });
 

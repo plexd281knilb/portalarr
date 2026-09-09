@@ -13,6 +13,7 @@ import {
     adminResetUserPassword, 
     approveAllPendingAppUsers,
     fetchPlexServerLibraries,
+    fetchUserPlexLibrariesAction,
     updateUserPlexLibraries,
     setUserTrialOrSubscription,
     markUserConverted,
@@ -35,7 +36,7 @@ import {
     Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, 
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
-    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar
+    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
@@ -54,7 +55,8 @@ export default function AccessSettingsPage() {
 
     // Manage Libraries Modal state
     const [libModalUser, setLibModalUser] = useState<any | null>(null);
-    const [userSelectedSections, setUserSelectedSections] = useState<number[]>([]);
+    const [userSelectedKeys, setUserSelectedKeys] = useState<string[]>([]);
+    const [loadingUserLibs, setLoadingUserLibs] = useState(false);
     const [savingUserLibs, setSavingUserLibs] = useState(false);
     const [libSuccessMsg, setLibSuccessMsg] = useState("");
     const [libErrMsg, setLibErrMsg] = useState("");
@@ -86,7 +88,7 @@ export default function AccessSettingsPage() {
         billingType: "YEARLY_PRORATED",
         requireReferralForSignup: false
     });
-    const [defaultSelectedSections, setDefaultSelectedSections] = useState<number[]>([]);
+    const [defaultSelectedKeys, setDefaultSelectedKeys] = useState<string[]>([]);
     const [savingSettings, setSavingSettings] = useState(false);
     const [settingsSuccessMsg, setSettingsSuccessMsg] = useState("");
     const [settingsErrMsg, setSettingsErrMsg] = useState("");
@@ -139,11 +141,11 @@ export default function AccessSettingsPage() {
         if (res.success && res.settings) {
             setPaymentSettings(res.settings);
             if (res.settings.defaultPlexLibraries) {
-                const ids = res.settings.defaultPlexLibraries
+                const keys = res.settings.defaultPlexLibraries
                     .split(",")
-                    .map((s: string) => parseInt(s.trim(), 10))
-                    .filter((n: number) => !isNaN(n));
-                setDefaultSelectedSections(ids);
+                    .map((s: string) => s.trim())
+                    .filter(Boolean);
+                setDefaultSelectedKeys(keys);
             }
         }
     };
@@ -270,37 +272,63 @@ export default function AccessSettingsPage() {
     };
 
     // Open Manage Libraries Modal for a user
-    const handleOpenLibrariesModal = (user: any) => {
+    const handleOpenLibrariesModal = async (user: any) => {
         setLibModalUser(user);
         setLibSuccessMsg("");
         setLibErrMsg("");
-        let sections: number[] = [];
+        setLoadingUserLibs(true);
+
+        // Pre-fill initial keys from user record or onboarding default
+        let initialKeys: string[] = [];
         if (user.plexLibrarySectionIds) {
-            sections = user.plexLibrarySectionIds
+            initialKeys = user.plexLibrarySectionIds
                 .split(",")
-                .map((s: string) => parseInt(s.trim(), 10))
-                .filter((n: number) => !isNaN(n));
+                .map((s: string) => s.trim())
+                .filter(Boolean);
         } else if (paymentSettings.defaultPlexLibraries) {
-            sections = paymentSettings.defaultPlexLibraries
+            initialKeys = paymentSettings.defaultPlexLibraries
                 .split(",")
-                .map((s: string) => parseInt(s.trim(), 10))
-                .filter((n: number) => !isNaN(n));
+                .map((s: string) => s.trim())
+                .filter(Boolean);
         }
-        setUserSelectedSections(sections);
+        setUserSelectedKeys(initialKeys);
+
+        // Fetch live shared library sections directly from Plex
+        try {
+            const res = await fetchUserPlexLibrariesAction(user.id);
+            if (res.success && Array.isArray(res.selectedKeys)) {
+                setUserSelectedKeys(res.selectedKeys);
+            }
+        } catch (e) {
+            console.warn("Could not query Plex for user libraries:", e);
+        } finally {
+            setLoadingUserLibs(false);
+        }
     };
 
-    const handleToggleUserSection = (sectionId: number) => {
-        setUserSelectedSections(prev => 
-            prev.includes(sectionId) ? prev.filter(id => id !== sectionId) : [...prev, sectionId]
+    const handleToggleUserSection = (uniqueKey: string) => {
+        setUserSelectedKeys(prev => 
+            prev.includes(uniqueKey) ? prev.filter(k => k !== uniqueKey) : [...prev, uniqueKey]
         );
     };
 
-    const handleSelectAllSections = (allSectionIds: number[]) => {
-        setUserSelectedSections(allSectionIds);
+    const handleToggleAllServerSections = (serverId: string, selectAll: boolean) => {
+        const server = serverLibraries.find(s => s.serverId === serverId);
+        if (!server) return;
+        const serverKeys = (server.sections || []).map((sec: any) => `${serverId}:${sec.id}`);
+        
+        setUserSelectedKeys(prev => {
+            const otherServerKeys = prev.filter(k => !k.startsWith(`${serverId}:`));
+            return selectAll ? [...otherServerKeys, ...serverKeys] : otherServerKeys;
+        });
+    };
+
+    const handleSelectAllSections = () => {
+        setUserSelectedKeys(allUniqueKeys);
     };
 
     const handleDeselectAllSections = () => {
-        setUserSelectedSections([]);
+        setUserSelectedKeys([]);
     };
 
     const handleSaveUserLibraries = async () => {
@@ -309,7 +337,7 @@ export default function AccessSettingsPage() {
         setLibSuccessMsg("");
         setLibErrMsg("");
 
-        const res = await updateUserPlexLibraries(libModalUser.id, userSelectedSections);
+        const res = await updateUserPlexLibraries(libModalUser.id, userSelectedKeys);
         setSavingUserLibs(false);
         if (res.success) {
             setLibSuccessMsg(res.message || "Plex libraries updated successfully!");
@@ -374,7 +402,7 @@ export default function AccessSettingsPage() {
 
         const formData = new FormData();
         formData.append("defaultTrialDays", String(paymentSettings.defaultTrialDays));
-        formData.append("defaultPlexLibraries", defaultSelectedSections.join(","));
+        formData.append("defaultPlexLibraries", defaultSelectedKeys.join(","));
         formData.append("paymentPaypal", paymentSettings.paymentPaypal);
         formData.append("paymentVenmo", paymentSettings.paymentVenmo);
         formData.append("paymentCashApp", paymentSettings.paymentCashApp);
@@ -426,7 +454,9 @@ export default function AccessSettingsPage() {
         return Math.max(0, diff);
     };
 
-    // Flatten all sections across servers
+    // Flatten all unique composite keys across servers
+    const allUniqueKeys: string[] = serverLibraries.flatMap(srv => (srv.sections || []).map((sec: any) => `${srv.serverId}:${sec.id}`));
+    const totalLibrariesCount = allUniqueKeys.length;
     const allSections = serverLibraries.flatMap(s => s.sections || []);
 
     // Live calculation for preview
@@ -723,7 +753,7 @@ export default function AccessSettingsPage() {
                                         const daysLeft = isTrial ? getDaysLeft(user.trialEndsAt) : null;
                                         const userLibraryCount = user.plexLibrarySectionIds 
                                             ? user.plexLibrarySectionIds.split(",").filter(Boolean).length 
-                                            : "Default";
+                                            : 0;
 
                                         return (
                                             <div 
@@ -860,7 +890,7 @@ export default function AccessSettingsPage() {
                                                         title="Manage Shared Plex Libraries"
                                                     >
                                                         <Layers className="h-3.5 w-3.5 text-primary" />
-                                                        Libraries ({userLibraryCount})
+                                                        Libraries ({userLibraryCount > 0 ? `${userLibraryCount} shared` : "None"})
                                                     </Button>
 
                                                     {/* TRIAL / SUBSCRIPTION TIMER BUTTON */}
@@ -1337,34 +1367,74 @@ export default function AccessSettingsPage() {
                                         </Button>
                                     </div>
 
-                                    {allSections.length === 0 ? (
+                                    {serverLibraries.length === 0 ? (
                                         <div className="text-xs text-muted-foreground italic p-4 bg-muted/20 rounded-xl border border-border/40">
                                             No Plex libraries detected. Verify your Admin Plex token is configured in Settings.
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 bg-muted/10 rounded-xl border border-border/40">
-                                            {allSections.map((sec) => {
-                                                const isChecked = defaultSelectedSections.includes(Number(sec.key));
+                                        <div className="space-y-3">
+                                            {serverLibraries.map((srv) => {
+                                                const srvSections = srv.sections || [];
+                                                const srvSelectedCount = srvSections.filter((sec: any) => 
+                                                    defaultSelectedKeys.includes(`${srv.serverId}:${sec.id}`)
+                                                ).length;
+                                                const allSrvSelected = srvSections.length > 0 && srvSelectedCount === srvSections.length;
+
                                                 return (
-                                                    <label 
-                                                        key={sec.key} 
-                                                        className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
-                                                            isChecked ? "bg-primary/15 border-primary/40 text-foreground" : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground"
-                                                        }`}
-                                                    >
-                                                        <input 
-                                                            type="checkbox"
-                                                            checked={isChecked}
-                                                            onChange={() => {
-                                                                const num = Number(sec.key);
-                                                                setDefaultSelectedSections(prev => 
-                                                                    prev.includes(num) ? prev.filter(x => x !== num) : [...prev, num]
+                                                    <div key={srv.serverId} className="p-3 bg-muted/10 rounded-xl border border-border/40 space-y-2">
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-border/30">
+                                                            <div className="flex items-center gap-2">
+                                                                <Server className="h-3.5 w-3.5 text-primary" />
+                                                                <span className="font-bold text-xs text-foreground">{srv.serverName || "Plex Server"}</span>
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50">
+                                                                    {srvSelectedCount}/{srvSections.length} Default
+                                                                </Badge>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                                                onClick={() => {
+                                                                    const srvKeys = srvSections.map((sec: any) => `${srv.serverId}:${sec.id}`);
+                                                                    setDefaultSelectedKeys(prev => {
+                                                                        const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`));
+                                                                        return allSrvSelected ? otherKeys : [...otherKeys, ...srvKeys];
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {allSrvSelected ? "Deselect All" : "Select All"}
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                            {srvSections.map((sec: any) => {
+                                                                const uniqueKey = `${srv.serverId}:${sec.id}`;
+                                                                const isChecked = defaultSelectedKeys.includes(uniqueKey);
+                                                                return (
+                                                                    <label 
+                                                                        key={uniqueKey} 
+                                                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                                                                            isChecked ? "bg-primary/15 border-primary/40 text-foreground font-semibold" : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground"
+                                                                        }`}
+                                                                    >
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {
+                                                                                setDefaultSelectedKeys(prev => 
+                                                                                    prev.includes(uniqueKey) ? prev.filter(x => x !== uniqueKey) : [...prev, uniqueKey]
+                                                                                );
+                                                                            }}
+                                                                            className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 shrink-0"
+                                                                        />
+                                                                        <span className="truncate">{sec.title}</span>
+                                                                        <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                    </label>
                                                                 );
-                                                            }}
-                                                            className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-                                                        />
-                                                        <span className="truncate">{sec.title} ({sec.type})</span>
-                                                    </label>
+                                                            })}
+                                                        </div>
+                                                    </div>
                                                 );
                                             })}
                                         </div>
@@ -1425,9 +1495,16 @@ export default function AccessSettingsPage() {
                                 </div>
                             )}
 
+                            {loadingUserLibs && (
+                                <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground bg-primary/5 rounded-xl border border-primary/20 animate-pulse">
+                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                    <span>Fetching current shared libraries from Plex...</span>
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-between text-xs">
                                 <span className="text-muted-foreground font-semibold">
-                                    {userSelectedSections.length} of {allSections.length} libraries selected
+                                    {userSelectedKeys.length} of {totalLibrariesCount} libraries selected
                                 </span>
                                 <div className="flex gap-2">
                                     <Button 
@@ -1435,7 +1512,7 @@ export default function AccessSettingsPage() {
                                         variant="outline" 
                                         size="sm" 
                                         className="h-7 text-xs px-2"
-                                        onClick={() => handleSelectAllSections(allSections.map(s => Number(s.key)))}
+                                        onClick={handleSelectAllSections}
                                     >
                                         Select All
                                     </Button>
@@ -1451,39 +1528,73 @@ export default function AccessSettingsPage() {
                                 </div>
                             </div>
 
-                            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                                {allSections.length === 0 ? (
-                                    <div className="text-xs text-muted-foreground italic p-4 text-center">
-                                        No libraries found. Ensure your Admin Plex Token is connected.
+                            <div className="max-h-[50vh] overflow-y-auto space-y-4 pr-1">
+                                {serverLibraries.length === 0 ? (
+                                    <div className="text-xs text-muted-foreground italic p-6 text-center border border-dashed border-border/40 rounded-xl bg-muted/10">
+                                        No Plex servers or libraries found. Ensure your Admin Plex Token is connected.
                                     </div>
                                 ) : (
-                                    allSections.map((sec) => {
-                                        const isChecked = userSelectedSections.includes(Number(sec.key));
+                                    serverLibraries.map((server) => {
+                                        const serverSections = server.sections || [];
+                                        const serverSelectedCount = serverSections.filter((sec: any) => 
+                                            userSelectedKeys.includes(`${server.serverId}:${sec.id}`)
+                                        ).length;
+                                        const allServerSelected = serverSections.length > 0 && serverSelectedCount === serverSections.length;
+
                                         return (
-                                            <div 
-                                                key={sec.key} 
-                                                onClick={() => handleToggleUserSection(Number(sec.key))}
-                                                className={`flex items-center justify-between p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
-                                                    isChecked 
-                                                        ? "bg-primary/10 border-primary/50 text-foreground" 
-                                                        : "bg-muted/10 border-border/30 text-muted-foreground hover:text-foreground"
-                                                }`}
-                                            >
-                                                <div className="flex items-center gap-2.5">
-                                                    <input 
-                                                        type="checkbox"
-                                                        checked={isChecked}
-                                                        onChange={() => {}}
-                                                        className="rounded border-border text-primary focus:ring-primary h-4 w-4 pointer-events-none"
-                                                    />
-                                                    <div>
-                                                        <span className="font-semibold block">{sec.title}</span>
-                                                        <span className="text-[10px] text-muted-foreground uppercase">{sec.type}</span>
+                                            <div key={server.serverId} className="space-y-2.5 p-3.5 bg-muted/10 rounded-xl border border-border/40">
+                                                <div className="flex items-center justify-between pb-2 border-b border-border/30">
+                                                    <div className="flex items-center gap-2">
+                                                        <Server className="h-4 w-4 text-primary shrink-0" />
+                                                        <span className="font-bold text-xs text-foreground">{server.serverName || "Plex Server"}</span>
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50">
+                                                            {serverSelectedCount}/{serverSections.length} Shared
+                                                        </Badge>
                                                     </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                                        onClick={() => handleToggleAllServerSections(server.serverId, !allServerSelected)}
+                                                    >
+                                                        {allServerSelected ? "Deselect All" : "Select All"}
+                                                    </Button>
                                                 </div>
-                                                <Badge variant="outline" className="text-[10px]">
-                                                    ID: {sec.key}
-                                                </Badge>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    {serverSections.map((sec: any) => {
+                                                        const uniqueKey = `${server.serverId}:${sec.id}`;
+                                                        const isChecked = userSelectedKeys.includes(uniqueKey);
+                                                        return (
+                                                            <div 
+                                                                key={uniqueKey} 
+                                                                onClick={() => handleToggleUserSection(uniqueKey)}
+                                                                className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                                                                    isChecked 
+                                                                        ? "bg-primary/15 border-primary/50 text-foreground font-semibold shadow-sm" 
+                                                                        : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground hover:bg-background/70"
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                    <input 
+                                                                        type="checkbox"
+                                                                        checked={isChecked}
+                                                                        onChange={() => {}}
+                                                                        className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 pointer-events-none shrink-0"
+                                                                    />
+                                                                    <div className="min-w-0">
+                                                                        <span className="font-semibold block truncate">{sec.title}</span>
+                                                                        <span className="text-[9px] text-muted-foreground uppercase">{sec.type}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0 ml-1 text-muted-foreground">
+                                                                    #{sec.id}
+                                                                </Badge>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         );
                                     })

@@ -336,6 +336,7 @@ export interface PlexSharedServerItem {
     };
     invitedEmail?: string;
     librarySectionIds: number[];
+    allLibraries?: boolean;
     accepted: boolean;
 }
 
@@ -363,6 +364,8 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                         ? rawSections.map((s: any) => parseInt(s, 10)).filter((n: number) => !isNaN(n))
                         : (typeof rawSections === "string" ? rawSections.split(",").map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n)) : []);
 
+                    const isAll = Boolean(item.all_libraries || item.allLibraries || (Array.isArray(item.sections) && item.sections.length > 0 && sectionIds.length === 0));
+
                     items.push({
                         id: item.id,
                         serverId: item.machine_identifier || item.machineIdentifier || item.server_id || "",
@@ -376,6 +379,7 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                         },
                         invitedEmail: item.invited_email || item.invitedEmail || rawUser.email,
                         librarySectionIds: sectionIds,
+                        allLibraries: isAll,
                         accepted: Boolean(item.accepted ?? true)
                     });
                 }
@@ -386,6 +390,59 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
     }
 
     return items;
+}
+
+export async function getUserPlexSharedLibraries(
+    adminToken: string, 
+    user: { email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null }
+): Promise<{ matchedShares: PlexSharedServerItem[]; selectedKeys: string[] }> {
+    if (!adminToken) return { matchedShares: [], selectedKeys: [] };
+
+    const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
+    const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
+
+    const [shares, serversWithSections] = await Promise.all([
+        getPlexSharedServersList(adminToken),
+        getPlexServerLibrarySections(adminToken)
+    ]);
+
+    const matchedShares = shares.filter(s => {
+        const shareEmail = (s.user.email || s.invitedEmail || "").toLowerCase().trim();
+        const shareUser = (s.user.username || s.user.title || "").toLowerCase().trim();
+        return (targetEmail && shareEmail === targetEmail) ||
+               (targetUser && shareUser === targetUser) ||
+               (targetEmail && shareUser === targetEmail) ||
+               (targetUser && shareEmail === targetUser);
+    });
+
+    const selectedKeys: string[] = [];
+
+    for (const share of matchedShares) {
+        const srvId = share.serverId;
+        const server = serversWithSections.find(srv => srv.serverId === srvId);
+
+        if (server) {
+            if (share.allLibraries || (share.librarySectionIds.length === 0 && server.sections.length > 0)) {
+                // All libraries on this server
+                for (const sec of server.sections) {
+                    selectedKeys.push(`${srvId}:${sec.id}`);
+                }
+            } else {
+                for (const secId of share.librarySectionIds) {
+                    selectedKeys.push(`${srvId}:${secId}`);
+                }
+            }
+        } else {
+            for (const secId of share.librarySectionIds) {
+                selectedKeys.push(`${srvId}:${secId}`);
+            }
+        }
+    }
+
+    return {
+        matchedShares,
+        selectedKeys: Array.from(new Set(selectedKeys))
+    };
 }
 
 export async function invitePlexFriendAndShare(
