@@ -41,40 +41,100 @@ if (typeof window === "undefined" && !(global as any).__loggerPatched) {
     };
 }
 
+function createDatabaseBackup(dbPath: string) {
+    try {
+        if (!fs.existsSync(dbPath)) return;
+        const size = fs.statSync(dbPath).size;
+        if (size === 0) return;
+
+        const backupDir = path.join(path.dirname(dbPath), "backups");
+        if (!fs.existsSync(backupDir)) {
+            fs.mkdirSync(backupDir, { recursive: true });
+        }
+
+        const now = new Date();
+        const stamp = now.toISOString().replace(/[:.]/g, "-");
+        const backupFile = path.join(backupDir, `dev_backup_${stamp}.db`);
+
+        const existingBackups = fs.readdirSync(backupDir)
+            .filter(f => f.startsWith("dev_backup_") && f.endsWith(".db"))
+            .sort();
+
+        let shouldBackup = true;
+        if (existingBackups.length > 0) {
+            const latestBackup = path.join(backupDir, existingBackups[existingBackups.length - 1]);
+            const latestStat = fs.statSync(latestBackup);
+            if (now.getTime() - latestStat.mtime.getTime() < 5 * 60 * 1000) {
+                shouldBackup = false;
+            }
+        }
+
+        if (shouldBackup) {
+            fs.copyFileSync(dbPath, backupFile);
+            console.log(`[DB-BACKUP] Created database snapshot: ${backupFile} (${size} bytes)`);
+
+            // Retain last 20 backups
+            if (existingBackups.length >= 20) {
+                for (let i = 0; i < existingBackups.length - 19; i++) {
+                    try {
+                        fs.unlinkSync(path.join(backupDir, existingBackups[i]));
+                    } catch (e) {}
+                }
+            }
+        }
+    } catch (err: any) {
+        console.warn("[DB-BACKUP] Failed to create backup:", err.message);
+    }
+}
+
 function ensureDatabaseFile() {
     try {
-        const dbUrl = process.env.DATABASE_URL || "";
-        if (dbUrl.startsWith("file:")) {
-            const rawPath = dbUrl.replace("file:", "").trim();
-            const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
-            
-            const targetDir = path.dirname(targetPath);
-            if (!fs.existsSync(targetDir)) {
-                fs.mkdirSync(targetDir, { recursive: true });
-            }
+        const canonicalPath = path.join(process.cwd(), "prisma", "dev.db");
+        const legacyNestedPath = path.join(process.cwd(), "prisma", "prisma", "dev.db");
 
-            const targetExists = fs.existsSync(targetPath);
-            const targetSize = targetExists ? fs.statSync(targetPath).size : 0;
+        const targetDir = path.dirname(canonicalPath);
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
 
-            if (targetSize === 0) {
-                const candidates = [
-                    path.join(process.cwd(), "prisma", "dev.db"),
-                    path.join(process.cwd(), "dev.db"),
-                    "/app/prisma/dev.db",
-                    "/app/dev.db"
-                ];
+        const canonicalExists = fs.existsSync(canonicalPath);
+        const canonicalSize = canonicalExists ? fs.statSync(canonicalPath).size : 0;
 
-                for (const candidate of candidates) {
-                    if (candidate !== targetPath && fs.existsSync(candidate)) {
-                        const candidateSize = fs.statSync(candidate).size;
-                        if (candidateSize > 0) {
-                            console.log(`[DB-MIGRATION] Restoring legacy database file from ${candidate} (${candidateSize} bytes) -> ${targetPath}`);
-                            fs.copyFileSync(candidate, targetPath);
-                            break;
-                        }
+        const nestedExists = fs.existsSync(legacyNestedPath);
+        const nestedSize = nestedExists ? fs.statSync(legacyNestedPath).size : 0;
+
+        // If nested db has data and canonical doesn't, or nested is larger, merge/restore from nested
+        if (nestedExists && nestedSize > canonicalSize) {
+            console.log(`[DB-MIGRATION] Consolidating nested database (${nestedSize} bytes) -> canonical ${canonicalPath}`);
+            fs.copyFileSync(legacyNestedPath, canonicalPath);
+        } else if (canonicalSize === 0) {
+            const candidates = [
+                path.join(process.cwd(), "dev.db"),
+                legacyNestedPath,
+                "/app/prisma/dev.db",
+                "/app/data/dev.db",
+                "/app/dev.db"
+            ];
+
+            for (const candidate of candidates) {
+                if (candidate !== canonicalPath && fs.existsSync(candidate)) {
+                    const candidateSize = fs.statSync(candidate).size;
+                    if (candidateSize > 0) {
+                        console.log(`[DB-MIGRATION] Restoring database file from ${candidate} (${candidateSize} bytes) -> ${canonicalPath}`);
+                        fs.copyFileSync(candidate, canonicalPath);
+                        break;
                     }
                 }
             }
+        }
+
+        if (fs.existsSync(canonicalPath) && fs.statSync(canonicalPath).size > 0) {
+            createDatabaseBackup(canonicalPath);
+            const nestedDir = path.dirname(legacyNestedPath);
+            if (!fs.existsSync(nestedDir)) {
+                fs.mkdirSync(nestedDir, { recursive: true });
+            }
+            fs.copyFileSync(canonicalPath, legacyNestedPath);
         }
     } catch (err: any) {
         console.error("[DB-MIGRATION] Error during database file check:", err);
@@ -104,193 +164,399 @@ async function ensureSchemaColumns() {
         await prisma.$queryRawUnsafe(`PRAGMA busy_timeout = 5000;`).catch(() => {});
         await prisma.$queryRawUnsafe(`PRAGMA synchronous = NORMAL;`).catch(() => {});
 
-        const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Library");`);
-        const columns = tableInfo.map((c: any) => c.name);
+        // --- 1. SETTINGS TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "Settings" (
+                    "id" TEXT PRIMARY KEY DEFAULT 'global',
+                    "mainPlexUrl" TEXT,
+                    "mainPlexToken" TEXT,
+                    "smtpHost" TEXT,
+                    "smtpPort" INTEGER,
+                    "smtpUser" TEXT,
+                    "smtpPass" TEXT,
+                    "smtpFrom" TEXT NOT NULL DEFAULT '',
+                    "refreshInterval" INTEGER NOT NULL DEFAULT 10,
+                    "theme" TEXT NOT NULL DEFAULT 'dark',
+                    "autoSyncInterval" INTEGER NOT NULL DEFAULT 6,
+                    "lastAutoSync" DATETIME,
+                    "betaDashboardText" TEXT,
+                    "roadmapText" TEXT,
+                    "alertBannerEnabled" BOOLEAN NOT NULL DEFAULT 0,
+                    "alertBannerText" TEXT,
+                    "downloadsPath" TEXT DEFAULT '/downloads',
+                    "aiProvider" TEXT DEFAULT 'default',
+                    "aiApiKey" TEXT,
+                    "aiModel" TEXT DEFAULT 'gemini-2.5-flash',
+                    "aiAutoResolve" BOOLEAN NOT NULL DEFAULT 1,
+                    "googleBooksApiKey" TEXT,
+                    "defaultTrialDays" INTEGER NOT NULL DEFAULT 14,
+                    "defaultPlexLibraries" TEXT,
+                    "paymentPaypal" TEXT,
+                    "paymentVenmo" TEXT,
+                    "paymentCashApp" TEXT,
+                    "paymentZelle" TEXT,
+                    "paymentInstructions" TEXT,
+                    "subscriptionPrice" TEXT,
+                    "yearlyPrice" REAL DEFAULT 180,
+                    "monthlyPrice" REAL DEFAULT 15,
+                    "renewalMonth" INTEGER DEFAULT 1,
+                    "renewalDay" INTEGER DEFAULT 1,
+                    "billingType" TEXT DEFAULT 'YEARLY_PRORATED',
+                    "requireReferralForSignup" BOOLEAN NOT NULL DEFAULT 0
+                );
+            `);
 
-        if (!columns.includes("restrictedUsers")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'restrictedUsers' column to Library table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "restrictedUsers" TEXT DEFAULT "";`);
-        }
-        if (!columns.includes("downloadCategory")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'downloadCategory' column to Library table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "downloadCategory" TEXT DEFAULT "books";`);
-        }
-        if (!columns.includes("mediaType")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'mediaType' column to Library table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
-        }
-        if (!columns.includes("allowedUsers")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'allowedUsers' column to Library table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "allowedUsers" TEXT DEFAULT "";`);
-        }
-        if (!columns.includes("path")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'path' column to Library table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "path" TEXT DEFAULT "";`);
-        }
-        if (!columns.includes("description")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'description' column to Library table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "description" TEXT DEFAULT "";`);
-        }
-    } catch (e: any) {
-        console.error("[DB-SCHEMA-AUTOFIX] Failed to patch Library columns:", e.message || e);
-    }
+            const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Settings");`);
+            const cols = tableInfo.map((c: any) => c.name);
 
-    try {
-        const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Book");`);
-        const columns = tableInfo.map((c: any) => c.name);
-        if (!columns.includes("mediaType")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'mediaType' column to Book table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
-        }
-        if (!columns.includes("series")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'series' column to Book table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "series" TEXT;`);
-        }
-        if (!columns.includes("volumeNumber")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'volumeNumber' column to Book table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "volumeNumber" TEXT;`);
-        }
-    } catch (e: any) {}
-
-    try {
-        const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("BookRequest");`);
-        const columns = tableInfo.map((c: any) => c.name);
-        if (!columns.includes("mediaType")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'mediaType' column to BookRequest table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
-        }
-        if (!columns.includes("type")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'type' column to BookRequest table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "type" TEXT DEFAULT "book";`);
-        }
-        if (!columns.includes("series")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'series' column to BookRequest table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "series" TEXT;`);
-        }
-        if (!columns.includes("volumeNumber")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'volumeNumber' column to BookRequest table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "volumeNumber" TEXT;`);
-        }
-        if (!columns.includes("monitorSeries")) {
-            console.log("[DB-SCHEMA-AUTOFIX] Adding missing 'monitorSeries' column to BookRequest table...");
-            await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "monitorSeries" BOOLEAN DEFAULT 0;`);
-        }
-    } catch (e: any) {}
-
-    try {
-        await prisma.$executeRawUnsafe(`
-            CREATE TABLE IF NOT EXISTS "KindleDeliveryLog" (
-                "id" TEXT PRIMARY KEY,
-                "bookId" TEXT,
-                "bookTitle" TEXT NOT NULL,
-                "bookAuthor" TEXT,
-                "recipientEmail" TEXT NOT NULL,
-                "userEmail" TEXT,
-                "username" TEXT NOT NULL,
-                "status" TEXT NOT NULL DEFAULT 'DELIVERED',
-                "errorMessage" TEXT,
-                "fileSize" REAL,
-                "fileType" TEXT,
-                "diagnostics" TEXT,
-                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
-    } catch (e: any) {
-        console.error("[DB-SCHEMA-AUTOFIX] Failed to create KindleDeliveryLog table:", e.message || e);
-    }
-
-    try {
-        await prisma.$executeRawUnsafe(`
-            CREATE TABLE IF NOT EXISTS "FailedRelease" (
-                "id" TEXT PRIMARY KEY,
-                "releaseTitle" TEXT NOT NULL,
-                "downloadUrl" TEXT,
-                "guid" TEXT,
-                "protocol" TEXT NOT NULL DEFAULT 'torrent',
-                "reason" TEXT,
-                "bookRequestId" TEXT,
-                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
-    } catch (e: any) {
-        console.error("[DB-SCHEMA-AUTOFIX] Failed to create FailedRelease table:", e.message || e);
-    }
-
-    try {
-        await prisma.$executeRawUnsafe(`
-            CREATE TABLE IF NOT EXISTS "FeatureSuggestion" (
-                "id" TEXT PRIMARY KEY,
-                "title" TEXT NOT NULL,
-                "description" TEXT,
-                "category" TEXT NOT NULL DEFAULT 'General',
-                "createdBy" TEXT NOT NULL DEFAULT 'Admin',
-                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
-        await prisma.$executeRawUnsafe(`
-            CREATE TABLE IF NOT EXISTS "FeatureVote" (
-                "id" TEXT PRIMARY KEY,
-                "suggestionId" TEXT NOT NULL,
-                "username" TEXT NOT NULL,
-                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                CONSTRAINT "FeatureVote_suggestionId_fkey" FOREIGN KEY ("suggestionId") REFERENCES "FeatureSuggestion" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-            );
-        `);
-        await prisma.$executeRawUnsafe(`
-            CREATE UNIQUE INDEX IF NOT EXISTS "FeatureVote_suggestionId_username_key" ON "FeatureVote"("suggestionId", "username");
-        `);
-
-        // Seed initial suggestions if empty
-        const count: any[] = await prisma.$queryRawUnsafe(`SELECT count(*) as cnt FROM "FeatureSuggestion";`);
-        const total = count?.[0]?.cnt || 0;
-        if (total === 0) {
-            console.log("[DB-SCHEMA-AUTOFIX] Seeding initial community feature suggestions...");
-            const initialSuggestions = [
-                {
-                    id: "sug_tunarr_live",
-                    title: "Tunarr Live TV & 24/7 Channels",
-                    description: "Stream personalized 24/7 TV channels, custom programming blocks, and continuously running shows directly in your media player.",
-                    category: "Live TV"
-                },
-                {
-                    id: "sug_audiobook_enhancements",
-                    title: "Enhanced Audiobook Player & Playlists",
-                    description: "Smarter chapter tracking, customizable bookmarks, listening speed presets, and cross-device listening resume.",
-                    category: "Audiobooks"
-                },
-                {
-                    id: "sug_plex_user_filter",
-                    title: "Personal Plex Content & NSFW Filtering",
-                    description: "Allow users to customize their Plex experience from Portalarr—toggle NSFW/mature content and hide specific tagged shows or movies.",
-                    category: "Plex"
-                },
-                {
-                    id: "sug_instant_notifications",
-                    title: "Real-Time Discord & Telegram Notifications",
-                    description: "Receive instant notifications on Discord, Telegram, or phone alerts when requested books, movies, or show episodes finish downloading.",
-                    category: "Notifications"
-                },
-                {
-                    id: "sug_listening_stats",
-                    title: "Personal Reading & Listening Statistics",
-                    description: "Track your reading speed, completed books, monthly listening hours, and personalized reading goal milestones.",
-                    category: "Stats"
-                }
+            const settingsAddCols: [string, string][] = [
+                ["smtpFrom", `ALTER TABLE "Settings" ADD COLUMN "smtpFrom" TEXT NOT NULL DEFAULT '';`],
+                ["smtpHost", `ALTER TABLE "Settings" ADD COLUMN "smtpHost" TEXT;`],
+                ["smtpPort", `ALTER TABLE "Settings" ADD COLUMN "smtpPort" INTEGER;`],
+                ["smtpUser", `ALTER TABLE "Settings" ADD COLUMN "smtpUser" TEXT;`],
+                ["smtpPass", `ALTER TABLE "Settings" ADD COLUMN "smtpPass" TEXT;`],
+                ["mainPlexUrl", `ALTER TABLE "Settings" ADD COLUMN "mainPlexUrl" TEXT;`],
+                ["mainPlexToken", `ALTER TABLE "Settings" ADD COLUMN "mainPlexToken" TEXT;`],
+                ["downloadsPath", `ALTER TABLE "Settings" ADD COLUMN "downloadsPath" TEXT DEFAULT '/downloads';`],
+                ["aiProvider", `ALTER TABLE "Settings" ADD COLUMN "aiProvider" TEXT DEFAULT 'default';`],
+                ["aiApiKey", `ALTER TABLE "Settings" ADD COLUMN "aiApiKey" TEXT;`],
+                ["aiModel", `ALTER TABLE "Settings" ADD COLUMN "aiModel" TEXT DEFAULT 'gemini-2.5-flash';`],
+                ["aiAutoResolve", `ALTER TABLE "Settings" ADD COLUMN "aiAutoResolve" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["googleBooksApiKey", `ALTER TABLE "Settings" ADD COLUMN "googleBooksApiKey" TEXT;`],
+                ["defaultTrialDays", `ALTER TABLE "Settings" ADD COLUMN "defaultTrialDays" INTEGER NOT NULL DEFAULT 14;`],
+                ["defaultPlexLibraries", `ALTER TABLE "Settings" ADD COLUMN "defaultPlexLibraries" TEXT;`],
+                ["paymentPaypal", `ALTER TABLE "Settings" ADD COLUMN "paymentPaypal" TEXT;`],
+                ["paymentVenmo", `ALTER TABLE "Settings" ADD COLUMN "paymentVenmo" TEXT;`],
+                ["paymentCashApp", `ALTER TABLE "Settings" ADD COLUMN "paymentCashApp" TEXT;`],
+                ["paymentZelle", `ALTER TABLE "Settings" ADD COLUMN "paymentZelle" TEXT;`],
+                ["paymentInstructions", `ALTER TABLE "Settings" ADD COLUMN "paymentInstructions" TEXT;`],
+                ["subscriptionPrice", `ALTER TABLE "Settings" ADD COLUMN "subscriptionPrice" TEXT;`],
+                ["yearlyPrice", `ALTER TABLE "Settings" ADD COLUMN "yearlyPrice" REAL DEFAULT 180;`],
+                ["monthlyPrice", `ALTER TABLE "Settings" ADD COLUMN "monthlyPrice" REAL DEFAULT 15;`],
+                ["renewalMonth", `ALTER TABLE "Settings" ADD COLUMN "renewalMonth" INTEGER DEFAULT 1;`],
+                ["renewalDay", `ALTER TABLE "Settings" ADD COLUMN "renewalDay" INTEGER DEFAULT 1;`],
+                ["billingType", `ALTER TABLE "Settings" ADD COLUMN "billingType" TEXT DEFAULT 'YEARLY_PRORATED';`],
+                ["requireReferralForSignup", `ALTER TABLE "Settings" ADD COLUMN "requireReferralForSignup" BOOLEAN NOT NULL DEFAULT 0;`]
             ];
 
-            for (const s of initialSuggestions) {
-                await prisma.$executeRawUnsafe(
-                    `INSERT OR IGNORE INTO "FeatureSuggestion" ("id", "title", "description", "category", "createdBy", "createdAt", "updatedAt") VALUES (?, ?, ?, ?, 'Admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`,
-                    s.id,
-                    s.title,
-                    s.description,
-                    s.category
-                );
+            for (const [colName, ddl] of settingsAddCols) {
+                if (!cols.includes(colName)) {
+                    console.log(`[DB-SCHEMA-AUTOFIX] Adding missing '${colName}' column to Settings table...`);
+                    await prisma.$executeRawUnsafe(ddl);
+                }
             }
+
+            // Ensure singleton row exists
+            await prisma.$executeRawUnsafe(`
+                INSERT OR IGNORE INTO "Settings" ("id", "theme", "refreshInterval", "autoSyncInterval", "defaultTrialDays", "yearlyPrice", "monthlyPrice", "renewalMonth", "renewalDay", "billingType")
+                VALUES ('global', 'dark', 10, 6, 14, 180, 15, 1, 1, 'YEARLY_PRORATED');
+            `);
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Settings table check error:", e.message || e);
         }
-    } catch (e: any) {
-        console.error("[DB-SCHEMA-AUTOFIX] Failed to create or seed FeatureSuggestion tables:", e.message || e);
+
+        // --- 2. USER TABLE ---
+        try {
+            const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("User");`);
+            const cols = tableInfo.map((c: any) => c.name);
+
+            const userAddCols: [string, string][] = [
+                ["kindleEmail", `ALTER TABLE "User" ADD COLUMN "kindleEmail" TEXT NOT NULL DEFAULT '';`],
+                ["role", `ALTER TABLE "User" ADD COLUMN "role" TEXT NOT NULL DEFAULT 'USER';`],
+                ["status", `ALTER TABLE "User" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'APPROVED';`],
+                ["trialEndsAt", `ALTER TABLE "User" ADD COLUMN "trialEndsAt" DATETIME;`],
+                ["subscriptionEndsAt", `ALTER TABLE "User" ADD COLUMN "subscriptionEndsAt" DATETIME;`],
+                ["plexUsername", `ALTER TABLE "User" ADD COLUMN "plexUsername" TEXT;`],
+                ["plexEmail", `ALTER TABLE "User" ADD COLUMN "plexEmail" TEXT;`],
+                ["plexLibrarySectionIds", `ALTER TABLE "User" ADD COLUMN "plexLibrarySectionIds" TEXT;`],
+                ["referralCode", `ALTER TABLE "User" ADD COLUMN "referralCode" TEXT;`],
+                ["referredByUserId", `ALTER TABLE "User" ADD COLUMN "referredByUserId" TEXT;`],
+                ["convertedAt", `ALTER TABLE "User" ADD COLUMN "convertedAt" DATETIME;`],
+                ["lastLogin", `ALTER TABLE "User" ADD COLUMN "lastLogin" DATETIME;`]
+            ];
+
+            for (const [colName, ddl] of userAddCols) {
+                if (!cols.includes(colName)) {
+                    console.log(`[DB-SCHEMA-AUTOFIX] Adding missing '${colName}' column to User table...`);
+                    await prisma.$executeRawUnsafe(ddl);
+                }
+            }
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] User table check error:", e.message || e);
+        }
+
+        // --- 3. MEDIA APP TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "MediaApp" (
+                    "id" TEXT PRIMARY KEY,
+                    "type" TEXT NOT NULL,
+                    "name" TEXT NOT NULL,
+                    "url" TEXT NOT NULL,
+                    "externalUrl" TEXT,
+                    "apiKey" TEXT,
+                    "enabledForUsers" BOOLEAN NOT NULL DEFAULT 0,
+                    "allowedQualityProfileIds" TEXT,
+                    "allowedRootFolderIds" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
+            const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaApp");`);
+            const cols = tableInfo.map((c: any) => c.name);
+
+            if (!cols.includes("externalUrl")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "MediaApp" ADD COLUMN "externalUrl" TEXT;`);
+            }
+            if (!cols.includes("apiKey")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "MediaApp" ADD COLUMN "apiKey" TEXT;`);
+            }
+            if (!cols.includes("enabledForUsers")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "MediaApp" ADD COLUMN "enabledForUsers" BOOLEAN NOT NULL DEFAULT 0;`);
+            }
+            if (!cols.includes("allowedQualityProfileIds")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "MediaApp" ADD COLUMN "allowedQualityProfileIds" TEXT;`);
+            }
+            if (!cols.includes("allowedRootFolderIds")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "MediaApp" ADD COLUMN "allowedRootFolderIds" TEXT;`);
+            }
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] MediaApp table check error:", e.message || e);
+        }
+
+        // --- 4. INSTANCE & SERVICE TABLES ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "TautulliInstance" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "url" TEXT NOT NULL,
+                    "apiKey" TEXT NOT NULL,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "GlancesInstance" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "url" TEXT NOT NULL,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "Service" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "url" TEXT NOT NULL,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "SupportTicket" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "email" TEXT NOT NULL,
+                    "issue" TEXT NOT NULL,
+                    "status" TEXT NOT NULL DEFAULT 'Pending',
+                    "adminComment" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "BetaCard" (
+                    "id" TEXT PRIMARY KEY,
+                    "title" TEXT NOT NULL,
+                    "content" TEXT NOT NULL,
+                    "buttonText" TEXT,
+                    "buttonUrl" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Auxiliary tables check error:", e.message || e);
+        }
+
+        // --- 5. LIBRARY TABLE ---
+        try {
+            const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Library");`);
+            const columns = tableInfo.map((c: any) => c.name);
+
+            if (!columns.includes("restrictedUsers")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "restrictedUsers" TEXT DEFAULT "";`);
+            }
+            if (!columns.includes("downloadCategory")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "downloadCategory" TEXT DEFAULT "books";`);
+            }
+            if (!columns.includes("mediaType")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
+            }
+            if (!columns.includes("allowedUsers")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "allowedUsers" TEXT DEFAULT "";`);
+            }
+            if (!columns.includes("path")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "path" TEXT DEFAULT "";`);
+            }
+            if (!columns.includes("description")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Library" ADD COLUMN "description" TEXT DEFAULT "";`);
+            }
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Failed to patch Library columns:", e.message || e);
+        }
+
+        // --- 6. BOOK TABLE ---
+        try {
+            const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Book");`);
+            const columns = tableInfo.map((c: any) => c.name);
+            if (!columns.includes("mediaType")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
+            }
+            if (!columns.includes("series")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "series" TEXT;`);
+            }
+            if (!columns.includes("volumeNumber")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "volumeNumber" TEXT;`);
+            }
+        } catch (e: any) {}
+
+        // --- 7. BOOK REQUEST TABLE ---
+        try {
+            const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("BookRequest");`);
+            const columns = tableInfo.map((c: any) => c.name);
+            if (!columns.includes("mediaType")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
+            }
+            if (!columns.includes("type")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "type" TEXT DEFAULT "book";`);
+            }
+            if (!columns.includes("series")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "series" TEXT;`);
+            }
+            if (!columns.includes("volumeNumber")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "volumeNumber" TEXT;`);
+            }
+            if (!columns.includes("monitorSeries")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "monitorSeries" BOOLEAN DEFAULT 0;`);
+            }
+        } catch (e: any) {}
+
+        // --- 8. DELIVERY LOGS & COMMUNTIY SUGGESTIONS ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "KindleDeliveryLog" (
+                    "id" TEXT PRIMARY KEY,
+                    "bookId" TEXT,
+                    "bookTitle" TEXT NOT NULL,
+                    "bookAuthor" TEXT,
+                    "recipientEmail" TEXT NOT NULL,
+                    "userEmail" TEXT,
+                    "username" TEXT NOT NULL,
+                    "status" TEXT NOT NULL DEFAULT 'DELIVERED',
+                    "errorMessage" TEXT,
+                    "fileSize" REAL,
+                    "fileType" TEXT,
+                    "diagnostics" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+        } catch (e: any) {}
+
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "FailedRelease" (
+                    "id" TEXT PRIMARY KEY,
+                    "releaseTitle" TEXT NOT NULL,
+                    "downloadUrl" TEXT,
+                    "guid" TEXT,
+                    "protocol" TEXT NOT NULL DEFAULT 'torrent',
+                    "reason" TEXT,
+                    "bookRequestId" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+        } catch (e: any) {}
+
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "FeatureSuggestion" (
+                    "id" TEXT PRIMARY KEY,
+                    "title" TEXT NOT NULL,
+                    "description" TEXT,
+                    "category" TEXT NOT NULL DEFAULT 'General',
+                    "createdBy" TEXT NOT NULL DEFAULT 'Admin',
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "FeatureVote" (
+                    "id" TEXT PRIMARY KEY,
+                    "suggestionId" TEXT NOT NULL,
+                    "username" TEXT NOT NULL,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "FeatureVote_suggestionId_fkey" FOREIGN KEY ("suggestionId") REFERENCES "FeatureSuggestion" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`
+                CREATE UNIQUE INDEX IF NOT EXISTS "FeatureVote_suggestionId_username_key" ON "FeatureVote"("suggestionId", "username");
+            `);
+
+            // Seed initial suggestions if empty
+            const count: any[] = await prisma.$queryRawUnsafe(`SELECT count(*) as cnt FROM "FeatureSuggestion";`);
+            const total = count?.[0]?.cnt || 0;
+            if (total === 0) {
+                console.log("[DB-SCHEMA-AUTOFIX] Seeding initial community feature suggestions...");
+                const initialSuggestions = [
+                    {
+                        id: "sug_tunarr_live",
+                        title: "Tunarr Live TV & 24/7 Channels",
+                        description: "Stream personalized 24/7 TV channels, custom programming blocks, and continuously running shows directly in your media player.",
+                        category: "Live TV"
+                    },
+                    {
+                        id: "sug_audiobook_enhancements",
+                        title: "Enhanced Audiobook Player & Playlists",
+                        description: "Smarter chapter tracking, customizable bookmarks, listening speed presets, and cross-device listening resume.",
+                        category: "Audiobooks"
+                    },
+                    {
+                        id: "sug_plex_user_filter",
+                        title: "Personal Plex Content & NSFW Filtering",
+                        description: "Allow users to customize their Plex experience from Portalarr—toggle NSFW/mature content and hide specific tagged shows or movies.",
+                        category: "Plex"
+                    },
+                    {
+                        id: "sug_instant_notifications",
+                        title: "Real-Time Discord & Telegram Notifications",
+                        description: "Receive instant notifications on Discord, Telegram, or phone alerts when requested books, movies, or show episodes finish downloading.",
+                        category: "Notifications"
+                    },
+                    {
+                        id: "sug_listening_stats",
+                        title: "Personal Reading & Listening Statistics",
+                        description: "Track your reading speed, completed books, monthly listening hours, and personalized reading goal milestones.",
+                        category: "Stats"
+                    }
+                ];
+
+                for (const s of initialSuggestions) {
+                    await prisma.$executeRawUnsafe(
+                        `INSERT OR IGNORE INTO "FeatureSuggestion" ("id", "title", "description", "category", "createdBy", "createdAt", "updatedAt") VALUES (?, ?, ?, ?, 'Admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`,
+                        s.id,
+                        s.title,
+                        s.description,
+                        s.category
+                    );
+                }
+            }
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Failed to create or seed FeatureSuggestion tables:", e.message || e);
+        }
+    } catch (globalErr: any) {
+        console.error("[DB-SCHEMA-AUTOFIX] Critical error in ensureSchemaColumns:", globalErr.message || globalErr);
     }
 }
 
