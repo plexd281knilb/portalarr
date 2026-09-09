@@ -250,3 +250,306 @@ export async function terminatePlexServerSession(serverUrl: string, token: strin
         message: success ? "Stream terminated successfully." : "Failed to terminate stream on Plex Media Server." 
     };
 }
+
+export interface PlexLibrarySection {
+    id: number;
+    key: string;
+    title: string;
+    type: string;
+    agent?: string;
+    scanner?: string;
+    thumb?: string;
+}
+
+export interface PlexServerWithSections {
+    serverId: string;
+    serverName: string;
+    serverUrl: string;
+    sections: PlexLibrarySection[];
+}
+
+export async function getPlexServerLibrarySections(adminToken: string): Promise<PlexServerWithSections[]> {
+    if (!adminToken) return [];
+    const servers = await getPlexServers(adminToken);
+    const results: PlexServerWithSections[] = [];
+
+    await Promise.allSettled(servers.map(async (srv) => {
+        const token = srv.accessToken || adminToken;
+        for (const conn of srv.connections) {
+            try {
+                const cleanBase = conn.uri.replace(/\/+$/, "");
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+                const res = await fetch(`${cleanBase}/library/sections`, {
+                    headers: {
+                        "Accept": "application/json",
+                        "X-Plex-Token": token,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    },
+                    signal: controller.signal,
+                    cache: "no-store"
+                });
+                clearTimeout(timeoutId);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const rawDirs = data.MediaContainer?.Directory || [];
+                    const dirs = Array.isArray(rawDirs) ? rawDirs : [rawDirs];
+                    const sections: PlexLibrarySection[] = dirs.map((d: any) => ({
+                        id: parseInt(d.key, 10) || parseInt(d.id, 10) || 0,
+                        key: String(d.key),
+                        title: d.title || "Untitled Library",
+                        type: d.type || "unknown",
+                        agent: d.agent,
+                        scanner: d.scanner,
+                        thumb: d.thumb
+                    })).filter((s: PlexLibrarySection) => s.id > 0);
+
+                    results.push({
+                        serverId: srv.clientIdentifier,
+                        serverName: srv.name,
+                        serverUrl: cleanBase,
+                        sections
+                    });
+                    break;
+                }
+            } catch (e) {
+                // Try next connection candidate
+            }
+        }
+    }));
+
+    return results;
+}
+
+export interface PlexSharedServerItem {
+    id: number | string;
+    serverId: string;
+    serverName?: string;
+    user: {
+        id?: number;
+        email?: string;
+        username?: string;
+        title?: string;
+        thumb?: string;
+    };
+    invitedEmail?: string;
+    librarySectionIds: number[];
+    accepted: boolean;
+}
+
+export async function getPlexSharedServersList(adminToken: string): Promise<PlexSharedServerItem[]> {
+    if (!adminToken) return [];
+    const items: PlexSharedServerItem[] = [];
+
+    try {
+        const res = await fetch("https://plex.tv/api/v2/shared_servers", {
+            headers: {
+                "Accept": "application/json",
+                "X-Plex-Token": adminToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            },
+            cache: "no-store"
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                for (const item of data) {
+                    const rawUser = item.user || {};
+                    const rawSections = item.library_section_ids || item.librarySectionIds || [];
+                    const sectionIds = Array.isArray(rawSections) 
+                        ? rawSections.map((s: any) => parseInt(s, 10)).filter((n: number) => !isNaN(n))
+                        : (typeof rawSections === "string" ? rawSections.split(",").map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n)) : []);
+
+                    items.push({
+                        id: item.id,
+                        serverId: item.machine_identifier || item.machineIdentifier || item.server_id || "",
+                        serverName: item.server_name || item.serverName,
+                        user: {
+                            id: rawUser.id,
+                            email: rawUser.email || item.email || item.invitedEmail,
+                            username: rawUser.username || rawUser.title || item.username || item.title,
+                            title: rawUser.title || rawUser.username,
+                            thumb: rawUser.thumb
+                        },
+                        invitedEmail: item.invited_email || item.invitedEmail || rawUser.email,
+                        librarySectionIds: sectionIds,
+                        accepted: Boolean(item.accepted ?? true)
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[PLEX-API] Failed to fetch shared_servers list:", e);
+    }
+
+    return items;
+}
+
+export async function invitePlexFriendAndShare(
+    adminToken: string, 
+    serverId: string, 
+    emailOrUsername: string, 
+    librarySectionIds?: number[]
+): Promise<{ success: boolean; shareId?: string | number; message?: string; error?: string }> {
+    if (!adminToken) return { success: false, error: "Missing Plex Admin Token." };
+    if (!emailOrUsername) return { success: false, error: "Missing email or username." };
+
+    const cleanTarget = emailOrUsername.trim();
+    const sectionIds = Array.isArray(librarySectionIds) ? librarySectionIds : [];
+
+    // 1. Try modern plex.tv v2 API
+    try {
+        const payload: any = {
+            invited_email: cleanTarget,
+            library_section_ids: sectionIds
+        };
+        if (serverId) {
+            payload.machine_identifier = serverId;
+        }
+
+        const res = await fetch("https://plex.tv/api/v2/shared_servers", {
+            method: "POST",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "X-Plex-Token": adminToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            return {
+                success: true,
+                shareId: data?.id,
+                message: `Successfully invited ${cleanTarget} to Plex server with ${sectionIds.length} libraries shared.`
+            };
+        } else {
+            const errText = await res.text().catch(() => "");
+            // If already shared, we will try updating their existing share
+            if (errText.includes("already") || res.status === 409) {
+                const existing = await getPlexSharedServersList(adminToken);
+                const match = existing.find(s => 
+                    (s.user.email && s.user.email.toLowerCase() === cleanTarget.toLowerCase()) ||
+                    (s.user.username && s.user.username.toLowerCase() === cleanTarget.toLowerCase()) ||
+                    (s.invitedEmail && s.invitedEmail.toLowerCase() === cleanTarget.toLowerCase())
+                );
+                if (match && match.id) {
+                    return await updatePlexUserShareSections(adminToken, String(match.id), sectionIds);
+                }
+            }
+        }
+    } catch (e: any) {
+        console.warn("[PLEX-API] Failed v2 invite:", e);
+    }
+
+    // 2. Fallback to server direct XML endpoint
+    if (serverId) {
+        try {
+            const xmlUrl = `https://plex.tv/api/servers/${encodeURIComponent(serverId)}/shared_servers?invited_email=${encodeURIComponent(cleanTarget)}&library_section_ids=${sectionIds.join(",")}`;
+            const res = await fetch(xmlUrl, {
+                method: "POST",
+                headers: {
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (res.ok) {
+                return {
+                    success: true,
+                    message: `Invited ${cleanTarget} to Plex server successfully.`
+                };
+            }
+        } catch (e: any) {
+            console.warn("[PLEX-API] Fallback invite error:", e);
+        }
+    }
+
+    return {
+        success: false,
+        error: `Could not send Plex invite to ${cleanTarget}. Please verify the Plex account username or email exists.`
+    };
+}
+
+export async function updatePlexUserShareSections(
+    adminToken: string, 
+    shareId: string | number, 
+    librarySectionIds: number[]
+): Promise<{ success: boolean; message?: string; error?: string }> {
+    if (!adminToken) return { success: false, error: "Missing Plex Admin Token." };
+    if (!shareId) return { success: false, error: "Missing Plex Share ID." };
+
+    try {
+        const res = await fetch(`https://plex.tv/api/v2/shared_servers/${encodeURIComponent(String(shareId))}`, {
+            method: "PUT",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "X-Plex-Token": adminToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            },
+            body: JSON.stringify({
+                library_section_ids: librarySectionIds
+            })
+        });
+
+        if (res.ok) {
+            return {
+                success: true,
+                message: `Updated Plex library shares (${librarySectionIds.length} libraries enabled).`
+            };
+        } else {
+            const errText = await res.text().catch(() => "");
+            return {
+                success: false,
+                error: `Plex API returned error (${res.status}): ${errText || res.statusText}`
+            };
+        }
+    } catch (e: any) {
+        return {
+            success: false,
+            error: e.message || "Failed to update Plex shared libraries."
+        };
+    }
+}
+
+export async function removePlexUserShare(
+    adminToken: string, 
+    shareId: string | number
+): Promise<{ success: boolean; message?: string; error?: string }> {
+    if (!adminToken) return { success: false, error: "Missing Plex Admin Token." };
+    if (!shareId) return { success: false, error: "Missing Plex Share ID." };
+
+    try {
+        const res = await fetch(`https://plex.tv/api/v2/shared_servers/${encodeURIComponent(String(shareId))}`, {
+            method: "DELETE",
+            headers: {
+                "Accept": "application/json",
+                "X-Plex-Token": adminToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            }
+        });
+
+        if (res.ok) {
+            return {
+                success: true,
+                message: "Plex share removed successfully."
+            };
+        }
+    } catch (e: any) {
+        return {
+            success: false,
+            error: e.message || "Failed to delete Plex share."
+        };
+    }
+
+    return {
+        success: false,
+        error: "Failed to remove Plex share."
+    };
+}
+

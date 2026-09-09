@@ -31,6 +31,13 @@ model Settings {
   aiModel            String?   @default("gemini-2.5-flash")
   aiAutoResolve      Boolean   @default(true)
   googleBooksApiKey  String?
+  defaultTrialDays   Int       @default(14)
+  defaultPlexLibraries String?
+  paymentPaypal      String?
+  paymentVenmo       String?
+  paymentInstructions String?
+  subscriptionPrice  String?
+  requireReferralForSignup Boolean @default(false)
 }
 
 model TautulliInstance {
@@ -70,15 +77,25 @@ model MediaApp {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  username    String   @unique
-  email       String   @unique 
-  password    String   // Hashed
-  kindleEmail String   @default("") // Send-to-Kindle email address
-  role        String   @default("USER") // "ADMIN" or "USER"
-  status      String   @default("APPROVED") // "APPROVED", "PENDING", "REJECTED"
-  lastLogin   DateTime? // Last time the user logged in
-  createdAt   DateTime @default(now())
+  id                     String    @id @default(cuid())
+  username               String    @unique
+  email                  String    @unique 
+  password               String    // Hashed
+  kindleEmail            String    @default("") // Send-to-Kindle email address
+  role                   String    @default("USER") // "ADMIN", "SUPER_USER", "USER"
+  status                 String    @default("APPROVED") // "APPROVED", "PENDING", "REJECTED", "TRIAL", "SUSPENDED", "EXPIRED"
+  trialEndsAt            DateTime?
+  subscriptionEndsAt     DateTime?
+  plexUsername           String?
+  plexEmail              String?
+  plexLibrarySectionIds  String?   // Comma-separated list of Plex section IDs (e.g. "1,2,5")
+  referralCode           String?   @unique
+  referredByUserId       String?
+  referredBy             User?     @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
+  referrals              User[]    @relation("UserReferrals")
+  convertedAt            DateTime? // When trial converted to paying subscriber
+  lastLogin              DateTime? // Last time the user logged in
+  createdAt              DateTime  @default(now())
 }
 
 model SupportTicket {

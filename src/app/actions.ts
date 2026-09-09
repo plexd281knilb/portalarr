@@ -5,12 +5,23 @@ import { hash } from "bcryptjs";
 import nodemailer from "nodemailer"; 
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
-import { encryptData, decryptData } from "@/lib/encryption";
-import { getPlexServerFriends, getPlexServers, getPlexActiveSessions, getPlexOwnerUser, terminatePlexServerSession } from "@/lib/plex";
+import { 
+    getPlexServerFriends, 
+    getPlexServers, 
+    getPlexActiveSessions, 
+    getPlexOwnerUser, 
+    terminatePlexServerSession,
+    getPlexServerLibrarySections,
+    getPlexSharedServersList,
+    invitePlexFriendAndShare,
+    updatePlexUserShareSections,
+    removePlexUserShare
+} from "@/lib/plex";
 import prisma from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
+import { encryptData, decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
 import fs from "fs";
 import path from "path";
@@ -1086,21 +1097,77 @@ export async function validateDownloadsPathAction(pathStr: string) {
     }
 }
 
-import { sendUserApprovalEmail } from "@/app/auth-actions";
+import { sendUserApprovalEmail, createSession } from "@/app/auth-actions";
 
 export async function getAppUsers() {
     try {
         await verifyAdmin();
         return await prisma.user.findMany({
             orderBy: { createdAt: 'desc' },
-            select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true, lastLogin: true }
+            select: { 
+                id: true, 
+                username: true, 
+                email: true, 
+                role: true, 
+                status: true, 
+                createdAt: true, 
+                kindleEmail: true, 
+                lastLogin: true,
+                trialEndsAt: true,
+                subscriptionEndsAt: true,
+                plexUsername: true,
+                plexEmail: true,
+                plexLibrarySectionIds: true,
+                referralCode: true,
+                referredByUserId: true,
+                convertedAt: true,
+                referredBy: {
+                    select: {
+                        id: true,
+                        username: true
+                    }
+                },
+                _count: {
+                    select: {
+                        referrals: true
+                    }
+                }
+            }
         });
     } catch (e) {
         const user = await verifyUser().catch(() => null);
         if (user) {
             return await prisma.user.findMany({
                 orderBy: { createdAt: 'desc' },
-                select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true, lastLogin: true }
+                select: { 
+                    id: true, 
+                    username: true, 
+                    email: true, 
+                    role: true, 
+                    status: true, 
+                    createdAt: true, 
+                    kindleEmail: true, 
+                    lastLogin: true,
+                    trialEndsAt: true,
+                    subscriptionEndsAt: true,
+                    plexUsername: true,
+                    plexEmail: true,
+                    plexLibrarySectionIds: true,
+                    referralCode: true,
+                    referredByUserId: true,
+                    convertedAt: true,
+                    referredBy: {
+                        select: {
+                            id: true,
+                            username: true
+                        }
+                    },
+                    _count: {
+                        select: {
+                            referrals: true
+                        }
+                    }
+                }
             });
         }
         return [];
@@ -1113,13 +1180,32 @@ export async function createAppUser(formData: FormData) {
     const email = (formData.get("email") as string)?.trim().toLowerCase();
     const password = formData.get("password") as string;
     const role = (formData.get("role") as string) || "USER";
+    const status = (formData.get("status") as string) || "APPROVED";
+    const plexUsername = (formData.get("plexUsername") as string)?.trim() || null;
+    const plexEmail = (formData.get("plexEmail") as string)?.trim() || null;
 
     if (!username || !password || !email) return { error: "Username, email, and password required" };
     const hashedPassword = await hash(password, 10);
 
+    const refSlug = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    let referralCode = refSlug;
+    const existingRef = await prisma.user.findUnique({ where: { referralCode } });
+    if (existingRef) {
+        referralCode = `${refSlug}-${Math.random().toString(36).substring(2, 6)}`;
+    }
+
     try {
         await prisma.user.create({
-            data: { username, email, password: hashedPassword, role, status: "APPROVED" }
+            data: { 
+                username, 
+                email, 
+                password: hashedPassword, 
+                role, 
+                status,
+                plexUsername,
+                plexEmail,
+                referralCode
+            }
         });
         revalidatePath("/settings");
         revalidatePath("/settings/access");
@@ -1304,6 +1390,530 @@ export async function deleteSupportTicket(id: string) {
     } catch (e) {
         console.error("Failed to delete ticket:", e);
         return { error: "Failed to delete ticket." };
+    }
+}
+
+// ============================================================================
+// --- PLEX LIBRARY SHARING, TRIALS & REFERRALS ENGINE ---
+// ============================================================================
+
+export async function fetchPlexServerLibraries() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            return { success: false, servers: [], error: "Admin Plex token not configured in settings." };
+        }
+        const adminToken = decryptData(settings.mainPlexToken);
+        const servers = await getPlexServerLibrarySections(adminToken);
+        return { success: true, servers };
+    } catch (e: any) {
+        console.error("[PLEX-LIBRARIES-ERROR]:", e);
+        return { success: false, servers: [], error: e.message || "Failed to fetch Plex libraries" };
+    }
+}
+
+export async function fetchUserPlexShares() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            return { success: false, shares: [] };
+        }
+        const adminToken = decryptData(settings.mainPlexToken);
+        const shares = await getPlexSharedServersList(adminToken);
+        return { success: true, shares };
+    } catch (e: any) {
+        return { success: false, shares: [], error: e.message };
+    }
+}
+
+export async function updateUserPlexLibraries(userId: string, sectionIds: number[]) {
+    try {
+        await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found" };
+
+        const sectionStr = sectionIds.join(",");
+        await prisma.user.update({
+            where: { id: userId },
+            data: { plexLibrarySectionIds: sectionStr }
+        });
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.mainPlexToken) {
+            const adminToken = decryptData(settings.mainPlexToken);
+            const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
+            const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
+
+            const shares = await getPlexSharedServersList(adminToken);
+            const match = shares.find(s => 
+                (s.user.email && s.user.email.toLowerCase() === targetEmail) ||
+                (s.user.username && s.user.username.toLowerCase() === targetUser) ||
+                (s.invitedEmail && s.invitedEmail.toLowerCase() === targetEmail)
+            );
+
+            if (match && match.id) {
+                await updatePlexUserShareSections(adminToken, match.id, sectionIds);
+            } else if (targetEmail || targetUser) {
+                const servers = await getPlexServers(adminToken);
+                const primaryServer = servers[0];
+                if (primaryServer) {
+                    await invitePlexFriendAndShare(adminToken, primaryServer.clientIdentifier, targetEmail || targetUser, sectionIds);
+                }
+            }
+        }
+
+        revalidatePath("/settings/access");
+        return { success: true, message: `Updated shared Plex libraries for ${user.username}.` };
+    } catch (e: any) {
+        console.error("[UPDATE-USER-PLEX-LIBRARIES-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to update user libraries" };
+    }
+}
+
+export async function setUserTrialOrSubscription(
+    userId: string, 
+    type: "TRIAL" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM", 
+    customDate?: string
+) {
+    try {
+        await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found" };
+
+        let status = user.status;
+        let trialEndsAt: Date | null = user.trialEndsAt;
+        let subscriptionEndsAt: Date | null = user.subscriptionEndsAt;
+        let convertedAt = user.convertedAt;
+
+        const now = new Date();
+
+        if (type === "TRIAL") {
+            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+            const days = settings?.defaultTrialDays || 14;
+            status = "TRIAL";
+            trialEndsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+            subscriptionEndsAt = null;
+        } else if (type === "30_DAYS") {
+            status = "APPROVED";
+            subscriptionEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+        } else if (type === "1_YEAR") {
+            status = "APPROVED";
+            subscriptionEndsAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+        } else if (type === "PERMANENT") {
+            status = "APPROVED";
+            subscriptionEndsAt = null;
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+        } else if (type === "SUSPENDED") {
+            status = "SUSPENDED";
+        } else if (type === "EXPIRED") {
+            status = "EXPIRED";
+        } else if (type === "CUSTOM" && customDate) {
+            status = "APPROVED";
+            subscriptionEndsAt = new Date(customDate);
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+        }
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                status,
+                trialEndsAt,
+                subscriptionEndsAt,
+                convertedAt
+            }
+        });
+
+        // Sync Plex sharing state: if suspended or expired, clear library sections; if active, restore
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.mainPlexToken) {
+            const adminToken = decryptData(settings.mainPlexToken);
+            const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
+            const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
+            const shares = await getPlexSharedServersList(adminToken);
+            const match = shares.find(s => 
+                (s.user.email && s.user.email.toLowerCase() === targetEmail) ||
+                (s.user.username && s.user.username.toLowerCase() === targetUser) ||
+                (s.invitedEmail && s.invitedEmail.toLowerCase() === targetEmail)
+            );
+
+            if (match && match.id) {
+                if (status === "SUSPENDED" || status === "EXPIRED") {
+                    await updatePlexUserShareSections(adminToken, match.id, []);
+                } else if (status === "APPROVED" || status === "TRIAL") {
+                    const sectionIds = user.plexLibrarySectionIds 
+                        ? user.plexLibrarySectionIds.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+                        : (settings.defaultPlexLibraries ? settings.defaultPlexLibraries.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : []);
+                    if (sectionIds.length > 0) {
+                        await updatePlexUserShareSections(adminToken, match.id, sectionIds);
+                    }
+                }
+            }
+        }
+
+        revalidatePath("/settings/access");
+        revalidatePath("/settings");
+        return { success: true, message: `Updated access status for ${user.username} to ${status}.` };
+    } catch (e: any) {
+        console.error("[SET-TRIAL-SUBSCRIPTION-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to update trial or subscription" };
+    }
+}
+
+export async function markUserConverted(userId: string) {
+    try {
+        await verifyAdmin();
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                status: "APPROVED",
+                convertedAt: new Date()
+            }
+        });
+        revalidatePath("/settings/access");
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function getReferralStats() {
+    try {
+        await verifyAdmin();
+        const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                username: true,
+                status: true,
+                convertedAt: true,
+                trialEndsAt: true,
+                createdAt: true,
+                referredByUserId: true,
+                referralCode: true,
+                referredBy: {
+                    select: { id: true, username: true }
+                },
+                _count: {
+                    select: { referrals: true }
+                }
+            }
+        });
+
+        const totalReferred = users.filter(u => u.referredByUserId).length;
+        const totalTrials = users.filter(u => u.referredByUserId && (u.status === "TRIAL" || u.trialEndsAt)).length;
+        const totalConversions = users.filter(u => u.referredByUserId && u.convertedAt).length;
+
+        // Leaderboard
+        const referrersMap = new Map<string, { username: string; totalReferrals: number; trials: number; conversions: number }>();
+        for (const u of users) {
+            if (u.referredBy) {
+                const rId = u.referredBy.id;
+                const existing = referrersMap.get(rId) || {
+                    username: u.referredBy.username,
+                    totalReferrals: 0,
+                    trials: 0,
+                    conversions: 0
+                };
+                existing.totalReferrals++;
+                if (u.status === "TRIAL" || u.trialEndsAt) existing.trials++;
+                if (u.convertedAt) existing.conversions++;
+                referrersMap.set(rId, existing);
+            }
+        }
+
+        const leaderboard = Array.from(referrersMap.values()).sort((a, b) => b.conversions - a.conversions || b.totalReferrals - a.totalReferrals);
+
+        return {
+            success: true,
+            stats: {
+                totalReferred,
+                totalTrials,
+                totalConversions,
+                leaderboard
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function savePaymentAndTrialSettings(formData: FormData) {
+    try {
+        await verifyAdmin();
+        const defaultTrialDays = parseInt((formData.get("defaultTrialDays") as string) || "14", 10) || 14;
+        const defaultPlexLibraries = (formData.get("defaultPlexLibraries") as string)?.trim() || "";
+        const paymentPaypal = (formData.get("paymentPaypal") as string)?.trim() || "";
+        const paymentVenmo = (formData.get("paymentVenmo") as string)?.trim() || "";
+        const paymentInstructions = (formData.get("paymentInstructions") as string) || "";
+        const subscriptionPrice = (formData.get("subscriptionPrice") as string)?.trim() || "";
+        const requireReferralForSignup = formData.get("requireReferralForSignup") === "true";
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: {
+                defaultTrialDays,
+                defaultPlexLibraries,
+                paymentPaypal,
+                paymentVenmo,
+                paymentInstructions,
+                subscriptionPrice,
+                requireReferralForSignup
+            },
+            create: {
+                id: "global",
+                defaultTrialDays,
+                defaultPlexLibraries,
+                paymentPaypal,
+                paymentVenmo,
+                paymentInstructions,
+                subscriptionPrice,
+                requireReferralForSignup
+            }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        return { success: true, message: "Payment & Trial settings saved successfully!" };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to save settings" };
+    }
+}
+
+export async function getPaymentAndTrialSettings() {
+    try {
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        return {
+            success: true,
+            settings: {
+                defaultTrialDays: settings?.defaultTrialDays ?? 14,
+                defaultPlexLibraries: settings?.defaultPlexLibraries ?? "",
+                paymentPaypal: settings?.paymentPaypal ?? "",
+                paymentVenmo: settings?.paymentVenmo ?? "",
+                paymentInstructions: settings?.paymentInstructions ?? "",
+                subscriptionPrice: settings?.subscriptionPrice ?? "",
+                requireReferralForSignup: Boolean(settings?.requireReferralForSignup)
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function getUserReferralInfo() {
+    try {
+        const user: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: {
+                id: true,
+                username: true,
+                referralCode: true,
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        status: true,
+                        createdAt: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        let code = dbUser.referralCode;
+        if (!code) {
+            code = dbUser.username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+            await prisma.user.update({
+                where: { id: dbUser.id },
+                data: { referralCode: code }
+            }).catch(() => {});
+        }
+
+        const totalReferrals = dbUser.referrals.length;
+        const activeTrials = dbUser.referrals.filter(r => r.status === "TRIAL").length;
+        const conversions = dbUser.referrals.filter(r => r.convertedAt).length;
+
+        return {
+            success: true,
+            referralCode: code,
+            totalReferrals,
+            activeTrials,
+            conversions,
+            referrals: dbUser.referrals
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function registerTrialUserFromInvite(data: {
+    username: string;
+    email: string;
+    password: string;
+    plexEmailOrUser?: string;
+    referralCode?: string;
+}) {
+    try {
+        const cleanUser = data.username.trim();
+        const cleanEmail = data.email.trim().toLowerCase();
+        const cleanPlex = (data.plexEmailOrUser || cleanEmail).trim();
+        const refCode = (data.referralCode || "").trim();
+
+        if (!cleanUser || !cleanEmail || !data.password) {
+            return { success: false, error: "Username, email, and password are required." };
+        }
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.requireReferralForSignup && !refCode) {
+            return { success: false, error: "A valid referral code from an existing member is required to join." };
+        }
+
+        let referrer = null;
+        if (refCode) {
+            referrer = await prisma.user.findFirst({
+                where: {
+                    OR: [
+                        { referralCode: refCode },
+                        { username: { equals: refCode } }
+                    ]
+                }
+            });
+            if (settings?.requireReferralForSignup && !referrer) {
+                return { success: false, error: "Invalid referral code. Please check with the friend who invited you." };
+            }
+        }
+
+        // Check if username or email already taken
+        const existing = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { username: cleanUser },
+                    { email: cleanEmail }
+                ]
+            }
+        });
+        if (existing) {
+            return { success: false, error: "An account with that username or email already exists. Please log in." };
+        }
+
+        const hashedPassword = await hash(data.password, 10);
+        const trialDays = settings?.defaultTrialDays || 14;
+        const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+
+        const refSlug = cleanUser.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        let userReferralCode = refSlug;
+        const existingRef = await prisma.user.findUnique({ where: { referralCode: userReferralCode } });
+        if (existingRef) {
+            userReferralCode = `${refSlug}-${Math.random().toString(36).substring(2, 6)}`;
+        }
+
+        const defaultSections = settings?.defaultPlexLibraries 
+            ? settings.defaultPlexLibraries.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+            : [];
+
+        const newUser = await prisma.user.create({
+            data: {
+                username: cleanUser,
+                email: cleanEmail,
+                password: hashedPassword,
+                role: "USER",
+                status: "TRIAL",
+                trialEndsAt,
+                plexEmail: cleanPlex.includes("@") ? cleanPlex : null,
+                plexUsername: !cleanPlex.includes("@") ? cleanPlex : null,
+                plexLibrarySectionIds: defaultSections.join(","),
+                referralCode: userReferralCode,
+                referredByUserId: referrer?.id || null
+            }
+        });
+
+        // Automatically invite to Plex server with default libraries
+        if (settings?.mainPlexToken) {
+            try {
+                const adminToken = decryptData(settings.mainPlexToken);
+                const servers = await getPlexServers(adminToken);
+                const primaryServer = servers[0];
+                if (primaryServer) {
+                    await invitePlexFriendAndShare(
+                        adminToken, 
+                        primaryServer.clientIdentifier, 
+                        cleanPlex, 
+                        defaultSections
+                    );
+                }
+            } catch (plexErr: any) {
+                console.warn("[AUTO-PLEX-INVITE-WARNING]:", plexErr.message || plexErr);
+            }
+        }
+
+        // Automatically create session cookie so user is logged in
+        try {
+            await createSession(newUser.id, newUser.username, newUser.role, newUser.status);
+        } catch (sessErr) {
+            console.warn("[AUTO-SESSION-CREATE-WARNING]:", sessErr);
+        }
+
+        return {
+            success: true,
+            userId: newUser.id,
+            username: newUser.username,
+            trialDays,
+            trialEndsAt: trialEndsAt.toISOString(),
+            message: `Account created! Your ${trialDays}-day free trial is now active.`
+        };
+    } catch (e: any) {
+        console.error("[REGISTER-TRIAL-USER-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to complete registration." };
+    }
+}
+
+export async function getPublicJoinConfig(refCode?: string) {
+    try {
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let referrerName: string | null = null;
+        let validReferral = false;
+
+        const cleanRef = (refCode || "").trim();
+        if (cleanRef) {
+            const referrer = await prisma.user.findFirst({
+                where: {
+                    OR: [
+                        { referralCode: cleanRef },
+                        { username: { equals: cleanRef } }
+                    ]
+                },
+                select: { id: true, username: true }
+            });
+            if (referrer) {
+                referrerName = referrer.username;
+                validReferral = true;
+            }
+        }
+
+        return {
+            success: true,
+            config: {
+                defaultTrialDays: settings?.defaultTrialDays ?? 14,
+                paymentPaypal: settings?.paymentPaypal ?? "",
+                paymentVenmo: settings?.paymentVenmo ?? "",
+                paymentInstructions: settings?.paymentInstructions ?? "",
+                subscriptionPrice: settings?.subscriptionPrice ?? "",
+                requireReferralForSignup: Boolean(settings?.requireReferralForSignup),
+                referrerName,
+                validReferral
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
     }
 }
 

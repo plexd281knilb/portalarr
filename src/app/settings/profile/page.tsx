@@ -2,18 +2,25 @@
 
 import { useState, useEffect } from "react";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
+import { getUserReferralInfo } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { User, Mail, KeyRound, CheckCircle2, XCircle, Loader2, ShieldCheck, MailCheck, Zap, BookOpen } from "lucide-react";
+import { 
+    User, Mail, KeyRound, CheckCircle2, XCircle, Loader2, ShieldCheck, 
+    MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink
+} from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
+import { format, differenceInDays } from "date-fns";
 
 export default function UserProfilePage() {
     const [user, setUser] = useState<any>(null);
+    const [referralInfo, setReferralInfo] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [copied, setCopied] = useState(false);
 
     // Change Password State
     const [passCurrent, setPassCurrent] = useState("");
@@ -25,9 +32,18 @@ export default function UserProfilePage() {
     useEffect(() => {
         async function fetchProfile() {
             setLoading(true);
-            const u = await getCurrentUser();
-            setUser(u);
-            setLoading(false);
+            try {
+                const u = await getCurrentUser();
+                setUser(u);
+                const ref = await getUserReferralInfo();
+                if (ref?.success) {
+                    setReferralInfo(ref);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
         }
         fetchProfile();
     }, []);
@@ -54,6 +70,15 @@ export default function UserProfilePage() {
         }
     };
 
+    const handleCopyInviteLink = () => {
+        if (!referralInfo?.referralCode) return;
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const url = `${origin}/join?ref=${referralInfo.referralCode}`;
+        navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     if (loading) {
         return (
             <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -61,6 +86,11 @@ export default function UserProfilePage() {
             </div>
         );
     }
+
+    const isTrial = user?.status === "TRIAL";
+    const daysLeft = isTrial && user?.trialEndsAt ? Math.max(0, differenceInDays(new Date(user.trialEndsAt), new Date())) : null;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const inviteUrl = referralInfo?.referralCode ? `${origin}/join?ref=${referralInfo.referralCode}` : "";
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto p-4 sm:p-6 animate-in fade-in duration-500">
@@ -70,7 +100,7 @@ export default function UserProfilePage() {
                         <User className="h-6 w-6 text-primary" /> Account Profile & Settings
                     </h1>
                     <p className="text-muted-foreground text-sm">
-                        Manage your personal account credentials, Send-to-Kindle settings, and streaming diagnostics.
+                        Manage your account credentials, Send-to-Kindle settings, and invite friends with your personal link.
                     </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -79,6 +109,62 @@ export default function UserProfilePage() {
                 </div>
             </div>
 
+            {/* REFERRAL & INVITE LINK CARD */}
+            <Card className="border-purple-500/30 bg-purple-950/10 backdrop-blur-md shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <Gift className="h-5 w-5 text-purple-400" /> Invite Friends & Share Media
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Give your friends a free 14-day pass to try out the media server. Track their trial progress and subscription rewards below.
+                            </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit">
+                            Code: {referralInfo?.referralCode || user?.username}
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {/* INVITE URL COPY BOX */}
+                    <div className="flex flex-col sm:flex-row items-center gap-2">
+                        <div className="relative w-full">
+                            <Input 
+                                readOnly 
+                                value={inviteUrl} 
+                                className="bg-background/80 font-mono text-xs pr-10 text-foreground border-purple-500/30"
+                            />
+                        </div>
+                        <Button 
+                            type="button" 
+                            onClick={handleCopyInviteLink}
+                            className="w-full sm:w-auto font-bold shrink-0 bg-purple-600 hover:bg-purple-500 text-white gap-2 text-xs h-10 transition-all hover:ring-2 hover:ring-purple-400/40 active:scale-95"
+                        >
+                            {copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+                            {copied ? "Copied Invite Link!" : "Copy Invite Link"}
+                        </Button>
+                    </div>
+
+                    {/* REFERRAL METRICS PILLS */}
+                    <div className="grid grid-cols-3 gap-3 pt-2 border-t border-purple-500/20 text-center">
+                        <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-0.5">
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Friends Invited</p>
+                            <p className="text-xl font-black text-foreground">{referralInfo?.totalReferrals ?? 0}</p>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-0.5">
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Active Trials</p>
+                            <p className="text-xl font-black text-blue-400">{referralInfo?.activeTrials ?? 0}</p>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-0.5">
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Subscribed</p>
+                            <p className="text-xl font-black text-emerald-400">{referralInfo?.conversions ?? 0}</p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
             <div className="grid gap-6 md:grid-cols-2">
                 {/* ACCOUNT INFORMATION CARD */}
                 <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
@@ -86,7 +172,7 @@ export default function UserProfilePage() {
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <ShieldCheck className="h-5 w-5 text-primary" /> Account Details
                         </CardTitle>
-                        <CardDescription>Your registered profile information.</CardDescription>
+                        <CardDescription>Your registered profile and access status.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-1">
@@ -117,10 +203,24 @@ export default function UserProfilePage() {
 
                         <div className="space-y-1 pt-2 border-t border-border/40">
                             <Label className="text-xs text-muted-foreground font-semibold">Account Access Status</Label>
-                            <div>
-                                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1 text-xs font-semibold">
-                                    <CheckCircle2 className="h-3.5 w-3.5" /> Approved Access
-                                </Badge>
+                            <div className="flex items-center gap-2 pt-0.5">
+                                {isTrial ? (
+                                    <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500/40 gap-1.5 text-xs font-bold">
+                                        <Timer className="h-3.5 w-3.5" /> 14-Day Free Trial ({daysLeft} days remaining)
+                                    </Badge>
+                                ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
+                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
+                                        <CheckCircle2 className="h-3.5 w-3.5" /> Subscribed (Expires {format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
+                                    </Badge>
+                                ) : user?.status === "APPROVED" ? (
+                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
+                                        <CheckCircle2 className="h-3.5 w-3.5" /> Permanent Access
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/30 gap-1.5 text-xs font-semibold">
+                                        {user?.status || "Pending"}
+                                    </Badge>
+                                )}
                             </div>
                         </div>
                     </CardContent>

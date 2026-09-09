@@ -452,12 +452,63 @@ export async function getCurrentUser() {
   const payload = await getSession();
   if (!payload || !payload.userId) return null;
   
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where: { id: payload.userId as string },
-    select: { id: true, username: true, email: true, kindleEmail: true, role: true, status: true }
+    select: { 
+      id: true, 
+      username: true, 
+      email: true, 
+      kindleEmail: true, 
+      role: true, 
+      status: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+      referralCode: true
+    }
   });
 
   if (!user) return null;
+
+  // Auto-expire trials that have elapsed
+  const now = new Date();
+  if (user.status === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) < now) {
+    console.log(`[AUTH] Trial expired for ${user.username}. Updating status to EXPIRED.`);
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { status: "EXPIRED" },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        kindleEmail: true,
+        role: true,
+        status: true,
+        trialEndsAt: true,
+        subscriptionEndsAt: true,
+        referralCode: true
+      }
+    });
+  }
+
+  // Auto-expire timed subscriptions that have elapsed
+  if (user.status === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
+    console.log(`[AUTH] Subscription expired for ${user.username}. Updating status to EXPIRED.`);
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { status: "EXPIRED" },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        kindleEmail: true,
+        role: true,
+        status: true,
+        trialEndsAt: true,
+        subscriptionEndsAt: true,
+        referralCode: true
+      }
+    });
+  }
   
   // Prevent login loops: If user status or role in DB changed, re-issue updated session cookie immediately
   if (user.status !== payload.status || user.role !== payload.role) {

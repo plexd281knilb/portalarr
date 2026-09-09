@@ -17,13 +17,17 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Allow access to the login page & pending status page without redirect loops
+  // 2. Allow access to public routes: /join, /login & pending status page without redirect loops
+  if (pathname === "/join" || pathname.startsWith("/join/")) {
+    return NextResponse.next();
+  }
+
   if (pathname === "/login") {
     if (session) {
       try {
         const { payload } = await jwtVerify(session, getJwtSecret());
         const status = (payload.status as string) || "APPROVED";
-        if (status === "PENDING" || status === "REJECTED") {
+        if (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED") {
           return NextResponse.redirect(new URL("/pending", req.url));
         }
         return NextResponse.redirect(new URL("/", req.url));
@@ -46,18 +50,18 @@ export async function proxy(req: NextRequest) {
     const { payload } = await jwtVerify(session, getJwtSecret());
     const userStatus = (payload.status as string) || "APPROVED";
 
-    // 4. Pending or Rejected user protection
-    if (userStatus === "PENDING" || userStatus === "REJECTED") {
+    // 4. Pending, Rejected, Suspended, or Expired user protection
+    if (userStatus === "PENDING" || userStatus === "REJECTED" || userStatus === "SUSPENDED" || userStatus === "EXPIRED") {
       if (pathname === "/pending") {
         return NextResponse.next();
       }
       if (pathname.startsWith("/api")) {
-        return NextResponse.json({ error: "Account Pending Approval" }, { status: 403 });
+        return NextResponse.json({ error: `Account status: ${userStatus}` }, { status: 403 });
       }
       return NextResponse.redirect(new URL("/pending", req.url));
     }
 
-    // If an approved user visits /pending, send them home
+    // If an approved or trial user visits /pending, send them home
     if (pathname === "/pending") {
       return NextResponse.redirect(new URL("/", req.url));
     }
