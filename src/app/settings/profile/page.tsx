@@ -135,7 +135,7 @@ export default function UserProfilePage() {
                         <CardDescription>Update your login password for Portalarr.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleChangePassword} className="space-y-4">
+                        <form onSubmit={handleChangePassword} className="space-y-4" autoComplete="off">
                             {passMsg && (
                                 <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -159,6 +159,7 @@ export default function UserProfilePage() {
                                     onChange={(e) => setPassCurrent(e.target.value)} 
                                     placeholder="Enter current or temp password"
                                     className="bg-background/60"
+                                    autoComplete="current-password"
                                 />
                             </div>
 
@@ -172,6 +173,7 @@ export default function UserProfilePage() {
                                     onChange={(e) => setPassNew(e.target.value)} 
                                     placeholder="Minimum 6 characters"
                                     className="bg-background/60"
+                                    autoComplete="new-password"
                                 />
                             </div>
 

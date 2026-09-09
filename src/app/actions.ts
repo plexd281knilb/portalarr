@@ -778,37 +778,155 @@ export async function testMediaAppConfigAction(type: string, rawUrl: string, raw
     await verifyAdmin();
     if (!rawUrl) return { success: false, error: "URL is required" };
 
-    const clean = cleanUrl(rawUrl);
+    let clean = cleanUrl(rawUrl.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
+    }
+
+    // Strip trailing /api, /api/v1, /api/v2, /api/v3 to get clean base URL
+    const cleanBase = clean.replace(/\/api(\/v?[123])?$/, "");
     const apiKey = (rawApiKey || "").trim();
+    const appType = (type || "").toLowerCase();
 
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
 
-        let testUrl = `${clean}/api/v3/system/status?apikey=${apiKey}`;
-        const appType = (type || "").toLowerCase();
+        let testUrls: { url: string; method?: string; headers?: Record<string, string>; body?: string }[] = [];
+
         if (appType === "sabnzbd") {
-            testUrl = `${clean}/api?mode=version&output=json&apikey=${apiKey}`;
+            testUrls.push({ url: `${cleanBase}/api?mode=version&output=json&apikey=${encodeURIComponent(apiKey)}` });
+            testUrls.push({ url: `${cleanBase}/api?mode=queue&output=json&apikey=${encodeURIComponent(apiKey)}` });
         } else if (appType === "qbittorrent") {
-            testUrl = `${clean}/api/v2/app/version`;
+            testUrls.push({ url: `${cleanBase}/api/v2/app/version` });
+            testUrls.push({ url: `${cleanBase}/api/v2/app/webapiVersion` });
         } else if (appType === "nzbget") {
-            testUrl = `${clean}/jsonrpc`;
+            let authHeader: Record<string, string> = { "Content-Type": "application/json" };
+            if (apiKey && apiKey.includes(":")) {
+                authHeader["Authorization"] = `Basic ${Buffer.from(apiKey).toString("base64")}`;
+            }
+            testUrls.push({ 
+                url: `${cleanBase}/jsonrpc`, 
+                method: "POST", 
+                headers: authHeader, 
+                body: JSON.stringify({ method: "version", params: [] }) 
+            });
+            testUrls.push({ url: `${cleanBase}/jsonrpc/version` });
         } else if (appType === "prowlarr") {
-            testUrl = `${clean}/api/v1/system/status?apikey=${apiKey}`;
+            testUrls.push({ 
+                url: `${cleanBase}/api/v1/system/status?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-Api-Key": apiKey }
+            });
+            testUrls.push({ 
+                url: `${cleanBase}/api/v1/indexer?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-Api-Key": apiKey }
+            });
+        } else if (appType === "readarr" || appType === "lidarr") {
+            testUrls.push({ 
+                url: `${cleanBase}/api/v1/system/status?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-Api-Key": apiKey }
+            });
+            testUrls.push({ 
+                url: `${cleanBase}/api/v1/qualityprofile?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-Api-Key": apiKey }
+            });
+        } else if (appType === "radarr" || appType === "sonarr" || appType === "whisparr") {
+            testUrls.push({ 
+                url: `${cleanBase}/api/v3/system/status?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-Api-Key": apiKey }
+            });
+            testUrls.push({ 
+                url: `${cleanBase}/api/v3/qualityprofile?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-Api-Key": apiKey }
+            });
         } else if (appType.includes("seerr") || appType === "overseerr") {
-            testUrl = `${clean}/api/v1/status`;
+            testUrls.push({ 
+                url: `${cleanBase}/api/v1/status`,
+                headers: { "X-Api-Key": apiKey }
+            });
+            testUrls.push({ 
+                url: `${cleanBase}/api/v1/status?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-Api-Key": apiKey }
+            });
+        } else if (appType === "bazarr") {
+            testUrls.push({ 
+                url: `${cleanBase}/api/system/status?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-API-KEY": apiKey }
+            });
+            testUrls.push({ 
+                url: `${cleanBase}/api/badges/subtitles?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-API-KEY": apiKey }
+            });
+        } else if (appType === "ombi") {
+            testUrls.push({ 
+                url: `${cleanBase}/api/v1/Status`,
+                headers: { "ApiKey": apiKey }
+            });
+            testUrls.push({ 
+                url: `${cleanBase}/api/v1/Status/info`,
+                headers: { "ApiKey": apiKey }
+            });
+        } else if (appType === "maintainerr") {
+            testUrls.push({ url: `${cleanBase}/api/version`, headers: { "X-API-KEY": apiKey } });
+            testUrls.push({ url: `${cleanBase}/api/rules`, headers: { "X-API-KEY": apiKey } });
+            testUrls.push({ url: `${cleanBase}/api/health` });
+        } else {
+            testUrls.push({ 
+                url: `${cleanBase}/api/v3/system/status?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-Api-Key": apiKey }
+            });
+            testUrls.push({ 
+                url: `${cleanBase}/api/v1/system/status?apikey=${encodeURIComponent(apiKey)}`,
+                headers: { "X-Api-Key": apiKey }
+            });
         }
 
-        const res = await fetch(testUrl, { signal: controller.signal, cache: "no-store" });
+        let lastError = "Connection failed";
+        for (const target of testUrls) {
+            try {
+                const res = await fetch(target.url, {
+                    method: target.method || "GET",
+                    headers: target.headers,
+                    body: target.body,
+                    signal: controller.signal,
+                    cache: "no-store"
+                });
+
+                if (res.ok) {
+                    clearTimeout(timeoutId);
+                    if (appType === "sabnzbd") {
+                        const sabJson = await res.json().catch(() => null);
+                        if (sabJson && sabJson.status === false && sabJson.error) {
+                            return { success: false, error: `SABnzbd: ${sabJson.error}` };
+                        }
+                    }
+                    return { success: true, message: `Successfully connected to ${type || "App"}!` };
+                }
+
+                if (res.status === 401 || res.status === 403) {
+                    clearTimeout(timeoutId);
+                    if (appType === "qbittorrent") {
+                        return { 
+                            success: false, 
+                            error: "Authentication required (HTTP 403). If WebUI authentication is enabled, enter username:password in the API Key field." 
+                        };
+                    }
+                    return { success: false, error: `Authentication failed (HTTP ${res.status}): Invalid API Key / Credentials` };
+                }
+
+                lastError = `HTTP ${res.status}: ${res.statusText || "Bad Request"}`;
+            } catch (innerErr: any) {
+                if (innerErr.name === "AbortError") {
+                    lastError = "Connection timed out after 7s. Please verify host, port, or firewall.";
+                } else {
+                    lastError = innerErr.message || "Failed to connect";
+                }
+            }
+        }
         clearTimeout(timeoutId);
-
-        if (res.ok || res.status === 401) {
-            if (res.status === 401) return { success: false, error: "Authentication failed: Invalid API Key" };
-            return { success: true, message: `Successfully connected to ${type || "App"}!` };
-        }
-        return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
+        return { success: false, error: lastError };
     } catch (e: any) {
-        return { success: false, error: e.name === "AbortError" ? "Connection timed out after 6s" : (e.message || "Failed to connect") };
+        return { success: false, error: e.name === "AbortError" ? "Connection timed out after 7s" : (e.message || "Failed to connect") };
     }
 }
 
@@ -889,21 +1007,57 @@ export async function testGlancesConfigAction(rawUrl: string) {
     await verifyAdmin();
     if (!rawUrl) return { success: false, error: "URL is required" };
 
-    const clean = cleanUrl(rawUrl);
-
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(`${clean}/api/3/status`, { signal: controller.signal, cache: "no-store" });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-            return { success: true, message: "Successfully connected to Glances server!" };
-        }
-        return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
-    } catch (e: any) {
-        return { success: false, error: e.name === "AbortError" ? "Connection timed out after 6s" : (e.message || "Connection failed") };
+    let clean = cleanUrl(rawUrl.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
     }
+
+    // Strip trailing /api, /api/4, /api/3, /api/2 if user entered a subpath
+    const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
+
+    // Test Glances endpoints across supported versions (v4, v3, v2)
+    const testEndpoints = [
+        "/api/4/cpu",
+        "/api/3/cpu",
+        "/api/2/cpu",
+        "/api/4/system",
+        "/api/3/system",
+        "/api/4/version",
+        "/api/3/version",
+        "/api/3/quicklook",
+        "/api/4/quicklook",
+        "/cpu",
+        "/version",
+        ""
+    ];
+
+    let lastError = "Connection failed";
+
+    for (const ep of testEndpoints) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const targetUrl = ep ? `${baseGlances}${ep}` : baseGlances;
+            const res = await fetch(targetUrl, { signal: controller.signal, cache: "no-store" });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                return { success: true, message: "Successfully connected to Glances server!" };
+            }
+            if (res.status === 401 || res.status === 403) {
+                return { success: false, error: `Authentication required (HTTP ${res.status}). Please check Glances credentials.` };
+            }
+            lastError = `HTTP ${res.status}: ${res.statusText || "Not Found"}`;
+        } catch (e: any) {
+            if (e.name === "AbortError") {
+                lastError = "Connection timed out after 4s";
+            } else {
+                lastError = e.message || "Connection failed";
+            }
+        }
+    }
+
+    return { success: false, error: lastError };
 }
 
 export async function testGlancesConnectionAction(id: string) {
@@ -1397,12 +1551,16 @@ export async function getActiveDownloads() {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000); 
-            const cleanUrl = app.url.replace(/\/$/, "");
+            let clean = cleanUrl(app.url || "").trim();
+            if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+                clean = `http://${clean}`;
+            }
+            const cleanBase = clean.replace(/\/api\/?$/, "");
             const decryptedKey = app.apiKey ? decryptData(app.apiKey as string) : "";
             const appType = app.type.toLowerCase();
 
             if (appType === "qbittorrent") {
-                const res = await fetch(`${cleanUrl}/api/v2/torrents/info?filter=downloading`, { 
+                const res = await fetch(`${cleanBase}/api/v2/torrents/info?filter=downloading`, { 
                     signal: controller.signal, 
                     cache: "no-store" 
                 });
@@ -1431,8 +1589,40 @@ export async function getActiveDownloads() {
                         });
                     }
                 }
+            } else if (appType === "nzbget") {
+                let authHeader: Record<string, string> = { "Content-Type": "application/json" };
+                if (decryptedKey && decryptedKey.includes(":")) {
+                    authHeader["Authorization"] = `Basic ${Buffer.from(decryptedKey).toString("base64")}`;
+                }
+                const res = await fetch(`${cleanBase}/jsonrpc`, {
+                    method: "POST",
+                    headers: authHeader,
+                    body: JSON.stringify({ method: "listgroups", params: [0] }),
+                    signal: controller.signal,
+                    cache: "no-store"
+                });
+                clearTimeout(timeoutId);
+
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json && Array.isArray(json.result)) {
+                        data.online = true;
+                        data.queue = json.result.map((grp: any) => {
+                            const totalMb = grp.FileSizeMB || 0;
+                            const leftMb = grp.RemainingSizeMB || 0;
+                            const pct = totalMb > 0 ? (((totalMb - leftMb) / totalMb) * 100).toFixed(1) : "0";
+                            return {
+                                filename: grp.NZBName || "Unknown Download",
+                                percentage: pct,
+                                timeleft: "In Progress",
+                                mb: totalMb,
+                                mbleft: leftMb
+                            };
+                        });
+                    }
+                }
             } else {
-                const res = await fetch(`${cleanUrl}/api?mode=queue&output=json&apikey=${decryptedKey}`, { 
+                const res = await fetch(`${cleanBase}/api?mode=queue&output=json&apikey=${encodeURIComponent(decryptedKey)}`, { 
                     signal: controller.signal, 
                     cache: "no-store" 
                 });
@@ -1495,17 +1685,26 @@ export async function getLandingStats() {
     }));
 
     await Promise.all(glances.map(async (g) => {
-        const cleanGlances = cleanUrl(g.url);
+        let clean = cleanUrl(g.url?.trim() || "");
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+            clean = `http://${clean}`;
+        }
+        const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
         
         const fetchGlancesMetric = async (endpoint: string) => {
             const versions = [4, 3, 2]; 
             for (const v of versions) {
                 try {
-                    const url = `${cleanGlances}/api/${v}/${endpoint}`;
+                    const url = `${baseGlances}/api/${v}/${endpoint}`;
                     const res = await fetch(url, { next: { revalidate: 10 } });
                     if (res.ok) return await res.json();
                 } catch (e) { }
             }
+            try {
+                const url = `${baseGlances}/${endpoint}`;
+                const res = await fetch(url, { next: { revalidate: 10 } });
+                if (res.ok) return await res.json();
+            } catch (e) { }
             throw new Error(`Failed`);
         };
 
@@ -1513,10 +1712,18 @@ export async function getLandingStats() {
             const cpu = await fetchGlancesMetric("cpu");
             const mem = await fetchGlancesMetric("mem");
             
+            const cpuTotal = typeof cpu?.total === 'number' 
+                ? Math.round(cpu.total) 
+                : (typeof cpu?.user === 'number' ? Math.round(cpu.user + (cpu.system || 0)) : (typeof cpu === 'number' ? Math.round(cpu) : 0));
+                
+            const ramPercent = typeof mem?.percent === 'number' 
+                ? Math.round(mem.percent) 
+                : (mem?.total && mem?.used ? Math.round((mem.used / mem.total) * 100) : (typeof mem === 'number' ? Math.round(mem) : 0));
+
             serverStats.push({ 
                 name: g.name, 
-                cpu: cpu.total, 
-                ram: mem.percent, 
+                cpu: cpuTotal, 
+                ram: ramPercent, 
                 online: true 
             });
         } catch (e: any) {
