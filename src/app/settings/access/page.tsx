@@ -353,7 +353,7 @@ export default function AccessSettingsPage() {
         const normalizeKeyList = (keys: string[]) => {
             return keys.map(k => {
                 if (k.includes(":")) return k;
-                const matchedServer = currentServers.find(s => (s.sections || []).some((sec: any) => String(sec.id) === k));
+                const matchedServer = currentServers.find(s => (s.sections || []).some((sec: any) => String(sec.id) === k || (sec.key && String(sec.key) === k)));
                 if (matchedServer) {
                     return `${matchedServer.serverId}:${k}`;
                 }
@@ -398,27 +398,39 @@ export default function AccessSettingsPage() {
         }
     };
 
-    const isSectionSelected = (serverId: string, sectionId: number | string) => {
+    const isSectionSelected = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
         const fullKey = `${serverId}:${sectionId}`;
         const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
         if (userSelectedKeys.includes(fullKey)) return true;
+        if (altFullKey && userSelectedKeys.includes(altFullKey)) return true;
         if (userSelectedKeys.includes(rawKey)) {
-            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey));
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey || (sec.key && String(sec.key) === rawKey)));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        if (altRawKey && userSelectedKeys.includes(altRawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => (sec.key && String(sec.key) === altRawKey) || String(sec.id) === altRawKey));
             if (matches.length === 1 && matches[0].serverId === serverId) return true;
             if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
         }
         return false;
     };
 
-    const handleToggleUserSection = (serverId: string, sectionId: number | string) => {
+    const handleToggleUserSection = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
         const fullKey = `${serverId}:${sectionId}`;
         const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
         setUserSelectedKeys(prev => {
-            const isCurrentlySelected = isSectionSelected(serverId, sectionId);
+            const isCurrentlySelected = isSectionSelected(serverId, sectionId, sectionKey);
             if (isCurrentlySelected) {
-                return prev.filter(k => k !== fullKey && k !== rawKey);
+                return prev.filter(k => k !== fullKey && k !== rawKey && (!altFullKey || k !== altFullKey) && (!altRawKey || k !== altRawKey));
             } else {
-                return [...prev.filter(k => k !== rawKey), fullKey];
+                return [...prev.filter(k => k !== rawKey && (!altRawKey || k !== altRawKey)), fullKey];
             }
         });
     };
@@ -427,10 +439,15 @@ export default function AccessSettingsPage() {
         const server = serverLibraries.find(s => s.serverId === serverId);
         if (!server) return;
         const serverKeys = (server.sections || []).map((sec: any) => `${serverId}:${sec.id}`);
-        const serverRawIds = (server.sections || []).map((sec: any) => String(sec.id));
+        const serverRawIds = new Set((server.sections || []).flatMap((sec: any) => [
+            String(sec.id),
+            sec.key ? String(sec.key) : null,
+            `${serverId}:${sec.id}`,
+            sec.key ? `${serverId}:${sec.key}` : null
+        ].filter(Boolean)));
         
         setUserSelectedKeys(prev => {
-            const otherServerKeys = prev.filter(k => !k.startsWith(`${serverId}:`) && !serverRawIds.includes(k));
+            const otherServerKeys = prev.filter(k => !k.startsWith(`${serverId}:`) && !serverRawIds.has(k));
             return selectAll ? [...otherServerKeys, ...serverKeys] : otherServerKeys;
         });
     };
@@ -443,27 +460,39 @@ export default function AccessSettingsPage() {
         setUserSelectedKeys([]);
     };
 
-    const isDefaultSelected = (serverId: string, sectionId: number | string) => {
+    const isDefaultSelected = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
         const fullKey = `${serverId}:${sectionId}`;
         const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
         if (defaultSelectedKeys.includes(fullKey)) return true;
+        if (altFullKey && defaultSelectedKeys.includes(altFullKey)) return true;
         if (defaultSelectedKeys.includes(rawKey)) {
-            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey));
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey || (sec.key && String(sec.key) === rawKey)));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        if (altRawKey && defaultSelectedKeys.includes(altRawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => (sec.key && String(sec.key) === altRawKey) || String(sec.id) === altRawKey));
             if (matches.length === 1 && matches[0].serverId === serverId) return true;
             if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
         }
         return false;
     };
 
-    const handleToggleDefaultSection = (serverId: string, sectionId: number | string) => {
+    const handleToggleDefaultSection = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
         const fullKey = `${serverId}:${sectionId}`;
         const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
         setDefaultSelectedKeys(prev => {
-            const isCurrentlySelected = isDefaultSelected(serverId, sectionId);
+            const isCurrentlySelected = isDefaultSelected(serverId, sectionId, sectionKey);
             if (isCurrentlySelected) {
-                return prev.filter(k => k !== fullKey && k !== rawKey);
+                return prev.filter(k => k !== fullKey && k !== rawKey && (!altFullKey || k !== altFullKey) && (!altRawKey || k !== altRawKey));
             } else {
-                return [...prev.filter(k => k !== rawKey), fullKey];
+                return [...prev.filter(k => k !== rawKey && (!altRawKey || k !== altRawKey)), fullKey];
             }
         });
     };
@@ -474,6 +503,8 @@ export default function AccessSettingsPage() {
         // Normalize keys before saving
         const normalizedKeys = userSelectedKeys.map(k => {
             if (k.includes(":")) return k;
+            const matchedServer = serverLibraries.find(s => (s.sections || []).some((sec: any) => String(sec.id) === k || (sec.key && String(sec.key) === k)));
+            if (matchedServer) return `${matchedServer.serverId}:${k}`;
             if (serverLibraries.length > 0) return `${serverLibraries[0].serverId}:${k}`;
             return k;
         });
@@ -1564,7 +1595,7 @@ export default function AccessSettingsPage() {
                                             {serverLibraries.map((srv) => {
                                                 const srvSections = srv.sections || [];
                                                 const srvSelectedCount = srvSections.filter((sec: any) => 
-                                                    isDefaultSelected(srv.serverId, sec.id)
+                                                    isDefaultSelected(srv.serverId, sec.id, sec.key)
                                                 ).length;
                                                 const allSrvSelected = srvSections.length > 0 && srvSelectedCount === srvSections.length;
 
@@ -1599,13 +1630,13 @@ export default function AccessSettingsPage() {
                                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                             {srvSections.map((sec: any) => {
                                                                 const uniqueKey = `${srv.serverId}:${sec.id}`;
-                                                                const isChecked = isDefaultSelected(srv.serverId, sec.id);
+                                                                const isChecked = isDefaultSelected(srv.serverId, sec.id, sec.key);
                                                                 return (
                                                                     <label 
                                                                         key={uniqueKey} 
                                                                         onClick={(e) => {
                                                                             e.preventDefault();
-                                                                            handleToggleDefaultSection(srv.serverId, sec.id);
+                                                                            handleToggleDefaultSection(srv.serverId, sec.id, sec.key);
                                                                         }}
                                                                         className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
                                                                             isChecked ? "bg-primary/15 border-primary/40 text-foreground font-semibold" : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground"
@@ -1709,7 +1740,8 @@ export default function AccessSettingsPage() {
                                 <span className="text-muted-foreground font-semibold">
                                     {allUniqueKeys.filter(k => {
                                         const [srvId, secId] = k.split(":");
-                                        return isSectionSelected(srvId, secId);
+                                        const matchedSec = serverLibraries.find(s => s.serverId === srvId)?.sections?.find((s: any) => String(s.id) === secId || (s.key && String(s.key) === secId));
+                                        return isSectionSelected(srvId, secId, matchedSec?.key);
                                     }).length} of {totalLibrariesCount} libraries selected
                                 </span>
                                 <div className="flex gap-2">
@@ -1766,7 +1798,7 @@ export default function AccessSettingsPage() {
                                     serverLibraries.map((server) => {
                                         const serverSections = server.sections || [];
                                         const serverSelectedCount = serverSections.filter((sec: any) => 
-                                            isSectionSelected(server.serverId, sec.id)
+                                            isSectionSelected(server.serverId, sec.id, sec.key)
                                         ).length;
                                         const allServerSelected = serverSections.length > 0 && serverSelectedCount === serverSections.length;
 
@@ -1794,11 +1826,11 @@ export default function AccessSettingsPage() {
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                     {serverSections.map((sec: any) => {
                                                         const uniqueKey = `${server.serverId}:${sec.id}`;
-                                                        const isChecked = isSectionSelected(server.serverId, sec.id);
+                                                        const isChecked = isSectionSelected(server.serverId, sec.id, sec.key);
                                                         return (
                                                             <div 
                                                                 key={uniqueKey} 
-                                                                onClick={() => handleToggleUserSection(server.serverId, sec.id)}
+                                                                onClick={() => handleToggleUserSection(server.serverId, sec.id, sec.key)}
                                                                 className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                                                                     isChecked 
                                                                         ? "bg-primary/15 border-primary/50 text-foreground font-semibold shadow-sm" 

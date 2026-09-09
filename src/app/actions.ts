@@ -1690,15 +1690,15 @@ export async function updateUserPlexLibraries(
             return { success: false, error: "Admin Plex token not configured in settings." };
         }
 
-        let servers = await getPlexServers(adminToken);
+        const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+        let servers = srvSections.map(s => ({
+            name: s.serverName,
+            clientIdentifier: s.serverId,
+            accessToken: adminToken,
+            connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+        }));
         if (servers.length === 0) {
-            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
-            servers = srvSections.map(s => ({
-                name: s.serverName,
-                clientIdentifier: s.serverId,
-                accessToken: adminToken,
-                connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
-            }));
+            servers = await getPlexServers(adminToken);
         }
         const shares = await getPlexSharedServersList(adminToken);
         const friend = await findPlexUserFriend(adminToken, user);
@@ -1744,7 +1744,24 @@ export async function updateUserPlexLibraries(
         // For each server, update share on Plex or invite
         for (const srv of servers) {
             const srvId = srv.clientIdentifier;
-            const targetSectionIds = serverSectionsMap.get(srvId) || [];
+            let targetSectionIds = serverSectionsMap.get(srvId) || [];
+
+            // If there is only 1 server and serverSectionsMap only has entries under another serverId or __default__
+            if (targetSectionIds.length === 0 && servers.length === 1 && serverSectionsMap.size > 0) {
+                targetSectionIds = Array.from(serverSectionsMap.values()).flat();
+            }
+
+            // Case-insensitive / partial machine identifier match
+            if (targetSectionIds.length === 0) {
+                for (const [mapKey, secList] of serverSectionsMap.entries()) {
+                    if (mapKey.toLowerCase() === srvId.toLowerCase() || 
+                        srvId.toLowerCase().includes(mapKey.toLowerCase()) || 
+                        mapKey.toLowerCase().includes(srvId.toLowerCase())) {
+                        targetSectionIds = secList;
+                        break;
+                    }
+                }
+            }
 
             // Find matching share for this user on this server
             const match = shares.find(s => 
@@ -1754,7 +1771,8 @@ export async function updateUserPlexLibraries(
 
             if (targetSectionIds.length === 0) {
                 // If 0 sections selected for this server, revoke access / remove share
-                if (match && match.id) {
+                const userExplicitlySelectedZero = selectedKeys.length === 0 || serverSectionsMap.has(srvId);
+                if (userExplicitlySelectedZero && match && match.id) {
                     await removePlexUserShare(adminToken, match.id, srvId);
                 }
             } else {
