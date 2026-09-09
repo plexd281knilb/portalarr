@@ -599,7 +599,14 @@ function SettingsPageContent() {
                                 </div>
                             </CardHeader>
                             <CardContent>
-                                <form onSubmit={(e) => handleForm(e, saveSettings)} className="space-y-4">
+                                <form 
+                                    key={`smtp-form-${systemSettings?.smtpHost || "new"}-${systemSettings?.smtpUser || ""}`} 
+                                    onSubmit={(e) => handleForm(e, saveSettings)} 
+                                    className="space-y-4"
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                >
                                     {testEmailMsg && (
                                         <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                             <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -614,13 +621,13 @@ function SettingsPageContent() {
                                     )}
 
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2"><Label>SMTP Host</Label><Input name="smtpHost" defaultValue={systemSettings.smtpHost || ""} placeholder="smtp.gmail.com"/></div>
-                                        <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort || ""} placeholder="587"/></div>
+                                        <div className="space-y-2"><Label>SMTP Host</Label><Input name="smtpHost" defaultValue={systemSettings.smtpHost || ""} placeholder="smtp.gmail.com" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/></div>
+                                        <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort || ""} placeholder="587" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/></div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label>User / Email</Label>
-                                            <Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com"/>
+                                            <Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/>
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Password</Label>
@@ -630,6 +637,9 @@ function SettingsPageContent() {
                                                     type={showSmtpKey ? "text" : "password"} 
                                                     defaultValue={systemSettings.smtpPass || ""} 
                                                     className="pr-8"
+                                                    autoComplete="new-password"
+                                                    data-1p-ignore="true"
+                                                    data-lpignore="true"
                                                 />
                                                 <Button
                                                     type="button"
@@ -648,7 +658,7 @@ function SettingsPageContent() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Sender Email Address (From)</Label>
-                                        <Input name="smtpFrom" defaultValue={systemSettings.smtpFrom || ""} placeholder="portalarr@domain.com"/>
+                                        <Input name="smtpFrom" defaultValue={systemSettings.smtpFrom || ""} placeholder="portalarr@domain.com" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/>
                                         <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
                                             <div className="font-semibold text-foreground flex items-center gap-1">
                                                 <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
@@ -675,6 +685,9 @@ function SettingsPageContent() {
                                                 defaultValue={systemSettings.mainPlexToken || ""} 
                                                 placeholder="xxxxxxxxxxxxxxxxxxxx" 
                                                 className="pr-8"
+                                                autoComplete="new-password"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
                                             />
                                             <Button
                                                 type="button"
@@ -888,13 +901,20 @@ function SettingsPageContent() {
                                     <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <form onSubmit={async (e) => {
-                                        e.preventDefault();
-                                        const formData = new FormData(e.currentTarget);
-                                        const res = await saveJobSettings(formData);
-                                        setSaveAiMsg("Google Books settings saved successfully!");
-                                        setTimeout(() => setSaveAiMsg(""), 4000);
-                                    }} className="space-y-4">
+                                    <form 
+                                        key={`google-books-${systemSettings?.googleBooksApiKey ? "saved" : "empty"}`}
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData(e.currentTarget);
+                                            const res = await saveJobSettings(formData);
+                                            setSaveAiMsg("Google Books settings saved successfully!");
+                                            setTimeout(() => setSaveAiMsg(""), 4000);
+                                        }} 
+                                        className="space-y-4"
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    >
                                         <div className="space-y-2">
                                             <div className="flex justify-between items-center">
                                                 <Label>API Key</Label>
@@ -912,6 +932,9 @@ function SettingsPageContent() {
                                                     onChange={(e) => setGoogleBooksKey(e.target.value)}
                                                     placeholder="AIzaSy..."
                                                     className="bg-black/50 border-white/10 text-white placeholder:text-gray-500 pr-8"
+                                                    autoComplete="new-password"
+                                                    data-1p-ignore="true"
+                                                    data-lpignore="true"
                                                 />
                                                 <Button
                                                     type="button"
@@ -952,18 +975,25 @@ function SettingsPageContent() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                    <form onSubmit={async (e) => {
-                                        e.preventDefault();
-                                        const formData = new FormData(e.currentTarget);
-                                        formData.append("aiProvider", aiProviderSelect);
-                                        formData.append("aiModel", aiModelInput);
-                                        formData.append("aiAutoResolve", aiAutoResolveSwitch ? "true" : "false");
-                                        const res = await saveAiAgentSettings(formData);
-                                        if (res.success) {
-                                            setSaveAiMsg("AI Agent settings saved successfully!");
-                                            setTimeout(() => setSaveAiMsg(""), 4000);
-                                        }
-                                    }} className="space-y-4">
+                                    <form 
+                                        key={`ai-agent-form-${aiProviderSelect}-${aiSettings?.aiApiKey ? "saved" : "empty"}`}
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData(e.currentTarget);
+                                            formData.append("aiProvider", aiProviderSelect);
+                                            formData.append("aiModel", aiModelInput);
+                                            formData.append("aiAutoResolve", aiAutoResolveSwitch ? "true" : "false");
+                                            const res = await saveAiAgentSettings(formData);
+                                            if (res.success) {
+                                                setSaveAiMsg("AI Agent settings saved successfully!");
+                                                setTimeout(() => setSaveAiMsg(""), 4000);
+                                            }
+                                        }} 
+                                        className="space-y-4"
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    >
                                         {saveAiMsg && (
                                             <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -1022,6 +1052,9 @@ function SettingsPageContent() {
                                                         type={showAiKey ? "text" : "password"}
                                                         defaultValue={aiSettings.aiApiKey || ""}
                                                         placeholder={aiProviderSelect === "gemini" ? "AIzaSy..." : "sk-..."}
+                                                        autoComplete="new-password"
+                                                        data-1p-ignore="true"
+                                                        data-lpignore="true"
                                                     />
                                                     <p className="text-[10px] text-muted-foreground leading-tight mt-1">
                                                         {aiProviderSelect === "gemini" ? (
@@ -1227,18 +1260,53 @@ function SettingsPageContent() {
                                         ))}
                                     </div>
                                 )}
-                                <form onSubmit={(e) => {
-                                    handleForm(e, editingTautulli ? updateTautulliInstance : addTautulliInstance);
-                                    if (editingTautulli) setEditingTautulli(null);
-                                    setTautulliFormTestResult(null);
-                                }} className={`space-y-2 ${!editingTautulli && "border-t pt-4 mt-auto"}`}>
+                                <form 
+                                    key={editingTautulli ? `edit-tautulli-${editingTautulli.id}` : "new-tautulli"}
+                                    onSubmit={(e) => {
+                                        handleForm(e, editingTautulli ? updateTautulliInstance : addTautulliInstance);
+                                        if (editingTautulli) setEditingTautulli(null);
+                                        setTautulliFormTestResult(null);
+                                    }} 
+                                    className={`space-y-2 ${!editingTautulli && "border-t pt-4 mt-auto"}`}
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                >
                                     {editingTautulli && <input type="hidden" name="id" value={editingTautulli.id} />}
                                     <div className="grid gap-2">
-                                        <Input name="name" placeholder="Friendly Name (e.g. Main Plex)" required className="h-9 text-sm" defaultValue={editingTautulli?.name} />
-                                        <Input name="url" placeholder="URL (http://192.168.1.50:8181)" required className="h-9 text-sm font-mono" defaultValue={editingTautulli?.url} />
+                                        <Input 
+                                            name="name" 
+                                            placeholder="Friendly Name (e.g. Main Plex)" 
+                                            required 
+                                            className="h-9 text-sm" 
+                                            defaultValue={editingTautulli?.name} 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                        <Input 
+                                            name="url" 
+                                            placeholder="URL (http://192.168.1.50:8181)" 
+                                            required 
+                                            className="h-9 text-sm font-mono" 
+                                            defaultValue={editingTautulli?.url} 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
                                         <div>
                                             <div className="relative">
-                                                <Input name="apiKey" type={showTautulliKey ? "text" : "password"} placeholder="Tautulli API Key" required className="h-9 text-sm font-mono pr-8" defaultValue={editingTautulli?.apiKey} />
+                                                <Input 
+                                                    name="apiKey" 
+                                                    type={showTautulliKey ? "text" : "password"} 
+                                                    placeholder="Tautulli API Key" 
+                                                    required 
+                                                    className="h-9 text-sm font-mono pr-8" 
+                                                    defaultValue={editingTautulli?.apiKey} 
+                                                    autoComplete="new-password"
+                                                    data-1p-ignore="true"
+                                                    data-lpignore="true"
+                                                />
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
@@ -1327,15 +1395,40 @@ function SettingsPageContent() {
                                         ))}
                                     </div>
                                 )}
-                                <form onSubmit={(e) => {
-                                    handleForm(e, editingGlances ? updateGlancesInstance : addGlancesInstance);
-                                    if (editingGlances) setEditingGlances(null);
-                                    setGlancesFormTestResult(null);
-                                }} className={`space-y-2 ${!editingGlances && "border-t pt-4 mt-auto"}`}>
+                                <form 
+                                    key={editingGlances ? `edit-glances-${editingGlances.id}` : "new-glances"}
+                                    onSubmit={(e) => {
+                                        handleForm(e, editingGlances ? updateGlancesInstance : addGlancesInstance);
+                                        if (editingGlances) setEditingGlances(null);
+                                        setGlancesFormTestResult(null);
+                                    }} 
+                                    className={`space-y-2 ${!editingGlances && "border-t pt-4 mt-auto"}`}
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                >
                                     {editingGlances && <input type="hidden" name="id" value={editingGlances.id} />}
                                     <div className="grid gap-2">
-                                        <Input name="name" placeholder="Server Name (e.g. Unraid)" required className="h-9 text-sm" defaultValue={editingGlances?.name} />
-                                        <Input name="url" placeholder="URL (http://192.168.1.50:61208)" required className="h-9 text-sm font-mono" defaultValue={editingGlances?.url} />
+                                        <Input 
+                                            name="name" 
+                                            placeholder="Server Name (e.g. Unraid)" 
+                                            required 
+                                            className="h-9 text-sm" 
+                                            defaultValue={editingGlances?.name} 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                        <Input 
+                                            name="url" 
+                                            placeholder="URL (http://192.168.1.50:61208)" 
+                                            required 
+                                            className="h-9 text-sm font-mono" 
+                                            defaultValue={editingGlances?.url} 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
                                     </div>
                                     {glancesFormTestResult && (
                                         <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${glancesFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
@@ -1416,12 +1509,19 @@ function SettingsPageContent() {
                                     </div>
                                 )}
 
-                                <form onSubmit={(e) => {
-                                    handleForm(e, editingApp ? updateMediaApp : addMediaApp);
-                                    if (editingApp) setEditingApp(null);
-                                    setNewAppType("");
-                                    setAppFormTestResult(null);
-                                }} className={`space-y-3 ${!editingApp && "border-t pt-4 mt-auto"}`}>
+                                <form 
+                                    key={editingApp ? `edit-app-${editingApp.id}` : `new-app-${newAppType || "default"}`}
+                                    onSubmit={(e) => {
+                                        handleForm(e, editingApp ? updateMediaApp : addMediaApp);
+                                        if (editingApp) setEditingApp(null);
+                                        setNewAppType("");
+                                        setAppFormTestResult(null);
+                                    }} 
+                                    className={`space-y-3 ${!editingApp && "border-t pt-4 mt-auto"}`}
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                >
                                     {editingApp && <input type="hidden" name="id" value={editingApp.id} />}
                                     <Select 
                                         name="type" 
@@ -1458,7 +1558,16 @@ function SettingsPageContent() {
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>
-                                    <Input name="name" placeholder="Display Name" required className="h-9 text-sm" defaultValue={editingApp?.name} />
+                                    <Input 
+                                        name="name" 
+                                        placeholder="Display Name" 
+                                        required 
+                                        className="h-9 text-sm" 
+                                        defaultValue={editingApp?.name} 
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    />
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
                                             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Internal URL</Label>
@@ -1468,16 +1577,36 @@ function SettingsPageContent() {
                                                 required 
                                                 className="h-9 text-sm font-mono" 
                                                 defaultValue={editingApp?.url} 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
                                             />
                                         </div>
                                         <div className="space-y-1">
                                             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">External URL</Label>
-                                            <Input name="externalUrl" placeholder="https://app.com" className="h-9 text-sm font-mono" defaultValue={editingApp?.externalUrl} />
+                                            <Input 
+                                                name="externalUrl" 
+                                                placeholder="https://app.com" 
+                                                className="h-9 text-sm font-mono" 
+                                                defaultValue={editingApp?.externalUrl} 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
                                         </div>
                                     </div>
                                     <div>
                                         <div className="relative">
-                                            <Input name="apiKey" type={showMediaAppKey ? "text" : "password"} placeholder="API Key / Password" className="h-9 text-sm font-mono pr-8" defaultValue={editingApp?.apiKey} />
+                                            <Input 
+                                                name="apiKey" 
+                                                type={showMediaAppKey ? "text" : "password"} 
+                                                placeholder="API Key / Password" 
+                                                className="h-9 text-sm font-mono pr-8" 
+                                                defaultValue={editingApp?.apiKey} 
+                                                autoComplete="new-password"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
                                             <Button
                                                 type="button"
                                                 variant="ghost"
@@ -1693,14 +1822,29 @@ function SettingsPageContent() {
                                         ))}
                                     </div>
                                 )}
-                                <form onSubmit={(e) => {
-                                    handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard);
-                                    setBetaCardContent("");
-                                }} className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}>
+                                <form 
+                                    key={editingBetaCard ? `edit-beta-${editingBetaCard.id}` : "new-beta"}
+                                    onSubmit={(e) => {
+                                        handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard);
+                                        setBetaCardContent("");
+                                    }} 
+                                    className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                >
                                     {editingBetaCard && <input type="hidden" name="id" value={editingBetaCard.id} />}
                                     <div className="space-y-2">
                                         <Label>Card Title</Label>
-                                        <Input name="title" placeholder="Ex: Audiobookshelf Beta" defaultValue={editingBetaCard?.title} required />
+                                        <Input 
+                                            name="title" 
+                                            placeholder="Ex: Audiobookshelf Beta" 
+                                            defaultValue={editingBetaCard?.title} 
+                                            required 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Content (Markdown)</Label>
@@ -1726,8 +1870,26 @@ function SettingsPageContent() {
                                         </Tabs>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2"><Label>Button Text</Label><Input name="buttonText" defaultValue={editingBetaCard?.buttonText} /></div>
-                                        <div className="space-y-2"><Label>Button URL</Label><Input name="buttonUrl" defaultValue={editingBetaCard?.buttonUrl} /></div>
+                                        <div className="space-y-2">
+                                            <Label>Button Text</Label>
+                                            <Input 
+                                                name="buttonText" 
+                                                defaultValue={editingBetaCard?.buttonText} 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Button URL</Label>
+                                            <Input 
+                                                name="buttonUrl" 
+                                                defaultValue={editingBetaCard?.buttonUrl} 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
+                                        </div>
                                     </div>
                                     <div className="flex gap-2">
                                         <Button type="submit" className="w-full font-semibold hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>

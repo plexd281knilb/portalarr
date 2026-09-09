@@ -239,18 +239,50 @@ export default function AccessSettingsPage() {
                         <CardDescription>Add a new administrator or pre-approved user.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleCreate} className="space-y-4">
+                        <form 
+                            onSubmit={handleCreate} 
+                            className="space-y-4"
+                            autoComplete="off"
+                            data-1p-ignore="true"
+                            data-lpignore="true"
+                        >
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold">Username</Label>
-                                <Input name="username" placeholder="e.g. jsmith" required className="bg-background/60" />
+                                <Input 
+                                    name="username" 
+                                    placeholder="e.g. jsmith" 
+                                    required 
+                                    className="bg-background/60" 
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                />
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold">Email Address</Label>
-                                <Input name="email" type="email" placeholder="user@example.com" required className="bg-background/60" />
+                                <Input 
+                                    name="email" 
+                                    type="email" 
+                                    placeholder="user@example.com" 
+                                    required 
+                                    className="bg-background/60" 
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                />
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold">Password</Label>
-                                <Input name="password" type="password" required placeholder="Minimum 6 characters" className="bg-background/60" />
+                                <Input 
+                                    name="password" 
+                                    type="password" 
+                                    required 
+                                    placeholder="Minimum 6 characters" 
+                                    className="bg-background/60" 
+                                    autoComplete="new-password"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                />
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold">Role</Label>
@@ -279,7 +311,11 @@ export default function AccessSettingsPage() {
                         <CardDescription>Update your logged-in administrator password.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleChangePassword} className="space-y-4">
+                        <form 
+                            onSubmit={handleChangePassword} 
+                            className="space-y-4"
+                            autoComplete="off"
+                        >
                             {passMsg && (
                                 <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -300,6 +336,7 @@ export default function AccessSettingsPage() {
                                     onChange={(e) => setPassCurrent(e.target.value)} 
                                     placeholder="Enter current password"
                                     className="bg-background/60"
+                                    autoComplete="current-password"
                                 />
                             </div>
                             <div className="space-y-1.5">
@@ -310,6 +347,7 @@ export default function AccessSettingsPage() {
                                     onChange={(e) => setPassNew(e.target.value)} 
                                     placeholder="Minimum 6 characters"
                                     className="bg-background/60"
+                                    autoComplete="new-password"
                                 />
                             </div>
                             <Button type="submit" disabled={passLoading} className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98">
@@ -334,7 +372,13 @@ export default function AccessSettingsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <form onSubmit={handleAdminResetPassword} className="space-y-4">
+                            <form 
+                                onSubmit={handleAdminResetPassword} 
+                                className="space-y-4"
+                                autoComplete="off"
+                                data-1p-ignore="true"
+                                data-lpignore="true"
+                            >
                                 {adminResetMsg && (
                                     <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                         <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -355,6 +399,9 @@ export default function AccessSettingsPage() {
                                         onChange={(e) => setAdminNewPass(e.target.value)}
                                         placeholder="Enter new user password"
                                         className="bg-background/60"
+                                        autoComplete="new-password"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
                                     />
                                 </div>
                                 <div className="flex gap-2 justify-end pt-2">
