@@ -61,7 +61,21 @@ model Settings {
   mdblistApiKey               String?
   autoOverlaySync             Boolean   @default(true)
   autoCollectionSync          Boolean   @default(true)
-  leavingSoonDiskThreshold    Int?      @default(10) // % free space threshold to flag leaving soon
+  leavingSoonDiskThreshold    Int?      @default(15) // % free space threshold to flag leaving soon
+  enableAutoPruneDeletion     Boolean   @default(false) // Safety master switch - OFF by default
+  pruneDryRun                 Boolean   @default(true) // Dry run simulation mode - ON by default
+  pruneTagCollection          Boolean   @default(true) // Tag '⚠️ Leaving Soon' Plex collection
+  pruneApplyOverlays          Boolean   @default(true) // Apply warning poster overlay
+  pruneDeleteFromArr          Boolean   @default(false) // Trigger deletion in Radarr/Sonarr
+  pruneDeleteFromDisk         Boolean   @default(false) // Trigger direct disk deletion
+  pruneDaysNotice             Int?      @default(14) // Days of advance notice before deletion
+  pruneMinAgeDays             Int?      @default(90) // Min days item must exist before pruning eligibility
+  pruneUnwatchedOnly          Boolean   @default(true) // Only prune items with 0 plays or unwatched
+  enabledServersForOverlays   String?   // JSON array of server clientIdentifiers
+  enabledServersForCollections String?  // JSON array of server clientIdentifiers
+  enabledServersForPruning    String?   // JSON array of server clientIdentifiers
+  comingSoonShares            String?   // JSON map of serverId -> share path e.g. {"main":"/mnt/user/coming_soon_main"}
+  serverStorageConfig         String?   // JSON map of serverId -> { glancesUrl, shares, radarrId, sonarrId }
 }
 
 model TautulliInstance {

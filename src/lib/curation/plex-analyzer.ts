@@ -20,6 +20,11 @@ export interface PlexMediaStreamInfo {
     imdbRating?: number;
     rtCriticsRating?: number;
     rtAudienceRating?: number;
+    addedAt?: number;
+    lastViewedAt?: number;
+    viewCount?: number;
+    fileSize?: number;
+    filePath?: string;
     guids: {
         imdb?: string;
         tmdb?: string;
@@ -197,6 +202,14 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         videoFormatLabel = detectedHdr ? "1080p • HDR" : "1080p FHD";
     }
 
+    const totalSize = rawMediaList.reduce((acc: number, m: any) => {
+        const parts = Array.isArray(m.Part) ? m.Part : m.Part ? [m.Part] : [];
+        return acc + parts.reduce((pAcc: number, p: any) => pAcc + (parseInt(p.size || "0", 10)), 0);
+    }, 0);
+
+    const firstPart = rawMediaList[0]?.Part?.[0] || rawMediaList[0]?.Part;
+    const filePath: string | undefined = firstPart?.file;
+
     return {
         ratingKey: String(metadata.ratingKey),
         key: metadata.key,
@@ -211,6 +224,11 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         contentRating: metadata.contentRating,
         rating: metadata.rating ? parseFloat(metadata.rating) : undefined,
         audienceRating: metadata.audienceRating ? parseFloat(metadata.audienceRating) : undefined,
+        addedAt: metadata.addedAt ? parseInt(metadata.addedAt, 10) * 1000 : undefined,
+        lastViewedAt: metadata.lastViewedAt ? parseInt(metadata.lastViewedAt, 10) * 1000 : undefined,
+        viewCount: metadata.viewCount ? parseInt(metadata.viewCount, 10) : 0,
+        fileSize: totalSize > 0 ? totalSize : undefined,
+        filePath,
         guids,
         media: mediaList,
         detectedBadges: {
@@ -514,5 +532,169 @@ export async function fetchPlexPosterBuffer(
         return Buffer.from(arrayBuf);
     } catch (e) {
         return null;
+    }
+}
+
+/**
+ * Prune candidate representation with disk footprint and watch stats.
+ */
+export interface PruneCandidateItem {
+    ratingKey: string;
+    title: string;
+    year?: number;
+    type: "movie" | "show" | "season" | "episode";
+    sectionKey: string;
+    sectionTitle?: string;
+    serverId: string;
+    serverName?: string;
+    addedAt?: number;
+    lastViewedAt?: number;
+    viewCount: number;
+    fileSizeGb: number;
+    filePath?: string;
+    imdbId?: string;
+    tmdbId?: string;
+    reason: string;
+    daysOld: number;
+}
+
+/**
+ * Evaluates oldest and unwatched media items across sections for a server to simulate or execute capacity pruning.
+ */
+export async function evaluatePruneCandidatesForServer(
+    serverUrl: string,
+    token: string,
+    serverId: string,
+    serverName: string,
+    options: {
+        minAgeDays?: number;
+        unwatchedOnly?: boolean;
+        targetFreeGb?: number;
+        maxCandidates?: number;
+    } = {}
+): Promise<{
+    candidates: PruneCandidateItem[];
+    totalRecoverableGb: number;
+    evaluatedCount: number;
+}> {
+    const minAgeDays = options.minAgeDays ?? 90;
+    const unwatchedOnly = options.unwatchedOnly ?? true;
+    const maxCandidates = options.maxCandidates ?? 50;
+
+    const cleanBase = serverUrl.replace(/\/+$/, "");
+    const sectionsUrl = `${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`;
+    
+    let sections: { key: string; title: string; type: string }[] = [];
+    try {
+        const secRes = await fetch(sectionsUrl, {
+            headers: { "Accept": "application/json", "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+            cache: "no-store"
+        });
+        if (secRes.ok) {
+            const secData = await secRes.json();
+            const directories = secData.MediaContainer?.Directory || [];
+            sections = (Array.isArray(directories) ? directories : [directories])
+                .filter((d: any) => d.type === "movie" || d.type === "show")
+                .map((d: any) => ({ key: String(d.key), title: d.title, type: d.type }));
+        }
+    } catch (e) {}
+
+    const allCandidates: PruneCandidateItem[] = [];
+    let totalEvaluated = 0;
+    const nowMs = Date.now();
+    const minAgeMs = minAgeDays * 24 * 60 * 60 * 1000;
+
+    for (const sec of sections) {
+        const items = await getPlexLibraryMediaItems(serverUrl, token, sec.key, 1000);
+        totalEvaluated += items.length;
+
+        for (const item of items) {
+            const addedAtMs = item.addedAt || nowMs;
+            const ageMs = nowMs - addedAtMs;
+            const daysOld = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+
+            // Filter out items younger than minAgeDays
+            if (daysOld < minAgeDays) continue;
+
+            const viewCount = item.viewCount || 0;
+            const lastViewedAtMs = item.lastViewedAt;
+
+            // Filter out items that have been watched recently if unwatchedOnly is true
+            if (unwatchedOnly) {
+                if (viewCount > 0 && lastViewedAtMs) {
+                    const daysSinceViewed = Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000));
+                    if (daysSinceViewed < 180) continue; // Watched in last 6 months
+                }
+            }
+
+            const sizeBytes = item.fileSize || 0;
+            const sizeGb = parseFloat((sizeBytes / (1024 * 1024 * 1024)).toFixed(2));
+
+            let reason = `Added ${daysOld} days ago (Unwatched)`;
+            if (viewCount > 0 && lastViewedAtMs) {
+                const daysSinceViewed = Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000));
+                reason = `Last watched ${daysSinceViewed} days ago (${viewCount} total plays)`;
+            }
+
+            allCandidates.push({
+                ratingKey: item.ratingKey,
+                title: item.title,
+                year: item.year,
+                type: item.type,
+                sectionKey: sec.key,
+                sectionTitle: sec.title,
+                serverId,
+                serverName,
+                addedAt: item.addedAt,
+                lastViewedAt: item.lastViewedAt,
+                viewCount,
+                fileSizeGb: sizeGb > 0 ? sizeGb : (item.type === "movie" ? 4.5 : 12.0),
+                filePath: item.filePath,
+                imdbId: item.guids.imdb,
+                tmdbId: item.guids.tmdb,
+                reason,
+                daysOld
+            });
+        }
+    }
+
+    // Sort by oldest addedAt ascending (oldest first)
+    allCandidates.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+
+    const selected = allCandidates.slice(0, maxCandidates);
+    const totalRecoverableGb = parseFloat(selected.reduce((acc, c) => acc + c.fileSizeGb, 0).toFixed(2));
+
+    return {
+        candidates: selected,
+        totalRecoverableGb,
+        evaluatedCount: totalEvaluated
+    };
+}
+
+/**
+ * Directly removes media file via Plex Media Server API.
+ */
+export async function deleteMediaFromPlexServer(
+    serverUrl: string,
+    token: string,
+    ratingKey: string
+): Promise<{ success: boolean; message?: string }> {
+    const cleanBase = serverUrl.replace(/\/+$/, "");
+    const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+
+    try {
+        const res = await fetch(url, {
+            method: "DELETE",
+            headers: {
+                "X-Plex-Token": token,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            }
+        });
+        if (res.ok) {
+            return { success: true, message: `Successfully deleted ratingKey ${ratingKey} from Plex and disk.` };
+        }
+        return { success: false, message: `Plex returned HTTP ${res.status}: ${res.statusText}` };
+    } catch (e: any) {
+        return { success: false, message: e.message };
     }
 }

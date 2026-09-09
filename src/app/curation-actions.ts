@@ -10,7 +10,10 @@ import {
     getPlexLibraryCollections, 
     syncPlexCollection, 
     deletePlexCollection, 
-    PlexMediaStreamInfo 
+    evaluatePruneCandidatesForServer,
+    deleteMediaFromPlexServer,
+    PlexMediaStreamInfo,
+    PruneCandidateItem
 } from "@/lib/curation/plex-analyzer";
 import { 
     backupAndApplyOverlay, 
@@ -60,9 +63,23 @@ export async function getCurationSettingsAction() {
         tmdbApiKey: settings?.tmdbApiKey || "",
         traktClientId: settings?.traktClientId || "",
         mdblistApiKey: settings?.mdblistApiKey || "",
-        autoOverlaySync: settings?.autoOverlaySync || false,
-        autoCollectionSync: settings?.autoCollectionSync || false,
-        leavingSoonDiskThreshold: settings?.leavingSoonDiskThreshold || 15
+        autoOverlaySync: settings?.autoOverlaySync ?? true,
+        autoCollectionSync: settings?.autoCollectionSync ?? true,
+        leavingSoonDiskThreshold: settings?.leavingSoonDiskThreshold ?? 15,
+        enableAutoPruneDeletion: settings?.enableAutoPruneDeletion ?? false,
+        pruneDryRun: settings?.pruneDryRun ?? true,
+        pruneTagCollection: settings?.pruneTagCollection ?? true,
+        pruneApplyOverlays: settings?.pruneApplyOverlays ?? true,
+        pruneDeleteFromArr: settings?.pruneDeleteFromArr ?? false,
+        pruneDeleteFromDisk: settings?.pruneDeleteFromDisk ?? false,
+        pruneDaysNotice: settings?.pruneDaysNotice ?? 14,
+        pruneMinAgeDays: settings?.pruneMinAgeDays ?? 90,
+        pruneUnwatchedOnly: settings?.pruneUnwatchedOnly ?? true,
+        enabledServersForOverlays: settings?.enabledServersForOverlays ? JSON.parse(settings.enabledServersForOverlays) : [],
+        enabledServersForCollections: settings?.enabledServersForCollections ? JSON.parse(settings.enabledServersForCollections) : [],
+        enabledServersForPruning: settings?.enabledServersForPruning ? JSON.parse(settings.enabledServersForPruning) : [],
+        comingSoonShares: settings?.comingSoonShares ? JSON.parse(settings.comingSoonShares) : {},
+        serverStorageConfig: settings?.serverStorageConfig ? JSON.parse(settings.serverStorageConfig) : {}
     };
 }
 
@@ -73,27 +90,51 @@ export async function saveCurationSettingsAction(data: {
     autoOverlaySync?: boolean;
     autoCollectionSync?: boolean;
     leavingSoonDiskThreshold?: number;
+    enableAutoPruneDeletion?: boolean;
+    pruneDryRun?: boolean;
+    pruneTagCollection?: boolean;
+    pruneApplyOverlays?: boolean;
+    pruneDeleteFromArr?: boolean;
+    pruneDeleteFromDisk?: boolean;
+    pruneDaysNotice?: number;
+    pruneMinAgeDays?: number;
+    pruneUnwatchedOnly?: boolean;
+    enabledServersForOverlays?: string[];
+    enabledServersForCollections?: string[];
+    enabledServersForPruning?: string[];
+    comingSoonShares?: Record<string, string>;
+    serverStorageConfig?: Record<string, any>;
 }) {
     await verifyAdmin();
     try {
+        const updatePayload: any = {};
+        if (data.tmdbApiKey !== undefined) updatePayload.tmdbApiKey = data.tmdbApiKey;
+        if (data.traktClientId !== undefined) updatePayload.traktClientId = data.traktClientId;
+        if (data.mdblistApiKey !== undefined) updatePayload.mdblistApiKey = data.mdblistApiKey;
+        if (data.autoOverlaySync !== undefined) updatePayload.autoOverlaySync = data.autoOverlaySync;
+        if (data.autoCollectionSync !== undefined) updatePayload.autoCollectionSync = data.autoCollectionSync;
+        if (data.leavingSoonDiskThreshold !== undefined) updatePayload.leavingSoonDiskThreshold = data.leavingSoonDiskThreshold;
+        if (data.enableAutoPruneDeletion !== undefined) updatePayload.enableAutoPruneDeletion = data.enableAutoPruneDeletion;
+        if (data.pruneDryRun !== undefined) updatePayload.pruneDryRun = data.pruneDryRun;
+        if (data.pruneTagCollection !== undefined) updatePayload.pruneTagCollection = data.pruneTagCollection;
+        if (data.pruneApplyOverlays !== undefined) updatePayload.pruneApplyOverlays = data.pruneApplyOverlays;
+        if (data.pruneDeleteFromArr !== undefined) updatePayload.pruneDeleteFromArr = data.pruneDeleteFromArr;
+        if (data.pruneDeleteFromDisk !== undefined) updatePayload.pruneDeleteFromDisk = data.pruneDeleteFromDisk;
+        if (data.pruneDaysNotice !== undefined) updatePayload.pruneDaysNotice = data.pruneDaysNotice;
+        if (data.pruneMinAgeDays !== undefined) updatePayload.pruneMinAgeDays = data.pruneMinAgeDays;
+        if (data.pruneUnwatchedOnly !== undefined) updatePayload.pruneUnwatchedOnly = data.pruneUnwatchedOnly;
+        if (data.enabledServersForOverlays !== undefined) updatePayload.enabledServersForOverlays = JSON.stringify(data.enabledServersForOverlays);
+        if (data.enabledServersForCollections !== undefined) updatePayload.enabledServersForCollections = JSON.stringify(data.enabledServersForCollections);
+        if (data.enabledServersForPruning !== undefined) updatePayload.enabledServersForPruning = JSON.stringify(data.enabledServersForPruning);
+        if (data.comingSoonShares !== undefined) updatePayload.comingSoonShares = JSON.stringify(data.comingSoonShares);
+        if (data.serverStorageConfig !== undefined) updatePayload.serverStorageConfig = JSON.stringify(data.serverStorageConfig);
+
         await prisma.settings.upsert({
             where: { id: "global" },
-            update: {
-                tmdbApiKey: data.tmdbApiKey,
-                traktClientId: data.traktClientId,
-                mdblistApiKey: data.mdblistApiKey,
-                autoOverlaySync: data.autoOverlaySync,
-                autoCollectionSync: data.autoCollectionSync,
-                leavingSoonDiskThreshold: data.leavingSoonDiskThreshold
-            },
+            update: updatePayload,
             create: {
                 id: "global",
-                tmdbApiKey: data.tmdbApiKey,
-                traktClientId: data.traktClientId,
-                mdblistApiKey: data.mdblistApiKey,
-                autoOverlaySync: data.autoOverlaySync,
-                autoCollectionSync: data.autoCollectionSync,
-                leavingSoonDiskThreshold: data.leavingSoonDiskThreshold
+                ...updatePayload
             }
         });
 
@@ -742,3 +783,267 @@ export async function testCurationApiKeysAction(tmdbKey?: string, traktKey?: str
         results
     };
 }
+
+export async function runPruneSimulationAction(targetServerId?: string, criteria?: {
+    minAgeDays?: number;
+    unwatchedOnly?: boolean;
+    maxCandidates?: number;
+}) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const servers = await getPlexServers(token);
+        const enabledPruneServers: string[] = settings?.enabledServersForPruning 
+            ? JSON.parse(settings.enabledServersForPruning) 
+            : [];
+
+        // If targetServerId specified, evaluate only that server; otherwise evaluate enabled servers or all servers
+        const targetServers = targetServerId 
+            ? servers.filter(s => s.clientIdentifier === targetServerId)
+            : enabledPruneServers.length > 0
+                ? servers.filter(s => enabledPruneServers.includes(s.clientIdentifier))
+                : servers;
+
+        if (targetServers.length === 0) {
+            return {
+                success: false,
+                error: "No eligible servers configured for pruning evaluation.",
+                candidates: [],
+                totalRecoverableGb: 0,
+                evaluatedCount: 0
+            };
+        }
+
+        const allCandidates: PruneCandidateItem[] = [];
+        let totalRecoverable = 0;
+        let totalEvaluated = 0;
+
+        for (const s of targetServers) {
+            const serverUrl = s.connections[0]?.uri || settings?.mainPlexUrl || "";
+            if (!serverUrl) continue;
+
+            const res = await evaluatePruneCandidatesForServer(serverUrl, token, s.clientIdentifier, s.name, {
+                minAgeDays: criteria?.minAgeDays ?? settings?.pruneMinAgeDays ?? 90,
+                unwatchedOnly: criteria?.unwatchedOnly ?? settings?.pruneUnwatchedOnly ?? true,
+                maxCandidates: criteria?.maxCandidates ?? 50
+            });
+
+            allCandidates.push(...res.candidates);
+            totalRecoverable += res.totalRecoverableGb;
+            totalEvaluated += res.evaluatedCount;
+        }
+
+        allCandidates.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+
+        return {
+            success: true,
+            isDryRun: true,
+            masterDeletionEnabled: settings?.enableAutoPruneDeletion ?? false,
+            pruneDryRun: settings?.pruneDryRun ?? true,
+            candidates: allCandidates,
+            totalRecoverableGb: parseFloat(totalRecoverable.toFixed(2)),
+            evaluatedCount: totalEvaluated,
+            serversEvaluated: targetServers.map(s => ({ id: s.clientIdentifier, name: s.name }))
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function executePruneAction(
+    items: { ratingKey: string; serverId: string; sectionKey?: string; title?: string }[],
+    options: {
+        forceLiveDelete?: boolean;
+        applyOverlay?: boolean;
+        tagCollection?: boolean;
+        daysNotice?: number;
+        reason?: string;
+    } = {}
+) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const servers = await getPlexServers(token);
+        const isMasterEnabled = settings?.enableAutoPruneDeletion ?? false;
+        const isDryRun = options.forceLiveDelete ? false : (settings?.pruneDryRun ?? true);
+        const shouldTagCollection = options.tagCollection ?? settings?.pruneTagCollection ?? true;
+        const shouldApplyOverlay = options.applyOverlay ?? settings?.pruneApplyOverlays ?? true;
+        const daysNotice = options.daysNotice ?? settings?.pruneDaysNotice ?? 14;
+        const reason = options.reason || `Storage capacity optimization (${daysNotice}-day notice)`;
+
+        const enabledServersForOverlays: string[] = settings?.enabledServersForOverlays 
+            ? JSON.parse(settings.enabledServersForOverlays) 
+            : [];
+        const enabledServersForCollections: string[] = settings?.enabledServersForCollections 
+            ? JSON.parse(settings.enabledServersForCollections) 
+            : [];
+
+        const results: { ratingKey: string; title: string; serverName: string; action: string; success: boolean }[] = [];
+
+        for (const it of items) {
+            const server = servers.find(s => s.clientIdentifier === it.serverId) || servers[0];
+            const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+            const serverName = server?.name || it.serverId;
+
+            // 1. If dry run or deletion not explicitly armed, flag as Leaving Soon and stage
+            if (isDryRun || !isMasterEnabled) {
+                const effectiveDate = new Date(Date.now() + daysNotice * 24 * 60 * 60 * 1000);
+
+                await prisma.mediaContentAdvisory.upsert({
+                    where: { ratingKey_serverId: { ratingKey: it.ratingKey, serverId: it.serverId } },
+                    update: {
+                        title: it.title || undefined,
+                        isLeavingSoon: true,
+                        leavingSoonDate: effectiveDate,
+                        leavingReason: reason
+                    },
+                    create: {
+                        ratingKey: it.ratingKey,
+                        serverId: it.serverId,
+                        title: it.title || "Media Item",
+                        isLeavingSoon: true,
+                        leavingSoonDate: effectiveDate,
+                        leavingReason: reason
+                    }
+                });
+
+                // Tag Plex collection if server enabled
+                const canTagCollection = enabledServersForCollections.length === 0 || enabledServersForCollections.includes(it.serverId);
+                if (shouldTagCollection && canTagCollection && serverUrl && it.sectionKey) {
+                    await syncPlexCollection(
+                        serverUrl,
+                        token,
+                        it.sectionKey,
+                        "⚠️ Leaving Soon",
+                        [it.ratingKey],
+                        {
+                            summary: "These items are scheduled to be removed soon to free up disk space. Watch them while you can!",
+                            sortTitle: "!000_LeavingSoon"
+                        }
+                    );
+                }
+
+                // Apply overlay if server enabled
+                const canApplyOverlay = enabledServersForOverlays.length === 0 || enabledServersForOverlays.includes(it.serverId);
+                if (shouldApplyOverlay && canApplyOverlay && serverUrl && it.sectionKey) {
+                    const mediaItems = await getPlexLibraryMediaItems(serverUrl, token, it.sectionKey, 50);
+                    const matched = mediaItems.find(m => m.ratingKey === it.ratingKey);
+                    if (matched) {
+                        await backupAndApplyOverlay(
+                            serverUrl,
+                            token,
+                            it.serverId,
+                            matched,
+                            {
+                                showLeavingSoon: true,
+                                leavingSoonDays: daysNotice,
+                                position: "top-right",
+                                theme: "glass"
+                            }
+                        );
+                    }
+                }
+
+                results.push({
+                    ratingKey: it.ratingKey,
+                    title: it.title || it.ratingKey,
+                    serverName,
+                    action: `Staged with ${daysNotice}-day Leaving Soon notice (Simulation / Safe Mode)`,
+                    success: true
+                });
+            } else {
+                // 2. LIVE DELETION MODE (Master Switch ON + Dry Run OFF / Explicit Force Delete)
+                let deleted = false;
+
+                if (serverUrl) {
+                    const plexDelRes = await deleteMediaFromPlexServer(serverUrl, token, it.ratingKey);
+                    deleted = plexDelRes.success;
+                }
+
+                await prisma.mediaContentAdvisory.deleteMany({
+                    where: { ratingKey: it.ratingKey, serverId: it.serverId }
+                });
+
+                results.push({
+                    ratingKey: it.ratingKey,
+                    title: it.title || it.ratingKey,
+                    serverName,
+                    action: deleted ? "Permanently deleted from disk & Plex library" : "Failed to delete from Plex",
+                    success: deleted
+                });
+            }
+        }
+
+        return {
+            success: true,
+            isDryRun,
+            isMasterEnabled,
+            processedCount: results.length,
+            results
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function clearAllLeavingSoonFlagsAction(serverId?: string) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        const serverUrl = settings?.mainPlexUrl || "";
+
+        const whereClause = serverId ? { serverId } : {};
+
+        // Find all leaving soon items to restore posters
+        const advisories = await prisma.mediaContentAdvisory.findMany({
+            where: { ...whereClause, isLeavingSoon: true }
+        });
+
+        if (token && serverUrl) {
+            for (const adv of advisories) {
+                if (adv.serverId && adv.ratingKey) {
+                    await restoreItemOriginalArtwork(serverUrl, token, adv.serverId, adv.ratingKey).catch(() => {});
+                }
+            }
+        }
+
+        await prisma.mediaContentAdvisory.updateMany({
+            where: whereClause,
+            data: {
+                isLeavingSoon: false,
+                leavingSoonDate: null,
+                leavingReason: null
+            }
+        });
+
+        return {
+            success: true,
+            clearedCount: advisories.length,
+            message: `Cleared ${advisories.length} Leaving Soon flags and restored original poster artwork.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function saveComingSoonSharesAction(shares: Record<string, string>) {
+    await verifyAdmin();
+    try {
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { comingSoonShares: JSON.stringify(shares) },
+            create: { id: "global", comingSoonShares: JSON.stringify(shares) }
+        });
+        return { success: true, message: "Coming soon placeholder shares saved successfully." };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+

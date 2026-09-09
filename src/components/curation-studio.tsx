@@ -18,7 +18,11 @@ import {
     unmarkItemLeavingSoonAction,
     getUserContentPreferencesAction, 
     saveUserContentPreferencesAction,
-    testCurationApiKeysAction
+    testCurationApiKeysAction,
+    runPruneSimulationAction,
+    executePruneAction,
+    clearAllLeavingSoonFlagsAction,
+    saveComingSoonSharesAction
 } from "@/app/curation-actions";
 import { COLLECTION_PRESETS, CollectionPreset } from "@/lib/curation/presets";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -36,7 +40,8 @@ import {
     Disc, Radio, Ghost, Gift, Eye, Volume2, TrendingUp, AlertTriangle, 
     Layers, RefreshCw, CheckCircle2, XCircle, Loader2, ArrowRight, 
     Sliders, Copy, Check, Trash2, Plus, Calendar, Clock, Lock, Key, 
-    FolderHeart, Undo2, HardDrive, PlaySquare, Filter, ShieldAlert, HeartOff
+    FolderHeart, Undo2, HardDrive, PlaySquare, Filter, ShieldAlert, HeartOff,
+    Server, Power, Ban, Archive, TestTube, Settings2, FolderCheck
 } from "lucide-react";
 
 export default function CurationStudio() {
@@ -77,7 +82,7 @@ export default function CurationStudio() {
     const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal">("glass");
     const [simPosition, setSimPosition] = useState<"top-right" | "top-left" | "bottom-right">("top-right");
 
-    // Upcoming Releases Calendar
+    // Upcoming Releases Calendar & Coming Soon Shares
     const [releasesLoading, setReleasesLoading] = useState(false);
     const [releasesData, setReleasesData] = useState<{ digitalStreaming: any[]; theatricalUpcoming: any[]; nowPlaying: any[] }>({
         digitalStreaming: [],
@@ -85,14 +90,34 @@ export default function CurationStudio() {
         nowPlaying: []
     });
     const [releaseFilter, setReleaseFilter] = useState<"all" | "digital" | "theatrical">("all");
+    const [comingSoonShares, setComingSoonShares] = useState<Record<string, string>>({});
+    const [savingShares, setSavingShares] = useState(false);
+    const [sharesSavedMsg, setSharesSavedMsg] = useState(false);
 
-    // Leaving Soon Pruning
+    // Leaving Soon Pruning & Safety Sandbox
     const [leavingSoonItems, setLeavingSoonItems] = useState<any[]>([]);
     const [copiedWebhook, setCopiedWebhook] = useState(false);
     const [manualLeavingTitle, setManualLeavingTitle] = useState("");
     const [manualLeavingDays, setManualLeavingDays] = useState(7);
     const [manualLeavingReason, setManualLeavingReason] = useState("Storage capacity cleanup");
     const [manualLeavingModalOpen, setManualLeavingModalOpen] = useState(false);
+
+    // Prune Simulation & Testing States
+    const [simulatingPrune, setSimulatingPrune] = useState(false);
+    const [pruneSimResults, setPruneSimResults] = useState<{
+        candidates: any[];
+        totalRecoverableGb: number;
+        evaluatedCount: number;
+        serversEvaluated: any[];
+    } | null>(null);
+    const [executingPrune, setExecutingPrune] = useState(false);
+    const [pruneExecMessage, setPruneExecMessage] = useState<{ success: boolean; text: string } | null>(null);
+    const [clearingFlags, setClearingFlags] = useState(false);
+    const [clearFlagsMsg, setClearFlagsMsg] = useState<string | null>(null);
+
+    // Server Target Matrix State
+    const [savingServerTargets, setSavingServerTargets] = useState(false);
+    const [serverTargetsSavedMsg, setServerTargetsSavedMsg] = useState(false);
 
     // User Content Preferences
     const [userPrefs, setUserPrefs] = useState<any>({
@@ -130,7 +155,12 @@ export default function CurationStudio() {
             const ruleData = ruleRes as any;
             const leaveData = leaveRes as any;
 
-            if ((settRes as any).success) setSettings(settRes);
+            if ((settRes as any).success) {
+                setSettings(settRes);
+                if ((settRes as any).comingSoonShares) {
+                    setComingSoonShares((settRes as any).comingSoonShares);
+                }
+            }
             if (srvData?.success && Array.isArray(srvData.servers) && srvData.servers.length > 0) {
                 setServers(srvData.servers);
                 setSelectedServerId(srvData.servers[0].serverId);
@@ -345,6 +375,118 @@ export default function CurationStudio() {
         }
     };
 
+    // Handle Run Prune Simulation (Dry Run)
+    const handleRunPruneSimulation = async (targetSrvId?: string) => {
+        setSimulatingPrune(true);
+        setPruneExecMessage(null);
+        try {
+            const res = await runPruneSimulationAction(targetSrvId);
+            if (res.success) {
+                setPruneSimResults({
+                    candidates: res.candidates || [],
+                    totalRecoverableGb: res.totalRecoverableGb || 0,
+                    evaluatedCount: res.evaluatedCount || 0,
+                    serversEvaluated: res.serversEvaluated || []
+                });
+            } else {
+                alert(res.error || "Simulation failed.");
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed running prune simulation.");
+        } finally {
+            setSimulatingPrune(false);
+        }
+    };
+
+    // Handle Execute Prune (Staged Notice or Force Live Delete)
+    const handleExecutePrune = async (items: any[], forceLiveDelete = false) => {
+        if (forceLiveDelete) {
+            if (!confirm(`⚠️ ARE YOU SURE? You are about to LIVE DELETE ${items.length} media items from disk and your Plex library! This cannot be undone.`)) {
+                return;
+            }
+        }
+        setExecutingPrune(true);
+        setPruneExecMessage(null);
+        try {
+            const payload = items.map(it => ({
+                ratingKey: it.ratingKey,
+                serverId: it.serverId,
+                sectionKey: it.sectionKey,
+                title: it.title
+            }));
+            const res = await executePruneAction(payload, { forceLiveDelete });
+            if (res.success) {
+                setPruneExecMessage({
+                    success: true,
+                    text: forceLiveDelete 
+                        ? `Live deleted ${res.processedCount} items from Plex & disk.` 
+                        : `Staged ${res.processedCount} items in Leaving Soon queue with warning notice.`
+                });
+                await loadData();
+                await handleRunPruneSimulation(selectedServerId);
+            } else {
+                setPruneExecMessage({ success: false, text: res.error || "Execution failed." });
+            }
+        } catch (e: any) {
+            setPruneExecMessage({ success: false, text: e.message });
+        } finally {
+            setExecutingPrune(false);
+        }
+    };
+
+    // Handle Clear All Leaving Soon Flags & Restore Posters
+    const handleClearAllLeavingSoon = async (srvId?: string) => {
+        if (!confirm("Restore all pristine poster artwork and clear all leaving soon advisory flags on this server?")) return;
+        setClearingFlags(true);
+        setClearFlagsMsg(null);
+        try {
+            const res = await clearAllLeavingSoonFlagsAction(srvId);
+            if (res.success) {
+                setClearFlagsMsg(res.message || "Cleared flags and restored artwork.");
+                await loadData();
+                setTimeout(() => setClearFlagsMsg(null), 4000);
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed clearing flags.");
+        } finally {
+            setClearingFlags(false);
+        }
+    };
+
+    // Handle Save Server Targets Matrix
+    const handleSaveServerTargets = async () => {
+        setSavingServerTargets(true);
+        setServerTargetsSavedMsg(false);
+        try {
+            await saveCurationSettingsAction({
+                enabledServersForOverlays: settings.enabledServersForOverlays || [],
+                enabledServersForCollections: settings.enabledServersForCollections || [],
+                enabledServersForPruning: settings.enabledServersForPruning || []
+            });
+            setServerTargetsSavedMsg(true);
+            setTimeout(() => setServerTargetsSavedMsg(false), 3000);
+        } catch (e) {
+            console.error("Failed saving server targets:", e);
+        } finally {
+            setSavingServerTargets(false);
+        }
+    };
+
+    // Handle Save Coming Soon Shares
+    const handleSaveShares = async () => {
+        setSavingShares(true);
+        setSharesSavedMsg(false);
+        try {
+            await saveComingSoonSharesAction(comingSoonShares);
+            setSharesSavedMsg(true);
+            setTimeout(() => setSharesSavedMsg(false), 3000);
+        } catch (e) {
+            console.error("Failed saving coming soon shares:", e);
+        } finally {
+            setSavingShares(false);
+        }
+    };
+
     // Handle Test API Keys
     const handleTestKeys = async () => {
         setTestingKeys(true);
@@ -435,6 +577,105 @@ export default function CurationStudio() {
                     </div>
                 </div>
             </div>
+
+            {/* Server Target Matrix & Vanilla Protection Guard */}
+            {servers.length > 0 && (
+                <Card className="bg-slate-900/60 border-slate-800/80 shadow-md">
+                    <CardContent className="p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
+                        <div className="space-y-1 max-w-xl">
+                            <div className="flex items-center gap-2">
+                                <Server className="h-4 w-4 text-indigo-400" />
+                                <span className="font-bold text-white text-sm">Server Targeting & Vanilla Guard</span>
+                                <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 bg-emerald-950/30 text-[10px] font-semibold">
+                                    Protection Active
+                                </Badge>
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                                Select which Plex servers receive Collections, Overlays, and Capacity Pruning. Unchecked servers (e.g. your Backup server) stay 100% vanilla and unmodified.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                            {servers.map(srv => {
+                                const isOverlayEnabled = (settings.enabledServersForOverlays || []).includes(srv.serverId);
+                                const isCollEnabled = (settings.enabledServersForCollections || []).includes(srv.serverId);
+                                const isPruneEnabled = (settings.enabledServersForPruning || []).includes(srv.serverId);
+
+                                return (
+                                    <div key={srv.serverId} className="p-2.5 bg-slate-800/80 border border-slate-700/60 rounded-xl space-y-1.5 min-w-[170px] flex-1 sm:flex-initial">
+                                        <div className="flex items-center justify-between font-bold text-slate-200 text-xs">
+                                            <span className="truncate">{srv.serverName || "Server"}</span>
+                                            {srv.serverId === selectedServerId && <Badge className="text-[9px] bg-purple-600/80 px-1.5 py-0">Selected</Badge>}
+                                        </div>
+                                        <div className="space-y-1 text-[11px] text-slate-300">
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={isOverlayEnabled}
+                                                    onChange={e => {
+                                                        const curr = settings.enabledServersForOverlays || [];
+                                                        const updated = e.target.checked 
+                                                            ? [...curr, srv.serverId]
+                                                            : curr.filter((id: string) => id !== srv.serverId);
+                                                        setSettings({ ...settings, enabledServersForOverlays: updated });
+                                                    }}
+                                                    className="rounded border-slate-700 text-purple-600 focus:ring-0"
+                                                />
+                                                <span>🎨 Overlays</span>
+                                            </label>
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={isCollEnabled}
+                                                    onChange={e => {
+                                                        const curr = settings.enabledServersForCollections || [];
+                                                        const updated = e.target.checked 
+                                                            ? [...curr, srv.serverId]
+                                                            : curr.filter((id: string) => id !== srv.serverId);
+                                                        setSettings({ ...settings, enabledServersForCollections: updated });
+                                                    }}
+                                                    className="rounded border-slate-700 text-purple-600 focus:ring-0"
+                                                />
+                                                <span>📚 Collections</span>
+                                            </label>
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={isPruneEnabled}
+                                                    onChange={e => {
+                                                        const curr = settings.enabledServersForPruning || [];
+                                                        const updated = e.target.checked 
+                                                            ? [...curr, srv.serverId]
+                                                            : curr.filter((id: string) => id !== srv.serverId);
+                                                        setSettings({ ...settings, enabledServersForPruning: updated });
+                                                    }}
+                                                    className="rounded border-slate-700 text-purple-600 focus:ring-0"
+                                                />
+                                                <span>🗑️ Pruning</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            <div className="flex flex-col gap-1">
+                                <Button 
+                                    size="sm" 
+                                    onClick={handleSaveServerTargets}
+                                    disabled={savingServerTargets}
+                                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-8 px-3"
+                                >
+                                    {savingServerTargets ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+                                    Save Targets
+                                </Button>
+                                {serverTargetsSavedMsg && (
+                                    <span className="text-[10px] text-emerald-400 font-semibold text-center">✓ Saved!</span>
+                                )}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Studio Navigation Tabs */}
             <Tabs value={subTab} onValueChange={setSubTab} className="space-y-6">
@@ -868,6 +1109,77 @@ export default function CurationStudio() {
                         </div>
                     </div>
 
+                    {/* Agregarr Isolated Pre-Release Placeholder Shares */}
+                    {servers.length > 0 && (
+                        <Card className="bg-slate-900/80 border-slate-800 shadow-xl overflow-hidden">
+                            <CardHeader className="p-4 pb-3 border-b border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                                            <FolderCheck className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+                                                Dedicated Coming Soon Shares (Agregarr Placeholder Separation)
+                                            </CardTitle>
+                                            <CardDescription className="text-xs text-slate-400">
+                                                Configure isolated storage share paths per server (e.g. Unraid <code className="text-purple-300">/mnt/user/coming_soon_main</code>) to keep pre-release dummy placeholders separated from real media libraries.
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button 
+                                            size="sm"
+                                            onClick={handleSaveShares}
+                                            disabled={savingShares}
+                                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-emerald-950/40"
+                                        >
+                                            {savingShares ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                            <span>Save Share Paths</span>
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-3 text-xs">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {servers.map(srv => (
+                                        <div key={srv.serverId} className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                                                    <Server className="h-3.5 w-3.5 text-indigo-400" />
+                                                    <span>{srv.serverName || "Plex Server"}</span>
+                                                </Label>
+                                                {srv.serverId === selectedServerId && (
+                                                    <Badge className="text-[9px] bg-purple-600/80 px-1.5 py-0">Active</Badge>
+                                                )}
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Input 
+                                                    value={comingSoonShares[srv.serverId] || ""}
+                                                    onChange={e => setComingSoonShares({ ...comingSoonShares, [srv.serverId]: e.target.value })}
+                                                    placeholder={`e.g. /mnt/user/coming_soon_${(srv.serverName || "main").toLowerCase().replace(/\s+/g, "_")}`}
+                                                    className="bg-slate-800/80 border-slate-700 text-xs h-8 font-mono"
+                                                />
+                                                <p className="text-[10px] text-slate-500">
+                                                    Share path for <span className="text-slate-400">{srv.serverName}</span> dummy stubs
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
+                                    <div className="flex items-center gap-1.5">
+                                        <HardDrive className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                        <span>Multi-server remote Unraid arrays maintain completely isolated placeholder shares with 0% risk to production movie files.</span>
+                                    </div>
+                                    {sharesSavedMsg && (
+                                        <span className="text-emerald-400 font-semibold animate-pulse">✓ Share paths saved successfully!</span>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {releasesLoading ? (
                         <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
                             <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
@@ -933,33 +1245,330 @@ export default function CurationStudio() {
                 {/* TAB 4: LEAVING SOON & DISK PRUNING MANAGER (AGREGARR REPLACEMENT) */}
                 {/* ========================================================================= */}
                 <TabsContent value="pruning" className="space-y-6">
+                    {/* Master Safety Switch & Control Deck */}
+                    <Card className="bg-slate-900/80 border-slate-800 shadow-xl overflow-hidden">
+                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30">
+                                            <HardDrive className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                                Multi-Library Array Capacity & Oldest Media Pruner
+                                            </CardTitle>
+                                            <CardDescription className="text-xs text-slate-400">
+                                                Intelligent automated discovery of oldest and unwatched media across multiple servers with dry-run safety locks.
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-700">
+                                    <div className="text-right">
+                                        <div className="text-xs font-bold text-white flex items-center gap-1.5 justify-end">
+                                            <Power className="h-3.5 w-3.5 text-rose-400" />
+                                            <span>Pruning Master Switch</span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400">
+                                            {settings.enableAutoPruneDeletion ? "🔴 Auto-Prune Active" : "🟢 Safety Protected (OFF)"}
+                                        </p>
+                                    </div>
+                                    <Switch 
+                                        checked={Boolean(settings.enableAutoPruneDeletion)}
+                                        onCheckedChange={checked => setSettings({ ...settings, enableAutoPruneDeletion: checked })}
+                                    />
+                                </div>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-5 space-y-6 text-xs">
+                            {/* Granular Action Switches & Pruning Mode */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="font-semibold text-white flex items-center gap-1.5">
+                                            <TestTube className="h-3.5 w-3.5 text-sky-400" /> Dry-Run Simulation
+                                        </Label>
+                                        <p className="text-[10px] text-slate-400">Stage & preview without deleting</p>
+                                    </div>
+                                    <Switch 
+                                        checked={settings.pruneDryRun ?? true}
+                                        onCheckedChange={checked => setSettings({ ...settings, pruneDryRun: checked })}
+                                    />
+                                </div>
+
+                                <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="font-semibold text-white flex items-center gap-1.5">
+                                            <Layers className="h-3.5 w-3.5 text-amber-400" /> Plex Collection Tag
+                                        </Label>
+                                        <p className="text-[10px] text-slate-400">Add to "⚠️ Leaving Soon" collection</p>
+                                    </div>
+                                    <Switch 
+                                        checked={settings.pruneTagCollection ?? true}
+                                        onCheckedChange={checked => setSettings({ ...settings, pruneTagCollection: checked })}
+                                    />
+                                </div>
+
+                                <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="font-semibold text-white flex items-center gap-1.5">
+                                            <Sparkles className="h-3.5 w-3.5 text-purple-400" /> Warning Overlays
+                                        </Label>
+                                        <p className="text-[10px] text-slate-400">Apply Leaving Soon poster ribbons</p>
+                                    </div>
+                                    <Switch 
+                                        checked={settings.pruneApplyOverlays ?? true}
+                                        onCheckedChange={checked => setSettings({ ...settings, pruneApplyOverlays: checked })}
+                                    />
+                                </div>
+
+                                <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="font-semibold text-white flex items-center gap-1.5">
+                                            <Trash2 className="h-3.5 w-3.5 text-rose-400" /> Radarr / Sonarr / Disk
+                                        </Label>
+                                        <p className="text-[10px] text-slate-400">Unmonitor & delete physical files</p>
+                                    </div>
+                                    <Switch 
+                                        checked={Boolean(settings.pruneDeleteFromArr || settings.pruneDeleteFromDisk)}
+                                        onCheckedChange={checked => setSettings({ 
+                                            ...settings, 
+                                            pruneDeleteFromArr: checked,
+                                            pruneDeleteFromDisk: checked
+                                        })}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Pruning Criteria Parameters */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-950/60 border border-slate-800 rounded-xl">
+                                <div className="space-y-1.5">
+                                    <Label className="text-slate-300">Free Space Trigger Threshold</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input 
+                                            type="number" 
+                                            value={settings.leavingSoonDiskThreshold ?? 15} 
+                                            onChange={e => setSettings({ ...settings, leavingSoonDiskThreshold: parseInt(e.target.value, 10) || 15 })}
+                                            className="bg-slate-800 border-slate-700 text-xs h-8 w-20" 
+                                        />
+                                        <span className="text-slate-400">% free space</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label className="text-slate-300">Advance Notice Grace Period</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input 
+                                            type="number" 
+                                            value={settings.pruneDaysNotice ?? 14} 
+                                            onChange={e => setSettings({ ...settings, pruneDaysNotice: parseInt(e.target.value, 10) || 14 })}
+                                            className="bg-slate-800 border-slate-700 text-xs h-8 w-20" 
+                                        />
+                                        <span className="text-slate-400">days notice</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label className="text-slate-300">Minimum Age in Library</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input 
+                                            type="number" 
+                                            value={settings.pruneMinAgeDays ?? 90} 
+                                            onChange={e => setSettings({ ...settings, pruneMinAgeDays: parseInt(e.target.value, 10) || 90 })}
+                                            className="bg-slate-800 border-slate-700 text-xs h-8 w-20" 
+                                        />
+                                        <span className="text-slate-400">days minimum</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5 flex flex-col justify-center">
+                                    <Label className="text-slate-300">Unwatched / Stale Only</Label>
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <Switch 
+                                            checked={settings.pruneUnwatchedOnly ?? true}
+                                            onCheckedChange={checked => setSettings({ ...settings, pruneUnwatchedOnly: checked })}
+                                        />
+                                        <span className="text-slate-400">{settings.pruneUnwatchedOnly ? "0 plays or >180d unwatched" : "All media"}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons: Run Simulation & Save */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button 
+                                        onClick={() => handleRunPruneSimulation(selectedServerId)}
+                                        disabled={simulatingPrune}
+                                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-9 px-4 gap-2 shadow-lg shadow-purple-950/40"
+                                    >
+                                        {simulatingPrune ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube className="h-4 w-4" />}
+                                        <span>🧪 Run Prune Simulation (Dry Run)</span>
+                                    </Button>
+
+                                    <Button 
+                                        variant="outline"
+                                        onClick={() => handleClearAllLeavingSoon(selectedServerId)}
+                                        disabled={clearingFlags}
+                                        className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-semibold text-xs h-9 gap-1.5"
+                                    >
+                                        {clearingFlags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4 text-emerald-400" />}
+                                        <span>🧹 Clear All Flags & Restore Posters</span>
+                                    </Button>
+                                </div>
+
+                                <Button 
+                                    onClick={async () => {
+                                        await saveCurationSettingsAction(settings);
+                                        alert("Pruning configuration saved successfully!");
+                                    }}
+                                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-9 px-4 gap-1.5"
+                                >
+                                    <Check className="h-4 w-4" /> Save Pruning Settings
+                                </Button>
+                            </div>
+
+                            {clearFlagsMsg && (
+                                <div className="p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-xl text-xs flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                    <span>{clearFlagsMsg}</span>
+                                </div>
+                            )}
+
+                            {pruneExecMessage && (
+                                <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${pruneExecMessage.success ? 'bg-emerald-950/60 border border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border border-rose-800 text-rose-300'}`}>
+                                    {pruneExecMessage.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+                                    <span>{pruneExecMessage.text}</span>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Interactive Simulation Results & Candidate Sandbox */}
+                    {pruneSimResults && (
+                        <Card className="bg-slate-900/70 border-slate-800 shadow-xl">
+                            <CardHeader className="p-4 pb-2 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div>
+                                    <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+                                        <TestTube className="h-4 w-4 text-purple-400" /> Simulation Preview — {pruneSimResults.candidates.length} Prune Candidates
+                                    </CardTitle>
+                                    <CardDescription className="text-xs text-slate-400">
+                                        Evaluated {pruneSimResults.evaluatedCount} items across {pruneSimResults.serversEvaluated?.length || 1} servers. Total Recoverable Capacity: <strong className="text-emerald-400">{pruneSimResults.totalRecoverableGb} GB</strong>
+                                    </CardDescription>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <Button 
+                                        size="sm" 
+                                        disabled={executingPrune || pruneSimResults.candidates.length === 0}
+                                        onClick={() => handleExecutePrune(pruneSimResults.candidates, false)}
+                                        className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs h-8 px-3 gap-1.5"
+                                    >
+                                        {executingPrune ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                                        <span>Stage All ({settings.pruneDaysNotice || 14}-Day Notice)</span>
+                                    </Button>
+
+                                    {settings.enableAutoPruneDeletion && (
+                                        <Button 
+                                            size="sm" 
+                                            disabled={executingPrune || pruneSimResults.candidates.length === 0}
+                                            onClick={() => handleExecutePrune(pruneSimResults.candidates, true)}
+                                            className="bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-lg shadow-rose-950/40"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            <span>⚡ Force Live Delete ({pruneSimResults.candidates.length})</span>
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardHeader>
+
+                            <CardContent className="p-4">
+                                {pruneSimResults.candidates.length === 0 ? (
+                                    <div className="text-center py-10 text-slate-400 text-xs">
+                                        🎉 No candidates found matching pruning criteria! Your library is active and storage is healthy.
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs text-left">
+                                            <thead>
+                                                <tr className="border-b border-slate-800 text-slate-400 text-[11px] uppercase tracking-wider">
+                                                    <th className="py-2.5 px-3">Title & Year</th>
+                                                    <th className="py-2.5 px-3">Server</th>
+                                                    <th className="py-2.5 px-3">Library</th>
+                                                    <th className="py-2.5 px-3 text-right">Size (GB)</th>
+                                                    <th className="py-2.5 px-3">Age in Library</th>
+                                                    <th className="py-2.5 px-3">View History</th>
+                                                    <th className="py-2.5 px-3 text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-800/60">
+                                                {pruneSimResults.candidates.map((cand: any) => (
+                                                    <tr key={`${cand.serverId}-${cand.ratingKey}`} className="hover:bg-slate-800/40 transition-colors">
+                                                        <td className="py-2 px-3 font-semibold text-white">
+                                                            <div className="flex items-center gap-2">
+                                                                <Film className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                                                <span className="truncate max-w-[220px]">{cand.title}</span>
+                                                                {cand.year && <span className="text-slate-500 text-[11px]">({cand.year})</span>}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-2 px-3">
+                                                            <Badge variant="outline" className="text-[10px] border-slate-700 text-slate-300">
+                                                                {cand.serverName || "Server"}
+                                                            </Badge>
+                                                        </td>
+                                                        <td className="py-2 px-3 text-slate-400 text-[11px]">{cand.sectionTitle || cand.sectionKey}</td>
+                                                        <td className="py-2 px-3 text-right font-mono font-bold text-amber-300">{cand.fileSizeGb.toFixed(1)} GB</td>
+                                                        <td className="py-2 px-3 text-slate-400 text-[11px]">{cand.daysOld} days ago</td>
+                                                        <td className="py-2 px-3 text-slate-400 text-[11px]">{cand.reason}</td>
+                                                        <td className="py-2 px-3 text-right">
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                <Button 
+                                                                    size="sm" 
+                                                                    variant="outline"
+                                                                    onClick={() => handleExecutePrune([cand], false)}
+                                                                    className="h-6 px-2 text-[10px] border-amber-500/40 text-amber-300 hover:bg-amber-950/40"
+                                                                >
+                                                                    Stage Notice
+                                                                </Button>
+                                                                {settings.enableAutoPruneDeletion && (
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        variant="ghost"
+                                                                        onClick={() => handleExecutePrune([cand], true)}
+                                                                        className="h-6 px-2 text-[10px] text-rose-400 hover:bg-rose-950/50 hover:text-rose-300"
+                                                                    >
+                                                                        Delete
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Active Leaving Soon Scheduled Queue */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        {/* Storage Threshold & Webhook Guide */}
+                        {/* Webhook & Remote Integration Card */}
                         <div className="lg:col-span-5 space-y-4">
                             <Card className="bg-slate-900/60 border-slate-800">
                                 <CardHeader className="p-4 pb-2">
                                     <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                                        <HardDrive className="h-4 w-4 text-rose-400" /> Array Pruning & Webhook
+                                        <HardDrive className="h-4 w-4 text-rose-400" /> Pruning Webhook & Remote Scripts
                                     </CardTitle>
                                     <CardDescription className="text-xs text-slate-400">
-                                        Integrate Maintainerr, bash cron jobs, or Radarr/Sonarr unmonitor scripts.
+                                        Integrate Maintainerr, bash cron scripts, or remote Unraid array cleanup hooks.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="p-4 space-y-3 text-xs">
                                     <div className="space-y-1">
-                                        <Label className="text-slate-300">Storage Warning Free Space Threshold</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Input 
-                                                type="number" 
-                                                value={settings.leavingSoonDiskThreshold || 15} 
-                                                onChange={e => setSettings({ ...settings, leavingSoonDiskThreshold: parseInt(e.target.value, 10) })}
-                                                className="bg-slate-800 border-slate-700 text-xs h-8 w-24" 
-                                            />
-                                            <span className="text-slate-400">% free space remaining</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1 pt-2">
                                         <Label className="text-slate-300">Leaving Soon Webhook Endpoint</Label>
                                         <div className="flex items-center gap-1.5">
                                             <Input 
@@ -981,7 +1590,7 @@ export default function CurationStudio() {
                                             </Button>
                                         </div>
                                         <p className="text-[10px] text-slate-500">
-                                            Send POST JSON with <code>{`{ "ratingKey": "1234", "daysRemaining": 7, "reason": "Low disk space" }`}</code>
+                                            Send POST JSON with <code>{`{ "ratingKey": "1234", "daysRemaining": 14, "reason": "Low storage" }`}</code>
                                         </p>
                                     </div>
                                 </CardContent>
@@ -994,7 +1603,7 @@ export default function CurationStudio() {
                                 <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
                                     <div>
                                         <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                                            <AlertTriangle className="h-4 w-4 text-amber-400" /> Scheduled for Removal ({leavingSoonItems.length})
+                                            <AlertTriangle className="h-4 w-4 text-amber-400" /> Currently Scheduled for Removal ({leavingSoonItems.length})
                                         </CardTitle>
                                         <CardDescription className="text-xs text-slate-400">
                                             Items tagged with warning ribbons and auto-added to the Leaving Soon Plex collection.

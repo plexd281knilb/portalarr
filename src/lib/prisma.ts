@@ -268,7 +268,21 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["mdblistApiKey", `ALTER TABLE "Settings" ADD COLUMN "mdblistApiKey" TEXT;`],
                 ["autoOverlaySync", `ALTER TABLE "Settings" ADD COLUMN "autoOverlaySync" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["autoCollectionSync", `ALTER TABLE "Settings" ADD COLUMN "autoCollectionSync" BOOLEAN NOT NULL DEFAULT 1;`],
-                ["leavingSoonDiskThreshold", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonDiskThreshold" INTEGER NOT NULL DEFAULT 15;`]
+                ["leavingSoonDiskThreshold", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonDiskThreshold" INTEGER NOT NULL DEFAULT 15;`],
+                ["enableAutoPruneDeletion", `ALTER TABLE "Settings" ADD COLUMN "enableAutoPruneDeletion" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["pruneDryRun", `ALTER TABLE "Settings" ADD COLUMN "pruneDryRun" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["pruneTagCollection", `ALTER TABLE "Settings" ADD COLUMN "pruneTagCollection" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["pruneApplyOverlays", `ALTER TABLE "Settings" ADD COLUMN "pruneApplyOverlays" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["pruneDeleteFromArr", `ALTER TABLE "Settings" ADD COLUMN "pruneDeleteFromArr" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["pruneDeleteFromDisk", `ALTER TABLE "Settings" ADD COLUMN "pruneDeleteFromDisk" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["pruneDaysNotice", `ALTER TABLE "Settings" ADD COLUMN "pruneDaysNotice" INTEGER NOT NULL DEFAULT 14;`],
+                ["pruneMinAgeDays", `ALTER TABLE "Settings" ADD COLUMN "pruneMinAgeDays" INTEGER NOT NULL DEFAULT 90;`],
+                ["pruneUnwatchedOnly", `ALTER TABLE "Settings" ADD COLUMN "pruneUnwatchedOnly" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["enabledServersForOverlays", `ALTER TABLE "Settings" ADD COLUMN "enabledServersForOverlays" TEXT;`],
+                ["enabledServersForCollections", `ALTER TABLE "Settings" ADD COLUMN "enabledServersForCollections" TEXT;`],
+                ["enabledServersForPruning", `ALTER TABLE "Settings" ADD COLUMN "enabledServersForPruning" TEXT;`],
+                ["comingSoonShares", `ALTER TABLE "Settings" ADD COLUMN "comingSoonShares" TEXT;`],
+                ["serverStorageConfig", `ALTER TABLE "Settings" ADD COLUMN "serverStorageConfig" TEXT;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
