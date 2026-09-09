@@ -968,9 +968,32 @@ export default function AccessSettingsPage() {
                                         const isPending = user.status === "PENDING";
                                         const isRejected = user.status === "REJECTED";
                                         const daysLeft = isTrial ? getDaysLeft(user.trialEndsAt) : null;
-                                        const userLibraryCount = user.plexLibrarySectionIds 
-                                            ? user.plexLibrarySectionIds.split(",").filter(Boolean).length 
-                                            : 0;
+                                        const userLibraryCount = (() => {
+                                            if (!user.plexLibrarySectionIds) return 0;
+                                            const rawKeys = user.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            if (rawKeys.length === 0) return 0;
+                                            if (serverLibraries && serverLibraries.length > 0) {
+                                                let count = 0;
+                                                for (const srv of serverLibraries) {
+                                                    for (const sec of srv.sections || []) {
+                                                        const fullKey = `${srv.serverId}:${sec.id}`;
+                                                        const altFullKey = sec.key ? `${srv.serverId}:${sec.key}` : null;
+                                                        const rawKey = String(sec.id);
+                                                        const altRawKey = sec.key ? String(sec.key) : null;
+                                                        if (
+                                                            rawKeys.includes(fullKey) || 
+                                                            (altFullKey && rawKeys.includes(altFullKey)) || 
+                                                            rawKeys.includes(rawKey) || 
+                                                            (altRawKey && rawKeys.includes(altRawKey))
+                                                        ) {
+                                                            count++;
+                                                        }
+                                                    }
+                                                }
+                                                return count;
+                                            }
+                                            return new Set(rawKeys.map((k: string) => k.split(":").pop())).size;
+                                        })();
 
                                         return (
                                             <div 
@@ -1850,7 +1873,7 @@ export default function AccessSettingsPage() {
                                                                     </div>
                                                                 </div>
                                                                 <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0 ml-1 text-muted-foreground">
-                                                                    #{sec.id}
+                                                                    #{sec.key || sec.id}
                                                                 </Badge>
                                                             </div>
                                                         );

@@ -18,7 +18,8 @@ import {
     updatePlexUserShareSections,
     removePlexUserShare,
     matchesPlexUser,
-    findPlexUserFriend
+    findPlexUserFriend,
+    getPlexCloudServersMap
 } from "@/lib/plex";
 import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
@@ -1770,7 +1771,7 @@ export async function updateUserPlexLibraries(
             for (const srv of servers) {
                 const srvId = srv.clientIdentifier;
                 const match = shares.find(s => 
-                    (s.serverId === srvId || !s.serverId || servers.length === 1) &&
+                    ((s.serverId && srvId && s.serverId.toLowerCase() === srvId.toLowerCase()) || !s.serverId || servers.length === 1) &&
                     matchesPlexUser(matchTarget, s)
                 );
                 if (match && match.id) {
@@ -1808,7 +1809,7 @@ export async function updateUserPlexLibraries(
 
             // Find matching share for this user on this server
             const match = shares.find(s => 
-                (s.serverId === srvId || !s.serverId || servers.length === 1) &&
+                ((s.serverId && srvId && s.serverId.toLowerCase() === srvId.toLowerCase()) || !s.serverId || servers.length === 1) &&
                 matchesPlexUser(matchTarget, s)
             );
 
@@ -1959,7 +1960,15 @@ export async function setUserTrialOrSubscription(
                 if (status === "SUSPENDED" || status === "EXPIRED") {
                     logger.addLog("INFO", "PLEX", `[SUSPEND-PLEX-SYNC] Revoking Plex shares for suspended user "${user.username}" across ${servers.length} servers`);
                     // Revoke Plex shares across all servers
-                    const matchedShares = shares.filter(s => matchesPlexUser(user, s));
+                    const friend = await findPlexUserFriend(adminToken, user);
+                    const matchTarget = {
+                        id: friend?.id,
+                        email: friend?.email || targetEmail,
+                        username: friend?.username || targetUser,
+                        plexEmail: user.plexEmail,
+                        plexUsername: user.plexUsername
+                    };
+                    const matchedShares = shares.filter(s => matchesPlexUser(matchTarget, s));
                     for (const share of matchedShares) {
                         const srvId = share.serverId || servers[0]?.clientIdentifier;
                         if (share.id) {
@@ -1991,7 +2000,11 @@ export async function setUserTrialOrSubscription(
                     }
                 } else if (status === "APPROVED" || status === "TRIAL") {
                     // Restore Plex shares with configured library sections
-                    const rawKeys = (user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    let rawKeys = (user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    if (rawKeys.length === 0) {
+                        const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                        rawKeys = srvSections.flatMap(srv => (srv.sections || []).map(sec => `${srv.serverId}:${sec.id}`));
+                    }
                     logger.addLog("INFO", "PLEX", `[SET-TRIAL-PLEX-SYNC] Restoring/Granting libraries for "${user.username}" across ${servers.length} servers`, `Library Keys: ${rawKeys.join(",") || 'none'}`);
                     const serverSectionsMap = new Map<string, number[]>();
 
@@ -2028,11 +2041,24 @@ export async function setUserTrialOrSubscription(
 
                     for (const srv of servers) {
                         const srvId = srv.clientIdentifier;
-                        const secIds = serverSectionsMap.get(srvId) || [];
+                        let secIds = serverSectionsMap.get(srvId) || [];
+                        if (secIds.length === 0) {
+                            for (const [mapKey, secList] of serverSectionsMap.entries()) {
+                                if (mapKey.toLowerCase() === srvId.toLowerCase() || 
+                                    srvId.toLowerCase().includes(mapKey.toLowerCase()) || 
+                                    mapKey.toLowerCase().includes(srvId.toLowerCase())) {
+                                    secIds = secList;
+                                    break;
+                                }
+                            }
+                        }
+                        if (secIds.length === 0 && servers.length === 1 && serverSectionsMap.size > 0) {
+                            secIds = Array.from(serverSectionsMap.values()).flat();
+                        }
                         if (secIds.length === 0) continue;
 
                         const match = shares.find(s => 
-                            (s.serverId === srvId || !s.serverId || servers.length === 1) &&
+                            ((s.serverId && srvId && s.serverId.toLowerCase() === srvId.toLowerCase()) || !s.serverId || servers.length === 1) &&
                             matchesPlexUser(matchTarget, s)
                         );
 
@@ -10644,6 +10670,18 @@ export async function runPlexDiagnosticsAction() {
             });
         } catch (secErr: any) {
             logger.addLog("ERROR", "PLEX", `❌ Error evaluating server library sections: ${secErr.message}`);
+        }
+
+        // 4b. Canonical Cloud Server & Section Map (authoritative for Plex sharing)
+        try {
+            const cloudMap = await getPlexCloudServersMap(adminToken, true);
+            logger.addLog("INFO", "PLEX", `🗺️ Canonical Cloud Server & Section Map (${cloudMap.size} servers discovered):`);
+            cloudMap.forEach(s => {
+                const sStr = (s.sections || []).map(sec => `"${sec.title}" (CloudID: ${sec.id}, Key: ${sec.key})`).join(", ");
+                logger.addLog("INFO", "PLEX", `  - [${s.serverName}] ServerId: "${s.serverId}": ${s.sections?.length || 0} Cloud Sections`, `Sections: ${sStr || 'None'}`);
+            });
+        } catch (cmErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Error building canonical cloud server map: ${cmErr.message}`);
         }
 
         // 5. Inspect Plex Friends
