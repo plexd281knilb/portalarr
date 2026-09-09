@@ -13,15 +13,44 @@ async function verifySuperUserOrAdmin() {
     return session;
 }
 
+function getCleanArrBase(rawUrl: string): string {
+    let clean = (rawUrl || "").trim().replace(/\/+$/, "");
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
+    }
+    return clean.replace(/\/api(\/v?[123])?$/, "");
+}
+
+function resolveArrEndpoint(rawUrl: string, endpoint: string): string {
+    const base = getCleanArrBase(rawUrl);
+    const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    return `${base}${cleanEndpoint}`;
+}
+
 export async function testArrConfig(url: string, apiKey: string) {
     try {
         await verifySuperUserOrAdmin();
-        const cleanUrl = url.replace(/\/+$/, "");
-        const profilesRes = await fetch(`${cleanUrl}/api/v3/qualityprofile`, { headers: { "X-Api-Key": apiKey }, cache: "no-store" });
-        const foldersRes = await fetch(`${cleanUrl}/api/v3/rootfolder`, { headers: { "X-Api-Key": apiKey }, cache: "no-store" });
+        const base = getCleanArrBase(url);
+        const cleanKey = (apiKey || "").trim();
+
+        const headers = { 
+            "X-Api-Key": cleanKey,
+            "Accept": "application/json"
+        };
+
+        // Try v3 first (Radarr, Sonarr), then v1 (Readarr, Lidarr)
+        let profilesRes = await fetch(`${base}/api/v3/qualityprofile?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store" });
+        if (profilesRes.status === 404) {
+            profilesRes = await fetch(`${base}/api/v1/qualityprofile?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store" });
+        }
+
+        let foldersRes = await fetch(`${base}/api/v3/rootfolder?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store" });
+        if (foldersRes.status === 404) {
+            foldersRes = await fetch(`${base}/api/v1/rootfolder?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store" });
+        }
         
-        if (!profilesRes.ok) throw new Error(`Profiles API failed: ${profilesRes.statusText}`);
-        if (!foldersRes.ok) throw new Error(`Folders API failed: ${foldersRes.statusText}`);
+        if (!profilesRes.ok) throw new Error(`Profiles API failed: HTTP ${profilesRes.status} ${profilesRes.statusText}`);
+        if (!foldersRes.ok) throw new Error(`Folders API failed: HTTP ${foldersRes.status} ${foldersRes.statusText}`);
         
         const profilesText = await profilesRes.text();
         const foldersText = await foldersRes.text();
@@ -65,9 +94,12 @@ export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
 
 export async function arrApiGet(app: any, endpoint: string) {
     try {
-        const cleanUrl = app.url.replace(/\/+$/, "");
-        const res = await fetch(`${cleanUrl}${endpoint}`, {
-            headers: { "X-Api-Key": app.apiKey },
+        const targetUrl = resolveArrEndpoint(app.url, endpoint);
+        const res = await fetch(targetUrl, {
+            headers: { 
+                "X-Api-Key": app.apiKey,
+                "Accept": "application/json"
+            },
             cache: "no-store"
         });
         const text = await res.text();
@@ -94,12 +126,13 @@ export async function arrApiGet(app: any, endpoint: string) {
 
 export async function arrApiPost(app: any, endpoint: string, body: any) {
     try {
-        const cleanUrl = app.url.replace(/\/+$/, "");
-        const res = await fetch(`${cleanUrl}${endpoint}`, {
+        const targetUrl = resolveArrEndpoint(app.url, endpoint);
+        const res = await fetch(targetUrl, {
             method: "POST",
             headers: { 
                 "X-Api-Key": app.apiKey,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             },
             body: JSON.stringify(body),
             cache: "no-store"
@@ -128,12 +161,13 @@ export async function arrApiPost(app: any, endpoint: string, body: any) {
 
 export async function arrApiPut(app: any, endpoint: string, body: any) {
     try {
-        const cleanUrl = app.url.replace(/\/+$/, "");
-        const res = await fetch(`${cleanUrl}${endpoint}`, {
+        const targetUrl = resolveArrEndpoint(app.url, endpoint);
+        const res = await fetch(targetUrl, {
             method: "PUT",
             headers: { 
                 "X-Api-Key": app.apiKey,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             },
             body: JSON.stringify(body),
             cache: "no-store"
