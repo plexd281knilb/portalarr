@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, Suspense } from "react";
+import { useState, useEffect, useTransition, Suspense, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
@@ -32,8 +32,16 @@ import {
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
     Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
-    Bell, BellOff, UserCheck, BookOpen, LifeBuoy
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw
 } from "lucide-react";
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogDescription, 
+    DialogFooter 
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
@@ -157,10 +165,167 @@ function SettingsPageContent() {
     const [testingCurationKeys, setTestingCurationKeys] = useState(false);
     const [curationSavedMsg, setCurationSavedMsg] = useState("");
 
-    // Path Validation State
+    // Controlled Form State Variables for Unsaved Tracking
+    const [alertBannerText, setAlertBannerText] = useState("");
+    const [smtpHostInput, setSmtpHostInput] = useState("");
+    const [smtpPortInput, setSmtpPortInput] = useState("");
+    const [smtpUserInput, setSmtpUserInput] = useState("");
+    const [smtpPassInput, setSmtpPassInput] = useState("");
+    const [smtpFromInput, setSmtpFromInput] = useState("");
+    const [mainPlexTokenInput, setMainPlexTokenInput] = useState("");
+    const [autoSyncIntervalInput, setAutoSyncIntervalInput] = useState<number | string>(5);
+    const [inputDownloadsPath, setInputDownloadsPath] = useState("/downloads");
     const [validatingPath, setValidatingPath] = useState(false);
     const [pathResult, setPathResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
-    const [inputDownloadsPath, setInputDownloadsPath] = useState("");
+    const [googleBooksKey, setGoogleBooksKey] = useState<string>("");
+    const [aiSettings, setAiSettings] = useState<any>({
+        aiProvider: "default",
+        aiApiKey: "",
+        aiModel: "gemini-1.5-flash",
+        aiAutoResolve: true
+    });
+    const [aiProviderSelect, setAiProviderSelect] = useState("default");
+    const [aiModelInput, setAiModelInput] = useState("gemini-1.5-flash");
+    const [aiAutoResolveSwitch, setAiAutoResolveSwitch] = useState(true);
+    const [aiApiKeyInput, setAiApiKeyInput] = useState("");
+    const [showAiKey, setShowAiKey] = useState(false);
+    const [showPlexKey, setShowPlexKey] = useState(false);
+    const [showSmtpKey, setShowSmtpKey] = useState(false);
+    const [showGoogleBooksKey, setShowGoogleBooksKey] = useState(false);
+    const [showTautulliKey, setShowTautulliKey] = useState(false);
+    const [showMediaAppKey, setShowMediaAppKey] = useState(false);
+    const [testAiLoading, setTestAiLoading] = useState(false);
+    const [testAiResult, setTestAiResult] = useState<any>(null);
+    const [testAiErr, setTestAiErr] = useState("");
+    const [saveAiMsg, setSaveAiMsg] = useState("");
+
+    // Baseline snapshot for tracking unsaved changes
+    const initialDataRef = useRef<{
+        alertBannerEnabled: boolean;
+        alertBannerText: string;
+        smtpHost: string;
+        smtpPort: string;
+        smtpUser: string;
+        smtpPass: string;
+        smtpFrom: string;
+        mainPlexToken: string;
+        autoSyncInterval: number | string;
+        downloadsPath: string;
+        googleBooksKey: string;
+        tmdbKey: string;
+        traktKey: string;
+        mdblistKey: string;
+        aiProvider: string;
+        aiModel: string;
+        aiAutoResolve: boolean;
+        aiApiKey: string;
+        roadmapText: string;
+        betaText: string;
+    } | null>(null);
+
+    const [isSavingAll, setIsSavingAll] = useState(false);
+    const [saveAllSuccessMsg, setSaveAllSuccessMsg] = useState("");
+    const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+    const [pendingNavigation, setPendingNavigation] = useState<{ type: 'tab' | 'url'; target: string } | null>(null);
+
+    // Compute dirty state for each card/section
+    const isAlertBannerDirty = initialDataRef.current ? (
+        bannerEnabled !== initialDataRef.current.alertBannerEnabled ||
+        alertBannerText !== initialDataRef.current.alertBannerText
+    ) : false;
+
+    const isSmtpDirty = initialDataRef.current ? (
+        smtpHostInput !== initialDataRef.current.smtpHost ||
+        String(smtpPortInput) !== String(initialDataRef.current.smtpPort) ||
+        smtpUserInput !== initialDataRef.current.smtpUser ||
+        smtpPassInput !== initialDataRef.current.smtpPass ||
+        smtpFromInput !== initialDataRef.current.smtpFrom ||
+        mainPlexTokenInput !== initialDataRef.current.mainPlexToken
+    ) : false;
+
+    const isAutomationDirty = initialDataRef.current ? (
+        String(autoSyncIntervalInput) !== String(initialDataRef.current.autoSyncInterval) ||
+        inputDownloadsPath !== initialDataRef.current.downloadsPath
+    ) : false;
+
+    const isGoogleBooksDirty = initialDataRef.current ? (
+        googleBooksKey !== initialDataRef.current.googleBooksKey
+    ) : false;
+
+    const isCurationDirty = initialDataRef.current ? (
+        tmdbKey !== initialDataRef.current.tmdbKey ||
+        traktKey !== initialDataRef.current.traktKey ||
+        mdblistKey !== initialDataRef.current.mdblistKey
+    ) : false;
+
+    const isAiDirty = initialDataRef.current ? (
+        aiProviderSelect !== initialDataRef.current.aiProvider ||
+        aiModelInput !== initialDataRef.current.aiModel ||
+        aiAutoResolveSwitch !== initialDataRef.current.aiAutoResolve ||
+        aiApiKeyInput !== initialDataRef.current.aiApiKey
+    ) : false;
+
+    const isRoadmapDirty = initialDataRef.current ? (
+        roadmapText !== initialDataRef.current.roadmapText
+    ) : false;
+
+    const isBetaDirty = initialDataRef.current ? (
+        betaText !== initialDataRef.current.betaText
+    ) : false;
+
+    const unsavedSections: string[] = [];
+    if (isAlertBannerDirty) unsavedSections.push("System Alert Banner");
+    if (isSmtpDirty) unsavedSections.push("Global SMTP & Plex Token");
+    if (isAutomationDirty) unsavedSections.push("Automation & Directory Paths");
+    if (isGoogleBooksDirty) unsavedSections.push("Google Books API Key");
+    if (isCurationDirty) unsavedSections.push("Curation & Discovery API Keys");
+    if (isAiDirty) unsavedSections.push("AI Metadata Agent");
+    if (isRoadmapDirty) unsavedSections.push("Roadmap Text");
+    if (isBetaDirty) unsavedSections.push("Beta Dashboard Intro");
+
+    const hasUnsavedChanges = unsavedSections.length > 0;
+    const isGeneralTabDirty = isAlertBannerDirty || isSmtpDirty || isAutomationDirty || isGoogleBooksDirty || isCurationDirty || isAiDirty;
+    const isBetaTabDirty = isRoadmapDirty || isBetaDirty;
+
+    // Browser-level reload/close protection
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = "";
+                return "";
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasUnsavedChanges]);
+
+    // In-app navigation protection for link clicks
+    useEffect(() => {
+        const handleLinkClick = (e: MouseEvent) => {
+            if (!hasUnsavedChanges) return;
+
+            const target = e.target as HTMLElement;
+            const anchor = target.closest("a");
+            if (!anchor) return;
+
+            const href = anchor.getAttribute("href");
+            if (!href || href.startsWith("#") || href.startsWith("javascript:") || anchor.target === "_blank") {
+                return;
+            }
+
+            const currentUrl = window.location.pathname + window.location.search;
+            if (href === currentUrl) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            setPendingNavigation({ type: "url", target: href });
+            setLeaveModalOpen(true);
+        };
+
+        document.addEventListener("click", handleLinkClick, true);
+        return () => document.removeEventListener("click", handleLinkClick, true);
+    }, [hasUnsavedChanges]);
 
     const handleTestSmtp = async () => {
         setTestEmailLoading(true);
@@ -331,28 +496,6 @@ function SettingsPageContent() {
             setPermTesting(false);
         }
     };
-
-    // AI Agent States
-    const [googleBooksKey, setGoogleBooksKey] = useState<string>("");
-    const [aiSettings, setAiSettings] = useState<any>({
-        aiProvider: "default",
-        aiApiKey: "",
-        aiModel: "gemini-1.5-flash",
-        aiAutoResolve: true
-    });
-    const [aiProviderSelect, setAiProviderSelect] = useState("default");
-    const [aiModelInput, setAiModelInput] = useState("gemini-1.5-flash");
-    const [aiAutoResolveSwitch, setAiAutoResolveSwitch] = useState(true);
-    const [showAiKey, setShowAiKey] = useState(false);
-    const [showPlexKey, setShowPlexKey] = useState(false);
-    const [showSmtpKey, setShowSmtpKey] = useState(false);
-    const [showGoogleBooksKey, setShowGoogleBooksKey] = useState(false);
-    const [showTautulliKey, setShowTautulliKey] = useState(false);
-    const [showMediaAppKey, setShowMediaAppKey] = useState(false);
-    const [testAiLoading, setTestAiLoading] = useState(false);
-    const [testAiResult, setTestAiResult] = useState<any>(null);
-    const [testAiErr, setTestAiErr] = useState("");
-    const [saveAiMsg, setSaveAiMsg] = useState("");
 
     // Plex Admin Token Linking States
     const [isLinkingPlex, setIsLinkingPlex] = useState(false);
@@ -545,11 +688,39 @@ function SettingsPageContent() {
             ]);
             setUsers(u || []);
             setSystemSettings(s || {});
-            setInputDownloadsPath(s?.downloadsPath || "/downloads");
-            setGoogleBooksKey(s?.googleBooksApiKey || "");
-            setTmdbKey(s?.tmdbApiKey || "");
-            setTraktKey(s?.traktClientId || "");
-            setMdblistKey(s?.mdblistApiKey || "");
+            
+            const bannerTextVal = ab?.text || "";
+            const bannerEnabledVal = ab?.enabled || false;
+            setAlertBanner(ab || { enabled: false, text: "" });
+            setBannerEnabled(bannerEnabledVal);
+            setAlertBannerText(bannerTextVal);
+
+            const smtpHostVal = s?.smtpHost || "";
+            const smtpPortVal = s?.smtpPort ? String(s.smtpPort) : "";
+            const smtpUserVal = s?.smtpUser || "";
+            const smtpPassVal = s?.smtpPass || "";
+            const smtpFromVal = s?.smtpFrom || "";
+            const mainPlexTokenVal = s?.mainPlexToken || "";
+            const autoSyncIntervalVal = s?.autoSyncInterval ?? 5;
+            const downloadsPathVal = s?.downloadsPath || "/downloads";
+            const googleBooksKeyVal = s?.googleBooksApiKey || "";
+            const tmdbKeyVal = s?.tmdbApiKey || "";
+            const traktKeyVal = s?.traktClientId || "";
+            const mdblistKeyVal = s?.mdblistApiKey || "";
+
+            setSmtpHostInput(smtpHostVal);
+            setSmtpPortInput(smtpPortVal);
+            setSmtpUserInput(smtpUserVal);
+            setSmtpPassInput(smtpPassVal);
+            setSmtpFromInput(smtpFromVal);
+            setMainPlexTokenInput(mainPlexTokenVal);
+            setAutoSyncIntervalInput(autoSyncIntervalVal);
+            setInputDownloadsPath(downloadsPathVal);
+            setGoogleBooksKey(googleBooksKeyVal);
+            setTmdbKey(tmdbKeyVal);
+            setTraktKey(traktKeyVal);
+            setMdblistKey(mdblistKeyVal);
+
             if (s) {
                 setEmailSettings({
                     emailNotificationsEnabled: s.emailNotificationsEnabled ?? true,
@@ -564,19 +735,53 @@ function SettingsPageContent() {
             setTautulli(t || []);
             setGlances(g || []);
             setMediaApps(m || []);
-            setBetaText(bt || "");
+
+            const roadmapTextVal = rt || "";
+            const betaTextVal = bt || "";
+            setBetaText(betaTextVal);
             setBetaCards(bc || []);
-            setRoadmapText(rt || "");
-            
-            setAlertBanner(ab || {enabled: false, text: ""});
-            setBannerEnabled(ab?.enabled || false);
+            setRoadmapText(roadmapTextVal);
+
+            const aiProviderVal = ai?.aiProvider || "default";
+            const aiModelVal = ai?.aiModel || "gemini-2.5-flash";
+            const aiAutoResolveVal = ai?.aiAutoResolve ?? true;
+            const aiApiKeyVal = ai?.aiApiKey || "";
 
             if (ai) {
                 setAiSettings(ai);
-                setAiProviderSelect(ai.aiProvider || "default");
-                setAiModelInput(ai.aiModel || "gemini-2.5-flash");
-                setAiAutoResolveSwitch(ai.aiAutoResolve ?? true);
+                setAiProviderSelect(aiProviderVal);
+                setAiModelInput(aiModelVal);
+                setAiAutoResolveSwitch(aiAutoResolveVal);
+                setAiApiKeyInput(aiApiKeyVal);
+            } else {
+                setAiProviderSelect("default");
+                setAiModelInput("gemini-2.5-flash");
+                setAiAutoResolveSwitch(true);
+                setAiApiKeyInput("");
             }
+
+            initialDataRef.current = {
+                alertBannerEnabled: bannerEnabledVal,
+                alertBannerText: bannerTextVal,
+                smtpHost: smtpHostVal,
+                smtpPort: smtpPortVal,
+                smtpUser: smtpUserVal,
+                smtpPass: smtpPassVal,
+                smtpFrom: smtpFromVal,
+                mainPlexToken: mainPlexTokenVal,
+                autoSyncInterval: autoSyncIntervalVal,
+                downloadsPath: downloadsPathVal,
+                googleBooksKey: googleBooksKeyVal,
+                tmdbKey: tmdbKeyVal,
+                traktKey: traktKeyVal,
+                mdblistKey: mdblistKeyVal,
+                aiProvider: aiProviderVal,
+                aiModel: aiModelVal,
+                aiAutoResolve: aiAutoResolveVal,
+                aiApiKey: aiApiKeyVal,
+                roadmapText: roadmapTextVal,
+                betaText: betaTextVal,
+            };
         } catch (error) {
             console.error("Failed to load settings data:", error);
         } finally {
@@ -588,6 +793,11 @@ function SettingsPageContent() {
     useEffect(() => { loadAllData(); }, []);
 
     const handleTabChange = (value: string) => {
+        if (hasUnsavedChanges && value !== activeTab) {
+            setPendingNavigation({ type: "tab", target: value });
+            setLeaveModalOpen(true);
+            return;
+        }
         setActiveTab(value);
         localStorage.setItem("settings-active-tab", value);
         startTransition(() => {
@@ -595,6 +805,147 @@ function SettingsPageContent() {
             params.set("tab", value);
             router.push(`${pathname}?${params.toString()}`);
         });
+    };
+
+    const handleSaveAllDirty = async () => {
+        setIsSavingAll(true);
+        setSaveAllSuccessMsg("");
+        try {
+            const promises: Promise<any>[] = [];
+
+            if (isAlertBannerDirty) {
+                const formData = new FormData();
+                formData.append("enabled", bannerEnabled ? "on" : "off");
+                formData.append("text", alertBannerText);
+                promises.push(updateAlertBanner(formData));
+            }
+
+            if (isSmtpDirty) {
+                const formData = new FormData();
+                formData.append("smtpHost", smtpHostInput);
+                formData.append("smtpPort", String(smtpPortInput));
+                formData.append("smtpUser", smtpUserInput);
+                formData.append("smtpPass", smtpPassInput);
+                formData.append("smtpFrom", smtpFromInput);
+                formData.append("mainPlexToken", mainPlexTokenInput);
+                promises.push(saveSettings(formData));
+            }
+
+            if (isAutomationDirty || isGoogleBooksDirty) {
+                const formData = new FormData();
+                formData.append("autoSyncInterval", String(autoSyncIntervalInput));
+                formData.append("downloadsPath", inputDownloadsPath);
+                formData.append("googleBooksApiKey", googleBooksKey);
+                promises.push(saveJobSettings(formData));
+            }
+
+            if (isCurationDirty) {
+                const { saveCurationSettingsAction } = await import("@/app/curation-actions");
+                promises.push(saveCurationSettingsAction({
+                    tmdbApiKey: tmdbKey,
+                    traktClientId: traktKey,
+                    mdblistApiKey: mdblistKey
+                }));
+            }
+
+            if (isAiDirty) {
+                const formData = new FormData();
+                formData.append("aiProvider", aiProviderSelect);
+                formData.append("aiModel", aiModelInput);
+                formData.append("aiAutoResolve", aiAutoResolveSwitch ? "true" : "false");
+                formData.append("aiApiKey", aiApiKeyInput);
+                promises.push(saveAiAgentSettings(formData));
+            }
+
+            if (isRoadmapDirty) {
+                const formData = new FormData();
+                formData.append("text", roadmapText);
+                promises.push(updateRoadmapText(formData));
+            }
+
+            if (isBetaDirty) {
+                const formData = new FormData();
+                formData.append("text", betaText);
+                promises.push(updateBetaDashboardText(formData));
+            }
+
+            await Promise.all(promises);
+            setSaveAllSuccessMsg("All changes saved successfully!");
+            setTimeout(() => setSaveAllSuccessMsg(""), 4000);
+            await loadAllData();
+            return true;
+        } catch (e: any) {
+            console.error("Failed to save all settings:", e);
+            alert("Failed to save some settings: " + (e.message || "Unknown error"));
+            return false;
+        } finally {
+            setIsSavingAll(false);
+        }
+    };
+
+    const handleDiscardAllDirty = () => {
+        if (!initialDataRef.current) return;
+        const init = initialDataRef.current;
+        setBannerEnabled(init.alertBannerEnabled);
+        setAlertBannerText(init.alertBannerText);
+        setSmtpHostInput(init.smtpHost);
+        setSmtpPortInput(init.smtpPort);
+        setSmtpUserInput(init.smtpUser);
+        setSmtpPassInput(init.smtpPass);
+        setSmtpFromInput(init.smtpFrom);
+        setMainPlexTokenInput(init.mainPlexToken);
+        setAutoSyncIntervalInput(init.autoSyncInterval);
+        setInputDownloadsPath(init.downloadsPath);
+        setGoogleBooksKey(init.googleBooksKey);
+        setTmdbKey(init.tmdbKey);
+        setTraktKey(init.traktKey);
+        setMdblistKey(init.mdblistKey);
+        setAiProviderSelect(init.aiProvider);
+        setAiModelInput(init.aiModel);
+        setAiAutoResolveSwitch(init.aiAutoResolve);
+        setAiApiKeyInput(init.aiApiKey);
+        setRoadmapText(init.roadmapText);
+        setBetaText(init.betaText);
+    };
+
+    const handleConfirmDiscardAndLeave = () => {
+        handleDiscardAllDirty();
+        setLeaveModalOpen(false);
+        if (pendingNavigation) {
+            if (pendingNavigation.type === "tab") {
+                setActiveTab(pendingNavigation.target);
+                localStorage.setItem("settings-active-tab", pendingNavigation.target);
+                startTransition(() => {
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set("tab", pendingNavigation.target);
+                    router.push(`${pathname}?${params.toString()}`);
+                });
+            } else if (pendingNavigation.type === "url") {
+                router.push(pendingNavigation.target);
+            }
+            setPendingNavigation(null);
+        }
+    };
+
+    const handleConfirmSaveAndLeave = async () => {
+        const success = await handleSaveAllDirty();
+        if (success) {
+            setLeaveModalOpen(false);
+            if (pendingNavigation) {
+                if (pendingNavigation.type === "tab") {
+                    setActiveTab(pendingNavigation.target);
+                    localStorage.setItem("settings-active-tab", pendingNavigation.target);
+                    startTransition(() => {
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set("tab", pendingNavigation.target);
+                        router.push(`${pathname}?${params.toString()}`);
+                    });
+                } else if (pendingNavigation.type === "url") {
+                    router.push(pendingNavigation.target);
+                }
+                setPendingNavigation(null);
+            }
+        }
     };
 
     const handleForm = async (e: React.FormEvent, action: Function) => {
@@ -660,6 +1011,12 @@ function SettingsPageContent() {
                     <TabsTrigger value="general" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80">
                         <Sliders className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>General & Setup</span>
+                        {isGeneralTabDirty && (
+                            <span className="ml-1 flex h-2 w-2 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                        )}
                     </TabsTrigger>
                     <TabsTrigger value="access" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
                         <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
@@ -676,6 +1033,12 @@ function SettingsPageContent() {
                     <TabsTrigger value="beta" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
                         <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Beta & Announcements</span>
+                        {isBetaTabDirty && (
+                            <span className="ml-1 flex h-2 w-2 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                        )}
                     </TabsTrigger>
                     <TabsTrigger value="logs" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
                         <Terminal className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
@@ -693,12 +1056,25 @@ function SettingsPageContent() {
                 <TabsContent value="general" className="space-y-6">
                     
                     {/* ALERT BANNER CARD */}
-                    <Card className="border-orange-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg shadow-orange-950/20">
+                    <Card className={`bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                        isAlertBannerDirty 
+                            ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                            : "border-orange-500/40 shadow-orange-950/20"
+                    }`}>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-orange-500">
-                                <AlertTriangle className="h-5 w-5"/> System Alert Banner
-                            </CardTitle>
-                            <CardDescription>Display a warning or maintenance notification banner at the top of the main dashboard.</CardDescription>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2 text-orange-500">
+                                        <AlertTriangle className="h-5 w-5"/> System Alert Banner
+                                    </CardTitle>
+                                    <CardDescription>Display a warning or maintenance notification banner at the top of the main dashboard.</CardDescription>
+                                </div>
+                                {isAlertBannerDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(e) => handleForm(e, updateAlertBanner)} className="space-y-4">
@@ -714,7 +1090,8 @@ function SettingsPageContent() {
                                 <div className="space-y-2">
                                     <Input 
                                         name="text" 
-                                        defaultValue={alertBanner.text} 
+                                        value={alertBannerText}
+                                        onChange={(e) => setAlertBannerText(e.target.value)}
                                         placeholder="⚠️ **Maintenance Notice:** Server maintenance scheduled for 2:00 AM EST..." 
                                     />
                                 </div>
@@ -727,7 +1104,9 @@ function SettingsPageContent() {
 
                     <div className="grid gap-6 md:grid-cols-2">
                         {/* SMTP & EMAIL INTEGRATION */}
-                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                            isSmtpDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                        }`}>
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <div>
@@ -737,6 +1116,11 @@ function SettingsPageContent() {
                                         <CardDescription>Configure outbound SMTP server for Send-to-Kindle delivery & admin notifications.</CardDescription>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-1.5">
+                                        {isSmtpDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
                                         {systemSettings?.smtpHost ? (
                                             <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
                                                 <CheckCircle2 className="h-3 w-3" /> SMTP Configured
@@ -772,13 +1156,43 @@ function SettingsPageContent() {
                                     )}
 
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2"><Label>SMTP Host</Label><Input name="smtpHost" defaultValue={systemSettings.smtpHost || ""} placeholder="smtp.gmail.com" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/></div>
-                                        <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort || ""} placeholder="587" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/></div>
+                                        <div className="space-y-2">
+                                            <Label>SMTP Host</Label>
+                                            <Input 
+                                                name="smtpHost" 
+                                                value={smtpHostInput} 
+                                                onChange={(e) => setSmtpHostInput(e.target.value)} 
+                                                placeholder="smtp.gmail.com" 
+                                                autoComplete="off" 
+                                                data-1p-ignore="true" 
+                                                data-lpignore="true"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Port</Label>
+                                            <Input 
+                                                name="smtpPort" 
+                                                value={smtpPortInput} 
+                                                onChange={(e) => setSmtpPortInput(e.target.value)} 
+                                                placeholder="587" 
+                                                autoComplete="off" 
+                                                data-1p-ignore="true" 
+                                                data-lpignore="true"
+                                            />
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label>User / Email</Label>
-                                            <Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/>
+                                            <Input 
+                                                name="smtpUser" 
+                                                value={smtpUserInput} 
+                                                onChange={(e) => setSmtpUserInput(e.target.value)} 
+                                                placeholder="user@gmail.com" 
+                                                autoComplete="off" 
+                                                data-1p-ignore="true" 
+                                                data-lpignore="true"
+                                            />
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Password</Label>
@@ -786,7 +1200,8 @@ function SettingsPageContent() {
                                                 <Input 
                                                     name="smtpPass" 
                                                     type={showSmtpKey ? "text" : "password"} 
-                                                    defaultValue={systemSettings.smtpPass || ""} 
+                                                    value={smtpPassInput} 
+                                                    onChange={(e) => setSmtpPassInput(e.target.value)} 
                                                     className="pr-8"
                                                     autoComplete="new-password"
                                                     data-1p-ignore="true"
@@ -809,7 +1224,15 @@ function SettingsPageContent() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Sender Email Address (From)</Label>
-                                        <Input name="smtpFrom" defaultValue={systemSettings.smtpFrom || ""} placeholder="portalarr@domain.com" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/>
+                                        <Input 
+                                            name="smtpFrom" 
+                                            value={smtpFromInput} 
+                                            onChange={(e) => setSmtpFromInput(e.target.value)} 
+                                            placeholder="portalarr@domain.com" 
+                                            autoComplete="off" 
+                                            data-1p-ignore="true" 
+                                            data-lpignore="true"
+                                        />
                                         <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
                                             <div className="font-semibold text-foreground flex items-center gap-1">
                                                 <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
@@ -833,7 +1256,8 @@ function SettingsPageContent() {
                                                 id="mainPlexToken" 
                                                 name="mainPlexToken" 
                                                 type={showPlexKey ? "text" : "password"} 
-                                                defaultValue={systemSettings.mainPlexToken || ""} 
+                                                value={mainPlexTokenInput} 
+                                                onChange={(e) => setMainPlexTokenInput(e.target.value)} 
                                                 placeholder="xxxxxxxxxxxxxxxxxxxx" 
                                                 className="pr-8"
                                                 autoComplete="new-password"
@@ -919,18 +1343,34 @@ function SettingsPageContent() {
 
                         {/* AUTOMATION & DOWNLOAD DIRECTORY VALIDATOR */}
                         <div className="space-y-6">
-                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isAutomationDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
                                 <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <FolderCheck className="h-5 w-5 text-primary" /> Automation & Directory Paths
-                                    </CardTitle>
-                                    <CardDescription>Configure scan intervals and inspect completed downloads path access.</CardDescription>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <FolderCheck className="h-5 w-5 text-primary" /> Automation & Directory Paths
+                                            </CardTitle>
+                                            <CardDescription>Configure scan intervals and inspect completed downloads path access.</CardDescription>
+                                        </div>
+                                        {isAutomationDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
                                     <form onSubmit={(e) => handleForm(e, saveJobSettings)} className="space-y-4">
                                         <div className="space-y-2">
                                             <Label>Library Auto-Scan Interval (Minutes)</Label>
-                                            <Input name="autoSyncInterval" type="number" defaultValue={systemSettings.autoSyncInterval || 5} />
+                                            <Input 
+                                                name="autoSyncInterval" 
+                                                type="number" 
+                                                value={autoSyncIntervalInput} 
+                                                onChange={(e) => setAutoSyncIntervalInput(e.target.value)} 
+                                            />
                                         </div>
                                         <div className="space-y-3">
                                             <div className="flex justify-between items-center">
@@ -1069,10 +1509,21 @@ function SettingsPageContent() {
                                 </CardContent>
                             </Card>
 
-                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isGoogleBooksDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
                                 <CardHeader>
-                                    <CardTitle>Google Books API</CardTitle>
-                                    <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle>Google Books API</CardTitle>
+                                            <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
+                                        </div>
+                                        {isGoogleBooksDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
                                     <form 
@@ -1083,6 +1534,7 @@ function SettingsPageContent() {
                                             const res = await saveJobSettings(formData);
                                             setSaveAiMsg("Google Books settings saved successfully!");
                                             setTimeout(() => setSaveAiMsg(""), 4000);
+                                            loadAllData();
                                         }} 
                                         className="space-y-4"
                                         autoComplete="off"
@@ -1132,7 +1584,11 @@ function SettingsPageContent() {
                             </Card>
 
                             {/* CURATION, KOMETA & AGREGARR API KEYS CARD */}
-                            <Card className="border-indigo-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg shadow-indigo-950/20">
+                            <Card className={`border-indigo-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                                isCurationDirty 
+                                    ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                                    : "shadow-indigo-950/20"
+                            }`}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
@@ -1143,6 +1599,11 @@ function SettingsPageContent() {
                                                 Configure TMDb, Trakt.tv, and IMDb / Community Ratings (MDBList) API keys for automated movie/TV collections, ratings badges, and theatrical vs digital release calendars.
                                             </CardDescription>
                                         </div>
+                                        {isCurationDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
                                     </div>
                                 </CardHeader>
                                 <CardContent>
@@ -1303,7 +1764,11 @@ function SettingsPageContent() {
                             </Card>
 
                             {/* AI METADATA AGENT CARD */}
-                            <Card className="border-purple-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg shadow-purple-950/20">
+                            <Card className={`border-purple-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                                isAiDirty 
+                                    ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                                    : "shadow-purple-950/20"
+                            }`}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
@@ -1314,9 +1779,16 @@ function SettingsPageContent() {
                                                 Automated AI agent to analyze messy release folder names and extract official book titles, authors, and cover art queries.
                                             </CardDescription>
                                         </div>
-                                        <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">
-                                            {aiProviderSelect === "default" ? "Built-In Heuristic" : aiProviderSelect === "gemini" ? "Google Gemini" : "OpenAI"}
-                                        </Badge>
+                                        <div className="flex items-center gap-1.5">
+                                            {isAiDirty && (
+                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                    ● Unsaved Changes
+                                                </Badge>
+                                            )}
+                                            <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">
+                                                {aiProviderSelect === "default" ? "Built-In Heuristic" : aiProviderSelect === "gemini" ? "Google Gemini" : "OpenAI"}
+                                            </Badge>
+                                        </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent>
@@ -1328,10 +1800,12 @@ function SettingsPageContent() {
                                             formData.append("aiProvider", aiProviderSelect);
                                             formData.append("aiModel", aiModelInput);
                                             formData.append("aiAutoResolve", aiAutoResolveSwitch ? "true" : "false");
+                                            formData.append("aiApiKey", aiApiKeyInput);
                                             const res = await saveAiAgentSettings(formData);
                                             if (res.success) {
                                                 setSaveAiMsg("AI Agent settings saved successfully!");
                                                 setTimeout(() => setSaveAiMsg(""), 4000);
+                                                loadAllData();
                                             }
                                         }} 
                                         className="space-y-4"
@@ -1395,7 +1869,8 @@ function SettingsPageContent() {
                                                     <Input 
                                                         name="aiApiKey" 
                                                         type={showAiKey ? "text" : "password"}
-                                                        defaultValue={aiSettings.aiApiKey || ""}
+                                                        value={aiApiKeyInput}
+                                                        onChange={(e) => setAiApiKeyInput(e.target.value)}
                                                         placeholder={aiProviderSelect === "gemini" ? "AIzaSy..." : "sk-..."}
                                                         autoComplete="new-password"
                                                         data-1p-ignore="true"
@@ -1427,7 +1902,7 @@ function SettingsPageContent() {
                                                     <Select 
                                                         value={
                                                             dynamicModels.includes(aiModelInput) ||
-                                                             (aiProviderSelect === "gemini" && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
+                                                            (aiProviderSelect === "gemini" && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
                                                             (aiProviderSelect === "openai" && ["gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"].includes(aiModelInput))
                                                                 ? aiModelInput
                                                                 : "custom"
@@ -2236,10 +2711,21 @@ function SettingsPageContent() {
                 {/* --- TAB 4: BETA TESTING & ROADMAP --- */}
                 <TabsContent value="beta" className="space-y-6">
                     {/* ROADMAP CARD EDITOR */}
-                    <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                    <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                        isRoadmapDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                    }`}>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">🗺️ Roadmap & Feature Announcements</CardTitle>
-                            <CardDescription>Update the Markdown roadmap text displayed on the main dashboard.</CardDescription>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2">🗺️ Roadmap & Feature Announcements</CardTitle>
+                                    <CardDescription>Update the Markdown roadmap text displayed on the main dashboard.</CardDescription>
+                                </div>
+                                {isRoadmapDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
@@ -2270,10 +2756,21 @@ function SettingsPageContent() {
 
                     <div className="grid gap-6 md:grid-cols-2">
                         {/* BETA DASHBOARD INTRO EDITOR */}
-                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                            isBetaDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                        }`}>
                             <CardHeader>
-                                <CardTitle>Beta Dashboard Intro</CardTitle>
-                                <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle>Beta Dashboard Intro</CardTitle>
+                                        <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
+                                    </div>
+                                    {isBetaDirty && (
+                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                            ● Unsaved Changes
+                                        </Badge>
+                                    )}
+                                </div>
                             </CardHeader>
                             <CardContent>
                                 <form onSubmit={(e) => handleForm(e, updateBetaDashboardText)} className="space-y-4">
@@ -2412,6 +2909,105 @@ function SettingsPageContent() {
                     <SystemLogsViewer />
                 </TabsContent>
             </Tabs>
+
+            {/* FLOATING DOCKED SAVE BAR */}
+            {hasUnsavedChanges && (
+                <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                            <div className="text-xs">
+                                <span className="font-bold text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
+                                <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
+                                    {unsavedSections.join(", ")}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={handleDiscardAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleSaveAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+                            >
+                                {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                Save All Changes
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* UNSAVED CHANGES MODAL */}
+            <Dialog open={leaveModalOpen} onOpenChange={(open) => { if (!open) { setLeaveModalOpen(false); setPendingNavigation(null); } }}>
+                <DialogContent className="sm:max-w-md bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
+                    <DialogHeader>
+                        <div className="flex items-center gap-2 text-amber-500 mb-1">
+                            <AlertTriangle className="h-5 w-5" />
+                            <DialogTitle className="text-lg font-bold">Unsaved Changes</DialogTitle>
+                        </div>
+                        <DialogDescription className="text-xs text-muted-foreground">
+                            You have unsaved changes in your system settings. If you leave now without saving, your edits will be lost.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-2 py-2">
+                        <div className="text-xs font-semibold text-slate-300">Modified Sections:</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {unsavedSections.map((sec) => (
+                                <Badge key={sec} variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[11px] font-medium">
+                                    ● {sec}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setLeaveModalOpen(false); setPendingNavigation(null); }}
+                            className="text-xs"
+                        >
+                            Stay on Page
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleConfirmDiscardAndLeave}
+                            className="text-xs bg-red-600 hover:bg-red-500"
+                        >
+                            Discard & Leave
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleConfirmSaveAndLeave}
+                            disabled={isSavingAll}
+                            className="text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black gap-1"
+                        >
+                            {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                            Save & Continue
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
