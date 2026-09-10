@@ -1145,7 +1145,7 @@ function SettingsPageContent() {
                                                 <Sparkles className="h-5 w-5 text-indigo-400"/> Curation & Discovery API Keys
                                             </CardTitle>
                                             <CardDescription>
-                                                Configure TMDb, Trakt.tv, and MDBList API keys for automated movie/TV collections, ratings badges, and theatrical vs digital release calendars.
+                                                Configure TMDb, Trakt.tv, and IMDb / Community Ratings (MDBList) API keys for automated movie/TV collections, ratings badges, and theatrical vs digital release calendars.
                                             </CardDescription>
                                         </div>
                                     </div>
@@ -1184,7 +1184,7 @@ function SettingsPageContent() {
                                                 <div className="text-[11px] space-y-0.5 pl-5">
                                                     {tmdbKey && <div>• TMDb: {curationTestResult.tmdb ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
                                                     {traktKey && <div>• Trakt: {curationTestResult.trakt ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
-                                                    {mdblistKey && <div>• MDBList: {curationTestResult.mdblist ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {mdblistKey && <div>• IMDb / Ratings (MDBList): {curationTestResult.mdblist ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
                                                     {curationTestResult.errors?.map((err: string, i: number) => (
                                                         <div key={i} className="text-rose-400">• {err}</div>
                                                     ))}
@@ -1258,7 +1258,7 @@ function SettingsPageContent() {
                                             {/* MDBList API Key */}
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-center text-xs">
-                                                    <Label className="font-semibold text-slate-200">MDBList API Key</Label>
+                                                    <Label className="font-semibold text-slate-200">IMDb & Community Ratings (MDBList API Key)</Label>
                                                     <a href="https://mdblist.com/preferences/" target="_blank" className="text-[10px] text-primary hover:underline">
                                                         Get MDBList Key ↗
                                                     </a>

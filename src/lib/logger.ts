@@ -366,6 +366,20 @@ if (!globalLogger.consoleIntercepted) {
             searchPool.includes("upload failed")
         ) {
             category = "API";
+        }
+        // 13. CURATION / OVERLAYS / AGREGARR / KOMETA / PRUNING / COLLECTIONS
+        else if (
+            hasTagSub("CURATION", "OVERLAY", "KOMETA", "AGREGARR", "PRUNE", "LEAVING-SOON", "COLLECTION", "COLLECTIONS", "BADGE", "BADGES", "SEASONAL") ||
+            hasTagToken("CURATION", "OVERLAY", "OVERLAYS", "COLLECTION", "COLLECTIONS") ||
+            searchPool.includes("curation") ||
+            searchPool.includes("curation-sync") ||
+            searchPool.includes("curation-timer") ||
+            searchPool.includes("overlay rule") ||
+            searchPool.includes("applied overlays") ||
+            searchPool.includes("leaving soon") ||
+            searchPool.includes("prune simulation")
+        ) {
+            category = "CURATION";
         } else {
             category = "SYSTEM";
         }

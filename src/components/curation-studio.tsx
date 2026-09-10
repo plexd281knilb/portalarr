@@ -975,6 +975,34 @@ export default function CurationStudio() {
         }
     };
 
+    // Handle Toggle Server Target
+    const handleToggleServerTarget = (srvId: string, feature: "overlays" | "collections" | "pruning", checked: boolean) => {
+        setSettings((prev: any) => {
+            const currentOverlays = prev.enabledServersForOverlays ?? servers.map(s => s.serverId);
+            const currentCollections = prev.enabledServersForCollections ?? servers.map(s => s.serverId);
+            const currentPruning = prev.enabledServersForPruning ?? servers.map(s => s.serverId);
+
+            let newOverlays = [...currentOverlays];
+            let newCollections = [...currentCollections];
+            let newPruning = [...currentPruning];
+
+            if (feature === "overlays") {
+                newOverlays = checked ? Array.from(new Set([...newOverlays, srvId])) : newOverlays.filter(id => id !== srvId);
+            } else if (feature === "collections") {
+                newCollections = checked ? Array.from(new Set([...newCollections, srvId])) : newCollections.filter(id => id !== srvId);
+            } else if (feature === "pruning") {
+                newPruning = checked ? Array.from(new Set([...newPruning, srvId])) : newPruning.filter(id => id !== srvId);
+            }
+
+            return {
+                ...prev,
+                enabledServersForOverlays: newOverlays,
+                enabledServersForCollections: newCollections,
+                enabledServersForPruning: newPruning
+            };
+        });
+    };
+
     // Handle Save Server Targets Matrix
     const handleSaveServerTargets = async () => {
         setSavingServerTargets(true);
@@ -1256,6 +1284,59 @@ export default function CurationStudio() {
         return badges;
     };
 
+    // Helper for rendering clean source provider badges (TMDb, IMDb, Trakt, Plex Smart)
+    const getSourceBadge = (sourceType?: string, title?: string, query?: string) => {
+        const s = (sourceType || "").toLowerCase();
+        const q = (query || title || "").toLowerCase();
+        if (s === "mdblist") {
+            if (q.includes("imdb") || q.includes("top-250") || q.includes("top_250")) {
+                return (
+                    <Badge variant="secondary" className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 gap-1">
+                        <span>⭐</span> IMDb
+                    </Badge>
+                );
+            }
+            if (q.includes("oscar") || q.includes("academy")) {
+                return (
+                    <Badge variant="secondary" className="text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 gap-1">
+                        <span>🏆</span> TMDb / IMDb
+                    </Badge>
+                );
+            }
+            return (
+                <Badge variant="secondary" className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 gap-1">
+                    <span>⭐</span> IMDb / TMDb
+                </Badge>
+            );
+        }
+        if (s === "tmdb") {
+            return (
+                <Badge variant="secondary" className="text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 gap-1">
+                    <span>🎬</span> TMDb
+                </Badge>
+            );
+        }
+        if (s === "trakt") {
+            return (
+                <Badge variant="secondary" className="text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 gap-1">
+                    <span>🔥</span> Trakt
+                </Badge>
+            );
+        }
+        if (s === "plex_query") {
+            return (
+                <Badge variant="secondary" className="text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 gap-1">
+                    <span>⚡</span> Plex Smart
+                </Badge>
+            );
+        }
+        return (
+            <Badge variant="secondary" className="text-[10px] font-semibold bg-slate-800 text-slate-300">
+                {sourceType?.toUpperCase() || "MANUAL"}
+            </Badge>
+        );
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-muted-foreground">
@@ -1413,97 +1494,73 @@ export default function CurationStudio() {
 
             {/* Server Target Matrix & Vanilla Protection Guard */}
             {servers.length > 0 && (
-                <Card className="bg-slate-900/60 border-slate-800/80 shadow-md">
-                    <CardContent className="p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
-                        <div className="space-y-1 max-w-xl">
-                            <div className="flex items-center gap-2">
-                                <Server className="h-4 w-4 text-indigo-400" />
-                                <span className="font-bold text-white text-sm">Server Targeting & Vanilla Guard</span>
-                                <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 bg-emerald-950/30 text-[10px] font-semibold">
-                                    Protection Active
-                                </Badge>
+                <Card className="bg-slate-900/60 border-slate-800 shadow-md">
+                    <CardContent className="p-4">
+                        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <Server className="h-4 w-4 text-purple-400" />
+                                    <span className="text-sm font-bold text-white">Active Plex Server Multi-Target Routing</span>
+                                    <Badge className="bg-purple-950/80 text-purple-300 border border-purple-800 text-[10px]">
+                                        {servers.length} Connected
+                                    </Badge>
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    Select which servers participate in automated Poster Overlays, Curated Collections, and Leaving Soon disk cleanup.
+                                </p>
                             </div>
-                            <p className="text-[11px] text-slate-400">
-                                Select which Plex servers receive Collections, Overlays, and Capacity Pruning. Unchecked servers (e.g. your Backup server) stay 100% vanilla and unmodified.
-                            </p>
-                        </div>
 
-                        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                            {servers.map(srv => {
-                                const isOverlayEnabled = (settings.enabledServersForOverlays || []).includes(srv.serverId);
-                                const isCollEnabled = (settings.enabledServersForCollections || []).includes(srv.serverId);
-                                const isPruneEnabled = (settings.enabledServersForPruning || []).includes(srv.serverId);
+                            <div className="flex flex-wrap items-center gap-3">
+                                {servers.map(srv => {
+                                    const overlayEnabled = settings.enabledServersForOverlays?.includes(srv.serverId) ?? true;
+                                    const collEnabled = settings.enabledServersForCollections?.includes(srv.serverId) ?? true;
+                                    const pruneEnabled = settings.enabledServersForPruning?.includes(srv.serverId) ?? true;
 
-                                return (
-                                    <div key={srv.serverId} className="p-2.5 bg-slate-800/80 border border-slate-700/60 rounded-xl space-y-1.5 min-w-[170px] flex-1 sm:flex-initial">
-                                        <div className="flex items-center justify-between font-bold text-slate-200 text-xs">
-                                            <span className="truncate">{srv.serverName || "Server"}</span>
-                                            {srv.serverId === selectedServerId && <Badge className="text-[9px] bg-purple-600/80 px-1.5 py-0">Selected</Badge>}
+                                    return (
+                                        <div key={srv.serverId} className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-800 px-3 py-2 rounded-xl text-xs">
+                                            <span className="font-semibold text-slate-200">{srv.serverName}</span>
+                                            <div className="flex items-center gap-2 border-l border-slate-800 pl-2.5">
+                                                <label className="flex items-center gap-1 cursor-pointer" title="Enable Poster Overlays">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={overlayEnabled}
+                                                        onChange={e => handleToggleServerTarget(srv.serverId, "overlays", e.target.checked)}
+                                                        className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3 w-3"
+                                                    />
+                                                    <span className="text-[10px] text-slate-400">Overlays</span>
+                                                </label>
+                                                <label className="flex items-center gap-1 cursor-pointer" title="Enable Curated Collections">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={collEnabled}
+                                                        onChange={e => handleToggleServerTarget(srv.serverId, "collections", e.target.checked)}
+                                                        className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3 w-3"
+                                                    />
+                                                    <span className="text-[10px] text-slate-400">Collections</span>
+                                                </label>
+                                                <label className="flex items-center gap-1 cursor-pointer" title="Enable Leaving Soon Pruning">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={pruneEnabled}
+                                                        onChange={e => handleToggleServerTarget(srv.serverId, "pruning", e.target.checked)}
+                                                        className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3 w-3"
+                                                    />
+                                                    <span className="text-[10px] text-slate-400">Pruning</span>
+                                                </label>
+                                            </div>
                                         </div>
-                                        <div className="space-y-1 text-[11px] text-slate-300">
-                                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                                <input 
-                                                    type="checkbox"
-                                                    checked={isOverlayEnabled}
-                                                    onChange={e => {
-                                                        const curr = settings.enabledServersForOverlays || [];
-                                                        const updated = e.target.checked 
-                                                            ? [...curr, srv.serverId]
-                                                            : curr.filter((id: string) => id !== srv.serverId);
-                                                        setSettings({ ...settings, enabledServersForOverlays: updated });
-                                                    }}
-                                                    className="rounded border-slate-700 text-purple-600 focus:ring-0"
-                                                />
-                                                <span>🎨 Overlays</span>
-                                            </label>
-                                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                                <input 
-                                                    type="checkbox"
-                                                    checked={isCollEnabled}
-                                                    onChange={e => {
-                                                        const curr = settings.enabledServersForCollections || [];
-                                                        const updated = e.target.checked 
-                                                            ? [...curr, srv.serverId]
-                                                            : curr.filter((id: string) => id !== srv.serverId);
-                                                        setSettings({ ...settings, enabledServersForCollections: updated });
-                                                    }}
-                                                    className="rounded border-slate-700 text-purple-600 focus:ring-0"
-                                                />
-                                                <span>📚 Collections</span>
-                                            </label>
-                                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                                <input 
-                                                    type="checkbox"
-                                                    checked={isPruneEnabled}
-                                                    onChange={e => {
-                                                        const curr = settings.enabledServersForPruning || [];
-                                                        const updated = e.target.checked 
-                                                            ? [...curr, srv.serverId]
-                                                            : curr.filter((id: string) => id !== srv.serverId);
-                                                        setSettings({ ...settings, enabledServersForPruning: updated });
-                                                    }}
-                                                    className="rounded border-slate-700 text-purple-600 focus:ring-0"
-                                                />
-                                                <span>🗑️ Pruning</span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
 
-                            <div className="flex flex-col gap-1">
                                 <Button 
-                                    size="sm" 
+                                    size="sm"
                                     onClick={handleSaveServerTargets}
                                     disabled={savingServerTargets}
-                                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-8 px-3"
+                                    className="h-8 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold px-3 shadow-md"
                                 >
                                     {savingServerTargets ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
                                     Save Targets
                                 </Button>
-                                {serverTargetsSavedMsg && (
-                                    <span className="text-[10px] text-emerald-400 font-semibold text-center">✓ Saved!</span>
-                                )}
                             </div>
                         </div>
                     </CardContent>
@@ -1512,30 +1569,30 @@ export default function CurationStudio() {
 
             {/* Studio Navigation Tabs */}
             <Tabs value={subTab} onValueChange={setSubTab} className="space-y-6">
-                <TabsList className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 w-full h-auto p-2 bg-slate-900/80 border border-slate-800/80 rounded-2xl gap-2 shadow-lg backdrop-blur-md">
-                    <TabsTrigger value="collections" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full h-auto p-1.5 bg-slate-900/90 border border-slate-800 rounded-2xl gap-1.5 shadow-xl backdrop-blur-md">
+                    <TabsTrigger value="collections" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
                         <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
-                        <span className="truncate">Curated Collections</span>
+                        <span>Collections</span>
                     </TabsTrigger>
-                    <TabsTrigger value="overlays" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                    <TabsTrigger value="overlays" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
                         <Layers className="h-4 w-4 text-sky-400 shrink-0" />
-                        <span className="truncate">Poster Overlays & Badges</span>
+                        <span>Overlays & Badges</span>
                     </TabsTrigger>
-                    <TabsTrigger value="inspector" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                    <TabsTrigger value="inspector" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
                         <Search className="h-4 w-4 text-cyan-400 shrink-0" />
-                        <span className="truncate">Media Inspector & Simulator</span>
+                        <span>Media Inspector</span>
                     </TabsTrigger>
-                    <TabsTrigger value="releases" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                    <TabsTrigger value="releases" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
                         <Calendar className="h-4 w-4 text-emerald-400 shrink-0" />
-                        <span className="truncate">Digital Releases & Timings</span>
+                        <span>Digital Releases</span>
                     </TabsTrigger>
-                    <TabsTrigger value="pruning" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                    <TabsTrigger value="pruning" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
                         <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
-                        <span className="truncate">Leaving Soon & Hub</span>
+                        <span>Leaving Soon</span>
                     </TabsTrigger>
-                    <TabsTrigger value="preferences" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                    <TabsTrigger value="preferences" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
                         <Filter className="h-4 w-4 text-indigo-400 shrink-0" />
-                        <span className="truncate">Content Filters</span>
+                        <span>Content Filters</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -1650,11 +1707,12 @@ export default function CurationStudio() {
 
                                                 {/* Title & Category */}
                                                 <div className="sm:col-span-4 space-y-0.5">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
                                                         <span className="font-bold text-white text-sm">{coll.title}</span>
                                                         <Badge variant="outline" className="text-[9px] uppercase px-1.5 py-0 border-slate-700 text-slate-300">
                                                             {coll.category}
                                                         </Badge>
+                                                        {getSourceBadge(coll.sourceType, coll.title, coll.sourceQuery)}
                                                     </div>
                                                     <div className="text-[11px] text-slate-400 flex items-center gap-2">
                                                         <span>{coll.itemCount || 0} items</span>
@@ -1842,10 +1900,10 @@ export default function CurationStudio() {
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="tmdb">TMDb (Franchise/Studio)</SelectItem>
-                                                        <SelectItem value="trakt">Trakt (Trending/List)</SelectItem>
-                                                        <SelectItem value="mdblist">MDBList Curated</SelectItem>
-                                                        <SelectItem value="plex_query">Plex Media Query</SelectItem>
+                                                        <SelectItem value="tmdb">🎬 TMDb (Franchise / Studio / Network)</SelectItem>
+                                                        <SelectItem value="trakt">🔥 Trakt (Trending / Popular Lists)</SelectItem>
+                                                        <SelectItem value="mdblist">⭐ IMDb Top 250 & Curated Charts</SelectItem>
+                                                        <SelectItem value="plex_query">⚡ Plex Smart Query (HDR / Audio / Year)</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -1948,9 +2006,7 @@ export default function CurationStudio() {
                                                         🗓️ Seasonal
                                                     </Badge>
                                                 )}
-                                                <Badge variant="secondary" className="text-[10px] font-semibold bg-slate-800 text-slate-300">
-                                                    {preset.sourceType.toUpperCase()}
-                                                </Badge>
+                                                {getSourceBadge(preset.sourceType, preset.title, preset.sourceQuery)}
                                             </div>
                                         </div>
                                         <CardTitle className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors">

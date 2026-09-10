@@ -38,6 +38,7 @@ const LOG_CATEGORIES: LogCategoryMeta[] = [
     { id: "APPS", label: "APPS", icon: "⚡", badgeStyle: "bg-sky-500/20 text-sky-300 border-sky-500/30", activeStyle: "bg-sky-500/25 text-sky-300 border-sky-500/60 font-bold ring-1 ring-sky-500/30" },
     { id: "DATABASE", label: "DATABASE", icon: "💾", badgeStyle: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30", activeStyle: "bg-yellow-500/25 text-yellow-300 border-yellow-500/60 font-bold ring-1 ring-yellow-500/30" },
     { id: "API", label: "API", icon: "🌐", badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30", activeStyle: "bg-cyan-500/25 text-cyan-300 border-cyan-500/60 font-bold ring-1 ring-cyan-500/30" },
+    { id: "CURATION", label: "CURATION", icon: "🎨", badgeStyle: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30", activeStyle: "bg-fuchsia-500/25 text-fuchsia-300 border-fuchsia-500/60 font-bold ring-1 ring-fuchsia-500/30" },
     { id: "SYSTEM", label: "SYSTEM", icon: "⚙️", badgeStyle: "bg-slate-500/20 text-slate-300 border-slate-500/30", activeStyle: "bg-slate-500/25 text-slate-300 border-slate-500/60 font-bold ring-1 ring-slate-500/30" },
 ];
 
@@ -142,6 +143,15 @@ export default function SystemLogsViewer() {
         for (const l of logs) {
             const cat = l.category === "PLEX_HUB" ? "PLEX" : l.category;
             counts[cat] = (counts[cat] || 0) + 1;
+        }
+        return counts;
+    }, [logs]);
+
+    // Calculate dynamic level counts
+    const levelCounts = useMemo(() => {
+        const counts: Record<string, number> = { ALL: logs.length, INFO: 0, SUCCESS: 0, WARN: 0, ERROR: 0 };
+        for (const l of logs) {
+            counts[l.level] = (counts[l.level] || 0) + 1;
         }
         return counts;
     }, [logs]);
@@ -307,25 +317,38 @@ export default function SystemLogsViewer() {
                             />
                         </div>
 
-                        {/* Level Filters */}
-                        <div className="flex items-center gap-1.5 bg-slate-900/80 p-1 rounded-lg border border-slate-800 text-xs">
-                            {["ALL", "INFO", "SUCCESS", "WARN", "ERROR"].map(lvl => (
-                                <button
-                                    key={lvl}
-                                    onClick={() => setLevelFilter(lvl)}
-                                    className={`px-2.5 py-1 rounded font-medium transition-colors ${
-                                        levelFilter === lvl
-                                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                            : "text-slate-400 hover:text-slate-200"
-                                    }`}
-                                >
-                                    {lvl}
-                                </button>
-                            ))}
+                        {/* Level Filters with Circle Count Badges */}
+                        <div className="flex items-center gap-1.5 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs">
+                            {["ALL", "INFO", "SUCCESS", "WARN", "ERROR"].map(lvl => {
+                                const isSelected = levelFilter === lvl;
+                                const lvlCount = levelCounts[lvl] || 0;
+                                return (
+                                    <button
+                                        key={lvl}
+                                        onClick={() => setLevelFilter(lvl)}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border ${
+                                            isSelected
+                                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm"
+                                                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                                        }`}
+                                    >
+                                        <span>{lvl}</span>
+                                        <span className={`text-[10px] px-1.5 py-0.5 min-w-[18px] text-center rounded-full font-mono transition-all ${
+                                            isSelected 
+                                                ? 'bg-emerald-500/30 text-emerald-200 font-bold' 
+                                                : lvlCount > 0 
+                                                ? 'bg-slate-800 text-slate-300' 
+                                                : 'bg-slate-800/40 text-slate-500'
+                                        }`}>
+                                            {lvlCount}
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    {/* Dedicated Category Buttons with Counts & Icons */}
+                    {/* Dedicated Category Buttons with Uniform Circle Counts & Icons */}
                     <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800 text-xs">
                         {LOG_CATEGORIES.map(cat => {
                             const isSelected = categoryFilter === cat.id;
@@ -338,17 +361,21 @@ export default function SystemLogsViewer() {
                                         isSelected
                                             ? cat.activeStyle
                                             : count > 0 
-                                            ? "border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800/60" 
-                                            : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/30"
+                                            ? "border-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-800/60" 
+                                            : "border-slate-800/40 text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
                                     }`}
                                 >
                                     <span>{cat.icon}</span>
                                     <span>{cat.label}</span>
-                                    {count > 0 && (
-                                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-black/30 font-bold' : 'bg-slate-800/80 text-slate-400'}`}>
-                                            {count}
-                                        </span>
-                                    )}
+                                    <span className={`text-[10px] px-1.5 py-0.5 min-w-[20px] text-center rounded-full font-mono transition-all ${
+                                        isSelected 
+                                            ? 'bg-black/40 text-white font-bold' 
+                                            : count > 0 
+                                            ? 'bg-slate-800/90 text-slate-300 font-semibold' 
+                                            : 'bg-slate-800/40 text-slate-500'
+                                    }`}>
+                                        {count}
+                                    </span>
                                 </button>
                             );
                         })}
