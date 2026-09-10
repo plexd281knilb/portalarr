@@ -913,6 +913,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     ["showEdition", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showEdition" BOOLEAN NOT NULL DEFAULT 0;`],
                     ["showStudio", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showStudio" BOOLEAN NOT NULL DEFAULT 0;`],
                     ["showContentRating", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showContentRating" BOOLEAN NOT NULL DEFAULT 0;`],
+                    ["badgeScale", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "badgeScale" REAL DEFAULT 1.0;`],
                     ["customBadgeIds", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "customBadgeIds" TEXT;`]
                 ];
                 for (const [colName, ddl] of overlayAddCols) {

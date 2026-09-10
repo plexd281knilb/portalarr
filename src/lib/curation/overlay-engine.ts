@@ -40,6 +40,7 @@ export interface OverlayOptions {
     contentRatingPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
     ratingPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
     ratingsPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
+    badgeScale?: number;
     
     showRibbon?: boolean;
     ribbonPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
@@ -885,8 +886,11 @@ export async function applyOverlaysToPoster(
             if (!doesCustomBadgeMatchMedia(cb, mediaInfo)) continue;
 
             try {
-                const cbWidth = cb.width || 140;
-                const cbHeight = cb.height || 46;
+                const scale = options.badgeScale || 1.0;
+                const rawW = cb.width || 140;
+                const rawH = cb.height || 46;
+                const cbWidth = scale !== 1.0 && scale > 0.1 ? Math.round(rawW * scale) : rawW;
+                const cbHeight = scale !== 1.0 && scale > 0.1 ? Math.round(rawH * scale) : rawH;
                 const cbPos = cb.position || fallbackPos;
 
                 let cbBuffer = await sharp(cb.filePath)
@@ -921,15 +925,28 @@ export async function applyOverlaysToPoster(
         }
     }
 
-    // Next, add built-in SVG badges if not already overridden by custom matched badges
     const pushSvgToBucket = async (pos: string, svg: string) => {
         if (!buckets[pos]) return;
-        const buf = Buffer.from(svg);
+        let buf = Buffer.from(svg);
         const meta = await sharp(buf).metadata();
+        const rawW = meta.width || 140;
+        const rawH = meta.height || 46;
+        const scale = options.badgeScale || 1.0;
+        
+        let w = rawW;
+        let h = rawH;
+        if (scale !== 1.0 && scale > 0.1) {
+            w = Math.round(rawW * scale);
+            h = Math.round(rawH * scale);
+            buf = await sharp(buf)
+                .resize(w, h, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                .toBuffer();
+        }
+
         buckets[pos].push({
             buf,
-            w: meta.width || 140,
-            h: meta.height || 46
+            w,
+            h
         });
     };
 

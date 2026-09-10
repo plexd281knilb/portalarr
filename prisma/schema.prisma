@@ -373,6 +373,7 @@ model MediaOverlayRule {
   showEdition       Boolean   @default(false)
   showStudio        Boolean   @default(false)
   showContentRating Boolean   @default(false)
+  badgeScale        Float?    @default(1.0)
   customBadgeIds    String?   // JSON array of CustomBadge IDs to apply
   enabled           Boolean   @default(true)
   itemCount         Int       @default(0)

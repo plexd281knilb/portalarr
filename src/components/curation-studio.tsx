@@ -74,7 +74,7 @@ import {
     Server, Power, Ban, Archive, TestTube, Settings2, FolderCheck,
     Upload, Image as ImageIcon, MoveUp, MoveDown, CalendarClock,
     Palette, ChevronUp, ChevronDown, Tag, Compass, Home, Clock3,
-    Search, FileText, Info, Play, CheckCheck, Globe, Download, DownloadCloud, Package
+    Search, FileText, Info, Play, CheckCheck, Globe, Download, DownloadCloud, Package, Maximize2
 } from "lucide-react";
 
 export default function CurationStudio() {
@@ -154,16 +154,17 @@ export default function CurationStudio() {
     const [overlayMessage, setOverlayMessage] = useState<{ success: boolean; text: string } | null>(null);
 
     // Live Overlay Simulator States
-    const [simResolution, setSimResolution] = useState<"4K" | "1080p" | "none">("4K");
-    const [simHdr, setSimHdr] = useState<"DV" | "HDR10+" | "HDR" | "none">("DV");
-    const [simAudio, setSimAudio] = useState<"ATMOS" | "TRUEHD" | "DTS:X" | "5.1" | "none">("ATMOS");
-    const [simChannels, setSimChannels] = useState<"7.1" | "5.1" | "2.0" | "none">("7.1");
-    const [simCodec, setSimCodec] = useState<"HEVC" | "AVC" | "AV1" | "ProRes" | "none">("HEVC");
-    const [simEdition, setSimEdition] = useState<"IMAX" | "CRITERION" | "DIRECTOR'S CUT" | "EXTENDED" | "REMUX" | "none">("IMAX");
-    const [simStudio, setSimStudio] = useState<"HBO" | "NETFLIX" | "DISNEY+" | "APPLE TV+" | "PRIME" | "MARVEL" | "DC" | "A24" | "PARAMOUNT+" | "none">("HBO");
-    const [simRating, setSimRating] = useState<"G" | "PG" | "PG-13" | "R" | "NC-17" | "TV-MA" | "none">("PG-13");
-    const [simRatings, setSimRatings] = useState(true);
+    const [simShowResolution, setSimShowResolution] = useState(true);
+    const [simShowHdr, setSimShowHdr] = useState(true);
+    const [simShowAudio, setSimShowAudio] = useState(true);
+    const [simShowChannels, setSimShowChannels] = useState(false);
+    const [simShowCodec, setSimShowCodec] = useState(false);
+    const [simShowEdition, setSimShowEdition] = useState(false);
+    const [simShowStudio, setSimShowStudio] = useState(false);
+    const [simShowRating, setSimShowRating] = useState(false);
+    const [simRatings, setSimRatings] = useState(false);
     const [simLeavingSoon, setSimLeavingSoon] = useState(false);
+    const [simBadgeScale, setSimBadgeScale] = useState<number>(1.0);
     const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal">("glass");
     const [simPosition, setSimPosition] = useState<"top-right" | "top-left" | "bottom-right">("top-right");
     const [simVideoPosition, setSimVideoPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-right");
@@ -186,11 +187,10 @@ export default function CurationStudio() {
     const getEffectiveRibbonText = () => {
         if (simRibbonType === "custom") return (simRibbonText.trim() || "FEATURED").toUpperCase();
         if (simRibbonType === "leaving_soon") return "LEAVING SOON";
-        if (simRibbonType === "auto_edition") return simEdition !== "none" ? simEdition : "SPECIAL EDITION";
+        if (simRibbonType === "auto_edition") return "SPECIAL EDITION";
         // auto_quality
-        if (simHdr === "DV") return "DOLBY VISION";
-        if (simResolution === "4K") return "4K ULTRA HD";
-        if (simResolution === "1080p") return "1080P FULL HD";
+        if (simShowHdr) return "DOLBY VISION";
+        if (simShowResolution) return "4K ULTRA HD";
         return "4K ULTRA HD";
     };
 
@@ -404,6 +404,40 @@ export default function CurationStudio() {
             loadReleases();
         }
     }, [subTab]);
+
+    // Auto-sync overlay rule settings when selected server / section changes
+    useEffect(() => {
+        if (!selectedServerId || !selectedSectionKey || overlayRules.length === 0) return;
+        const rule = overlayRules.find(r => r.serverId === selectedServerId && r.sectionKey === selectedSectionKey);
+        if (rule) {
+            if (rule.showResolution !== undefined && rule.showResolution !== null) setSimShowResolution(Boolean(rule.showResolution));
+            if (rule.showHdr !== undefined && rule.showHdr !== null) setSimShowHdr(Boolean(rule.showHdr));
+            if (rule.showAudio !== undefined && rule.showAudio !== null) setSimShowAudio(Boolean(rule.showAudio));
+            if (rule.showAudioChannels !== undefined && rule.showAudioChannels !== null) setSimShowChannels(Boolean(rule.showAudioChannels));
+            if (rule.showCodec !== undefined && rule.showCodec !== null) setSimShowCodec(Boolean(rule.showCodec));
+            if (rule.showEdition !== undefined && rule.showEdition !== null) setSimShowEdition(Boolean(rule.showEdition));
+            if (rule.showStudio !== undefined && rule.showStudio !== null) setSimShowStudio(Boolean(rule.showStudio));
+            if (rule.showContentRating !== undefined && rule.showContentRating !== null) setSimShowRating(Boolean(rule.showContentRating));
+            if (rule.showRatings !== undefined && rule.showRatings !== null) setSimRatings(Boolean(rule.showRatings));
+            if (rule.showLeavingSoon !== undefined && rule.showLeavingSoon !== null) setSimLeavingSoon(Boolean(rule.showLeavingSoon));
+            if (rule.badgeScale !== undefined && rule.badgeScale !== null) setSimBadgeScale(Number(rule.badgeScale));
+            if (rule.theme) setSimTheme(rule.theme);
+            if (rule.resolutionPosition) setSimResolutionPosition(rule.resolutionPosition);
+            if (rule.hdrPosition) setSimHdrPosition(rule.hdrPosition);
+            if (rule.codecPosition) setSimCodecPosition(rule.codecPosition);
+            if (rule.audioPosition) setSimAudioPosition(rule.audioPosition);
+            if (rule.channelsPosition) setSimChannelsPosition(rule.channelsPosition);
+            if (rule.editionPosition) setSimEditionPosition(rule.editionPosition);
+            if (rule.studioPosition) setSimStudioPosition(rule.studioPosition);
+            if (rule.contentRatingPosition || rule.ratingPosition) setSimRatingPosition(rule.contentRatingPosition || rule.ratingPosition);
+            if (rule.ratingsPosition) setSimRatingsPosition(rule.ratingsPosition);
+            if (rule.showRibbon !== undefined && rule.showRibbon !== null) setSimShowRibbon(Boolean(rule.showRibbon));
+            if (rule.ribbonPosition) setSimRibbonPosition(rule.ribbonPosition);
+            if (rule.ribbonTheme) setSimRibbonTheme(rule.ribbonTheme);
+            if (rule.ribbonType) setSimRibbonType(rule.ribbonType);
+            if (rule.ribbonText) setSimRibbonText(rule.ribbonText);
+        }
+    }, [selectedServerId, selectedSectionKey, overlayRules]);
 
     // Handle Preset 1-Click Sync
     const handleSyncPreset = async (preset: CollectionPreset) => {
@@ -865,14 +899,15 @@ export default function CurationStudio() {
                 ribbonText: simRibbonText || undefined,
                 ribbonType: simRibbonType,
                 theme: simTheme,
-                showResolution: simResolution !== "none",
-                showHdr: simHdr !== "none",
-                showAudio: simAudio !== "none",
-                showAudioChannels: simChannels !== "none",
-                showCodec: simCodec !== "none",
-                showEdition: simEdition !== "none",
-                showStudio: simStudio !== "none",
-                showContentRating: simRating !== "none",
+                badgeScale: simBadgeScale,
+                showResolution: simShowResolution,
+                showHdr: simShowHdr,
+                showAudio: simShowAudio,
+                showAudioChannels: simShowChannels,
+                showCodec: simShowCodec,
+                showEdition: simShowEdition,
+                showStudio: simShowStudio,
+                showContentRating: simShowRating,
                 showRatings: simRatings,
                 showLeavingSoon: simLeavingSoon,
                 customBadgeIds: enabledBadgeIds,
@@ -1180,14 +1215,15 @@ export default function CurationStudio() {
                     ribbonText: simRibbonText || undefined,
                     ribbonType: simRibbonType,
                     theme: simTheme,
-                    showResolution: simResolution !== "none",
-                    showHdr: simHdr !== "none",
-                    showAudio: simAudio !== "none",
-                    showAudioChannels: simChannels !== "none",
-                    showCodec: simCodec !== "none",
-                    showEdition: simEdition !== "none",
-                    showStudio: simStudio !== "none",
-                    showContentRating: simRating !== "none",
+                    badgeScale: simBadgeScale,
+                    showResolution: simShowResolution,
+                    showHdr: simShowHdr,
+                    showAudio: simShowAudio,
+                    showAudioChannels: simShowChannels,
+                    showCodec: simShowCodec,
+                    showEdition: simShowEdition,
+                    showStudio: simShowStudio,
+                    showContentRating: simShowRating,
                     showRatings: simRatings,
                     showLeavingSoon: simLeavingSoon,
                     customBadgeIds: enabledBadgeIds
@@ -1611,14 +1647,14 @@ export default function CurationStudio() {
     const renderBadgesForPosition = (pos: string) => {
         const badges: React.ReactNode[] = [];
         const simDetected = {
-            resolution: simResolution === "none" ? undefined : simResolution,
-            hdr: simHdr === "none" ? undefined : simHdr,
-            codec: simCodec === "none" ? undefined : simCodec,
-            audio: simAudio === "none" ? undefined : simAudio,
-            audioChannels: simChannels === "none" ? undefined : simChannels,
-            edition: simEdition === "none" ? undefined : simEdition,
-            studio: simStudio === "none" ? undefined : simStudio,
-            contentRating: simRating === "none" ? undefined : simRating
+            resolution: simShowResolution ? "4K" : undefined,
+            hdr: simShowHdr ? "DV" : undefined,
+            codec: simShowCodec ? "HEVC" : undefined,
+            audio: simShowAudio ? "ATMOS" : undefined,
+            audioChannels: simShowChannels ? "7.1" : undefined,
+            edition: simShowEdition ? "IMAX" : undefined,
+            studio: simShowStudio ? "HBO" : undefined,
+            contentRating: simShowRating ? "PG-13" : undefined
         };
 
         let hasCustomRes = false;
@@ -1657,8 +1693,8 @@ export default function CurationStudio() {
         }
 
         // 2. Built-in Fallbacks (Priority 2) - only added if not overridden by a custom badge
-        // Resolution (4K UHD / 1080p FHD)
-        if (simResolutionPosition === pos && simResolution !== "none" && !hasCustomRes) {
+        // Resolution (4K UHD)
+        if (simResolutionPosition === pos && simShowResolution && !hasCustomRes) {
             badges.push(
                 <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
                     simTheme === "gold" 
@@ -1666,106 +1702,79 @@ export default function CurationStudio() {
                         : 'bg-slate-950/90 text-white border-amber-400/80'
                 }`}>
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    <span>{simResolution}</span>
-                    {simResolution === "4K" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>}
-                    {simResolution === "1080p" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-sky-300">FHD</span>}
+                    <span>4K</span>
+                    <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>
                 </div>
             );
         }
 
         // HDR / Dolby Vision
-        if (simHdrPosition === pos && simHdr !== "none" && !hasCustomHdr) {
+        if (simHdrPosition === pos && simShowHdr && !hasCustomHdr) {
             badges.push(
                 <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {simHdr === "DV" ? (
-                        <>
-                            <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
-                            <span>DOLBY VISION</span>
-                        </>
-                    ) : (
-                        <span>{simHdr}</span>
-                    )}
+                    <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
+                    <span>DOLBY VISION</span>
                 </div>
             );
         }
 
-        // Video Codec (HEVC / AV1 / AVC / ProRes)
-        if (simCodecPosition === pos && simCodec !== "none" && !hasCustomCodec) {
+        // Video Codec (HEVC)
+        if (simCodecPosition === pos && simShowCodec && !hasCustomCodec) {
             badges.push(
                 <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {simCodec === "HEVC" ? "HEVC • 10b" : simCodec === "AV1" ? "AV1 • HDR" : simCodec}
+                    HEVC • 10b
                 </div>
             );
         }
 
-        // Audio format (Dolby Atmos / TrueHD / DTS:X / 5.1)
-        if (simAudioPosition === pos && simAudio !== "none" && !hasCustomAudio) {
+        // Audio format (Dolby Atmos)
+        if (simAudioPosition === pos && simShowAudio && !hasCustomAudio) {
             badges.push(
                 <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {simAudio === "ATMOS" ? "DOLBY ATMOS" : simAudio === "TRUEHD" ? "TRUEHD 7.1" : simAudio}
+                    DOLBY ATMOS
                 </div>
             );
         }
 
-        // Audio Surround Channels (7.1 / 5.1 / 2.0)
-        if (simChannelsPosition === pos && simChannels !== "none") {
+        // Audio Surround Channels (7.1)
+        if (simChannelsPosition === pos && simShowChannels) {
             badges.push(
                 <div key="channels" className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {simChannels} SURROUND
+                    7.1 SURROUND
                 </div>
             );
         }
 
-        // Edition Cuts (IMAX / Criterion / Extended / Director's Cut / Remux)
-        if (simEditionPosition === pos && simEdition !== "none" && !hasCustomEdition) {
+        // Edition Cuts (IMAX Enhanced)
+        if (simEditionPosition === pos && simShowEdition && !hasCustomEdition) {
             badges.push(
-                <div key="edition" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${
-                    simEdition === "IMAX" 
-                        ? 'border-sky-400 bg-slate-950/95 text-sky-300' 
-                        : simEdition === "CRITERION" 
-                            ? 'border-amber-400 bg-slate-950/95 text-amber-300'
-                            : simEdition === "REMUX"
-                                ? 'border-emerald-400 bg-slate-950/95 text-emerald-300'
-                                : 'border-pink-400 bg-slate-950/95 text-pink-300'
-                }`}>
+                <div key="edition" className="relative px-2 py-0.5 rounded-md border border-sky-400 bg-slate-950/95 text-sky-300 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {simEdition === "IMAX" ? "IMAX ENHANCED" : simEdition === "REMUX" ? "REMUX • LOSSLESS" : simEdition}
+                    IMAX ENHANCED
                 </div>
             );
         }
 
-        // Studio / Network Logos
-        if (simStudioPosition === pos && simStudio !== "none" && !hasCustomStudio) {
+        // Studio / Network Logos (HBO Max)
+        if (simStudioPosition === pos && simShowStudio && !hasCustomStudio) {
             badges.push(
-                <div key="studio" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${
-                    simStudio === "NETFLIX" ? 'border-red-500 text-red-400 bg-slate-950/95' :
-                    simStudio === "DISNEY+" ? 'border-sky-400 text-sky-300 bg-slate-950/95' :
-                    simStudio === "HBO" ? 'border-purple-500 text-purple-300 bg-slate-950/95' :
-                    simStudio === "APPLE TV+" ? 'border-slate-300 text-slate-200 bg-slate-950/95' :
-                    'border-indigo-400 text-indigo-200 bg-slate-950/95'
-                }`}>
+                <div key="studio" className="relative px-2 py-0.5 rounded-md border border-purple-500 text-purple-300 bg-slate-950/95 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {simStudio}
+                    HBO MAX
                 </div>
             );
         }
 
-        // Content Rating (G, PG, PG-13, R, NC-17, TV-MA)
-        if (simRatingPosition === pos && simRating !== "none" && !hasCustomRating) {
-            const isMature = simRating.includes("R") || simRating.includes("TV-MA") || simRating.includes("NC-17");
-            const isTeen = simRating.includes("PG-13") || simRating.includes("TV-14");
+        // Content Rating (PG-13)
+        if (simRatingPosition === pos && simShowRating && !hasCustomRating) {
             badges.push(
-                <div key="rating" className={`relative px-1.5 py-0.5 rounded border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${
-                    isMature ? 'border-rose-500 text-rose-300 bg-slate-950/90' :
-                    isTeen ? 'border-amber-500 text-amber-300 bg-slate-950/90' :
-                    'border-emerald-500 text-emerald-300 bg-slate-950/90'
-                }`}>
+                <div key="rating" className="relative px-1.5 py-0.5 rounded border border-amber-500 text-amber-300 bg-slate-950/90 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-0.5 right-0.5 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {simRating}
+                    PG-13
                 </div>
             );
         }
@@ -1846,7 +1855,7 @@ export default function CurationStudio() {
         }
 
         // 2. Built-in Fallbacks (Priority 2)
-        if (detected.resolution && simResolutionPosition === pos && !hasCustomRes) {
+        if (detected.resolution && simShowResolution && simResolutionPosition === pos && !hasCustomRes) {
             badges.push(
                 <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
                     simTheme === "gold" 
@@ -1861,7 +1870,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.hdr && simHdrPosition === pos && !hasCustomHdr) {
+        if (detected.hdr && simShowHdr && simHdrPosition === pos && !hasCustomHdr) {
             badges.push(
                 <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1877,7 +1886,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.codec && simCodecPosition === pos && !hasCustomCodec) {
+        if (detected.codec && simShowCodec && simCodecPosition === pos && !hasCustomCodec) {
             badges.push(
                 <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1886,7 +1895,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.audio && simAudioPosition === pos && !hasCustomAudio) {
+        if (detected.audio && simShowAudio && simAudioPosition === pos && !hasCustomAudio) {
             badges.push(
                 <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1895,7 +1904,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.audioChannels && simChannelsPosition === pos) {
+        if (detected.audioChannels && simShowChannels && simChannelsPosition === pos) {
             badges.push(
                 <div key="channels" className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1904,7 +1913,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.edition && simEditionPosition === pos && !hasCustomEdition) {
+        if (detected.edition && simShowEdition && simEditionPosition === pos && !hasCustomEdition) {
             badges.push(
                 <div key="edition" className="relative px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1913,7 +1922,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.studio && simStudioPosition === pos && !hasCustomStudio) {
+        if (detected.studio && simShowStudio && simStudioPosition === pos && !hasCustomStudio) {
             badges.push(
                 <div key="studio" className="relative px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1922,7 +1931,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.contentRating && simRatingPosition === pos && !hasCustomRating) {
+        if (detected.contentRating && simShowRating && simRatingPosition === pos && !hasCustomRating) {
             badges.push(
                 <div key="rating" className="relative px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1998,89 +2007,94 @@ export default function CurationStudio() {
         }> = [];
 
         const simDetected = {
-            resolution: simResolution === "none" ? undefined : simResolution,
-            hdr: simHdr === "none" ? undefined : simHdr,
-            codec: simCodec === "none" ? undefined : simCodec,
-            audio: simAudio === "none" ? undefined : simAudio,
-            audioChannels: simChannels === "none" ? undefined : simChannels,
-            edition: simEdition === "none" ? undefined : simEdition,
-            studio: simStudio === "none" ? undefined : simStudio,
-            contentRating: simRating === "none" ? undefined : simRating
+            resolution: simShowResolution ? "4K" : undefined,
+            hdr: simShowHdr ? "DV" : undefined,
+            codec: simShowCodec ? "HEVC" : undefined,
+            audio: simShowAudio ? "ATMOS" : undefined,
+            audioChannels: simShowChannels ? "7.1" : undefined,
+            edition: simShowEdition ? "IMAX" : undefined,
+            studio: simShowStudio ? "HBO" : undefined,
+            contentRating: simShowRating ? "PG-13" : undefined
         };
 
         // Resolution
-        if (simResolution !== "none") {
+        if (simShowResolution) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Resolution") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Resolution", value: simResolution, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simResolutionPosition });
+                layers.push({ category: "Resolution", value: "4K UHD", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simResolutionPosition });
             } else {
-                layers.push({ category: "Resolution", value: simResolution, sourceType: "builtin", sourceName: `Kometa SVG (${simTheme === "gold" ? "Gold" : "Obsidian"})`, position: simResolutionPosition });
+                layers.push({ category: "Resolution", value: "4K UHD", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme === "gold" ? "Gold" : "Obsidian"})`, position: simResolutionPosition });
             }
         }
 
         // HDR
-        if (simHdr !== "none") {
+        if (simShowHdr) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Dynamic Range") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "HDR / DV", value: simHdr === "DV" ? "Dolby Vision" : simHdr, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simHdrPosition });
+                layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simHdrPosition });
             } else {
-                layers.push({ category: "HDR / DV", value: simHdr === "DV" ? "Dolby Vision" : simHdr, sourceType: "builtin", sourceName: "Kometa SVG", position: simHdrPosition });
+                layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "builtin", sourceName: "Kometa SVG", position: simHdrPosition });
             }
         }
 
         // Video Codec
-        if (simCodec !== "none") {
+        if (simShowCodec) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Video Codec") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Video Codec", value: simCodec, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simCodecPosition });
+                layers.push({ category: "Video Codec", value: "HEVC (H.265)", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simCodecPosition });
             } else {
-                layers.push({ category: "Video Codec", value: simCodec, sourceType: "builtin", sourceName: "Kometa SVG", position: simCodecPosition });
+                layers.push({ category: "Video Codec", value: "HEVC (H.265)", sourceType: "builtin", sourceName: "Kometa SVG", position: simCodecPosition });
             }
         }
 
         // Audio Codec
-        if (simAudio !== "none") {
+        if (simShowAudio) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Audio Format") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Audio Format", value: simAudio, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simAudioPosition });
+                layers.push({ category: "Audio Format", value: "Dolby Atmos", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simAudioPosition });
             } else {
-                layers.push({ category: "Audio Format", value: simAudio, sourceType: "builtin", sourceName: "Kometa SVG", position: simAudioPosition });
+                layers.push({ category: "Audio Format", value: "Dolby Atmos", sourceType: "builtin", sourceName: "Kometa SVG", position: simAudioPosition });
             }
         }
 
         // Audio Channels
-        if (simChannels !== "none") {
-            layers.push({ category: "Audio Channels", value: `${simChannels} CH`, sourceType: "builtin", sourceName: "Kometa SVG", position: simChannelsPosition });
+        if (simShowChannels) {
+            layers.push({ category: "Audio Channels", value: "7.1 Surround", sourceType: "builtin", sourceName: "Kometa SVG", position: simChannelsPosition });
         }
 
         // Edition
-        if (simEdition !== "none") {
+        if (simShowEdition) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Edition") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Edition / Cut", value: simEdition, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simEditionPosition });
+                layers.push({ category: "Edition / Cut", value: "IMAX Enhanced", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simEditionPosition });
             } else {
-                layers.push({ category: "Edition / Cut", value: simEdition, sourceType: "builtin", sourceName: "Kometa SVG", position: simEditionPosition });
+                layers.push({ category: "Edition / Cut", value: "IMAX Enhanced", sourceType: "builtin", sourceName: "Kometa SVG", position: simEditionPosition });
             }
         }
 
         // Studio
-        if (simStudio !== "none") {
+        if (simShowStudio) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Studio") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Studio / Network", value: simStudio, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simStudioPosition });
+                layers.push({ category: "Studio / Network", value: "HBO Max", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simStudioPosition });
             } else {
-                layers.push({ category: "Studio / Network", value: simStudio, sourceType: "builtin", sourceName: "Kometa SVG", position: simStudioPosition });
+                layers.push({ category: "Studio / Network", value: "HBO Max", sourceType: "builtin", sourceName: "Kometa SVG", position: simStudioPosition });
             }
         }
 
         // Content Rating
-        if (simRating !== "none") {
+        if (simShowRating) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Age Rating") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Age Rating", value: simRating, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simRatingPosition });
+                layers.push({ category: "Age Rating", value: "PG-13", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simRatingPosition });
             } else {
-                layers.push({ category: "Age Rating", value: simRating, sourceType: "builtin", sourceName: "Kometa SVG", position: simRatingPosition });
+                layers.push({ category: "Age Rating", value: "PG-13", sourceType: "builtin", sourceName: "Kometa SVG", position: simRatingPosition });
             }
+        }
+
+        // Community Ratings Bar
+        if (simRatings) {
+            layers.push({ category: "Community Ratings", value: "IMDb 8.6 • RT 94%", sourceType: "builtin", sourceName: "IMDb / Rotten Tomatoes", position: simRatingsPosition });
         }
 
         // Corner Ribbon
@@ -3065,42 +3079,60 @@ export default function CurationStudio() {
 
                                 {/* Top-Left Bucket */}
                                 {renderBadgesForPosition("top-left").length > 0 && (
-                                    <div className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} left-2.5 flex flex-col gap-1.5 items-start z-10`}>
+                                    <div 
+                                        className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} left-2.5 flex flex-col gap-1.5 items-start z-10`}
+                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'top left' }}
+                                    >
                                         {renderBadgesForPosition("top-left")}
                                     </div>
                                 )}
 
                                 {/* Top-Right Bucket */}
                                 {renderBadgesForPosition("top-right").length > 0 && (
-                                    <div className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} right-2.5 flex flex-col gap-1.5 items-end z-10`}>
+                                    <div 
+                                        className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} right-2.5 flex flex-col gap-1.5 items-end z-10`}
+                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'top right' }}
+                                    >
                                         {renderBadgesForPosition("top-right")}
                                     </div>
                                 )}
 
                                 {/* Top-Center Bucket */}
                                 {renderBadgesForPosition("top-center").length > 0 && (
-                                    <div className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]`}>
+                                    <div 
+                                        className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]`}
+                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'top center' }}
+                                    >
                                         {renderBadgesForPosition("top-center")}
                                     </div>
                                 )}
 
                                 {/* Bottom-Left Bucket */}
                                 {renderBadgesForPosition("bottom-left").length > 0 && (
-                                    <div className="absolute bottom-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10">
+                                    <div 
+                                        className="absolute bottom-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10"
+                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'bottom left' }}
+                                    >
                                         {renderBadgesForPosition("bottom-left")}
                                     </div>
                                 )}
 
                                 {/* Bottom-Right Bucket */}
                                 {renderBadgesForPosition("bottom-right").length > 0 && (
-                                    <div className="absolute bottom-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10">
+                                    <div 
+                                        className="absolute bottom-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10"
+                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'bottom right' }}
+                                    >
                                         {renderBadgesForPosition("bottom-right")}
                                     </div>
                                 )}
 
                                 {/* Bottom-Center Bucket */}
                                 {renderBadgesForPosition("bottom-center").length > 0 && (
-                                    <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]">
+                                    <div 
+                                        className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]"
+                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'bottom center' }}
+                                    >
                                         {renderBadgesForPosition("bottom-center")}
                                     </div>
                                 )}
@@ -3161,35 +3193,91 @@ export default function CurationStudio() {
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="p-4 space-y-3.5 text-xs">
-                                    {/* Global Style Theme Bar */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                                        <div className="space-y-0.5">
-                                            <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                                                <Palette className="h-3.5 w-3.5 text-purple-400" /> Kometa Glassmorphic Style Theme
-                                            </span>
-                                            <p className="text-[11px] text-slate-400">Backdrop style, specular highlights, and border luminance</p>
+                                    {/* Global Style Theme & Badge Scale Bar */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {/* Style Theme Selector */}
+                                        <div className="flex flex-col justify-between gap-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                                            <div className="space-y-0.5">
+                                                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                                                    <Palette className="h-3.5 w-3.5 text-purple-400" /> Style Theme
+                                                </span>
+                                                <p className="text-[11px] text-slate-400">Backdrop style, specular highlights, and border luminance</p>
+                                            </div>
+                                            <Select value={simTheme} onValueChange={(val: any) => setSimTheme(val)}>
+                                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7.5 w-full">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="glass">✨ Obsidian Glass (Kometa)</SelectItem>
+                                                    <SelectItem value="gold">💛 Amber Gold Metallic</SelectItem>
+                                                    <SelectItem value="classic">🛡️ Classic Solid Dark</SelectItem>
+                                                    <SelectItem value="minimal">🔲 Minimalist Framed</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                        <Select value={simTheme} onValueChange={(val: any) => setSimTheme(val)}>
-                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7.5 w-full sm:w-44">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="glass">✨ Obsidian Glass (Kometa)</SelectItem>
-                                                <SelectItem value="gold">💛 Amber Gold Metallic</SelectItem>
-                                                <SelectItem value="classic">🛡️ Classic Solid Dark</SelectItem>
-                                                <SelectItem value="minimal">🔲 Minimalist Framed</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+
+                                        {/* Badge Scale / Resizing Slider */}
+                                        <div className="flex flex-col justify-between gap-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                                                        <Maximize2 className="h-3.5 w-3.5 text-cyan-400" /> Badge Size / Scale
+                                                    </span>
+                                                    <p className="text-[11px] text-slate-400">Resize all poster badges uniformly</p>
+                                                </div>
+                                                <Badge variant="outline" className="text-[11px] font-mono font-bold bg-slate-900 border-slate-700 text-cyan-300 px-2 py-0.5">
+                                                    {Math.round(simBadgeScale * 100)}%
+                                                </Badge>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <input 
+                                                    type="range" 
+                                                    min="0.70" 
+                                                    max="1.40" 
+                                                    step="0.05"
+                                                    value={simBadgeScale}
+                                                    onChange={(e) => setSimBadgeScale(parseFloat(e.target.value))}
+                                                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                />
+                                                <div className="flex items-center justify-between gap-1">
+                                                    {[
+                                                        { label: "80%", val: 0.8 },
+                                                        { label: "100%", val: 1.0 },
+                                                        { label: "115%", val: 1.15 },
+                                                        { label: "130%", val: 1.3 }
+                                                    ].map((p) => (
+                                                        <button
+                                                            key={p.label}
+                                                            type="button"
+                                                            onClick={() => setSimBadgeScale(p.val)}
+                                                            className={`text-[10px] px-2 py-0.5 rounded transition-colors font-semibold ${
+                                                                Math.abs(simBadgeScale - p.val) < 0.02
+                                                                    ? "bg-purple-600 text-white shadow-sm"
+                                                                    : "bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700"
+                                                            }`}
+                                                        >
+                                                            {p.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {/* Badge Layers & Independent Positions Matrix */}
                                     <div className="space-y-2">
+                                        <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 font-medium">
+                                            <span>Layer & Priority</span>
+                                            <span className="hidden sm:inline">Active</span>
+                                            <span>Poster Position</span>
+                                        </div>
+
                                         {/* Resolution / 4K UHD */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Resolution (4K / 1080p)</span>
+                                                    <span className="font-semibold text-white text-[11px]">Resolution (4K UHD / 1080p FHD)</span>
                                                 </div>
                                                 {(() => {
                                                     const matches = getMatchingActiveCustomBadgesForCategory("resolution");
@@ -3208,17 +3296,11 @@ export default function CurationStudio() {
                                                     );
                                                 })()}
                                             </div>
-                                            <div className="sm:col-span-4">
-                                                <Select value={simResolution} onValueChange={(val: any) => setSimResolution(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="4K">4K Ultra HD</SelectItem>
-                                                        <SelectItem value="1080p">1080p Full HD</SelectItem>
-                                                        <SelectItem value="none">Disabled</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
+                                                <Switch 
+                                                    checked={simShowResolution}
+                                                    onCheckedChange={setSimShowResolution}
+                                                />
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <Select value={simResolutionPosition} onValueChange={(val: any) => setSimResolutionPosition(val)}>
@@ -3239,10 +3321,10 @@ export default function CurationStudio() {
 
                                         {/* HDR / Dolby Vision */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-purple-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Dynamic Range (DV / HDR)</span>
+                                                    <span className="font-semibold text-white text-[11px]">Dynamic Range (DV / HDR10+)</span>
                                                 </div>
                                                 {(() => {
                                                     const matches = getMatchingActiveCustomBadgesForCategory("hdr");
@@ -3261,18 +3343,11 @@ export default function CurationStudio() {
                                                     );
                                                 })()}
                                             </div>
-                                            <div className="sm:col-span-4">
-                                                <Select value={simHdr} onValueChange={(val: any) => setSimHdr(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="DV">Dolby Vision</SelectItem>
-                                                        <SelectItem value="HDR10+">HDR10+</SelectItem>
-                                                        <SelectItem value="HDR">HDR</SelectItem>
-                                                        <SelectItem value="none">Disabled</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
+                                                <Switch 
+                                                    checked={simShowHdr}
+                                                    onCheckedChange={setSimShowHdr}
+                                                />
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <Select value={simHdrPosition} onValueChange={(val: any) => setSimHdrPosition(val)}>
@@ -3293,10 +3368,10 @@ export default function CurationStudio() {
 
                                         {/* Video Codec */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Video Codec (HEVC / AV1)</span>
+                                                    <span className="font-semibold text-white text-[11px]">Video Codec (HEVC / AV1 / AVC)</span>
                                                 </div>
                                                 {(() => {
                                                     const matches = getMatchingActiveCustomBadgesForCategory("codec");
@@ -3315,19 +3390,11 @@ export default function CurationStudio() {
                                                     );
                                                 })()}
                                             </div>
-                                            <div className="sm:col-span-4">
-                                                <Select value={simCodec} onValueChange={(val: any) => setSimCodec(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="HEVC">HEVC (H.265)</SelectItem>
-                                                        <SelectItem value="AV1">AV1</SelectItem>
-                                                        <SelectItem value="AVC">AVC (H.264)</SelectItem>
-                                                        <SelectItem value="ProRes">Apple ProRes</SelectItem>
-                                                        <SelectItem value="none">Disabled</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
+                                                <Switch 
+                                                    checked={simShowCodec}
+                                                    onCheckedChange={setSimShowCodec}
+                                                />
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <Select value={simCodecPosition} onValueChange={(val: any) => setSimCodecPosition(val)}>
@@ -3348,10 +3415,10 @@ export default function CurationStudio() {
 
                                         {/* Audio Codec */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-sky-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Audio Codec (Atmos / DTS)</span>
+                                                    <span className="font-semibold text-white text-[11px]">Audio Format (Dolby Atmos / TrueHD / DTS)</span>
                                                 </div>
                                                 {(() => {
                                                     const matches = getMatchingActiveCustomBadgesForCategory("audio");
@@ -3370,19 +3437,11 @@ export default function CurationStudio() {
                                                     );
                                                 })()}
                                             </div>
-                                            <div className="sm:col-span-4">
-                                                <Select value={simAudio} onValueChange={(val: any) => setSimAudio(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="ATMOS">Dolby Atmos</SelectItem>
-                                                        <SelectItem value="TRUEHD">Dolby TrueHD</SelectItem>
-                                                        <SelectItem value="DTS:X">DTS:X Lossless</SelectItem>
-                                                        <SelectItem value="5.1">5.1 Surround</SelectItem>
-                                                        <SelectItem value="none">Disabled</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
+                                                <Switch 
+                                                    checked={simShowAudio}
+                                                    onCheckedChange={setSimShowAudio}
+                                                />
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <Select value={simAudioPosition} onValueChange={(val: any) => setSimAudioPosition(val)}>
@@ -3403,10 +3462,10 @@ export default function CurationStudio() {
 
                                         {/* Audio Channels */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Audio Channels (7.1 / 5.1)</span>
+                                                    <span className="font-semibold text-white text-[11px]">Audio Channels (7.1 / 5.1 Surround)</span>
                                                 </div>
                                                 {(() => {
                                                     const matches = getMatchingActiveCustomBadgesForCategory("channels");
@@ -3425,18 +3484,11 @@ export default function CurationStudio() {
                                                     );
                                                 })()}
                                             </div>
-                                            <div className="sm:col-span-4">
-                                                <Select value={simChannels} onValueChange={(val: any) => setSimChannels(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="7.1">7.1 Surround</SelectItem>
-                                                        <SelectItem value="5.1">5.1 Surround</SelectItem>
-                                                        <SelectItem value="2.0">2.0 Stereo</SelectItem>
-                                                        <SelectItem value="none">Disabled</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
+                                                <Switch 
+                                                    checked={simShowChannels}
+                                                    onCheckedChange={setSimShowChannels}
+                                                />
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <Select value={simChannelsPosition} onValueChange={(val: any) => setSimChannelsPosition(val)}>
@@ -3457,10 +3509,10 @@ export default function CurationStudio() {
 
                                         {/* Edition / Cut */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Edition / Cut (IMAX / Remux)</span>
+                                                    <span className="font-semibold text-white text-[11px]">Edition / Cut (IMAX / Remux / Criterion)</span>
                                                 </div>
                                                 {(() => {
                                                     const matches = getMatchingActiveCustomBadgesForCategory("edition");
@@ -3479,20 +3531,11 @@ export default function CurationStudio() {
                                                     );
                                                 })()}
                                             </div>
-                                            <div className="sm:col-span-4">
-                                                <Select value={simEdition} onValueChange={(val: any) => setSimEdition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="IMAX">IMAX Enhanced</SelectItem>
-                                                        <SelectItem value="CRITERION">The Criterion Collection</SelectItem>
-                                                        <SelectItem value="REMUX">Remux Lossless</SelectItem>
-                                                        <SelectItem value="DIRECTOR'S CUT">Director's Cut</SelectItem>
-                                                        <SelectItem value="EXTENDED">Extended Edition</SelectItem>
-                                                        <SelectItem value="none">Disabled</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
+                                                <Switch 
+                                                    checked={simShowEdition}
+                                                    onCheckedChange={setSimShowEdition}
+                                                />
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <Select value={simEditionPosition} onValueChange={(val: any) => setSimEditionPosition(val)}>
@@ -3513,10 +3556,10 @@ export default function CurationStudio() {
 
                                         {/* Studio / Network */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-pink-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Studio / Network (HBO / Netflix)</span>
+                                                    <span className="font-semibold text-white text-[11px]">Studio / Network (HBO / Netflix / Disney+)</span>
                                                 </div>
                                                 {(() => {
                                                     const matches = getMatchingActiveCustomBadgesForCategory("studio");
@@ -3535,24 +3578,11 @@ export default function CurationStudio() {
                                                     );
                                                 })()}
                                             </div>
-                                            <div className="sm:col-span-4">
-                                                <Select value={simStudio} onValueChange={(val: any) => setSimStudio(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="HBO">HBO Max</SelectItem>
-                                                        <SelectItem value="NETFLIX">Netflix</SelectItem>
-                                                        <SelectItem value="DISNEY+">Disney+</SelectItem>
-                                                        <SelectItem value="APPLE TV+">Apple TV+</SelectItem>
-                                                        <SelectItem value="PRIME">Prime Video</SelectItem>
-                                                        <SelectItem value="MARVEL">Marvel Studios</SelectItem>
-                                                        <SelectItem value="DC">DC Studios</SelectItem>
-                                                        <SelectItem value="A24">A24 Films</SelectItem>
-                                                        <SelectItem value="PARAMOUNT+">Paramount+</SelectItem>
-                                                        <SelectItem value="none">Disabled</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
+                                                <Switch 
+                                                    checked={simShowStudio}
+                                                    onCheckedChange={setSimShowStudio}
+                                                />
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <Select value={simStudioPosition} onValueChange={(val: any) => setSimStudioPosition(val)}>
@@ -3573,7 +3603,7 @@ export default function CurationStudio() {
 
                                         {/* Content Rating */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-rose-400"></span>
                                                     <span className="font-semibold text-white text-[11px]">Age Rating (PG-13 / R / TV-MA)</span>
@@ -3595,21 +3625,11 @@ export default function CurationStudio() {
                                                     );
                                                 })()}
                                             </div>
-                                            <div className="sm:col-span-4">
-                                                <Select value={simRating} onValueChange={(val: any) => setSimRating(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="G">G (All Ages)</SelectItem>
-                                                        <SelectItem value="PG">PG</SelectItem>
-                                                        <SelectItem value="PG-13">PG-13</SelectItem>
-                                                        <SelectItem value="R">R (Restricted)</SelectItem>
-                                                        <SelectItem value="NC-17">NC-17</SelectItem>
-                                                        <SelectItem value="TV-MA">TV-MA</SelectItem>
-                                                        <SelectItem value="none">Disabled</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
+                                                <Switch 
+                                                    checked={simShowRating}
+                                                    onCheckedChange={setSimShowRating}
+                                                />
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <Select value={simRatingPosition} onValueChange={(val: any) => setSimRatingPosition(val)}>
@@ -3630,18 +3650,20 @@ export default function CurationStudio() {
 
                                         {/* Community Ratings Bar */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">IMDb / RT Ratings Bar</span>
+                                                    <span className="font-semibold text-white text-[11px]">IMDb / RT Community Ratings</span>
                                                 </div>
+                                                <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
+                                                    IMDb 8.6 • 🍅 94%
+                                                </Badge>
+                                            </div>
+                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
                                                 <Switch 
                                                     checked={simRatings}
                                                     onCheckedChange={setSimRatings}
                                                 />
-                                            </div>
-                                            <div className="sm:col-span-4 text-[11px] text-slate-400 flex items-center">
-                                                <span>IMDb 8.6 • 🍅 94% • 🍿 92%</span>
                                             </div>
                                             <div className="sm:col-span-3">
                                                 <Select value={simRatingsPosition} onValueChange={(val: any) => setSimRatingsPosition(val)}>
@@ -4667,42 +4689,60 @@ export default function CurationStudio() {
 
                                                 {/* Top-Left Inspected Badges */}
                                                 {renderInspectedBadgesForPosition(inspectingItem.item, "top-left").length > 0 && (
-                                                    <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10">
+                                                    <div 
+                                                        className="absolute top-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10"
+                                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'top left' }}
+                                                    >
                                                         {renderInspectedBadgesForPosition(inspectingItem.item, "top-left")}
                                                     </div>
                                                 )}
 
                                                 {/* Top-Right Inspected Badges */}
                                                 {renderInspectedBadgesForPosition(inspectingItem.item, "top-right").length > 0 && (
-                                                    <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10">
+                                                    <div 
+                                                        className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10"
+                                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'top right' }}
+                                                    >
                                                         {renderInspectedBadgesForPosition(inspectingItem.item, "top-right")}
                                                     </div>
                                                 )}
 
                                                 {/* Top-Center Inspected Badges */}
                                                 {renderInspectedBadgesForPosition(inspectingItem.item, "top-center").length > 0 && (
-                                                    <div className="absolute top-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]">
+                                                    <div 
+                                                        className="absolute top-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]"
+                                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'top center' }}
+                                                    >
                                                         {renderInspectedBadgesForPosition(inspectingItem.item, "top-center")}
                                                     </div>
                                                 )}
 
                                                 {/* Bottom-Left Inspected Badges */}
                                                 {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-left").length > 0 && (
-                                                    <div className="absolute bottom-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10">
+                                                    <div 
+                                                        className="absolute bottom-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10"
+                                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'bottom left' }}
+                                                    >
                                                         {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-left")}
                                                     </div>
                                                 )}
 
                                                 {/* Bottom-Right Inspected Badges */}
                                                 {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-right").length > 0 && (
-                                                    <div className="absolute bottom-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10">
+                                                    <div 
+                                                        className="absolute bottom-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10"
+                                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'bottom right' }}
+                                                    >
                                                         {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-right")}
                                                     </div>
                                                 )}
 
                                                 {/* Bottom-Center Inspected Badges */}
                                                 {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-center").length > 0 && (
-                                                    <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]">
+                                                    <div 
+                                                        className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]"
+                                                        style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'bottom center' }}
+                                                    >
                                                         {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-center")}
                                                     </div>
                                                 )}

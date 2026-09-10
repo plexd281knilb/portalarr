@@ -982,6 +982,7 @@ export async function saveOverlayRuleAction(data: {
     showContentRating?: boolean;
     showRatings?: boolean;
     showLeavingSoon?: boolean;
+    badgeScale?: number;
     customBadgeIds?: string[];
     enabled?: boolean;
 }) {
@@ -1021,6 +1022,7 @@ export async function saveOverlayRuleAction(data: {
             showContentRating: data.showContentRating ?? false,
             showRatings: data.showRatings ?? false,
             showLeavingSoon: data.showLeavingSoon ?? true,
+            badgeScale: data.badgeScale ?? 1.0,
             customBadgeIds: data.customBadgeIds ? JSON.stringify(data.customBadgeIds) : null,
             enabled: data.enabled ?? true
         };
@@ -1128,6 +1130,7 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
                     ribbonText: rule.ribbonText || undefined,
                     ribbonType: (rule.ribbonType as any) || "auto_quality",
                     theme: (rule.theme as any) || "glass",
+                    badgeScale: (rule.badgeScale as number) || 1.0,
                     customBadges: activeCustomBadges.map(cb => ({
                         id: cb.id,
                         name: cb.name,
@@ -1829,6 +1832,7 @@ export async function applyOverlayToSingleItemAction(
         showContentRating?: boolean;
         showRatings?: boolean;
         showLeavingSoon?: boolean;
+        badgeScale?: number;
         customBadgeIds?: string[];
     }
 ) {
@@ -1874,6 +1878,7 @@ export async function applyOverlayToSingleItemAction(
                 ribbonText: options?.ribbonText || undefined,
                 ribbonType: (options?.ribbonType as any) || "auto_quality",
                 theme: (options?.theme as any) || "glass",
+                badgeScale: options?.badgeScale ?? 1.0,
                 showResolution: options?.showResolution ?? true,
                 showHdr: options?.showHdr ?? true,
                 showAudio: options?.showAudio ?? true,
