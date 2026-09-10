@@ -15,7 +15,9 @@ import {
     getCustomBadgesAction,
     saveCustomBadgeAction,
     deleteCustomBadgeAction,
+    deleteMultipleCustomBadgesAction,
     toggleCustomBadgeAction,
+    toggleMultipleCustomBadgesAction,
     getOverlayRulesAction, 
     saveOverlayRuleAction, 
     applyOverlaysToLibraryAction, 
@@ -123,6 +125,12 @@ export default function CurationStudio() {
     const [badgeMatchRule, setBadgeMatchRule] = useState("");
     const [uploadingBadge, setUploadingBadge] = useState(false);
     const [badgeUploadError, setBadgeUploadError] = useState<string | null>(null);
+
+    // Custom Badges Multi-Selection & Filter States
+    const [selectedCustomBadgeIds, setSelectedCustomBadgeIds] = useState<string[]>([]);
+    const [customBadgeFilter, setCustomBadgeFilter] = useState<string>("all");
+    const [customBadgeSearch, setCustomBadgeSearch] = useState<string>("");
+    const [deletingCustomBadges, setDeletingCustomBadges] = useState(false);
 
     // GitHub Badge Hub & Downloader States
     const [githubModalOpen, setGithubModalOpen] = useState(false);
@@ -648,14 +656,77 @@ export default function CurationStudio() {
         }
     };
 
-    // Handle Delete Custom Badge
+    // Handle Delete Custom Badge (Single)
     const handleDeleteCustomBadge = async (badgeId: string) => {
         if (!confirm("Are you sure you want to delete this custom badge?")) return;
         try {
             await deleteCustomBadgeAction(badgeId);
             setCustomBadges(customBadges.filter(b => b.id !== badgeId));
+            setSelectedCustomBadgeIds(prev => prev.filter(id => id !== badgeId));
         } catch (e) {
             console.error("Failed deleting badge:", e);
+        }
+    };
+
+    // Filter Custom Badges
+    const getFilteredCustomBadges = () => {
+        return customBadges.filter(badge => {
+            const matchesCategory = customBadgeFilter === "all" || badge.category.toLowerCase() === customBadgeFilter.toLowerCase();
+            const matchesSearch = !customBadgeSearch.trim() || 
+                badge.name.toLowerCase().includes(customBadgeSearch.toLowerCase()) ||
+                badge.category.toLowerCase().includes(customBadgeSearch.toLowerCase()) ||
+                (badge.matchRule && badge.matchRule.toLowerCase().includes(customBadgeSearch.toLowerCase())) ||
+                badge.position.toLowerCase().includes(customBadgeSearch.toLowerCase());
+            return matchesCategory && matchesSearch;
+        });
+    };
+
+    // Toggle Selection of Single Custom Badge
+    const handleToggleSelectCustomBadge = (badgeId: string) => {
+        setSelectedCustomBadgeIds(prev => 
+            prev.includes(badgeId) ? prev.filter(id => id !== badgeId) : [...prev, badgeId]
+        );
+    };
+
+    // Select All Filtered Custom Badges
+    const handleSelectAllCustomBadges = () => {
+        const filtered = getFilteredCustomBadges();
+        setSelectedCustomBadgeIds(filtered.map(b => b.id));
+    };
+
+    // Deselect All (Select None) Custom Badges
+    const handleSelectNoneCustomBadges = () => {
+        setSelectedCustomBadgeIds([]);
+    };
+
+    // Batch Delete Selected Custom Badges
+    const handleDeleteSelectedCustomBadges = async () => {
+        if (selectedCustomBadgeIds.length === 0) return;
+        const count = selectedCustomBadgeIds.length;
+        if (!confirm(`Are you sure you want to permanently delete ${count} custom badge(s)? This will also remove the image files from disk.`)) return;
+
+        setDeletingCustomBadges(true);
+        try {
+            const res = await deleteMultipleCustomBadgesAction(selectedCustomBadgeIds);
+            if (res.success) {
+                setCustomBadges(prev => prev.filter(b => !selectedCustomBadgeIds.includes(b.id)));
+                setSelectedCustomBadgeIds([]);
+            }
+        } catch (e) {
+            console.error("Failed batch deleting badges:", e);
+        } finally {
+            setDeletingCustomBadges(false);
+        }
+    };
+
+    // Batch Toggle Enable/Disable on Selected Custom Badges
+    const handleToggleSelectedCustomBadges = async (enabled: boolean) => {
+        if (selectedCustomBadgeIds.length === 0) return;
+        try {
+            await toggleMultipleCustomBadgesAction(selectedCustomBadgeIds, enabled);
+            setCustomBadges(prev => prev.map(b => selectedCustomBadgeIds.includes(b.id) ? { ...b, enabled } : b));
+        } catch (e) {
+            console.error("Failed batch toggling badges:", e);
         }
     };
 
@@ -1398,12 +1469,196 @@ export default function CurationStudio() {
         }
     };
 
+    // Helper to test if a custom badge matches detected media properties
+    const doesCustomBadgeMatchDetected = (
+        cb: { category?: string; matchRule?: string | null; name?: string; filePath?: string },
+        detected: { resolution?: string; hdr?: string; audio?: string; audioChannels?: string; codec?: string; edition?: string; studio?: string; contentRating?: string }
+    ): boolean => {
+        const rawRule = (cb.matchRule || "").toLowerCase().trim();
+        const rawCategory = (cb.category || "").toLowerCase().trim();
+        const rawName = (cb.name || "").toLowerCase();
+        const combined = `${rawRule} ${rawCategory} ${rawName}`;
+
+        // Wildcard or ribbon/banner without rule
+        if (rawRule === "all" || rawRule === "*" || (rawCategory === "ribbon" && !rawRule) || (rawCategory === "banner" && !rawRule)) {
+            return true;
+        }
+
+        // 1. Resolution
+        if (rawCategory === "resolution" || /4k|uhd|2160|1080|fhd|720|hd|sd|480|576/.test(rawRule) || /ultra-hd|1080p|720p/.test(rawName)) {
+            const itemRes = detected.resolution;
+            if (!itemRes) return false;
+            if (/4k|uhd|2160|ultra-hd/i.test(combined)) return itemRes === "4K";
+            if (/1080|fhd/i.test(combined)) return itemRes === "1080p";
+            if (/720|hd/i.test(combined) && !/1080|4k|fhd|uhd/i.test(combined)) return itemRes === "720p";
+            if (/sd|480|576/i.test(combined)) return itemRes === "SD";
+        }
+
+        // 2. HDR
+        if (rawCategory === "hdr" || /dv|dolby.*vision|hdr10\+|hdr10|hdr/i.test(combined)) {
+            const itemHdr = detected.hdr;
+            if (!itemHdr) return false;
+            if (/dv|dolby.*vision/i.test(combined)) return itemHdr === "DV";
+            if (/hdr10\+/i.test(combined)) return itemHdr === "HDR10+";
+            if (/hdr10/i.test(combined)) return itemHdr === "HDR10" || itemHdr === "HDR10+";
+            if (/hdr/i.test(combined)) return !!itemHdr;
+        }
+
+        // 3. Audio & Channels
+        if (rawCategory === "audio" || /atmos|truehd|dts|flac|aac|eac3|ac3|5\.1|7\.1/i.test(combined)) {
+            const itemAudio = (detected.audio || "").toLowerCase();
+            const itemChannels = detected.audioChannels;
+            if (/atmos/i.test(combined)) return itemAudio.includes("atmos");
+            if (/truehd/i.test(combined)) return itemAudio.includes("truehd");
+            if (/dts[-:_]?x/i.test(combined)) return itemAudio.includes("dts:x") || itemAudio.includes("dts-x");
+            if (/dts[-:_]?hd|dtshd|dts[-:_]?ma/i.test(combined)) return itemAudio.includes("dts-hd") || itemAudio.includes("ma");
+            if (/dts/i.test(combined) && !/dts[-:_]?x|dts[-:_]?hd/i.test(combined)) return itemAudio.includes("dts");
+            if (/7\.1/i.test(combined)) return itemChannels === "7.1";
+            if (/5\.1/i.test(combined)) return itemChannels === "5.1";
+        }
+
+        // 4. Video Codecs
+        if (rawCategory === "codec" || /hevc|h265|x265|av1|prores|h264|x264|avc/i.test(combined)) {
+            const itemCodec = detected.codec;
+            if (!itemCodec) return false;
+            if (/hevc|h265|x265/i.test(combined)) return itemCodec === "HEVC";
+            if (/av1/i.test(combined)) return itemCodec === "AV1";
+            if (/prores/i.test(combined)) return itemCodec === "ProRes";
+            if (/h264|x264|avc/i.test(combined)) return itemCodec === "AVC";
+        }
+
+        // 5. Editions
+        if (rawCategory === "edition" || /imax|criterion|director|extended|remaster|remux/i.test(combined)) {
+            const itemEdition = (detected.edition || "").toLowerCase();
+            if (!itemEdition) return false;
+            if (/imax/i.test(combined)) return itemEdition.includes("imax");
+            if (/criterion/i.test(combined)) return itemEdition.includes("criterion");
+            if (/director/i.test(combined)) return itemEdition.includes("director");
+            if (/extended/i.test(combined)) return itemEdition.includes("extended");
+            if (/remaster/i.test(combined)) return itemEdition.includes("remaster");
+            if (/remux/i.test(combined)) return itemEdition.includes("remux");
+        }
+
+        // 6. Studios
+        if (rawCategory === "studio" || /netflix|disney|hbo|apple|prime|paramount|marvel|dc|a24/i.test(combined)) {
+            const itemStudio = (detected.studio || "").toLowerCase();
+            if (!itemStudio) return false;
+            if (/netflix/i.test(combined)) return itemStudio.includes("netflix");
+            if (/disney/i.test(combined)) return itemStudio.includes("disney");
+            if (/hbo/i.test(combined)) return itemStudio.includes("hbo") || itemStudio.includes("max");
+            if (/apple/i.test(combined)) return itemStudio.includes("apple");
+            if (/prime|amazon/i.test(combined)) return itemStudio.includes("prime") || itemStudio.includes("amazon");
+            if (/paramount/i.test(combined)) return itemStudio.includes("paramount");
+            if (/marvel/i.test(combined)) return itemStudio.includes("marvel");
+            if (/dc/i.test(combined)) return itemStudio.includes("dc");
+            if (/a24/i.test(combined)) return itemStudio.includes("a24");
+        }
+
+        // 7. Content Ratings
+        if (rawCategory === "ratings" || /pg-13|tv-14|pg|tv-pg|nc-17|tv-ma|\br\b|\bg\b/i.test(combined)) {
+            const itemRating = (detected.contentRating || "").toUpperCase();
+            if (!itemRating) return false;
+            if (/pg-13|tv-14/i.test(combined)) return itemRating === "PG-13";
+            if (/nc-17/i.test(combined)) return itemRating === "NC-17";
+            if (/\br\b|tv-ma/i.test(combined)) return itemRating === "R";
+            if (/pg\b|tv-pg/i.test(combined)) return itemRating === "PG";
+            if (/\bg\b|tv-g|tv-y/i.test(combined)) return itemRating === "G";
+        }
+
+        return rawCategory === "custom" || rawCategory === "";
+    };
+
+    // Helper to get which human category an active custom badge overrides
+    const getCustomBadgeOverriddenCategory = (cb: any): string => {
+        const cat = (cb.category || "").toLowerCase();
+        const rule = (cb.matchRule || "").toLowerCase();
+        const name = (cb.name || "").toLowerCase();
+        const combined = `${cat} ${rule} ${name}`;
+
+        if (cat === "resolution" || /4k|1080|720|sd|uhd|fhd/i.test(combined)) return "Resolution (4K / 1080p)";
+        if (cat === "hdr" || /dv|hdr|dolby.*vision/i.test(combined)) return "Dynamic Range (DV / HDR)";
+        if (cat === "codec" || /hevc|av1|prores|avc/i.test(combined)) return "Video Codec";
+        if (cat === "audio" || /atmos|truehd|dts/i.test(combined)) return "Audio Format";
+        if (/7\.1|5\.1|2\.0|channels|surround/i.test(combined)) return "Audio Channels";
+        if (cat === "edition" || /imax|criterion|director|extended|remux/i.test(combined)) return "Edition / Cut";
+        if (cat === "studio" || /netflix|disney|hbo|apple|prime|paramount|marvel|dc|a24/i.test(combined)) return "Studio / Network";
+        if (cat === "ratings" || /pg-13|nc-17|tv-ma|rated/i.test(combined)) return "Age Rating";
+        if (cat === "ribbon") return "Corner Ribbon";
+        return "Custom Overlay";
+    };
+
+    // Helper to query all active custom badges overriding a given layer category
+    const getMatchingActiveCustomBadgesForCategory = (category: string) => {
+        return customBadges.filter(cb => {
+            if (!cb.enabled) return false;
+            const cat = (cb.category || "").toLowerCase();
+            const rule = (cb.matchRule || "").toLowerCase();
+            const name = (cb.name || "").toLowerCase();
+            const combined = `${cat} ${rule} ${name}`;
+            if (category === "resolution") return cat === "resolution" || /4k|1080|720|sd|uhd|fhd/i.test(combined);
+            if (category === "hdr") return cat === "hdr" || /dv|hdr|dolby.*vision/i.test(combined);
+            if (category === "codec") return cat === "codec" || /hevc|av1|prores|avc/i.test(combined);
+            if (category === "audio") return cat === "audio" || /atmos|truehd|dts/i.test(combined);
+            if (category === "channels") return /7\.1|5\.1|2\.0|channels|surround/i.test(combined);
+            if (category === "edition") return cat === "edition" || /imax|criterion|director|extended|remux/i.test(combined);
+            if (category === "studio") return cat === "studio" || /netflix|disney|hbo|apple|prime|paramount|marvel|dc|a24/i.test(combined);
+            if (category === "ratings") return cat === "ratings" || /pg-13|nc-17|tv-ma|rated/i.test(combined);
+            return false;
+        });
+    };
+
     // Helper to render badges into assigned positions in the simulator
     const renderBadgesForPosition = (pos: string) => {
         const badges: React.ReactNode[] = [];
+        const simDetected = {
+            resolution: simResolution === "none" ? undefined : simResolution,
+            hdr: simHdr === "none" ? undefined : simHdr,
+            codec: simCodec === "none" ? undefined : simCodec,
+            audio: simAudio === "none" ? undefined : simAudio,
+            audioChannels: simChannels === "none" ? undefined : simChannels,
+            edition: simEdition === "none" ? undefined : simEdition,
+            studio: simStudio === "none" ? undefined : simStudio,
+            contentRating: simRating === "none" ? undefined : simRating
+        };
 
-        // 1. Resolution (4K UHD / 1080p FHD)
-        if (simResolutionPosition === pos && simResolution !== "none") {
+        let hasCustomRes = false;
+        let hasCustomHdr = false;
+        let hasCustomCodec = false;
+        let hasCustomAudio = false;
+        let hasCustomEdition = false;
+        let hasCustomStudio = false;
+        let hasCustomRating = false;
+
+        // 1. Check matching active custom badges for this position (Priority 1)
+        const activeMatchedCustom = customBadges.filter(cb => cb.enabled && doesCustomBadgeMatchDetected(cb, simDetected));
+        for (const cb of activeMatchedCustom) {
+            const cbPos = cb.position || "top-right";
+            if (cbPos === pos) {
+                const overriddenCat = getCustomBadgeOverriddenCategory(cb);
+                if (overriddenCat.includes("Resolution")) hasCustomRes = true;
+                if (overriddenCat.includes("Dynamic Range")) hasCustomHdr = true;
+                if (overriddenCat.includes("Video Codec")) hasCustomCodec = true;
+                if (overriddenCat.includes("Audio Format")) hasCustomAudio = true;
+                if (overriddenCat.includes("Edition")) hasCustomEdition = true;
+                if (overriddenCat.includes("Studio")) hasCustomStudio = true;
+                if (overriddenCat.includes("Age Rating")) hasCustomRating = true;
+
+                badges.push(
+                    <div key={`custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
+                        <img 
+                            src={`/api/curation/badges/${cb.id}`} 
+                            alt={cb.name}
+                            style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
+                            className="object-contain drop-shadow"
+                        />
+                    </div>
+                );
+            }
+        }
+
+        // 2. Built-in Fallbacks (Priority 2) - only added if not overridden by a custom badge
+        // Resolution (4K UHD / 1080p FHD)
+        if (simResolutionPosition === pos && simResolution !== "none" && !hasCustomRes) {
             badges.push(
                 <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
                     simTheme === "gold" 
@@ -1418,8 +1673,8 @@ export default function CurationStudio() {
             );
         }
 
-        // 2. HDR / Dolby Vision
-        if (simHdrPosition === pos && simHdr !== "none") {
+        // HDR / Dolby Vision
+        if (simHdrPosition === pos && simHdr !== "none" && !hasCustomHdr) {
             badges.push(
                 <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1435,8 +1690,8 @@ export default function CurationStudio() {
             );
         }
 
-        // 3. Video Codec (HEVC / AV1 / AVC / ProRes)
-        if (simCodecPosition === pos && simCodec !== "none") {
+        // Video Codec (HEVC / AV1 / AVC / ProRes)
+        if (simCodecPosition === pos && simCodec !== "none" && !hasCustomCodec) {
             badges.push(
                 <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1445,8 +1700,8 @@ export default function CurationStudio() {
             );
         }
 
-        // 4. Audio format (Dolby Atmos / TrueHD / DTS:X / 5.1)
-        if (simAudioPosition === pos && simAudio !== "none") {
+        // Audio format (Dolby Atmos / TrueHD / DTS:X / 5.1)
+        if (simAudioPosition === pos && simAudio !== "none" && !hasCustomAudio) {
             badges.push(
                 <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1455,7 +1710,7 @@ export default function CurationStudio() {
             );
         }
 
-        // 5. Audio Surround Channels (7.1 / 5.1 / 2.0)
+        // Audio Surround Channels (7.1 / 5.1 / 2.0)
         if (simChannelsPosition === pos && simChannels !== "none") {
             badges.push(
                 <div key="channels" className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
@@ -1465,8 +1720,8 @@ export default function CurationStudio() {
             );
         }
 
-        // 6. Edition Cuts (IMAX / Criterion / Extended / Director's Cut / Remux)
-        if (simEditionPosition === pos && simEdition !== "none") {
+        // Edition Cuts (IMAX / Criterion / Extended / Director's Cut / Remux)
+        if (simEditionPosition === pos && simEdition !== "none" && !hasCustomEdition) {
             badges.push(
                 <div key="edition" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${
                     simEdition === "IMAX" 
@@ -1483,8 +1738,8 @@ export default function CurationStudio() {
             );
         }
 
-        // 7. Studio / Network Logos (HBO / Disney+ / Netflix / Apple TV+ / etc.)
-        if (simStudioPosition === pos && simStudio !== "none") {
+        // Studio / Network Logos
+        if (simStudioPosition === pos && simStudio !== "none" && !hasCustomStudio) {
             badges.push(
                 <div key="studio" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${
                     simStudio === "NETFLIX" ? 'border-red-500 text-red-400 bg-slate-950/95' :
@@ -1499,8 +1754,8 @@ export default function CurationStudio() {
             );
         }
 
-        // 8. Content Rating (G, PG, PG-13, R, NC-17, TV-MA)
-        if (simRatingPosition === pos && simRating !== "none") {
+        // Content Rating (G, PG, PG-13, R, NC-17, TV-MA)
+        if (simRatingPosition === pos && simRating !== "none" && !hasCustomRating) {
             const isMature = simRating.includes("R") || simRating.includes("TV-MA") || simRating.includes("NC-17");
             const isTeen = simRating.includes("PG-13") || simRating.includes("TV-14");
             badges.push(
@@ -1515,7 +1770,7 @@ export default function CurationStudio() {
             );
         }
 
-        // 9. Community Ratings (IMDb, Rotten Tomatoes, Metacritic)
+        // Community Ratings (IMDb, Rotten Tomatoes, Metacritic)
         if (simRatingsPosition === pos && simRatings) {
             badges.push(
                 <div key="ratings" className="relative flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-950/95 border border-white/20 shadow-lg text-[10px] overflow-hidden backdrop-blur-md">
@@ -1530,15 +1785,18 @@ export default function CurationStudio() {
             );
         }
 
-        // 10. Custom Badges assigned to this position
+        // Explicitly Selected Custom Badge
         if (simCustomBadgeId !== "none") {
             const cb = customBadges.find(b => b.id === simCustomBadgeId);
-            if (cb && (cb.position || "top-right") === pos) {
+            if (cb && (cb.position || "top-right") === pos && !activeMatchedCustom.some(m => m.id === cb.id)) {
                 badges.push(
-                    <div key="custom" className="relative px-2 py-1 rounded bg-purple-950/90 border border-purple-400 text-[9px] font-bold text-purple-200 shadow-lg flex items-center gap-1 overflow-hidden backdrop-blur-md">
-                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                        <Sparkles className="h-3 w-3 text-purple-300" />
-                        <span>{cb.name}</span>
+                    <div key={`sim-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg" style={{ opacity: cb.opacity ?? 1.0 }}>
+                        <img 
+                            src={`/api/curation/badges/${cb.id}`} 
+                            alt={cb.name}
+                            style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
+                            className="object-contain drop-shadow"
+                        />
                     </div>
                 );
             }
@@ -1552,7 +1810,43 @@ export default function CurationStudio() {
         const badges: React.ReactNode[] = [];
         const detected = item?.detectedBadges || {};
 
-        if (detected.resolution && simResolutionPosition === pos) {
+        let hasCustomRes = false;
+        let hasCustomHdr = false;
+        let hasCustomCodec = false;
+        let hasCustomAudio = false;
+        let hasCustomEdition = false;
+        let hasCustomStudio = false;
+        let hasCustomRating = false;
+
+        // 1. Check matching active custom badges for this position
+        const activeMatchedCustom = customBadges.filter(cb => cb.enabled && doesCustomBadgeMatchDetected(cb, detected));
+        for (const cb of activeMatchedCustom) {
+            const cbPos = cb.position || "top-right";
+            if (cbPos === pos) {
+                const overriddenCat = getCustomBadgeOverriddenCategory(cb);
+                if (overriddenCat.includes("Resolution")) hasCustomRes = true;
+                if (overriddenCat.includes("Dynamic Range")) hasCustomHdr = true;
+                if (overriddenCat.includes("Video Codec")) hasCustomCodec = true;
+                if (overriddenCat.includes("Audio Format")) hasCustomAudio = true;
+                if (overriddenCat.includes("Edition")) hasCustomEdition = true;
+                if (overriddenCat.includes("Studio")) hasCustomStudio = true;
+                if (overriddenCat.includes("Age Rating")) hasCustomRating = true;
+
+                badges.push(
+                    <div key={`inspect-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
+                        <img 
+                            src={`/api/curation/badges/${cb.id}`} 
+                            alt={cb.name}
+                            style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
+                            className="object-contain drop-shadow"
+                        />
+                    </div>
+                );
+            }
+        }
+
+        // 2. Built-in Fallbacks (Priority 2)
+        if (detected.resolution && simResolutionPosition === pos && !hasCustomRes) {
             badges.push(
                 <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
                     simTheme === "gold" 
@@ -1567,7 +1861,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.hdr && simHdrPosition === pos) {
+        if (detected.hdr && simHdrPosition === pos && !hasCustomHdr) {
             badges.push(
                 <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1583,7 +1877,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.codec && simCodecPosition === pos) {
+        if (detected.codec && simCodecPosition === pos && !hasCustomCodec) {
             badges.push(
                 <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1592,7 +1886,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.audio && simAudioPosition === pos) {
+        if (detected.audio && simAudioPosition === pos && !hasCustomAudio) {
             badges.push(
                 <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1610,7 +1904,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.edition && simEditionPosition === pos) {
+        if (detected.edition && simEditionPosition === pos && !hasCustomEdition) {
             badges.push(
                 <div key="edition" className="relative px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1619,7 +1913,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.studio && simStudioPosition === pos) {
+        if (detected.studio && simStudioPosition === pos && !hasCustomStudio) {
             badges.push(
                 <div key="studio" className="relative px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1628,7 +1922,7 @@ export default function CurationStudio() {
             );
         }
 
-        if (detected.contentRating && simRatingPosition === pos) {
+        if (detected.contentRating && simRatingPosition === pos && !hasCustomRating) {
             badges.push(
                 <div key="rating" className="relative px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
                     <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
@@ -1691,6 +1985,220 @@ export default function CurationStudio() {
                 {sourceType?.toUpperCase() || "MANUAL"}
             </Badge>
         );
+    };
+
+    // Helper to calculate active overlays & priority breakdown for the simulator
+    const getSimulatedLayersBreakdown = () => {
+        const layers: Array<{
+            category: string;
+            value: string;
+            sourceType: "custom" | "builtin";
+            sourceName: string;
+            position: string;
+        }> = [];
+
+        const simDetected = {
+            resolution: simResolution === "none" ? undefined : simResolution,
+            hdr: simHdr === "none" ? undefined : simHdr,
+            codec: simCodec === "none" ? undefined : simCodec,
+            audio: simAudio === "none" ? undefined : simAudio,
+            audioChannels: simChannels === "none" ? undefined : simChannels,
+            edition: simEdition === "none" ? undefined : simEdition,
+            studio: simStudio === "none" ? undefined : simStudio,
+            contentRating: simRating === "none" ? undefined : simRating
+        };
+
+        // Resolution
+        if (simResolution !== "none") {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Resolution") && doesCustomBadgeMatchDetected(cb, simDetected));
+            if (matchingCustom) {
+                layers.push({ category: "Resolution", value: simResolution, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simResolutionPosition });
+            } else {
+                layers.push({ category: "Resolution", value: simResolution, sourceType: "builtin", sourceName: `Kometa SVG (${simTheme === "gold" ? "Gold" : "Obsidian"})`, position: simResolutionPosition });
+            }
+        }
+
+        // HDR
+        if (simHdr !== "none") {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Dynamic Range") && doesCustomBadgeMatchDetected(cb, simDetected));
+            if (matchingCustom) {
+                layers.push({ category: "HDR / DV", value: simHdr === "DV" ? "Dolby Vision" : simHdr, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simHdrPosition });
+            } else {
+                layers.push({ category: "HDR / DV", value: simHdr === "DV" ? "Dolby Vision" : simHdr, sourceType: "builtin", sourceName: "Kometa SVG", position: simHdrPosition });
+            }
+        }
+
+        // Video Codec
+        if (simCodec !== "none") {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Video Codec") && doesCustomBadgeMatchDetected(cb, simDetected));
+            if (matchingCustom) {
+                layers.push({ category: "Video Codec", value: simCodec, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simCodecPosition });
+            } else {
+                layers.push({ category: "Video Codec", value: simCodec, sourceType: "builtin", sourceName: "Kometa SVG", position: simCodecPosition });
+            }
+        }
+
+        // Audio Codec
+        if (simAudio !== "none") {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Audio Format") && doesCustomBadgeMatchDetected(cb, simDetected));
+            if (matchingCustom) {
+                layers.push({ category: "Audio Format", value: simAudio, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simAudioPosition });
+            } else {
+                layers.push({ category: "Audio Format", value: simAudio, sourceType: "builtin", sourceName: "Kometa SVG", position: simAudioPosition });
+            }
+        }
+
+        // Audio Channels
+        if (simChannels !== "none") {
+            layers.push({ category: "Audio Channels", value: `${simChannels} CH`, sourceType: "builtin", sourceName: "Kometa SVG", position: simChannelsPosition });
+        }
+
+        // Edition
+        if (simEdition !== "none") {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Edition") && doesCustomBadgeMatchDetected(cb, simDetected));
+            if (matchingCustom) {
+                layers.push({ category: "Edition / Cut", value: simEdition, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simEditionPosition });
+            } else {
+                layers.push({ category: "Edition / Cut", value: simEdition, sourceType: "builtin", sourceName: "Kometa SVG", position: simEditionPosition });
+            }
+        }
+
+        // Studio
+        if (simStudio !== "none") {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Studio") && doesCustomBadgeMatchDetected(cb, simDetected));
+            if (matchingCustom) {
+                layers.push({ category: "Studio / Network", value: simStudio, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simStudioPosition });
+            } else {
+                layers.push({ category: "Studio / Network", value: simStudio, sourceType: "builtin", sourceName: "Kometa SVG", position: simStudioPosition });
+            }
+        }
+
+        // Content Rating
+        if (simRating !== "none") {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Age Rating") && doesCustomBadgeMatchDetected(cb, simDetected));
+            if (matchingCustom) {
+                layers.push({ category: "Age Rating", value: simRating, sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simRatingPosition });
+            } else {
+                layers.push({ category: "Age Rating", value: simRating, sourceType: "builtin", sourceName: "Kometa SVG", position: simRatingPosition });
+            }
+        }
+
+        // Corner Ribbon
+        if (simShowRibbon) {
+            layers.push({ category: "Corner Ribbon", value: getEffectiveRibbonText(), sourceType: "builtin", sourceName: `Gloss Ribbon (${simRibbonTheme})`, position: simRibbonPosition });
+        }
+
+        return layers;
+    };
+
+    // Helper to calculate decision matrix for inspected Plex media item
+    const getInspectedItemDecisionMatrix = (item: any) => {
+        const detected = item?.detectedBadges || {};
+        const decisions: Array<{
+            property: string;
+            detectedValue: string;
+            priority: "Priority 1 (Custom Override)" | "Priority 2 (Built-in SVG)";
+            badgeName: string;
+            position: string;
+            isCustom: boolean;
+        }> = [];
+
+        if (detected.resolution) {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Resolution") && doesCustomBadgeMatchDetected(cb, detected));
+            decisions.push({
+                property: "Resolution",
+                detectedValue: detected.resolution,
+                priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
+                badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.resolution} SVG`,
+                position: matchingCustom?.position || simResolutionPosition,
+                isCustom: !!matchingCustom
+            });
+        }
+
+        if (detected.hdr) {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Dynamic Range") && doesCustomBadgeMatchDetected(cb, detected));
+            decisions.push({
+                property: "Dynamic Range / HDR",
+                detectedValue: detected.hdr === "DV" ? "Dolby Vision" : detected.hdr,
+                priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
+                badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.hdr} SVG`,
+                position: matchingCustom?.position || simHdrPosition,
+                isCustom: !!matchingCustom
+            });
+        }
+
+        if (detected.audio) {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Audio Format") && doesCustomBadgeMatchDetected(cb, detected));
+            decisions.push({
+                property: "Audio Format",
+                detectedValue: detected.audio,
+                priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
+                badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.audio} SVG`,
+                position: matchingCustom?.position || simAudioPosition,
+                isCustom: !!matchingCustom
+            });
+        }
+
+        if (detected.audioChannels) {
+            decisions.push({
+                property: "Audio Channels",
+                detectedValue: `${detected.audioChannels} Channels`,
+                priority: "Priority 2 (Built-in SVG)",
+                badgeName: `Built-in ${detected.audioChannels} CH SVG`,
+                position: simChannelsPosition,
+                isCustom: false
+            });
+        }
+
+        if (detected.codec) {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Video Codec") && doesCustomBadgeMatchDetected(cb, detected));
+            decisions.push({
+                property: "Video Codec",
+                detectedValue: detected.codec,
+                priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
+                badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.codec} SVG`,
+                position: matchingCustom?.position || simCodecPosition,
+                isCustom: !!matchingCustom
+            });
+        }
+
+        if (detected.edition) {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Edition") && doesCustomBadgeMatchDetected(cb, detected));
+            decisions.push({
+                property: "Edition / Cut",
+                detectedValue: detected.edition,
+                priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
+                badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.edition} SVG`,
+                position: matchingCustom?.position || simEditionPosition,
+                isCustom: !!matchingCustom
+            });
+        }
+
+        if (detected.studio) {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Studio") && doesCustomBadgeMatchDetected(cb, detected));
+            decisions.push({
+                property: "Studio / Network",
+                detectedValue: detected.studio,
+                priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
+                badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.studio} SVG`,
+                position: matchingCustom?.position || simStudioPosition,
+                isCustom: !!matchingCustom
+            });
+        }
+
+        if (detected.contentRating) {
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Age Rating") && doesCustomBadgeMatchDetected(cb, detected));
+            decisions.push({
+                property: "Age Rating",
+                detectedValue: detected.contentRating,
+                priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
+                badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.contentRating} SVG`,
+                position: matchingCustom?.position || simRatingPosition,
+                isCustom: !!matchingCustom
+            });
+        }
+
+        return decisions;
     };
 
     if (loading) {
@@ -2410,6 +2918,61 @@ export default function CurationStudio() {
                 {/* TAB 2: POSTER OVERLAYS & CUSTOM BADGE UPLOAD STUDIO */}
                 {/* ========================================================================= */}
                 <TabsContent value="overlays" className="space-y-6">
+                    {/* Overlay Engine Priority & Resolution Hierarchy Banner */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900/90 to-slate-900/70 border border-purple-500/30 shadow-xl space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                                    <Layers className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                        Overlay Engine Priority & Multi-Layer Hierarchy
+                                        <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px]">Active Engine</Badge>
+                                    </h3>
+                                    <p className="text-xs text-slate-400">
+                                        How Portalarr automatically scans media, prioritizes custom uploads, and composites badges onto Plex posters.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                            {/* Step 1: Scan & Detect */}
+                            <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1.5">
+                                <div className="flex items-center gap-2 text-xs font-bold text-sky-400">
+                                    <span className="flex items-center justify-center w-5 h-5 rounded-full bg-sky-500/20 text-[11px] font-mono">1</span>
+                                    <span>Stream Telemetry Scan</span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    Plex files are scanned for exact video resolution (4K/1080p), HDR (Dolby Vision/HDR10+), Audio (Atmos/TrueHD/DTS), Codec, Studio, and Edition.
+                                </p>
+                            </div>
+
+                            {/* Step 2: Priority 1 Custom Badges */}
+                            <div className="p-3 rounded-xl bg-slate-950/70 border border-purple-800/40 space-y-1.5">
+                                <div className="flex items-center gap-2 text-xs font-bold text-purple-400">
+                                    <span className="flex items-center justify-center w-5 h-5 rounded-full bg-purple-500/20 text-[11px] font-mono">2</span>
+                                    <span>Priority 1: Custom Badges (Override)</span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    Active custom image badges (from GitHub or uploads) matching the stream <strong className="text-purple-300">take top priority</strong> and directly suppress the default SVG for that layer.
+                                </p>
+                            </div>
+
+                            {/* Step 3: Priority 2 Built-in SVGs */}
+                            <div className="p-3 rounded-xl bg-slate-950/70 border border-amber-800/40 space-y-1.5">
+                                <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                                    <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-[11px] font-mono">3</span>
+                                    <span>Priority 2: Built-in Kometa SVGs</span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    If no custom badge matches a detected layer, high-gloss Obsidian Glass or Amber Gold metallic SVGs render dynamically in your configured corner.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Interactive Poster Preview Simulator */}
                         <div className="lg:col-span-5 flex flex-col items-center justify-center p-6 bg-slate-900/70 border border-slate-800 rounded-2xl shadow-xl space-y-4">
@@ -2461,7 +3024,7 @@ export default function CurationStudio() {
                                                 <filter id="sim-ribbon-shadow" x="-20%" y="-20%" width="140%" height="140%">
                                                     <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#000000" floodOpacity="0.8"/>
                                                 </filter>
-                                            </defs>
+                                             </defs>
                                             <g filter="url(#sim-ribbon-shadow)">
                                                 {simRibbonPosition === 'top-right' && (
                                                     <g transform="translate(52.5, 52.5) rotate(45) translate(-52.5, -52.5)">
@@ -2548,6 +3111,42 @@ export default function CurationStudio() {
                                 <Shield className="h-3.5 w-3.5 text-emerald-400" />
                                 <span>Pristine Original Backups: <strong className="text-white">{backupsCount}</strong> in vault</span>
                             </div>
+
+                            {/* Applied Overlays & Priority Breakdown Card */}
+                            <div className="w-full p-3 bg-slate-950/90 border border-slate-800 rounded-xl space-y-2 text-xs">
+                                <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                                    <span className="font-bold text-white text-[11px] flex items-center gap-1.5">
+                                        <Layers className="h-3.5 w-3.5 text-purple-400" /> Applied Overlays Breakdown
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">{getSimulatedLayersBreakdown().length} Active</span>
+                                </div>
+
+                                {getSimulatedLayersBreakdown().length === 0 ? (
+                                    <p className="text-[11px] text-slate-500 py-1 text-center">No overlay layers enabled.</p>
+                                ) : (
+                                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                        {getSimulatedLayersBreakdown().map((ly, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-slate-900/80 border border-slate-800/80 text-[10px]">
+                                                <div className="space-y-0.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-semibold text-white">{ly.category}:</span>
+                                                        <span className="text-slate-300 font-bold">{ly.value}</span>
+                                                    </div>
+                                                    <p className="text-[9px] text-slate-400">Position: <strong className="text-slate-300">{ly.position}</strong></p>
+                                                </div>
+                                                <Badge className={`text-[9px] px-1.5 py-0 gap-1 ${
+                                                    ly.sourceType === "custom" 
+                                                        ? "bg-purple-950 text-purple-300 border-purple-500/40" 
+                                                        : "bg-slate-800 text-slate-300 border-slate-700"
+                                                }`}>
+                                                    {ly.sourceType === "custom" && <Zap className="h-2.5 w-2.5 text-amber-400" />}
+                                                    <span>{ly.sourceType === "custom" ? "⚡ Priority 1 (Custom)" : "✓ Priority 2 (SVG)"}</span>
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Controls & Batch Execution */}
@@ -2587,9 +3186,27 @@ export default function CurationStudio() {
                                     <div className="space-y-2">
                                         {/* Resolution / 4K UHD */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                                                <span className="font-semibold text-white text-[11px]">Resolution (4K / 1080p)</span>
+                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                                                    <span className="font-semibold text-white text-[11px]">Resolution (4K / 1080p)</span>
+                                                </div>
+                                                {(() => {
+                                                    const matches = getMatchingActiveCustomBadgesForCategory("resolution");
+                                                    if (matches.length > 0) {
+                                                        return (
+                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
+                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
+                                                                <span>⚡ Priority 1 ({matches.length})</span>
+                                                            </Badge>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
+                                                            ✓ Priority 2 SVG
+                                                        </Badge>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="sm:col-span-4">
                                                 <Select value={simResolution} onValueChange={(val: any) => setSimResolution(val)}>
@@ -2622,9 +3239,27 @@ export default function CurationStudio() {
 
                                         {/* HDR / Dolby Vision */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-purple-400"></span>
-                                                <span className="font-semibold text-white text-[11px]">Dynamic Range (DV / HDR)</span>
+                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                                                    <span className="font-semibold text-white text-[11px]">Dynamic Range (DV / HDR)</span>
+                                                </div>
+                                                {(() => {
+                                                    const matches = getMatchingActiveCustomBadgesForCategory("hdr");
+                                                    if (matches.length > 0) {
+                                                        return (
+                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
+                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
+                                                                <span>⚡ Priority 1 ({matches.length})</span>
+                                                            </Badge>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
+                                                            ✓ Priority 2 SVG
+                                                        </Badge>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="sm:col-span-4">
                                                 <Select value={simHdr} onValueChange={(val: any) => setSimHdr(val)}>
@@ -2658,9 +3293,27 @@ export default function CurationStudio() {
 
                                         {/* Video Codec */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-                                                <span className="font-semibold text-white text-[11px]">Video Codec (HEVC / AV1)</span>
+                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                                                    <span className="font-semibold text-white text-[11px]">Video Codec (HEVC / AV1)</span>
+                                                </div>
+                                                {(() => {
+                                                    const matches = getMatchingActiveCustomBadgesForCategory("codec");
+                                                    if (matches.length > 0) {
+                                                        return (
+                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
+                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
+                                                                <span>⚡ Priority 1 ({matches.length})</span>
+                                                            </Badge>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
+                                                            ✓ Priority 2 SVG
+                                                        </Badge>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="sm:col-span-4">
                                                 <Select value={simCodec} onValueChange={(val: any) => setSimCodec(val)}>
@@ -2695,9 +3348,27 @@ export default function CurationStudio() {
 
                                         {/* Audio Codec */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-sky-400"></span>
-                                                <span className="font-semibold text-white text-[11px]">Audio Codec (Atmos / DTS)</span>
+                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-sky-400"></span>
+                                                    <span className="font-semibold text-white text-[11px]">Audio Codec (Atmos / DTS)</span>
+                                                </div>
+                                                {(() => {
+                                                    const matches = getMatchingActiveCustomBadgesForCategory("audio");
+                                                    if (matches.length > 0) {
+                                                        return (
+                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
+                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
+                                                                <span>⚡ Priority 1 ({matches.length})</span>
+                                                            </Badge>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
+                                                            ✓ Priority 2 SVG
+                                                        </Badge>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="sm:col-span-4">
                                                 <Select value={simAudio} onValueChange={(val: any) => setSimAudio(val)}>
@@ -2732,9 +3403,27 @@ export default function CurationStudio() {
 
                                         {/* Audio Channels */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-                                                <span className="font-semibold text-white text-[11px]">Audio Channels (7.1 / 5.1)</span>
+                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                                                    <span className="font-semibold text-white text-[11px]">Audio Channels (7.1 / 5.1)</span>
+                                                </div>
+                                                {(() => {
+                                                    const matches = getMatchingActiveCustomBadgesForCategory("channels");
+                                                    if (matches.length > 0) {
+                                                        return (
+                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
+                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
+                                                                <span>⚡ Priority 1 ({matches.length})</span>
+                                                            </Badge>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
+                                                            ✓ Priority 2 SVG
+                                                        </Badge>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="sm:col-span-4">
                                                 <Select value={simChannels} onValueChange={(val: any) => setSimChannels(val)}>
@@ -2768,9 +3457,27 @@ export default function CurationStudio() {
 
                                         {/* Edition / Cut */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                                <span className="font-semibold text-white text-[11px]">Edition / Cut (IMAX / Remux)</span>
+                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                                    <span className="font-semibold text-white text-[11px]">Edition / Cut (IMAX / Remux)</span>
+                                                </div>
+                                                {(() => {
+                                                    const matches = getMatchingActiveCustomBadgesForCategory("edition");
+                                                    if (matches.length > 0) {
+                                                        return (
+                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
+                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
+                                                                <span>⚡ Priority 1 ({matches.length})</span>
+                                                            </Badge>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
+                                                            ✓ Priority 2 SVG
+                                                        </Badge>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="sm:col-span-4">
                                                 <Select value={simEdition} onValueChange={(val: any) => setSimEdition(val)}>
@@ -2806,9 +3513,27 @@ export default function CurationStudio() {
 
                                         {/* Studio / Network */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-pink-400"></span>
-                                                <span className="font-semibold text-white text-[11px]">Studio / Network (HBO / Netflix)</span>
+                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-pink-400"></span>
+                                                    <span className="font-semibold text-white text-[11px]">Studio / Network (HBO / Netflix)</span>
+                                                </div>
+                                                {(() => {
+                                                    const matches = getMatchingActiveCustomBadgesForCategory("studio");
+                                                    if (matches.length > 0) {
+                                                        return (
+                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
+                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
+                                                                <span>⚡ Priority 1 ({matches.length})</span>
+                                                            </Badge>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
+                                                            ✓ Priority 2 SVG
+                                                        </Badge>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="sm:col-span-4">
                                                 <Select value={simStudio} onValueChange={(val: any) => setSimStudio(val)}>
@@ -2848,9 +3573,27 @@ export default function CurationStudio() {
 
                                         {/* Content Rating */}
                                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-5 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-                                                <span className="font-semibold text-white text-[11px]">Age Rating (PG-13 / R / TV-MA)</span>
+                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+                                                    <span className="font-semibold text-white text-[11px]">Age Rating (PG-13 / R / TV-MA)</span>
+                                                </div>
+                                                {(() => {
+                                                    const matches = getMatchingActiveCustomBadgesForCategory("ratings");
+                                                    if (matches.length > 0) {
+                                                        return (
+                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
+                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
+                                                                <span>⚡ Priority 1 ({matches.length})</span>
+                                                            </Badge>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
+                                                            ✓ Priority 2 SVG
+                                                        </Badge>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="sm:col-span-4">
                                                 <Select value={simRating} onValueChange={(val: any) => setSimRating(val)}>
@@ -3518,68 +4261,208 @@ export default function CurationStudio() {
                                 </div>
                             </div>
 
-                            {customBadges.length === 0 ? (
-                                <div className="text-center py-10 text-slate-500 text-xs space-y-2">
-                                    <Palette className="h-8 w-8 mx-auto text-slate-600" />
-                                    <p>No custom badges uploaded yet. Click &quot;Upload Custom Badge&quot; above to add your own overlays!</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                    {customBadges.map(badge => (
-                                        <div 
-                                            key={badge.id}
-                                            className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl flex flex-col justify-between space-y-3 group hover:border-purple-500/40 transition-all"
-                                        >
-                                            <div className="space-y-2">
-                                                {/* Header Pill */}
-                                                <div className="flex items-center justify-between">
-                                                    <Badge variant="outline" className="text-[9px] uppercase tracking-wider border-slate-700 text-purple-300">
-                                                        {badge.category}
-                                                    </Badge>
-                                                    <Switch 
-                                                        checked={badge.enabled} 
-                                                        onCheckedChange={checked => handleToggleCustomBadge(badge.id, checked)}
-                                                    />
-                                                </div>
-
-                                                {/* Image Preview Box */}
-                                                <div className="h-20 bg-slate-900/90 border border-slate-800/80 rounded-lg flex items-center justify-center p-2 relative overflow-hidden group-hover:border-slate-700 transition-colors">
-                                                    <img 
-                                                        src={`/api/curation/badges/${badge.id}`} 
-                                                        alt={badge.name}
-                                                        className="max-h-full max-w-full object-contain"
-                                                        style={{ opacity: badge.opacity ?? 1.0 }}
-                                                    />
-                                                </div>
-
-                                                {/* Title & Details */}
-                                                <div>
-                                                    <h4 className="font-bold text-white text-xs truncate">{badge.name}</h4>
-                                                    <p className="text-[10px] text-slate-400">
-                                                        Pos: {badge.position} • {badge.width}x{badge.height}px
-                                                    </p>
-                                                    {badge.matchRule && (
-                                                        <p className="text-[10px] text-purple-400 font-mono truncate mt-0.5">
-                                                            Match: {badge.matchRule}
-                                                        </p>
-                                                    )}
-                                                </div>
+                            {/* Batch Selection & Filter Toolbar */}
+                            {customBadges.length > 0 && (
+                                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        {/* Search & Category Filter */}
+                                        <div className="flex flex-1 items-center gap-2">
+                                            <div className="relative flex-1 max-w-sm">
+                                                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                                                <Input 
+                                                    placeholder="Filter badges by name, match rule, or format..." 
+                                                    value={customBadgeSearch}
+                                                    onChange={e => setCustomBadgeSearch(e.target.value)}
+                                                    className="h-8 pl-8 text-xs bg-slate-900/90 border-slate-800 text-white"
+                                                />
                                             </div>
+                                            <Select value={customBadgeFilter} onValueChange={setCustomBadgeFilter}>
+                                                <SelectTrigger className="h-8 w-[160px] text-xs bg-slate-900/90 border-slate-800 text-slate-300">
+                                                    <SelectValue placeholder="Category" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    <SelectItem value="all">All Categories ({customBadges.length})</SelectItem>
+                                                    <SelectItem value="resolution">Resolutions (4K / 1080p)</SelectItem>
+                                                    <SelectItem value="hdr">HDR & Dolby Vision</SelectItem>
+                                                    <SelectItem value="audio">Audio Codecs</SelectItem>
+                                                    <SelectItem value="codec">Video Codecs</SelectItem>
+                                                    <SelectItem value="edition">Editions & Cuts</SelectItem>
+                                                    <SelectItem value="studio">Streaming & Studios</SelectItem>
+                                                    <SelectItem value="ratings">Ratings</SelectItem>
+                                                    <SelectItem value="ribbon">Ribbons & Gradients</SelectItem>
+                                                    <SelectItem value="custom">Custom</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                            {/* Action Bar */}
-                                            <div className="flex items-center justify-between pt-1 border-t border-slate-800/60 text-xs">
-                                                <span className="text-[9px] text-slate-500 uppercase">{badge.fileType}</span>
+                                        {/* Selection Buttons & Action Controls */}
+                                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                            <Button 
+                                                size="sm" 
+                                                variant="outline" 
+                                                onClick={handleSelectAllCustomBadges}
+                                                className="h-8 px-2.5 text-xs border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
+                                            >
+                                                <CheckCheck className="h-3.5 w-3.5 mr-1 text-purple-400" />
+                                                Select All ({getFilteredCustomBadges().length})
+                                            </Button>
+                                            {selectedCustomBadgeIds.length > 0 && (
                                                 <Button 
                                                     size="sm" 
                                                     variant="ghost" 
-                                                    onClick={() => handleDeleteCustomBadge(badge.id)}
-                                                    className="h-6 px-2 text-[10px] text-rose-400 hover:bg-rose-950/40 hover:text-rose-300"
+                                                    onClick={handleSelectNoneCustomBadges}
+                                                    className="h-8 px-2.5 text-xs text-slate-400 hover:text-white hover:bg-slate-900"
                                                 >
-                                                    <Trash2 className="h-3 w-3 mr-1" /> Remove
+                                                    Select None
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Batch Actions Bar (when 1+ badges selected) */}
+                                    {selectedCustomBadgeIds.length > 0 && (
+                                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80 bg-purple-950/20 -mx-3 -mb-3 p-3 rounded-b-xl">
+                                            <div className="flex items-center gap-2">
+                                                <Badge className="bg-purple-600 text-white text-xs font-semibold px-2 py-0.5">
+                                                    {selectedCustomBadgeIds.length} Selected
+                                                </Badge>
+                                                <span className="text-xs text-slate-400">
+                                                    out of {customBadges.length} total badges
+                                                </span>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline"
+                                                    onClick={() => handleToggleSelectedCustomBadges(true)}
+                                                    className="h-7 px-2 text-xs border-slate-700 bg-slate-900 text-slate-200 hover:text-emerald-400"
+                                                >
+                                                    Enable Selected
+                                                </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline"
+                                                    onClick={() => handleToggleSelectedCustomBadges(false)}
+                                                    className="h-7 px-2 text-xs border-slate-700 bg-slate-900 text-slate-200 hover:text-amber-400"
+                                                >
+                                                    Disable Selected
+                                                </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    disabled={deletingCustomBadges}
+                                                    onClick={handleDeleteSelectedCustomBadges}
+                                                    className="h-7 px-3 text-xs bg-rose-600 hover:bg-rose-500 text-white font-semibold shadow-md shadow-rose-950/50"
+                                                >
+                                                    {deletingCustomBadges ? (
+                                                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                                                    ) : (
+                                                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                                    )}
+                                                    Delete Selected ({selectedCustomBadgeIds.length})
                                                 </Button>
                                             </div>
                                         </div>
-                                    ))}
+                                    )}
+                                </div>
+                            )}
+
+                            {customBadges.length === 0 ? (
+                                <div className="text-center py-10 text-slate-500 text-xs space-y-2">
+                                    <Palette className="h-8 w-8 mx-auto text-slate-600" />
+                                    <p>No custom badges uploaded yet. Click &quot;Upload Custom Badge&quot; or &quot;GitHub Badge Hub&quot; above to add overlay packs!</p>
+                                </div>
+                            ) : getFilteredCustomBadges().length === 0 ? (
+                                <div className="text-center py-10 text-slate-500 text-xs space-y-2">
+                                    <Filter className="h-8 w-8 mx-auto text-slate-600" />
+                                    <p>No custom badges match your filter or search query.</p>
+                                    <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        onClick={() => { setCustomBadgeFilter("all"); setCustomBadgeSearch(""); }}
+                                        className="h-7 text-xs border-slate-700"
+                                    >
+                                        Clear Filters
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    {getFilteredCustomBadges().map(badge => {
+                                        const isSelected = selectedCustomBadgeIds.includes(badge.id);
+                                        return (
+                                            <div 
+                                                key={badge.id}
+                                                onClick={() => handleToggleSelectCustomBadge(badge.id)}
+                                                className={`p-3 rounded-xl flex flex-col justify-between space-y-3 cursor-pointer transition-all ${
+                                                    isSelected 
+                                                        ? "bg-purple-950/30 border-2 border-purple-500 shadow-lg shadow-purple-950/30 ring-1 ring-purple-500/40" 
+                                                        : "bg-slate-950/60 border border-slate-800 hover:border-purple-500/40"
+                                                }`}
+                                            >
+                                                <div className="space-y-2">
+                                                    {/* Header: Checkbox + Category Pill + Switch */}
+                                                    <div className="flex items-center justify-between" onClick={e => e.stopPropagation()}>
+                                                        <div className="flex items-center gap-2">
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => handleToggleSelectCustomBadge(badge.id)}
+                                                                className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500 focus:ring-offset-0 cursor-pointer"
+                                                            />
+                                                            <Badge variant="outline" className="text-[9px] uppercase tracking-wider border-slate-700 text-purple-300">
+                                                                {badge.category}
+                                                            </Badge>
+                                                        </div>
+                                                        <Switch 
+                                                            checked={badge.enabled} 
+                                                            onCheckedChange={checked => handleToggleCustomBadge(badge.id, checked)}
+                                                        />
+                                                    </div>
+
+                                                    {/* Image Preview Box */}
+                                                    <div className="h-20 bg-slate-900/90 border border-slate-800/80 rounded-lg flex items-center justify-center p-2 relative overflow-hidden group-hover:border-slate-700 transition-colors">
+                                                        <img 
+                                                            src={`/api/curation/badges/${badge.id}`} 
+                                                            alt={badge.name}
+                                                            className="max-h-full max-w-full object-contain"
+                                                            style={{ opacity: badge.opacity ?? 1.0 }}
+                                                        />
+                                                    </div>
+
+                                                    {/* Title & Details */}
+                                                    <div className="space-y-1">
+                                                        <h4 className="font-bold text-white text-xs truncate">{badge.name}</h4>
+                                                        <p className="text-[10px] text-slate-400">
+                                                            Pos: {badge.position} • {badge.width}x{badge.height}px
+                                                        </p>
+                                                        {badge.matchRule && (
+                                                            <p className="text-[10px] text-purple-400 font-mono truncate">
+                                                                Match: {badge.matchRule}
+                                                            </p>
+                                                        )}
+                                                        <div className="pt-0.5">
+                                                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-purple-950/70 text-purple-300 border border-purple-500/40 flex items-center gap-1 w-fit">
+                                                                <Zap className="h-2.5 w-2.5 text-purple-400 shrink-0" /> Overrides: {getCustomBadgeOverriddenCategory(badge)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Action Bar */}
+                                                <div className="flex items-center justify-between pt-1 border-t border-slate-800/60 text-xs" onClick={e => e.stopPropagation()}>
+                                                    <span className="text-[9px] text-slate-500 uppercase">{badge.fileType}</span>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="ghost" 
+                                                        onClick={() => handleDeleteCustomBadge(badge.id)}
+                                                        className="h-6 px-2 text-[10px] text-rose-400 hover:bg-rose-950/40 hover:text-rose-300"
+                                                    >
+                                                        <Trash2 className="h-3 w-3 mr-1" /> Remove
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </CardContent>
@@ -3882,6 +4765,69 @@ export default function CurationStudio() {
                                                     {inspectingItem.parts?.[0]?.sizeGb && <span className="px-2 py-0.5 bg-slate-900 rounded border border-slate-800 font-mono text-amber-300 font-bold">💾 {inspectingItem.parts[0].sizeGb} GB</span>}
                                                 </div>
                                             </div>
+
+                                            {/* Overlay Decision Matrix & Priority Engine Table */}
+                                            {getInspectedItemDecisionMatrix(inspectingItem.item).length > 0 && (
+                                                <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <Layers className="h-4 w-4 text-purple-400" />
+                                                            <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                                                Overlay Decision Matrix & Priority Engine
+                                                            </span>
+                                                        </div>
+                                                        <Badge variant="outline" className="border-purple-500/40 text-purple-300 bg-purple-950/30 text-[10px]">
+                                                            {getInspectedItemDecisionMatrix(inspectingItem.item).filter(d => d.isCustom).length} Custom (P1) • {getInspectedItemDecisionMatrix(inspectingItem.item).filter(d => !d.isCustom).length} SVG (P2)
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-[11px] text-slate-400">
+                                                        Exact decision trail showing which badge is selected for each detected media stream property and why.
+                                                    </p>
+
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-[11px] border-collapse">
+                                                            <thead>
+                                                                <tr className="border-b border-slate-800 text-slate-400 text-left">
+                                                                    <th className="py-1.5 px-2 font-semibold">Media Property</th>
+                                                                    <th className="py-1.5 px-2 font-semibold">Detected Value</th>
+                                                                    <th className="py-1.5 px-2 font-semibold">Chosen Priority</th>
+                                                                    <th className="py-1.5 px-2 font-semibold">Rendered Badge</th>
+                                                                    <th className="py-1.5 px-2 font-semibold text-right">Position</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-800/60">
+                                                                {getInspectedItemDecisionMatrix(inspectingItem.item).map((row, idx) => (
+                                                                    <tr key={idx} className="hover:bg-slate-900/50 transition-colors">
+                                                                        <td className="py-2 px-2 font-medium text-slate-200">{row.property}</td>
+                                                                        <td className="py-2 px-2 font-mono text-cyan-300 font-semibold">{row.detectedValue}</td>
+                                                                        <td className="py-2 px-2">
+                                                                            {row.isCustom ? (
+                                                                                <Badge className="bg-purple-950/80 text-purple-300 border border-purple-600/60 text-[9px] font-bold">
+                                                                                    ⚡ Priority 1 (Custom)
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <Badge variant="outline" className="text-slate-300 border-slate-700 bg-slate-900 text-[9px]">
+                                                                                    ✓ Priority 2 (SVG)
+                                                                                </Badge>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="py-2 px-2 text-white font-semibold">
+                                                                            {row.isCustom ? (
+                                                                                <span className="text-purple-300 flex items-center gap-1">
+                                                                                    <Sparkles className="h-3 w-3 text-purple-400 shrink-0" /> {row.badgeName}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-slate-300">{row.badgeName}</span>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="py-2 px-2 text-right text-slate-400 font-mono text-[10px]">{row.position}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* Video Streams Breakdown */}
                                             <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2">

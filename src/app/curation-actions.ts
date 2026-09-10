@@ -864,12 +864,46 @@ export async function deleteCustomBadgeAction(id: string) {
         const badge = await prisma.customBadge.findUnique({ where: { id } });
         if (badge) {
             try {
-                const fs = require("fs");
                 if (fs.existsSync(badge.filePath)) fs.unlinkSync(badge.filePath);
             } catch (err) {}
             await prisma.customBadge.delete({ where: { id } });
         }
         return { success: true, message: "Custom badge removed." };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function deleteMultipleCustomBadgesAction(ids: string[]) {
+    await verifyAdmin();
+    try {
+        if (!ids || ids.length === 0) return { success: true, count: 0 };
+        const badges = await prisma.customBadge.findMany({
+            where: { id: { in: ids } }
+        });
+        for (const b of badges) {
+            try {
+                if (fs.existsSync(b.filePath)) fs.unlinkSync(b.filePath);
+            } catch (err) {}
+        }
+        const delRes = await prisma.customBadge.deleteMany({
+            where: { id: { in: ids } }
+        });
+        return { success: true, count: delRes.count, message: `Deleted ${delRes.count} custom badge(s).` };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function toggleMultipleCustomBadgesAction(ids: string[], enabled: boolean) {
+    await verifyAdmin();
+    try {
+        if (!ids || ids.length === 0) return { success: true, count: 0 };
+        const updateRes = await prisma.customBadge.updateMany({
+            where: { id: { in: ids } },
+            data: { enabled }
+        });
+        return { success: true, count: updateRes.count, message: `${enabled ? "Enabled" : "Disabled"} ${updateRes.count} custom badge(s).` };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
