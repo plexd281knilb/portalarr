@@ -1052,6 +1052,8 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
             customBadges: activeCustomBadges.map(cb => ({
                 id: cb.id,
                 name: cb.name,
+                category: cb.category,
+                matchRule: cb.matchRule,
                 filePath: cb.filePath,
                 position: cb.position,
                 width: cb.width,
@@ -1095,6 +1097,8 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
                     customBadges: activeCustomBadges.map(cb => ({
                         id: cb.id,
                         name: cb.name,
+                        category: cb.category,
+                        matchRule: cb.matchRule,
                         filePath: cb.filePath,
                         position: cb.position,
                         width: cb.width,
@@ -1807,7 +1811,10 @@ export async function applyOverlayToSingleItemAction(
         const inspection = await inspectPlexMediaItemFull(serverUrl, token, ratingKey, serverId);
         if (!inspection) return { success: false, error: "Media item not found on Plex." };
 
-        const customBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
+        const allCustomBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
+        const activeBadges = (options?.customBadgeIds && options.customBadgeIds.length > 0)
+            ? allCustomBadges.filter(cb => options.customBadgeIds!.includes(cb.id))
+            : allCustomBadges;
 
         const res = await backupAndApplyOverlay(
             serverUrl,
@@ -1843,7 +1850,17 @@ export async function applyOverlayToSingleItemAction(
                 showContentRating: options?.showContentRating ?? false,
                 showRatings: options?.showRatings ?? false,
                 showLeavingSoon: options?.showLeavingSoon ?? false,
-                customBadges
+                customBadges: activeBadges.map(cb => ({
+                    id: cb.id,
+                    name: cb.name,
+                    category: cb.category,
+                    matchRule: cb.matchRule,
+                    filePath: cb.filePath,
+                    position: cb.position,
+                    width: cb.width,
+                    height: cb.height,
+                    opacity: cb.opacity
+                }))
             }
         );
 

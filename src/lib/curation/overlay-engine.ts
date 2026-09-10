@@ -56,6 +56,8 @@ export interface OverlayOptions {
     customBadges?: Array<{
         id: string;
         name: string;
+        category?: string;
+        matchRule?: string | null;
         filePath: string;
         position?: string;
         width?: number;
@@ -707,7 +709,145 @@ export async function applyOverlaysToPoster(
         });
     }
 
-    // 4. Resolve Independent Positions for Every Badge
+    // 4. Custom Badge Media Stream Matcher
+    function doesCustomBadgeMatchMedia(
+        cb: { category?: string; matchRule?: string | null; name?: string; filePath?: string },
+        mInfo: PlexMediaStreamInfo
+    ): boolean {
+        const rawRule = (cb.matchRule || "").toLowerCase().trim();
+        const rawCategory = (cb.category || "").toLowerCase().trim();
+        const rawName = (cb.name || "").toLowerCase();
+        const rawFile = path.basename(cb.filePath || "").toLowerCase();
+        const combined = `${rawRule} ${rawCategory} ${rawName} ${rawFile}`;
+
+        // Wildcard or universal banner/ribbon without rules
+        if (rawRule === "all" || rawRule === "*" || (rawCategory === "ribbon" && !rawRule) || (rawCategory === "banner" && !rawRule)) {
+            return true;
+        }
+
+        // 1. Resolution Matching (4K, 1080p, 720p, SD)
+        if (rawCategory === "resolution" || /4k|uhd|2160|1080|fhd|720|hd|sd|480|576/.test(rawRule) || /ultra-hd|1080p|720p/.test(rawFile)) {
+            const itemRes = mInfo.detectedBadges.resolution; // "4K" | "1080p" | "720p" | "SD"
+            if (/4k|uhd|2160|ultra-hd/i.test(combined)) {
+                return itemRes === "4K";
+            }
+            if (/1080|fhd/i.test(combined)) {
+                return itemRes === "1080p";
+            }
+            if (/720|hd/i.test(combined) && !/1080|4k|fhd|uhd/i.test(combined)) {
+                return itemRes === "720p";
+            }
+            if (/sd|480|576/i.test(combined)) {
+                return itemRes === "SD";
+            }
+        }
+
+        // 2. HDR & Dolby Vision Matching
+        if (rawCategory === "hdr" || /dv|dolby.*vision|hdr10\+|hdr10|hdr/i.test(combined)) {
+            const itemHdr = mInfo.detectedBadges.hdr;
+            if (!itemHdr) return false;
+
+            if (/dv|dolby.*vision/i.test(combined)) {
+                return itemHdr === "DV";
+            }
+            if (/hdr10\+/i.test(combined)) {
+                return itemHdr === "HDR10+";
+            }
+            if (/hdr10/i.test(combined)) {
+                return itemHdr === "HDR10" || itemHdr === "HDR10+";
+            }
+            if (/hdr/i.test(combined)) {
+                return !!itemHdr;
+            }
+        }
+
+        // 3. Audio & Codec Matching (Atmos, TrueHD, DTS:X, DTS-HD, 5.1, 7.1)
+        if (rawCategory === "audio" || rawCategory === "codec" || /atmos|truehd|dts|flac|aac|eac3|ac3|5\.1|7\.1/i.test(combined)) {
+            const itemAudio = mInfo.detectedBadges.audio;
+            const itemChannels = mInfo.detectedBadges.audioChannels;
+            const primaryMedia = mInfo.media?.[0];
+            const audioCodec = (primaryMedia?.audioCodec || "").toLowerCase();
+            const audioProfile = (primaryMedia?.audioProfile || "").toLowerCase();
+            const audioTitle = (primaryMedia?.audioTitle || "").toLowerCase();
+            const fullAudioStr = `${itemAudio || ""} ${audioCodec} ${audioProfile} ${audioTitle}`.toLowerCase();
+
+            if (/atmos/i.test(combined)) {
+                return fullAudioStr.includes("atmos") || itemAudio === "ATMOS";
+            }
+            if (/truehd/i.test(combined)) {
+                return fullAudioStr.includes("truehd") || itemAudio === "TRUEHD";
+            }
+            if (/dts[-:_]?x/i.test(combined)) {
+                return fullAudioStr.includes("dts:x") || fullAudioStr.includes("dts-x") || itemAudio === "DTS:X";
+            }
+            if (/dts[-:_]?hd|dtshd|dts[-:_]?ma/i.test(combined)) {
+                return fullAudioStr.includes("dts-hd") || fullAudioStr.includes("ma") || itemAudio === "DTS-HD";
+            }
+            if (/dts/i.test(combined) && !/dts[-:_]?x|dts[-:_]?hd/i.test(combined)) {
+                return fullAudioStr.includes("dts") || fullAudioStr.includes("dca");
+            }
+            if (/7\.1/i.test(combined)) {
+                return itemChannels === "7.1";
+            }
+            if (/5\.1/i.test(combined)) {
+                return itemChannels === "5.1";
+            }
+        }
+
+        // 4. Video Codecs (HEVC, AV1, ProRes, AVC)
+        if (rawCategory === "codec" || /hevc|h265|x265|av1|prores|h264|x264|avc/i.test(combined)) {
+            const itemCodec = mInfo.detectedBadges.codec;
+            if (/hevc|h265|x265/i.test(combined)) return itemCodec === "HEVC";
+            if (/av1/i.test(combined)) return itemCodec === "AV1";
+            if (/prores/i.test(combined)) return itemCodec === "ProRes";
+            if (/h264|x264|avc/i.test(combined)) return itemCodec === "AVC";
+        }
+
+        // 5. Editions & Cuts (IMAX, Criterion, Director's Cut, Extended, Remastered, Remux)
+        if (rawCategory === "edition" || /imax|criterion|director|extended|remaster|remux|theatrical|unrated/i.test(combined)) {
+            const itemEdition = (mInfo.detectedBadges.edition || "").toLowerCase();
+            if (!itemEdition) return false;
+
+            if (/imax/i.test(combined)) return itemEdition.includes("imax");
+            if (/criterion/i.test(combined)) return itemEdition.includes("criterion");
+            if (/director/i.test(combined)) return itemEdition.includes("director");
+            if (/extended/i.test(combined)) return itemEdition.includes("extended");
+            if (/remaster/i.test(combined)) return itemEdition.includes("remaster");
+            if (/remux/i.test(combined)) return itemEdition.includes("remux");
+        }
+
+        // 6. Streaming Services & Studios
+        if (rawCategory === "studio" || /netflix|disney|hbo|apple|prime|paramount|marvel|dc|a24|hulu|peacock/i.test(combined)) {
+            const itemStudio = (mInfo.detectedBadges.studio || "").toLowerCase();
+            if (!itemStudio) return false;
+
+            if (/netflix/i.test(combined)) return itemStudio.includes("netflix");
+            if (/disney/i.test(combined)) return itemStudio.includes("disney");
+            if (/hbo/i.test(combined)) return itemStudio.includes("hbo") || itemStudio.includes("max");
+            if (/apple/i.test(combined)) return itemStudio.includes("apple");
+            if (/prime|amazon/i.test(combined)) return itemStudio.includes("prime") || itemStudio.includes("amazon");
+            if (/paramount/i.test(combined)) return itemStudio.includes("paramount");
+            if (/marvel/i.test(combined)) return itemStudio.includes("marvel");
+            if (/dc/i.test(combined)) return itemStudio.includes("dc");
+            if (/a24/i.test(combined)) return itemStudio.includes("a24");
+        }
+
+        // 7. Content Ratings (G, PG, PG-13, R, NC-17, TV-MA)
+        if (rawCategory === "ratings" || /pg-13|tv-14|pg|tv-pg|nc-17|tv-ma|\br\b|\bg\b/i.test(combined)) {
+            const itemRating = (mInfo.detectedBadges.contentRating || "").toUpperCase();
+            if (!itemRating) return false;
+
+            if (/pg-13|tv-14/i.test(combined)) return itemRating === "PG-13";
+            if (/nc-17/i.test(combined)) return itemRating === "NC-17";
+            if (/\br\b|tv-ma/i.test(combined)) return itemRating === "R";
+            if (/pg\b|tv-pg/i.test(combined)) return itemRating === "PG";
+            if (/\bg\b|tv-g|tv-y/i.test(combined)) return itemRating === "G";
+        }
+
+        return rawCategory === "custom" || rawCategory === "";
+    }
+
+    // 5. Resolve Independent Positions and Buckets for All Badges
     const fallbackPos = options.position || "top-right";
     const resPos = options.resolutionPosition || options.videoPosition || fallbackPos;
     const hdrPos = options.hdrPosition || options.videoPosition || fallbackPos;
@@ -719,7 +859,7 @@ export async function applyOverlaysToPoster(
     const contentRatingPos = options.contentRatingPosition || options.ratingPosition || "bottom-left";
     const ratingsPos = options.ratingsPosition || options.ratingPosition || "bottom-left";
 
-    const buckets: Record<string, string[]> = {
+    const buckets: Record<string, Array<{ buf: Buffer; w: number; h: number }>> = {
         "top-right": [],
         "top-left": [],
         "bottom-right": [],
@@ -728,39 +868,103 @@ export async function applyOverlaysToPoster(
         "bottom-center": []
     };
 
-    // Route each badge to its exact position bucket
-    if (options.showResolution !== false && mediaInfo.detectedBadges.resolution) {
-        buckets[resPos]?.push(generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme));
+    let hasCustomResolution = false;
+    let hasCustomHdr = false;
+    let hasCustomCodec = false;
+    let hasCustomAudio = false;
+    let hasCustomEdition = false;
+    let hasCustomStudio = false;
+    let hasCustomContentRating = false;
+
+    // First, process active Custom Badges (from GitHub / Uploads) matching this specific media item
+    if (options.customBadges && Array.isArray(options.customBadges)) {
+        for (const cb of options.customBadges) {
+            if (!cb.filePath || !fs.existsSync(cb.filePath)) continue;
+            
+            // Only apply if the custom badge matches the media stream telemetry
+            if (!doesCustomBadgeMatchMedia(cb, mediaInfo)) continue;
+
+            try {
+                const cbWidth = cb.width || 140;
+                const cbHeight = cb.height || 46;
+                const cbPos = cb.position || fallbackPos;
+
+                let cbBuffer = await sharp(cb.filePath)
+                    .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                    .toBuffer();
+
+                if (cb.opacity !== undefined && cb.opacity < 1.0) {
+                    cbBuffer = await sharp(cbBuffer)
+                        .ensureAlpha()
+                        .linear(cb.opacity, 0)
+                        .toBuffer();
+                }
+
+                // Check category to avoid duplicate default SVGs
+                const cat = (cb.category || "").toLowerCase();
+                const rule = (cb.matchRule || "").toLowerCase();
+                const fName = (cb.name || "").toLowerCase();
+                const combinedCheck = `${cat} ${rule} ${fName}`;
+
+                if (cat === "resolution" || /4k|1080|720|sd|uhd|fhd/i.test(combinedCheck)) hasCustomResolution = true;
+                if (cat === "hdr" || /dv|hdr|dolby.*vision/i.test(combinedCheck)) hasCustomHdr = true;
+                if (cat === "codec" || /hevc|av1|prores|avc/i.test(combinedCheck)) hasCustomCodec = true;
+                if (cat === "audio" || /atmos|truehd|dts/i.test(combinedCheck)) hasCustomAudio = true;
+                if (cat === "edition" || /imax|criterion|director|extended/i.test(combinedCheck)) hasCustomEdition = true;
+                if (cat === "studio") hasCustomStudio = true;
+                if (cat === "ratings") hasCustomContentRating = true;
+
+                buckets[cbPos]?.push({ buf: cbBuffer, w: cbWidth, h: cbHeight });
+            } catch (err) {
+                logger.addLog("WARN", "CURATION", `Failed to load custom badge ${cb.name}: ${err}`);
+            }
+        }
     }
-    if (options.showHdr !== false && mediaInfo.detectedBadges.hdr) {
-        buckets[hdrPos]?.push(generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme));
+
+    // Next, add built-in SVG badges if not already overridden by custom matched badges
+    const pushSvgToBucket = async (pos: string, svg: string) => {
+        if (!buckets[pos]) return;
+        const buf = Buffer.from(svg);
+        const meta = await sharp(buf).metadata();
+        buckets[pos].push({
+            buf,
+            w: meta.width || 140,
+            h: meta.height || 46
+        });
+    };
+
+    if (options.showResolution !== false && mediaInfo.detectedBadges.resolution && !hasCustomResolution) {
+        await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme));
     }
-    if (options.showCodec && mediaInfo.detectedBadges.codec) {
-        buckets[codecPos]?.push(generateCodecBadgeSvg(mediaInfo.detectedBadges.codec));
+    if (options.showHdr !== false && mediaInfo.detectedBadges.hdr && !hasCustomHdr) {
+        await pushSvgToBucket(hdrPos, generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme));
     }
-    if (options.showAudio !== false && mediaInfo.detectedBadges.audio) {
-        buckets[audioPos]?.push(generateAudioBadgeSvg(mediaInfo.detectedBadges.audio));
+    if (options.showCodec && mediaInfo.detectedBadges.codec && !hasCustomCodec) {
+        await pushSvgToBucket(codecPos, generateCodecBadgeSvg(mediaInfo.detectedBadges.codec));
+    }
+    if (options.showAudio !== false && mediaInfo.detectedBadges.audio && !hasCustomAudio) {
+        await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio));
     }
     if (options.showAudioChannels && mediaInfo.detectedBadges.audioChannels) {
-        buckets[channelsPos]?.push(generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels));
+        await pushSvgToBucket(channelsPos, generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels));
     }
-    if (options.showEdition && mediaInfo.detectedBadges.edition) {
-        buckets[editionPos]?.push(generateEditionBadgeSvg(mediaInfo.detectedBadges.edition));
+    if (options.showEdition && mediaInfo.detectedBadges.edition && !hasCustomEdition) {
+        await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition));
     }
-    if (options.showStudio && mediaInfo.detectedBadges.studio) {
-        buckets[studioPos]?.push(generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio));
+    if (options.showStudio && mediaInfo.detectedBadges.studio && !hasCustomStudio) {
+        await pushSvgToBucket(studioPos, generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio));
     }
-    if (options.showContentRating && mediaInfo.detectedBadges.contentRating) {
-        buckets[contentRatingPos]?.push(generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating));
+    if (options.showContentRating && mediaInfo.detectedBadges.contentRating && !hasCustomContentRating) {
+        await pushSvgToBucket(contentRatingPos, generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating));
     }
     if (options.showRatings && options.ratingsSource) {
         const rSvg = generateRatingsBadgeSvg(options.ratingsSource);
-        if (rSvg) buckets[ratingsPos]?.push(rSvg);
+        if (rSvg) await pushSvgToBucket(ratingsPos, rSvg);
     }
 
-    // Render Each Bucket
-    for (const [posKey, svgList] of Object.entries(buckets)) {
-        if (!svgList || svgList.length === 0) continue;
+    // Render Each Bucket onto Poster Overlays
+    for (const [posKey, items] of Object.entries(buckets)) {
+        if (!items || items.length === 0) continue;
 
         const isBTop = posKey.startsWith("top");
         const isBRight = posKey.endsWith("right");
@@ -769,18 +973,7 @@ export async function applyOverlaysToPoster(
         const bTopOffset = isBTop ? (options.showLeavingSoon ? 95 : 35) : (1500 - 35);
 
         if (isBCenter) {
-            // Render centered horizontally
-            let totalW = 0;
-            const items: { buf: Buffer; w: number; h: number }[] = [];
-            for (const svg of svgList) {
-                const buf = Buffer.from(svg);
-                const meta = await sharp(buf).metadata();
-                const w = meta.width || 140;
-                const h = meta.height || 46;
-                items.push({ buf, w, h });
-                totalW += w + 12;
-            }
-            totalW -= 12; // trim last margin
+            let totalW = items.reduce((acc, it) => acc + it.w + 12, 0) - 12;
             let curX = (1000 - totalW) / 2;
             for (const it of items) {
                 overlays.push({
@@ -792,64 +985,20 @@ export async function applyOverlaysToPoster(
             }
         } else {
             let currentX = isBRight ? 1000 - 35 : 35;
-            for (const svg of svgList) {
-                const badgeBuf = Buffer.from(svg);
-                const meta = await sharp(badgeBuf).metadata();
-                const bWidth = meta.width || 140;
-                const bHeight = meta.height || 46;
-
-                const placeX = isBRight ? currentX - bWidth : currentX;
-                const placeY = isBTop ? bTopOffset : bTopOffset - bHeight;
+            for (const it of items) {
+                const placeX = isBRight ? currentX - it.w : currentX;
+                const placeY = isBTop ? bTopOffset : bTopOffset - it.h;
 
                 overlays.push({
-                    input: badgeBuf,
+                    input: it.buf,
                     top: Math.round(placeY),
                     left: Math.round(placeX)
                 });
 
                 if (isBRight) {
-                    currentX -= (bWidth + 12);
+                    currentX -= (it.w + 12);
                 } else {
-                    currentX += (bWidth + 12);
-                }
-            }
-        }
-    }
-
-    // 5. Custom Uploaded Badges (Image files from disk)
-    if (options.customBadges && Array.isArray(options.customBadges)) {
-        for (const cb of options.customBadges) {
-            if (cb.filePath && fs.existsSync(cb.filePath)) {
-                try {
-                    const cbWidth = cb.width || 140;
-                    const cbHeight = cb.height || 46;
-                    const cbPos = cb.position || fallbackPos;
-                    const isCbTop = cbPos.startsWith("top");
-                    const isCbRight = cbPos.endsWith("right");
-                    const isCbCenter = cbPos.includes("center");
-
-                    let cbBuffer = await sharp(cb.filePath)
-                        .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-                        .toBuffer();
-
-                    // Adjust opacity if < 1.0
-                    if (cb.opacity !== undefined && cb.opacity < 1.0) {
-                        cbBuffer = await sharp(cbBuffer)
-                            .ensureAlpha()
-                            .linear(1, 0)
-                            .toBuffer();
-                    }
-
-                    const cbX = isCbCenter ? (1000 - cbWidth) / 2 : (isCbRight ? 1000 - cbWidth - 35 : 35);
-                    const cbY = isCbTop ? (options.showLeavingSoon ? 95 : 35) : (1500 - cbHeight - 35);
-
-                    overlays.push({
-                        input: cbBuffer,
-                        top: Math.round(cbY),
-                        left: Math.round(cbX)
-                    });
-                } catch (err) {
-                    logger.addLog("WARN", "CURATION", `Failed to composite custom badge ${cb.name}: ${err}`);
+                    currentX += (it.w + 12);
                 }
             }
         }
