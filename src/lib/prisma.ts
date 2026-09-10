@@ -1056,6 +1056,14 @@ if (!globalForScheduler.schedulerInitialized) {
     console.log(`[BACKGROUND-JOB] Initializing library auto-scan job (Interval: ${intervalMinutes}m)...`);
     console.log(`[PORTALARR] Server is fully booted, ready, and listening on http://0.0.0.0:3000`);
 
+    // Auto-expire elapsed trials and subscriptions on boot
+    try {
+      const { expireDueTrialsAndSubscriptionsInternal } = await import("../app/actions");
+      await expireDueTrialsAndSubscriptionsInternal();
+    } catch (expErr: any) {
+      console.warn("[BACKGROUND-JOB] Boot trial expiration check error:", expErr.message || expErr);
+    }
+
     // Trigger instant initial library scan on boot
     try {
       const { scanLibraryInternal } = await import("../app/actions");
@@ -1073,8 +1081,16 @@ if (!globalForScheduler.schedulerInitialized) {
       console.error(`[BACKGROUND-JOB] Boot scan failed:`, bootErr.message || bootErr);
     }
     
-    // Check every minute if periodic scan is due
+    // Check every minute if periodic scan or trial expirations are due
     setInterval(async () => {
+      // Evaluate expired trials and subscriptions every minute down to the minute
+      try {
+        const { expireDueTrialsAndSubscriptionsInternal } = await import("../app/actions");
+        await expireDueTrialsAndSubscriptionsInternal();
+      } catch (trialExpErr: any) {
+        console.warn("[BACKGROUND-JOB] 1-minute trial expiration check error:", trialExpErr.message || trialExpErr);
+      }
+
       if ((global as any).__PORTALARR_SYNC_IN_PROGRESS) {
         return;
       }

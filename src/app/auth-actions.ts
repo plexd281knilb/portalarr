@@ -486,7 +486,9 @@ export async function getCurrentUser() {
       status: true,
       trialEndsAt: true,
       subscriptionEndsAt: true,
-      referralCode: true
+      referralCode: true,
+      plexEmail: true,
+      plexUsername: true
     }
   });
 
@@ -495,10 +497,10 @@ export async function getCurrentUser() {
   // Auto-expire trials that have elapsed
   const now = new Date();
   if (user.status === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) < now) {
-    console.log(`[AUTH] Trial expired for ${user.username}. Updating status to EXPIRED.`);
+    console.log(`[AUTH] Trial expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
     user = await prisma.user.update({
       where: { id: user.id },
-      data: { status: "EXPIRED" },
+      data: { status: "EXPIRED", plexLibrarySectionIds: "" },
       select: {
         id: true,
         username: true,
@@ -508,17 +510,26 @@ export async function getCurrentUser() {
         status: true,
         trialEndsAt: true,
         subscriptionEndsAt: true,
-        referralCode: true
+        referralCode: true,
+        plexEmail: true,
+        plexUsername: true
       }
     });
+
+    try {
+      const { revokePlexAccessForUserInternal } = await import("./actions");
+      await revokePlexAccessForUserInternal(user, "Your trial period has expired.");
+    } catch (revokeErr) {
+      console.warn("[AUTH-TRIAL-REVOKE-WARNING]:", revokeErr);
+    }
   }
 
   // Auto-expire timed subscriptions that have elapsed
   if (user.status === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
-    console.log(`[AUTH] Subscription expired for ${user.username}. Updating status to EXPIRED.`);
+    console.log(`[AUTH] Subscription expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
     user = await prisma.user.update({
       where: { id: user.id },
-      data: { status: "EXPIRED" },
+      data: { status: "EXPIRED", plexLibrarySectionIds: "" },
       select: {
         id: true,
         username: true,
@@ -528,9 +539,18 @@ export async function getCurrentUser() {
         status: true,
         trialEndsAt: true,
         subscriptionEndsAt: true,
-        referralCode: true
+        referralCode: true,
+        plexEmail: true,
+        plexUsername: true
       }
     });
+
+    try {
+      const { revokePlexAccessForUserInternal } = await import("./actions");
+      await revokePlexAccessForUserInternal(user, "Your subscription period has expired.");
+    } catch (revokeErr) {
+      console.warn("[AUTH-SUB-REVOKE-WARNING]:", revokeErr);
+    }
   }
   
   // Prevent login loops: If user status or role in DB changed, re-issue updated session cookie immediately

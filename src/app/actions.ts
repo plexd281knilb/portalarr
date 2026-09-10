@@ -1639,10 +1639,204 @@ export async function validateDownloadsPathAction(pathStr: string) {
 
 import { sendUserApprovalEmail, createSession } from "@/app/auth-actions";
 
+/**
+ * Revokes all Plex library shares and terminates active streaming sessions for a specific user.
+ */
+export async function revokePlexAccessForUserInternal(
+    user: { id?: string; email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null },
+    reason = "Account trial/access expired or revoked."
+) {
+    if (!user) return { success: false, error: "No user provided." };
+    try {
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            return { success: false, error: "Plex admin token not configured." };
+        }
+        const adminToken = decryptData(settings.mainPlexToken);
+        const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
+        const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
+
+        let servers = await getPlexServers(adminToken);
+        if (servers.length === 0) {
+            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            servers = srvSections.map(s => ({
+                name: s.serverName,
+                clientIdentifier: s.serverId,
+                accessToken: adminToken,
+                connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+            }));
+        }
+
+        const friend = await findPlexUserFriend(adminToken, user);
+        const matchTarget = {
+            id: friend?.id,
+            email: friend?.email || targetEmail,
+            username: friend?.username || targetUser,
+            plexEmail: user.plexEmail,
+            plexUsername: user.plexUsername
+        };
+
+        const ownerUser = await getPlexOwnerUser(adminToken);
+        const isOwner = ownerUser && matchesPlexUser(matchTarget, {
+            id: "",
+            serverId: "",
+            librarySectionIds: [],
+            user: ownerUser,
+            invitedEmail: ownerUser.email
+        });
+
+        if (isOwner) {
+            console.log(`[REVOKE-PLEX-ACCESS] Skipped: User "${user.username}" is the Plex Server Owner.`);
+            return { success: true, message: "Plex owner access retained." };
+        }
+
+        logger.addLog("INFO", "PLEX", `[REVOKE-PLEX-ACCESS] Revoking Plex library shares for user "${user.username}" across ${servers.length} servers...`);
+        const shares = await getPlexSharedServersList(adminToken);
+        const matchedShares = shares.filter(s => matchesPlexUser(matchTarget, s));
+
+        for (const share of matchedShares) {
+            const srvId = share.serverId || servers[0]?.clientIdentifier;
+            if (share.id) {
+                await removePlexUserShare(adminToken, share.id, srvId);
+            }
+        }
+
+        // Also check if user has canonical server XML shares across all servers
+        for (const srv of servers) {
+            if (!srv.clientIdentifier) continue;
+            try {
+                const srvRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srv.clientIdentifier)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+                    headers: {
+                        "Accept": "application/xml, text/xml, */*",
+                        "X-Plex-Token": adminToken,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    }
+                });
+                if (srvRes.ok) {
+                    const xml = await srvRes.text();
+                    const matches = xml.matchAll(/<SharedServer\b([^>]*?)(?:\/>|>[\s\S]*?<\/SharedServer>)/gi);
+                    for (const m of matches) {
+                        const attrs = m[1] || "";
+                        const shareId = attrs.match(/\bid="([^"]*)"/i)?.[1];
+                        const email = attrs.match(/\bemail="([^"]*)"/i)?.[1] || attrs.match(/\binvitedEmail="([^"]*)"/i)?.[1];
+                        const username = attrs.match(/\busername="([^"]*)"/i)?.[1];
+                        const userId = attrs.match(/\buserID="([^"]*)"/i)?.[1];
+
+                        if (shareId && matchesPlexUser(matchTarget, { id: shareId, serverId: srv.clientIdentifier, librarySectionIds: [], user: { id: userId, email, username }, invitedEmail: email })) {
+                            await removePlexUserShare(adminToken, shareId, srv.clientIdentifier);
+                        }
+                    }
+                }
+            } catch (srvErr) {}
+        }
+
+        // Terminate any active sessions on Plex immediately
+        try {
+            const activeServers = await getPlexActiveSessions(adminToken);
+            for (const srv of activeServers) {
+                for (const sess of srv.sessions) {
+                    const sessUser = (sess.User?.title || sess.username || "").toLowerCase().trim();
+                    if (
+                        (targetUser && sessUser === targetUser) ||
+                        (targetEmail && sessUser === targetEmail) ||
+                        (user.plexUsername && sessUser === user.plexUsername.toLowerCase().trim()) ||
+                        (user.plexEmail && sessUser === user.plexEmail.toLowerCase().trim())
+                    ) {
+                        const sessionKey = sess.Session?.id || sess.sessionKey || sess.ratingKey;
+                        const sessionId = sess.Session?.id || sess.sessionKey;
+                        if (sessionKey) {
+                            await terminatePlexServerSession(srv.serverUrl, srv.token, sessionKey, sessionId, reason);
+                        }
+                    }
+                }
+            }
+        } catch (killErr) {
+            console.warn("[REVOKE-KILL-SESSIONS-WARNING]:", killErr);
+        }
+
+        if (user.id) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { plexLibrarySectionIds: "" }
+            }).catch(() => {});
+        }
+
+        return { success: true, message: `Revoked Plex access for ${user.username}.` };
+    } catch (e: any) {
+        console.error("[REVOKE-PLEX-ACCESS-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to revoke Plex access" };
+    }
+}
+
+/**
+ * Scans the database for any expired trials or subscriptions and automatically revokes Plex access.
+ */
+export async function expireDueTrialsAndSubscriptionsInternal() {
+    try {
+        await ensureSchemaColumns();
+        const now = new Date();
+
+        // 1. Find all users whose TRIAL has elapsed
+        const expiredTrials = await prisma.user.findMany({
+            where: {
+                status: "TRIAL",
+                trialEndsAt: {
+                    not: null,
+                    lte: now
+                }
+            }
+        });
+
+        // 2. Find all approved users whose subscription has elapsed
+        const expiredSubs = await prisma.user.findMany({
+            where: {
+                status: "APPROVED",
+                subscriptionEndsAt: {
+                    not: null,
+                    lte: now
+                }
+            }
+        });
+
+        const allExpired = [...expiredTrials, ...expiredSubs];
+        if (allExpired.length === 0) return { success: true, expiredCount: 0 };
+
+        console.log(`[TRIAL-EXPIRATION] Found ${allExpired.length} expired trial/subscription accounts to process: ${allExpired.map(u => u.username).join(", ")}`);
+
+        for (const u of allExpired) {
+            try {
+                console.log(`[TRIAL-EXPIRATION] Processing expiration for user "${u.username}" (Status: ${u.status}, TrialEnd: ${u.trialEndsAt?.toISOString() || 'N/A'}, SubEnd: ${u.subscriptionEndsAt?.toISOString() || 'N/A'})...`);
+                
+                await prisma.user.update({
+                    where: { id: u.id },
+                    data: {
+                        status: "EXPIRED",
+                        plexLibrarySectionIds: ""
+                    }
+                });
+
+                await revokePlexAccessForUserInternal(u, "Your trial or subscription period has ended. Please renew your access on Portalarr.");
+                logger.addLog("SUCCESS", "PLEX", `[TRIAL-EXPIRATION] Account for "${u.username}" expired; Plex library access revoked and active sessions terminated.`);
+            } catch (err: any) {
+                console.error(`[TRIAL-EXPIRATION] Error expiring user "${u.username}":`, err.message || err);
+                logger.addLog("ERROR", "PLEX", `[TRIAL-EXPIRATION] Failed to revoke access for "${u.username}": ${err.message}`);
+            }
+        }
+
+        return { success: true, expiredCount: allExpired.length };
+    } catch (e: any) {
+        console.error("[EXPIRE-DUE-TRIALS-ERROR]:", e.message || e);
+        return { success: false, error: e.message };
+    }
+}
+
 export async function getAppUsers() {
     try {
         await verifyAdmin();
         await ensureSchemaColumns();
+        // Automatically evaluate and expire any elapsed trials or subscriptions
+        await expireDueTrialsAndSubscriptionsInternal().catch(() => {});
+
         return await prisma.user.findMany({
             orderBy: { createdAt: 'desc' },
             select: { 
@@ -1777,21 +1971,7 @@ export async function rejectAppUser(id: string) {
         });
 
         if (user) {
-            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-            if (settings?.mainPlexToken) {
-                try {
-                    const adminToken = decryptData(settings.mainPlexToken);
-                    const shares = await getPlexSharedServersList(adminToken);
-                    const matchedShares = shares.filter(s => matchesPlexUser(user, s));
-                    for (const share of matchedShares) {
-                        if (share.id) {
-                            await removePlexUserShare(adminToken, share.id, share.serverId);
-                        }
-                    }
-                } catch (plexErr) {
-                    console.warn("[REJECT-PLEX-REVOKE-WARNING]:", plexErr);
-                }
-            }
+            await revokePlexAccessForUserInternal(user, "Account access rejected by administrator.");
         }
 
         revalidatePath("/settings/access");
@@ -1808,21 +1988,7 @@ export async function deleteAppUser(id: string) {
     try {
         const user = await prisma.user.findUnique({ where: { id } });
         if (user) {
-            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-            if (settings?.mainPlexToken) {
-                try {
-                    const adminToken = decryptData(settings.mainPlexToken);
-                    const shares = await getPlexSharedServersList(adminToken);
-                    const matchedShares = shares.filter(s => matchesPlexUser(user, s));
-                    for (const share of matchedShares) {
-                        if (share.id) {
-                            await removePlexUserShare(adminToken, share.id, share.serverId);
-                        }
-                    }
-                } catch (plexErr) {
-                    console.warn("[DELETE-PLEX-REVOKE-WARNING]:", plexErr);
-                }
-            }
+            await revokePlexAccessForUserInternal(user, "Account deleted by administrator.");
         }
 
         await prisma.user.delete({ where: { id } });
@@ -2452,46 +2618,7 @@ export async function setUserTrialOrSubscription(
                 const shares = await getPlexSharedServersList(adminToken);
 
                 if (status === "SUSPENDED" || status === "EXPIRED") {
-                    logger.addLog("INFO", "PLEX", `[SUSPEND-PLEX-SYNC] Revoking Plex shares for suspended user "${user.username}" across ${servers.length} servers`);
-                    // Revoke Plex shares across all servers
-                    const friend = await findPlexUserFriend(adminToken, user);
-                    const matchTarget = {
-                        id: friend?.id,
-                        email: friend?.email || targetEmail,
-                        username: friend?.username || targetUser,
-                        plexEmail: user.plexEmail,
-                        plexUsername: user.plexUsername
-                    };
-                    const matchedShares = shares.filter(s => matchesPlexUser(matchTarget, s));
-                    for (const share of matchedShares) {
-                        const srvId = share.serverId || servers[0]?.clientIdentifier;
-                        if (share.id) {
-                            await removePlexUserShare(adminToken, share.id, srvId);
-                        }
-                    }
-
-                    // Terminate any active sessions on Plex immediately
-                    try {
-                        const activeServers = await getPlexActiveSessions(adminToken);
-                        for (const srv of activeServers) {
-                            for (const sess of srv.sessions) {
-                                const sessUser = (sess.User?.title || sess.username || "").toLowerCase().trim();
-                                if (
-                                    (targetUser && sessUser === targetUser) ||
-                                    (targetEmail && sessUser === targetEmail) ||
-                                    (user.plexUsername && sessUser === user.plexUsername.toLowerCase().trim())
-                                ) {
-                                    const sessionKey = sess.Session?.id || sess.sessionKey || sess.ratingKey;
-                                    const sessionId = sess.Session?.id || sess.sessionKey;
-                                    if (sessionKey) {
-                                        await terminatePlexServerSession(srv.serverUrl, srv.token, sessionKey, sessionId, "Account access suspended.");
-                                    }
-                                }
-                            }
-                        }
-                    } catch (killErr) {
-                        console.warn("[SUSPEND-KILL-SESSIONS-WARNING]:", killErr);
-                    }
+                    await revokePlexAccessForUserInternal(user, `Account access ${status.toLowerCase()}.`);
                 } else if (status === "APPROVED" || status === "TRIAL") {
                     // Restore Plex shares with configured library sections
                     let rawKeys = (user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
@@ -9651,6 +9778,9 @@ export async function syncPlexFriendsInternal() {
 
         const adminToken = decryptData(settings.mainPlexToken);
 
+        // Auto-expire any elapsed trials or subscriptions before syncing
+        await expireDueTrialsAndSubscriptionsInternal().catch(e => console.warn("[PLEX-SYNC] Trial expiration check warning:", e));
+
         // Fetch all Plex Friends, Shared Servers & Sections across API endpoints
         const [friendsList, sharesList, serversWithSections] = await Promise.all([
             getPlexServerFriends(adminToken),
@@ -9762,6 +9892,16 @@ export async function syncPlexFriendsInternal() {
             });
 
             if (existingUser) {
+                // If user is suspended, expired, or rejected in Portalarr, make sure any shares on Plex are revoked
+                if (existingUser.status === "EXPIRED" || existingUser.status === "SUSPENDED" || existingUser.status === "REJECTED") {
+                    if (userMatchedShares.length > 0) {
+                        console.log(`[PLEX-SYNC] User "${existingUser.username}" is ${existingUser.status} but has ${userMatchedShares.length} active Plex shares. Revoking...`);
+                        await revokePlexAccessForUserInternal(existingUser, `Account access is ${existingUser.status.toLowerCase()}.`);
+                        revokedCount++;
+                    }
+                    continue;
+                }
+
                 // Update existing user details/status/libraries if needed
                 let needsUpdate = false;
                 const updateData: any = {};
@@ -9854,14 +9994,14 @@ export async function syncPlexFriendsInternal() {
             create: { id: "global", lastAutoSync: new Date() }
         });
 
-        logger.addLog("SUCCESS", "PLEX", `[PLEX-SYNC] Completed friends sync. Added: ${addedCount}, Updated: ${updatedCount}`, `Friends discovered: ${friendsList.length}`);
-        console.log(`[PLEX-SYNC] Completed. Friends: ${friendsList.length}, Added: ${addedCount}, Updated: ${updatedCount}`);
+        logger.addLog("SUCCESS", "PLEX", `[PLEX-SYNC] Completed friends sync. Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}`, `Friends discovered: ${friendsList.length}`);
+        console.log(`[PLEX-SYNC] Completed. Friends: ${friendsList.length}, Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}`);
         return {
             success: true,
             totalFriends: friendsList.length,
             addedCount,
             updatedCount,
-            revokedCount: 0
+            revokedCount
         };
 
     } catch (e: any) {
