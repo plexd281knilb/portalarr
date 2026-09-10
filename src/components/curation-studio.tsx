@@ -131,7 +131,27 @@ export default function CurationStudio() {
     const [simLeavingSoon, setSimLeavingSoon] = useState(false);
     const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal">("glass");
     const [simPosition, setSimPosition] = useState<"top-right" | "top-left" | "bottom-right">("top-right");
+    const [simVideoPosition, setSimVideoPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-right");
+    const [simAudioPosition, setSimAudioPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-left");
+    const [simEditionPosition, setSimEditionPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("bottom-right");
+    const [simRatingPosition, setSimRatingPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("bottom-left");
+    const [simShowRibbon, setSimShowRibbon] = useState(false);
+    const [simRibbonPosition, setSimRibbonPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left">("top-right");
+    const [simRibbonTheme, setSimRibbonTheme] = useState<"purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange">("purple");
+    const [simRibbonType, setSimRibbonType] = useState<"auto_quality" | "auto_edition" | "leaving_soon" | "custom">("auto_quality");
+    const [simRibbonText, setSimRibbonText] = useState("");
     const [simCustomBadgeId, setSimCustomBadgeId] = useState<string>("none");
+
+    const getEffectiveRibbonText = () => {
+        if (simRibbonType === "custom") return (simRibbonText.trim() || "FEATURED").toUpperCase();
+        if (simRibbonType === "leaving_soon") return "LEAVING SOON";
+        if (simRibbonType === "auto_edition") return simEdition !== "none" ? simEdition : "SPECIAL EDITION";
+        // auto_quality
+        if (simHdr === "DV") return "DOLBY VISION";
+        if (simResolution === "4K") return "4K ULTRA HD";
+        if (simResolution === "1080p") return "1080P FULL HD";
+        return "4K ULTRA HD";
+    };
 
     // Upcoming Releases Calendar & Coming Soon Shares
     const [releasesLoading, setReleasesLoading] = useState(false);
@@ -600,6 +620,15 @@ export default function CurationStudio() {
                 sectionKey: selectedSectionKey,
                 overlayType: "combined",
                 position: simPosition,
+                videoPosition: simVideoPosition,
+                audioPosition: simAudioPosition,
+                editionPosition: simEditionPosition,
+                ratingPosition: simRatingPosition,
+                showRibbon: simShowRibbon,
+                ribbonPosition: simRibbonPosition,
+                ribbonTheme: simRibbonTheme,
+                ribbonText: simRibbonText || undefined,
+                ribbonType: simRibbonType,
                 theme: simTheme,
                 showResolution: simResolution !== "none",
                 showHdr: simHdr !== "none",
@@ -773,6 +802,15 @@ export default function CurationStudio() {
                 inspectingItem.item.ratingKey,
                 {
                     position: simPosition,
+                    videoPosition: simVideoPosition,
+                    audioPosition: simAudioPosition,
+                    editionPosition: simEditionPosition,
+                    ratingPosition: simRatingPosition,
+                    showRibbon: simShowRibbon,
+                    ribbonPosition: simRibbonPosition,
+                    ribbonTheme: simRibbonTheme,
+                    ribbonText: simRibbonText || undefined,
+                    ribbonType: simRibbonType,
                     theme: simTheme,
                     showResolution: simResolution !== "none",
                     showHdr: simHdr !== "none",
@@ -1035,6 +1073,189 @@ export default function CurationStudio() {
         }
     };
 
+    // Helper to render badges into assigned positions in the simulator
+    const renderBadgesForPosition = (pos: string) => {
+        const badges: React.ReactNode[] = [];
+
+        // Video badges (Resolution, HDR, Codec)
+        if (simVideoPosition === pos) {
+            if (simResolution !== "none") {
+                badges.push(
+                    <div key="res" className={`px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-md ${
+                        simTheme === "gold" 
+                            ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
+                            : 'bg-slate-950/90 text-white border-amber-400/80'
+                    }`}>
+                        <span>{simResolution}</span>
+                        {simResolution === "4K" && <span className="text-[8px] opacity-70 border-l border-current pl-1 ml-0.5">UHD</span>}
+                    </div>
+                );
+            }
+            if (simHdr !== "none") {
+                badges.push(
+                    <div key="hdr" className="px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-md">
+                        {simHdr === "DV" ? "DOLBY VISION" : simHdr}
+                    </div>
+                );
+            }
+            if (simCodec !== "none") {
+                badges.push(
+                    <div key="codec" className="px-1.5 py-0.5 rounded-md border border-emerald-400/70 bg-slate-950/90 text-emerald-300 text-[8px] font-black tracking-wider shadow-md">
+                        {simCodec}
+                    </div>
+                );
+            }
+        }
+
+        // Audio badges (Audio format, Surround Channels)
+        if (simAudioPosition === pos) {
+            if (simAudio !== "none") {
+                badges.push(
+                    <div key="audio" className="px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-md">
+                        {simAudio === "ATMOS" ? "DOLBY ATMOS" : simAudio}
+                    </div>
+                );
+            }
+            if (simChannels !== "none") {
+                badges.push(
+                    <div key="channels" className="px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-md">
+                        {simChannels} SURROUND
+                    </div>
+                );
+            }
+        }
+
+        // Edition & Studio badges
+        if (simEditionPosition === pos) {
+            if (simEdition !== "none") {
+                badges.push(
+                    <div key="edition" className="px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-md">
+                        {simEdition}
+                    </div>
+                );
+            }
+            if (simStudio !== "none") {
+                badges.push(
+                    <div key="studio" className="px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-md">
+                        {simStudio}
+                    </div>
+                );
+            }
+            if (simRating !== "none") {
+                badges.push(
+                    <div key="rating" className="px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider shadow-md">
+                        {simRating}
+                    </div>
+                );
+            }
+        }
+
+        // Community Ratings badge
+        if (simRatingPosition === pos && simRatings) {
+            badges.push(
+                <div key="ratings" className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-950/90 border border-slate-600/80 shadow-lg text-[10px]">
+                    <div className="bg-yellow-400 text-black font-black px-1 rounded text-[9px]">IMDb</div>
+                    <span className="font-bold text-white">8.6</span>
+                    <span className="text-xs">🍅</span>
+                    <span className="font-bold text-white">94%</span>
+                </div>
+            );
+        }
+
+        // Custom Badges assigned to this position
+        if (simCustomBadgeId !== "none") {
+            const cb = customBadges.find(b => b.id === simCustomBadgeId);
+            if (cb && (cb.position || "top-right") === pos) {
+                badges.push(
+                    <div key="custom" className="px-2 py-1 rounded bg-purple-950/90 border border-purple-400 text-[9px] font-bold text-purple-200 shadow-lg flex items-center gap-1">
+                        <Sparkles className="h-3 w-3 text-purple-300" />
+                        <span>{cb.name}</span>
+                    </div>
+                );
+            }
+        }
+
+        return badges;
+    };
+
+    // Helper for inspector simulated item badges
+    const renderInspectedBadgesForPosition = (item: any, pos: string) => {
+        const badges: React.ReactNode[] = [];
+        const detected = item?.detectedBadges || {};
+
+        if (simVideoPosition === pos) {
+            if (detected.resolution) {
+                badges.push(
+                    <div key="res" className={`px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-md ${
+                        simTheme === "gold" 
+                            ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
+                            : 'bg-slate-950/90 text-white border-amber-400/80'
+                    }`}>
+                        <span>{detected.resolution}</span>
+                        {detected.resolution === "4K" && <span className="text-[8px] opacity-70 border-l border-current pl-1 ml-0.5">UHD</span>}
+                    </div>
+                );
+            }
+            if (detected.hdr) {
+                badges.push(
+                    <div key="hdr" className="px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-md">
+                        {detected.hdr === "DV" ? "DOLBY VISION" : detected.hdr}
+                    </div>
+                );
+            }
+            if (detected.codec) {
+                badges.push(
+                    <div key="codec" className="px-1.5 py-0.5 rounded-md border border-emerald-400/70 bg-slate-950/90 text-emerald-300 text-[8px] font-black tracking-wider shadow-md">
+                        {detected.codec}
+                    </div>
+                );
+            }
+        }
+
+        if (simAudioPosition === pos) {
+            if (detected.audio) {
+                badges.push(
+                    <div key="audio" className="px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-md">
+                        {detected.audio}
+                    </div>
+                );
+            }
+            if (detected.audioChannels) {
+                badges.push(
+                    <div key="channels" className="px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-md">
+                        {detected.audioChannels}
+                    </div>
+                );
+            }
+        }
+
+        if (simEditionPosition === pos) {
+            if (detected.edition) {
+                badges.push(
+                    <div key="edition" className="px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-md">
+                        {detected.edition}
+                    </div>
+                );
+            }
+            if (detected.studio) {
+                badges.push(
+                    <div key="studio" className="px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-md">
+                        {detected.studio}
+                    </div>
+                );
+            }
+            if (detected.contentRating) {
+                badges.push(
+                    <div key="rating" className="px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider shadow-md">
+                        {detected.contentRating}
+                    </div>
+                );
+            }
+        }
+
+        return badges;
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-muted-foreground">
@@ -1291,30 +1512,30 @@ export default function CurationStudio() {
 
             {/* Studio Navigation Tabs */}
             <Tabs value={subTab} onValueChange={setSubTab} className="space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-6 w-full h-auto p-1.5 bg-slate-900/60 border border-slate-800 rounded-xl gap-1.5 shadow-md">
-                    <TabsTrigger value="collections" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                        <Trophy className="h-4 w-4 text-amber-400" />
-                        <span>Curated Collections</span>
+                <TabsList className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 w-full h-auto p-2 bg-slate-900/80 border border-slate-800/80 rounded-2xl gap-2 shadow-lg backdrop-blur-md">
+                    <TabsTrigger value="collections" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                        <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
+                        <span className="truncate">Curated Collections</span>
                     </TabsTrigger>
-                    <TabsTrigger value="overlays" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                        <Layers className="h-4 w-4 text-sky-400" />
-                        <span>Poster Overlays & Badges</span>
+                    <TabsTrigger value="overlays" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                        <Layers className="h-4 w-4 text-sky-400 shrink-0" />
+                        <span className="truncate">Poster Overlays & Badges</span>
                     </TabsTrigger>
-                    <TabsTrigger value="inspector" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                        <Search className="h-4 w-4 text-cyan-400" />
-                        <span>Media Inspector & Simulator</span>
+                    <TabsTrigger value="inspector" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                        <Search className="h-4 w-4 text-cyan-400 shrink-0" />
+                        <span className="truncate">Media Inspector & Simulator</span>
                     </TabsTrigger>
-                    <TabsTrigger value="releases" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                        <Calendar className="h-4 w-4 text-emerald-400" />
-                        <span>Digital Releases & Timings</span>
+                    <TabsTrigger value="releases" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                        <Calendar className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <span className="truncate">Digital Releases & Timings</span>
                     </TabsTrigger>
-                    <TabsTrigger value="pruning" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                        <AlertTriangle className="h-4 w-4 text-rose-400" />
-                        <span>Leaving Soon & Hub</span>
+                    <TabsTrigger value="pruning" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                        <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                        <span className="truncate">Leaving Soon & Hub</span>
                     </TabsTrigger>
-                    <TabsTrigger value="preferences" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                        <Filter className="h-4 w-4 text-indigo-400" />
-                        <span>Content Filters</span>
+                    <TabsTrigger value="preferences" className="py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/60">
+                        <Filter className="h-4 w-4 text-indigo-400 shrink-0" />
+                        <span className="truncate">Content Filters</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -1805,87 +2026,107 @@ export default function CurationStudio() {
                                     </div>
                                 )}
 
-                                {/* Top Left Badges (Edition, Studio, Rating) */}
-                                <div className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} left-2.5 flex flex-col gap-1.5 items-start z-10`}>
-                                    {/* Edition Badge */}
-                                    {simEdition !== "none" && (
-                                        <div className="px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-md">
-                                            {simEdition}
-                                        </div>
-                                    )}
+                                {/* Corner Ribbon Overlay Simulation */}
+                                {simShowRibbon && (
+                                    <div className={`absolute pointer-events-none z-20 ${
+                                        simRibbonPosition === 'top-right' ? 'top-0 right-0' :
+                                        simRibbonPosition === 'top-left' ? 'top-0 left-0' :
+                                        simRibbonPosition === 'bottom-right' ? 'bottom-0 right-0' :
+                                        'bottom-0 left-0'
+                                    }`}>
+                                        <svg width="105" height="105" viewBox="0 0 105 105" className="overflow-visible">
+                                            <defs>
+                                                <linearGradient id={`sim-ribbon-grad-${simRibbonTheme}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                                                    {simRibbonTheme === 'crimson' && <><stop offset="0%" stopColor="#ef4444"/><stop offset="100%" stopColor="#991b1b"/></>}
+                                                    {simRibbonTheme === 'emerald' && <><stop offset="0%" stopColor="#10b981"/><stop offset="100%" stopColor="#065f46"/></>}
+                                                    {simRibbonTheme === 'purple' && <><stop offset="0%" stopColor="#a855f7"/><stop offset="100%" stopColor="#6b21a8"/></>}
+                                                    {simRibbonTheme === 'gold' && <><stop offset="0%" stopColor="#fbbf24"/><stop offset="100%" stopColor="#b45309"/></>}
+                                                    {simRibbonTheme === 'cyan' && <><stop offset="0%" stopColor="#06b6d4"/><stop offset="100%" stopColor="#0e7490"/></>}
+                                                    {simRibbonTheme === 'pink' && <><stop offset="0%" stopColor="#ec4899"/><stop offset="100%" stopColor="#9d174d"/></>}
+                                                    {simRibbonTheme === 'glass' && <><stop offset="0%" stopColor="#334155"/><stop offset="100%" stopColor="#0f172a"/></>}
+                                                    {simRibbonTheme === 'orange' && <><stop offset="0%" stopColor="#f97316"/><stop offset="100%" stopColor="#c2410c"/></>}
+                                                </linearGradient>
+                                                <filter id="sim-ribbon-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                                    <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#000000" floodOpacity="0.8"/>
+                                                </filter>
+                                            </defs>
+                                            <g filter="url(#sim-ribbon-shadow)">
+                                                {simRibbonPosition === 'top-right' && (
+                                                    <g transform="translate(52.5, 52.5) rotate(45) translate(-52.5, -52.5)">
+                                                        <rect x="-30" y="40" width="165" height="25" fill={`url(#sim-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
+                                                        <text x="52.5" y="56" fill="#ffffff" fontSize="8.5" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
+                                                            {getEffectiveRibbonText()}
+                                                        </text>
+                                                    </g>
+                                                )}
+                                                {simRibbonPosition === 'top-left' && (
+                                                    <g transform="translate(52.5, 52.5) rotate(-45) translate(-52.5, -52.5)">
+                                                        <rect x="-30" y="40" width="165" height="25" fill={`url(#sim-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
+                                                        <text x="52.5" y="56" fill="#ffffff" fontSize="8.5" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
+                                                            {getEffectiveRibbonText()}
+                                                        </text>
+                                                    </g>
+                                                )}
+                                                {simRibbonPosition === 'bottom-right' && (
+                                                    <g transform="translate(52.5, 52.5) rotate(-45) translate(-52.5, -52.5)">
+                                                        <rect x="-30" y="40" width="165" height="25" fill={`url(#sim-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
+                                                        <text x="52.5" y="56" fill="#ffffff" fontSize="8.5" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
+                                                            {getEffectiveRibbonText()}
+                                                        </text>
+                                                    </g>
+                                                )}
+                                                {simRibbonPosition === 'bottom-left' && (
+                                                    <g transform="translate(52.5, 52.5) rotate(45) translate(-52.5, -52.5)">
+                                                        <rect x="-30" y="40" width="165" height="25" fill={`url(#sim-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
+                                                        <text x="52.5" y="56" fill="#ffffff" fontSize="8.5" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
+                                                            {getEffectiveRibbonText()}
+                                                        </text>
+                                                    </g>
+                                                )}
+                                            </g>
+                                        </svg>
+                                    </div>
+                                )}
 
-                                    {/* Studio Logo Badge */}
-                                    {simStudio !== "none" && (
-                                        <div className="px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-md">
-                                            {simStudio}
-                                        </div>
-                                    )}
+                                {/* Top-Left Bucket */}
+                                {renderBadgesForPosition("top-left").length > 0 && (
+                                    <div className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} left-2.5 flex flex-col gap-1.5 items-start z-10`}>
+                                        {renderBadgesForPosition("top-left")}
+                                    </div>
+                                )}
 
-                                    {/* Content Rating Badge */}
-                                    {simRating !== "none" && (
-                                        <div className="px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider">
-                                            {simRating}
-                                        </div>
-                                    )}
-                                </div>
+                                {/* Top-Right Bucket */}
+                                {renderBadgesForPosition("top-right").length > 0 && (
+                                    <div className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} right-2.5 flex flex-col gap-1.5 items-end z-10`}>
+                                        {renderBadgesForPosition("top-right")}
+                                    </div>
+                                )}
 
-                                {/* Top Right Badges (4K, HDR, Audio, Channels, Codec) */}
-                                <div className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} right-2.5 flex flex-col gap-1.5 items-end z-10`}>
-                                    {/* Resolution Badge */}
-                                    {simResolution !== "none" && (
-                                        <div className={`px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-md ${
-                                            simTheme === "gold" 
-                                                ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
-                                                : 'bg-slate-950/90 text-white border-amber-400/80'
-                                        }`}>
-                                            <span>4K</span>
-                                            <span className="text-[8px] opacity-70 border-l border-current pl-1 ml-0.5">UHD</span>
-                                        </div>
-                                    )}
+                                {/* Top-Center Bucket */}
+                                {renderBadgesForPosition("top-center").length > 0 && (
+                                    <div className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]`}>
+                                        {renderBadgesForPosition("top-center")}
+                                    </div>
+                                )}
 
-                                    {/* HDR Badge */}
-                                    {simHdr !== "none" && (
-                                        <div className="px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-md">
-                                            {simHdr === "DV" ? "DOLBY VISION" : simHdr}
-                                        </div>
-                                    )}
+                                {/* Bottom-Left Bucket */}
+                                {renderBadgesForPosition("bottom-left").length > 0 && (
+                                    <div className="absolute bottom-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10">
+                                        {renderBadgesForPosition("bottom-left")}
+                                    </div>
+                                )}
 
-                                    {/* Audio Badge */}
-                                    {simAudio !== "none" && (
-                                        <div className="px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-md">
-                                            {simAudio === "ATMOS" ? "DOLBY ATMOS" : simAudio}
-                                        </div>
-                                    )}
+                                {/* Bottom-Right Bucket */}
+                                {renderBadgesForPosition("bottom-right").length > 0 && (
+                                    <div className="absolute bottom-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10">
+                                        {renderBadgesForPosition("bottom-right")}
+                                    </div>
+                                )}
 
-                                    {/* Audio Channels Badge */}
-                                    {simChannels !== "none" && (
-                                        <div className="px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-md">
-                                            {simChannels} SURROUND
-                                        </div>
-                                    )}
-
-                                    {/* Video Codec Badge */}
-                                    {simCodec !== "none" && (
-                                        <div className="px-1.5 py-0.5 rounded-md border border-emerald-400/70 bg-slate-950/90 text-emerald-300 text-[8px] font-black tracking-wider shadow-md">
-                                            {simCodec}
-                                        </div>
-                                    )}
-
-                                    {/* Selected Custom Badge Preview */}
-                                    {simCustomBadgeId !== "none" && (
-                                        <div className="px-2 py-1 rounded bg-purple-950/90 border border-purple-400 text-[9px] font-bold text-purple-200 shadow-lg">
-                                            ✨ {customBadges.find(b => b.id === simCustomBadgeId)?.name || "Custom Badge"}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Simulated Ratings Badge */}
-                                {simRatings && (
-                                    <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-950/90 border border-slate-600/80 shadow-lg text-[10px] z-10">
-                                        <div className="bg-yellow-400 text-black font-black px-1 rounded text-[9px]">IMDb</div>
-                                        <span className="font-bold text-white">8.6</span>
-                                        <span className="text-xs">🍅</span>
-                                        <span className="font-bold text-white">94%</span>
+                                {/* Bottom-Center Bucket */}
+                                {renderBadgesForPosition("bottom-center").length > 0 && (
+                                    <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]">
+                                        {renderBadgesForPosition("bottom-center")}
                                     </div>
                                 )}
                             </div>
@@ -2000,8 +2241,8 @@ export default function CurationStudio() {
                                         </div>
                                     </div>
 
-                                    {/* Positioning & Style Selectors */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                                    {/* Styling & Custom Badge Selectors */}
+                                    <div className="grid grid-cols-2 gap-3 pt-2">
                                         <div className="space-y-1">
                                             <Label className="text-slate-300">Badge Theme</Label>
                                             <Select value={simTheme} onValueChange={(val: any) => setSimTheme(val)}>
@@ -2018,21 +2259,6 @@ export default function CurationStudio() {
                                         </div>
 
                                         <div className="space-y-1">
-                                            <Label className="text-slate-300">Badge Position</Label>
-                                            <Select value={simPosition} onValueChange={(val: any) => setSimPosition(val)}>
-                                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top Right Corner</SelectItem>
-                                                    <SelectItem value="top-left">Top Left Corner</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom Right Corner</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom Left Corner</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        <div className="space-y-1 col-span-2 sm:col-span-1">
                                             <Label className="text-slate-300">Simulator Custom Badge</Label>
                                             <Select value={simCustomBadgeId} onValueChange={setSimCustomBadgeId}>
                                                 <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
@@ -2048,6 +2274,178 @@ export default function CurationStudio() {
                                                 </SelectContent>
                                             </Select>
                                         </div>
+                                    </div>
+
+                                    {/* Independent Badge Placement Pickers */}
+                                    <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <Layers className="h-4 w-4 text-sky-400" />
+                                            <span className="font-bold text-white text-xs">Independent Badge Placements & Positioning</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400">
+                                            Freely arrange quality, audio, edition, and rating badge clusters into any corner or center of the poster.
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                            <div className="space-y-1">
+                                                <Label className="text-[11px] text-slate-300 flex items-center gap-1">
+                                                    <Film className="h-3.5 w-3.5 text-amber-400" /> Video (4K / HDR / Codec)
+                                                </Label>
+                                                <Select value={simVideoPosition} onValueChange={(val: any) => setSimVideoPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right Corner</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left Corner</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
+                                                        <SelectItem value="top-center">Top Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label className="text-[11px] text-slate-300 flex items-center gap-1">
+                                                    <Volume2 className="h-3.5 w-3.5 text-sky-400" /> Audio & Surround Channels
+                                                </Label>
+                                                <Select value={simAudioPosition} onValueChange={(val: any) => setSimAudioPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-left">Top-Left Corner</SelectItem>
+                                                        <SelectItem value="top-right">Top-Right Corner</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
+                                                        <SelectItem value="top-center">Top Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label className="text-[11px] text-slate-300 flex items-center gap-1">
+                                                    <Trophy className="h-3.5 w-3.5 text-purple-400" /> Edition & Studio Logos
+                                                </Label>
+                                                <Select value={simEditionPosition} onValueChange={(val: any) => setSimEditionPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left Corner</SelectItem>
+                                                        <SelectItem value="top-right">Top-Right Corner</SelectItem>
+                                                        <SelectItem value="top-center">Top Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label className="text-[11px] text-slate-300 flex items-center gap-1">
+                                                    <Star className="h-3.5 w-3.5 text-amber-300" /> Community Ratings (IMDb / RT)
+                                                </Label>
+                                                <Select value={simRatingPosition} onValueChange={(val: any) => setSimRatingPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left Corner</SelectItem>
+                                                        <SelectItem value="top-right">Top-Right Corner</SelectItem>
+                                                        <SelectItem value="top-center">Top Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Corner Ribbon Overlays Configuration */}
+                                    <div className="p-3.5 bg-gradient-to-r from-purple-950/40 via-slate-950/60 to-slate-950/70 rounded-xl border border-purple-800/40 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles className="h-4 w-4 text-purple-400" />
+                                                <span className="font-bold text-white text-xs">Corner Ribbon Overlays</span>
+                                            </div>
+                                            <Switch 
+                                                checked={simShowRibbon}
+                                                onCheckedChange={setSimShowRibbon}
+                                            />
+                                        </div>
+                                        <p className="text-[11px] text-slate-400">
+                                            Diagonal corner ribbons with high-gloss gradients, drop shadows, and automatic or custom text.
+                                        </p>
+
+                                        {simShowRibbon && (
+                                            <div className="space-y-3 pt-1 animate-in fade-in-50 duration-200">
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[11px] text-slate-300">Ribbon Content</Label>
+                                                        <Select value={simRibbonType} onValueChange={(val: any) => setSimRibbonType(val)}>
+                                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="auto_quality">Auto Quality (4K / DV)</SelectItem>
+                                                                <SelectItem value="auto_edition">Auto Edition (IMAX / Cut)</SelectItem>
+                                                                <SelectItem value="leaving_soon">Leaving Soon</SelectItem>
+                                                                <SelectItem value="custom">Custom Text Banner</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[11px] text-slate-300">Corner Placement</Label>
+                                                        <Select value={simRibbonPosition} onValueChange={(val: any) => setSimRibbonPosition(val)}>
+                                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="top-right">Top-Right Corner</SelectItem>
+                                                                <SelectItem value="top-left">Top-Left Corner</SelectItem>
+                                                                <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
+                                                                <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[11px] text-slate-300">Color Gradient</Label>
+                                                        <Select value={simRibbonTheme} onValueChange={(val: any) => setSimRibbonTheme(val)}>
+                                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="purple">💜 Royal Purple</SelectItem>
+                                                                <SelectItem value="emerald">💚 Emerald Green</SelectItem>
+                                                                <SelectItem value="crimson">❤️ Crimson Red</SelectItem>
+                                                                <SelectItem value="gold">💛 Amber Gold</SelectItem>
+                                                                <SelectItem value="cyan">🩵 Electric Cyan</SelectItem>
+                                                                <SelectItem value="pink">💖 Neon Pink</SelectItem>
+                                                                <SelectItem value="glass">🖤 Dark Glass</SelectItem>
+                                                                <SelectItem value="orange">🧡 Warning Orange</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                </div>
+
+                                                {simRibbonType === "custom" && (
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[11px] text-slate-300">Custom Ribbon Text</Label>
+                                                        <Input 
+                                                            value={simRibbonText}
+                                                            onChange={e => setSimRibbonText(e.target.value)}
+                                                            placeholder="e.g. EXCLUSIVE REMUX, DIRECTOR'S CUT, STAFF PICK..."
+                                                            className="bg-slate-800 border-slate-700 text-xs h-8"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </CardContent>
                                 <CardFooter className="p-4 pt-0 flex flex-col gap-2">
@@ -2494,54 +2892,109 @@ export default function CurationStudio() {
                                                     </div>
                                                 )}
 
-                                                {/* Detected Top-Left Badges (Edition, Studio, Rating) */}
-                                                <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10">
-                                                    {inspectingItem.item.detectedBadges?.edition && (
-                                                        <div className="px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-md">
-                                                            {inspectingItem.item.detectedBadges.edition}
-                                                        </div>
-                                                    )}
-                                                    {inspectingItem.item.detectedBadges?.studio && (
-                                                        <div className="px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-md">
-                                                            {inspectingItem.item.detectedBadges.studio}
-                                                        </div>
-                                                    )}
-                                                    {inspectingItem.item.detectedBadges?.contentRating && (
-                                                        <div className="px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider">
-                                                            {inspectingItem.item.detectedBadges.contentRating}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                {/* Corner Ribbon Overlay on Inspected Item */}
+                                                {simShowRibbon && (
+                                                    <div className={`absolute pointer-events-none z-20 ${
+                                                        simRibbonPosition === 'top-right' ? 'top-0 right-0' :
+                                                        simRibbonPosition === 'top-left' ? 'top-0 left-0' :
+                                                        simRibbonPosition === 'bottom-right' ? 'bottom-0 right-0' :
+                                                        'bottom-0 left-0'
+                                                    }`}>
+                                                        <svg width="100" height="100" viewBox="0 0 100 100" className="overflow-visible">
+                                                            <defs>
+                                                                <linearGradient id={`inspect-ribbon-grad-${simRibbonTheme}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                                                                    {simRibbonTheme === 'crimson' && <><stop offset="0%" stopColor="#ef4444"/><stop offset="100%" stopColor="#991b1b"/></>}
+                                                                    {simRibbonTheme === 'emerald' && <><stop offset="0%" stopColor="#10b981"/><stop offset="100%" stopColor="#065f46"/></>}
+                                                                    {simRibbonTheme === 'purple' && <><stop offset="0%" stopColor="#a855f7"/><stop offset="100%" stopColor="#6b21a8"/></>}
+                                                                    {simRibbonTheme === 'gold' && <><stop offset="0%" stopColor="#fbbf24"/><stop offset="100%" stopColor="#b45309"/></>}
+                                                                    {simRibbonTheme === 'cyan' && <><stop offset="0%" stopColor="#06b6d4"/><stop offset="100%" stopColor="#0e7490"/></>}
+                                                                    {simRibbonTheme === 'pink' && <><stop offset="0%" stopColor="#ec4899"/><stop offset="100%" stopColor="#9d174d"/></>}
+                                                                    {simRibbonTheme === 'glass' && <><stop offset="0%" stopColor="#334155"/><stop offset="100%" stopColor="#0f172a"/></>}
+                                                                    {simRibbonTheme === 'orange' && <><stop offset="0%" stopColor="#f97316"/><stop offset="100%" stopColor="#c2410c"/></>}
+                                                                </linearGradient>
+                                                                <filter id="inspect-ribbon-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                                                    <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#000000" floodOpacity="0.8"/>
+                                                                </filter>
+                                                            </defs>
+                                                            <g filter="url(#inspect-ribbon-shadow)">
+                                                                {simRibbonPosition === 'top-right' && (
+                                                                    <g transform="translate(50, 50) rotate(45) translate(-50, -50)">
+                                                                        <rect x="-30" y="38" width="160" height="24" fill={`url(#inspect-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
+                                                                        <text x="50" y="53" fill="#ffffff" fontSize="8" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
+                                                                            {getEffectiveRibbonText()}
+                                                                        </text>
+                                                                    </g>
+                                                                )}
+                                                                {simRibbonPosition === 'top-left' && (
+                                                                    <g transform="translate(50, 50) rotate(-45) translate(-50, -50)">
+                                                                        <rect x="-30" y="38" width="160" height="24" fill={`url(#inspect-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
+                                                                        <text x="50" y="53" fill="#ffffff" fontSize="8" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
+                                                                            {getEffectiveRibbonText()}
+                                                                        </text>
+                                                                    </g>
+                                                                )}
+                                                                {simRibbonPosition === 'bottom-right' && (
+                                                                    <g transform="translate(50, 50) rotate(-45) translate(-50, -50)">
+                                                                        <rect x="-30" y="38" width="160" height="24" fill={`url(#inspect-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
+                                                                        <text x="50" y="53" fill="#ffffff" fontSize="8" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
+                                                                            {getEffectiveRibbonText()}
+                                                                        </text>
+                                                                    </g>
+                                                                )}
+                                                                {simRibbonPosition === 'bottom-left' && (
+                                                                    <g transform="translate(50, 50) rotate(45) translate(-50, -50)">
+                                                                        <rect x="-30" y="38" width="160" height="24" fill={`url(#inspect-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
+                                                                        <text x="50" y="53" fill="#ffffff" fontSize="8" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
+                                                                            {getEffectiveRibbonText()}
+                                                                        </text>
+                                                                    </g>
+                                                                )}
+                                                            </g>
+                                                        </svg>
+                                                    </div>
+                                                )}
 
-                                                {/* Detected Top-Right Badges (Resolution, HDR, Audio, Channels, Codec) */}
-                                                <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10">
-                                                    {inspectingItem.item.detectedBadges?.resolution && (
-                                                        <div className="px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/90 text-white text-[10px] font-black tracking-wider flex items-center gap-1 shadow-md">
-                                                            <span>{inspectingItem.item.detectedBadges.resolution}</span>
-                                                            <span className="text-[8px] opacity-70 border-l border-current pl-1 ml-0.5">UHD</span>
-                                                        </div>
-                                                    )}
-                                                    {inspectingItem.item.detectedBadges?.hdr && (
-                                                        <div className="px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-md">
-                                                            {inspectingItem.item.detectedBadges.hdr === "DV" ? "DOLBY VISION" : inspectingItem.item.detectedBadges.hdr}
-                                                        </div>
-                                                    )}
-                                                    {inspectingItem.item.detectedBadges?.audio && (
-                                                        <div className="px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-md">
-                                                            {inspectingItem.item.detectedBadges.audio}
-                                                        </div>
-                                                    )}
-                                                    {inspectingItem.item.detectedBadges?.audioChannels && (
-                                                        <div className="px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-md">
-                                                            {inspectingItem.item.detectedBadges.audioChannels}
-                                                        </div>
-                                                    )}
-                                                    {inspectingItem.item.detectedBadges?.codec && (
-                                                        <div className="px-1.5 py-0.5 rounded-md border border-emerald-400/70 bg-slate-950/90 text-emerald-300 text-[8px] font-black tracking-wider shadow-md">
-                                                            {inspectingItem.item.detectedBadges.codec}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                {/* Top-Left Inspected Badges */}
+                                                {renderInspectedBadgesForPosition(inspectingItem.item, "top-left").length > 0 && (
+                                                    <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10">
+                                                        {renderInspectedBadgesForPosition(inspectingItem.item, "top-left")}
+                                                    </div>
+                                                )}
+
+                                                {/* Top-Right Inspected Badges */}
+                                                {renderInspectedBadgesForPosition(inspectingItem.item, "top-right").length > 0 && (
+                                                    <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10">
+                                                        {renderInspectedBadgesForPosition(inspectingItem.item, "top-right")}
+                                                    </div>
+                                                )}
+
+                                                {/* Top-Center Inspected Badges */}
+                                                {renderInspectedBadgesForPosition(inspectingItem.item, "top-center").length > 0 && (
+                                                    <div className="absolute top-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]">
+                                                        {renderInspectedBadgesForPosition(inspectingItem.item, "top-center")}
+                                                    </div>
+                                                )}
+
+                                                {/* Bottom-Left Inspected Badges */}
+                                                {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-left").length > 0 && (
+                                                    <div className="absolute bottom-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10">
+                                                        {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-left")}
+                                                    </div>
+                                                )}
+
+                                                {/* Bottom-Right Inspected Badges */}
+                                                {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-right").length > 0 && (
+                                                    <div className="absolute bottom-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10">
+                                                        {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-right")}
+                                                    </div>
+                                                )}
+
+                                                {/* Bottom-Center Inspected Badges */}
+                                                {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-center").length > 0 && (
+                                                    <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]">
+                                                        {renderInspectedBadgesForPosition(inspectingItem.item, "bottom-center")}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Backup Pill & Single Item Action Buttons */}

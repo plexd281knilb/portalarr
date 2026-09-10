@@ -26,7 +26,16 @@ export interface OverlayOptions {
     placeholderText?: string;
     placeholderTheme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass";
     placeholderPosition?: "top" | "bottom" | "corner";
-    position?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
+    position?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
+    videoPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
+    audioPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
+    editionPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
+    ratingPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
+    showRibbon?: boolean;
+    ribbonPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
+    ribbonTheme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange";
+    ribbonText?: string;
+    ribbonType?: "auto_quality" | "auto_edition" | "leaving_soon" | "custom";
     theme?: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson";
     ratingsSource?: {
         imdb?: number;
@@ -449,6 +458,58 @@ export function generatePlaceholderRibbonSvg(
 }
 
 /**
+ * Generates high-definition diagonal corner ribbon (Top-Right, Top-Left, Bottom-Right, Bottom-Left).
+ */
+export function generateCornerRibbonSvg(
+    text: string,
+    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right",
+    theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "purple"
+): string {
+    const isTop = position.startsWith("top");
+    const isRight = position.endsWith("right");
+
+    const rotation = (isTop && isRight) || (!isTop && !isRight) ? 45 : -45;
+
+    const gradients: Record<string, { start: string; mid: string; end: string; border: string; text: string; shadow: string }> = {
+        crimson: { start: "#ef4444", mid: "#dc2626", end: "#991b1b", border: "#fca5a5", text: "#ffffff", shadow: "rgba(153, 27, 27, 0.7)" },
+        emerald: { start: "#10b981", mid: "#059669", end: "#065f46", border: "#a7f3d0", text: "#ffffff", shadow: "rgba(6, 95, 70, 0.7)" },
+        purple: { start: "#818cf8", mid: "#6366f1", end: "#4338ca", border: "#c7d2fe", text: "#ffffff", shadow: "rgba(67, 56, 202, 0.7)" },
+        gold: { start: "#fef08a", mid: "#eab308", end: "#ca8a04", border: "#fef9c3", text: "#000000", shadow: "rgba(202, 138, 4, 0.7)" },
+        cyan: { start: "#38bdf8", mid: "#0284c7", end: "#0369a1", border: "#bae6fd", text: "#ffffff", shadow: "rgba(3, 105, 161, 0.7)" },
+        pink: { start: "#f472b6", mid: "#ec4899", end: "#be185d", border: "#fbcfe8", text: "#ffffff", shadow: "rgba(190, 24, 93, 0.7)" },
+        glass: { start: "#334155", mid: "#1e293b", end: "#0f172a", border: "#94a3b8", text: "#f8fafc", shadow: "rgba(15, 23, 42, 0.8)" },
+        orange: { start: "#fb923c", mid: "#ea580c", end: "#c2410c", border: "#ffedd5", text: "#ffffff", shadow: "rgba(194, 65, 12, 0.7)" }
+    };
+
+    const g = gradients[theme] || gradients.purple;
+    const cleanText = text.toUpperCase().slice(0, 26);
+
+    return `
+    <svg width="340" height="340" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="ribbonGrad_${theme}_${position}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="${g.start}" />
+                <stop offset="35%" stop-color="${g.mid}" />
+                <stop offset="100%" stop-color="${g.end}" />
+            </linearGradient>
+            <filter id="ribbonShadow_${theme}_${position}" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.6"/>
+            </filter>
+        </defs>
+        <g transform="translate(170, 170) rotate(${rotation})">
+            <!-- Drop Shadow Backer -->
+            <rect x="-260" y="-24" width="520" height="48" fill="url(#ribbonGrad_${theme}_${position})" filter="url(#ribbonShadow_${theme}_${position})"/>
+            <!-- Top Highlight Stripe -->
+            <line x1="-260" y1="-22" x2="260" y2="-22" stroke="${g.border}" stroke-width="1.5" opacity="0.65"/>
+            <!-- Bottom Border Stripe -->
+            <line x1="-260" y1="22" x2="260" y2="22" stroke="${g.border}" stroke-width="1.5" opacity="0.45"/>
+            <!-- Ribbon Text -->
+            <text x="0" y="8" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="19" fill="${g.text}" text-anchor="middle" letter-spacing="2.2">${cleanText}</text>
+        </g>
+    </svg>`;
+}
+
+/**
  * Applies overlay SVG badges & custom uploaded badges onto a poster image buffer using sharp.
  */
 export async function applyOverlaysToPoster(
@@ -461,9 +522,6 @@ export async function applyOverlaysToPoster(
     // Standardize base image size to 1000x1500 (standard high-DPI 2:3 vertical poster)
     const baseImage = sharp(originalBuffer).resize(1000, 1500, { fit: "cover" });
     const overlays: { input: Buffer | string; top?: number; left?: number }[] = [];
-
-    const isTop = (options.position || "top-right").startsWith("top");
-    const isRight = (options.position || "top-right").endsWith("right");
 
     // 1. Leaving Soon Banner (Takes precedence at the very top)
     if (options.showLeavingSoon) {
@@ -493,70 +551,142 @@ export async function applyOverlaysToPoster(
         });
     }
 
-    // 3. Built-in Vector Badges Collection
-    const badgeSvgs: string[] = [];
+    // 3. Diagonal Corner Ribbon (e.g. 4K UHD, IMAX, CRITERION, LEAVING SOON, NEW RELEASE)
+    if (options.showRibbon || options.ribbonText) {
+        let rText = options.ribbonText;
+        if (!rText) {
+            if (options.ribbonType === "auto_edition" && mediaInfo.detectedBadges.edition) {
+                rText = mediaInfo.detectedBadges.edition;
+            } else if (options.ribbonType === "leaving_soon" || mediaInfo.isLeavingSoon) {
+                rText = options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays}D` : "LEAVING SOON";
+            } else if (mediaInfo.detectedBadges.resolution === "4K") {
+                rText = "4K UHD";
+            } else if (mediaInfo.detectedBadges.hdr) {
+                rText = String(mediaInfo.detectedBadges.hdr).toUpperCase();
+            } else {
+                rText = "FEATURED";
+            }
+        }
 
-    if (options.showResolution !== false && mediaInfo.detectedBadges.resolution) {
-        badgeSvgs.push(generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme));
-    }
+        const rPos = options.ribbonPosition || "top-right";
+        const rTheme = options.ribbonTheme || "purple";
+        const cornerRibbonSvg = generateCornerRibbonSvg(rText, rPos, rTheme);
+        const ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(340, 340).toBuffer();
 
-    if (options.showHdr !== false && mediaInfo.detectedBadges.hdr) {
-        badgeSvgs.push(generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme));
-    }
-
-    if (options.showAudio !== false && mediaInfo.detectedBadges.audio) {
-        badgeSvgs.push(generateAudioBadgeSvg(mediaInfo.detectedBadges.audio));
-    }
-
-    if (options.showAudioChannels && mediaInfo.detectedBadges.audioChannels) {
-        badgeSvgs.push(generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels));
-    }
-
-    if (options.showCodec && mediaInfo.detectedBadges.codec) {
-        badgeSvgs.push(generateCodecBadgeSvg(mediaInfo.detectedBadges.codec));
-    }
-
-    if (options.showEdition && mediaInfo.detectedBadges.edition) {
-        badgeSvgs.push(generateEditionBadgeSvg(mediaInfo.detectedBadges.edition));
-    }
-
-    if (options.showStudio && mediaInfo.detectedBadges.studio) {
-        badgeSvgs.push(generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio));
-    }
-
-    if (options.showContentRating && mediaInfo.detectedBadges.contentRating) {
-        badgeSvgs.push(generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating));
-    }
-
-    let topOffset = options.showLeavingSoon ? 90 : 35;
-    let bottomOffset = 1500 - 65;
-
-    // Stack built-in badges horizontally
-    let currentX = isRight ? 1000 - 35 : 35;
-
-    for (const svg of badgeSvgs) {
-        const badgeBuf = Buffer.from(svg);
-        const meta = await sharp(badgeBuf).metadata();
-        const bWidth = meta.width || 140;
-        const bHeight = meta.height || 46;
-
-        let placeX = isRight ? currentX - bWidth : currentX;
-        let placeY = isTop ? topOffset : bottomOffset - bHeight;
+        let rTop = rPos.startsWith("top") ? (options.showLeavingSoon ? 75 : 0) : 1500 - 340;
+        let rLeft = rPos.endsWith("right") ? 1000 - 340 : 0;
 
         overlays.push({
-            input: badgeBuf,
-            top: placeY,
-            left: placeX
+            input: ribbonBuf,
+            top: rTop,
+            left: rLeft
         });
+    }
 
-        if (isRight) {
-            currentX -= (bWidth + 14);
+    // 4. Group Badges by Configured Positions & Placements
+    const videoPos = options.videoPosition || options.position || "top-right";
+    const audioPos = options.audioPosition || "top-left";
+    const editionPos = options.editionPosition || (videoPos === "top-right" ? "bottom-right" : "top-right");
+    const ratingPos = options.ratingPosition || "bottom-left";
+
+    const buckets: Record<string, string[]> = {
+        "top-right": [],
+        "top-left": [],
+        "bottom-right": [],
+        "bottom-left": [],
+        "top-center": [],
+        "bottom-center": []
+    };
+
+    // Video badges -> videoPos
+    if (options.showResolution !== false && mediaInfo.detectedBadges.resolution) {
+        buckets[videoPos]?.push(generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme));
+    }
+    if (options.showHdr !== false && mediaInfo.detectedBadges.hdr) {
+        buckets[videoPos]?.push(generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme));
+    }
+    if (options.showCodec && mediaInfo.detectedBadges.codec) {
+        buckets[videoPos]?.push(generateCodecBadgeSvg(mediaInfo.detectedBadges.codec));
+    }
+
+    // Audio badges -> audioPos
+    if (options.showAudio !== false && mediaInfo.detectedBadges.audio) {
+        buckets[audioPos]?.push(generateAudioBadgeSvg(mediaInfo.detectedBadges.audio));
+    }
+    if (options.showAudioChannels && mediaInfo.detectedBadges.audioChannels) {
+        buckets[audioPos]?.push(generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels));
+    }
+
+    // Edition / Studio / Content Rating -> editionPos
+    if (options.showEdition && mediaInfo.detectedBadges.edition) {
+        buckets[editionPos]?.push(generateEditionBadgeSvg(mediaInfo.detectedBadges.edition));
+    }
+    if (options.showStudio && mediaInfo.detectedBadges.studio) {
+        buckets[editionPos]?.push(generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio));
+    }
+    if (options.showContentRating && mediaInfo.detectedBadges.contentRating) {
+        buckets[editionPos]?.push(generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating));
+    }
+
+    // Render Each Bucket
+    for (const [posKey, svgList] of Object.entries(buckets)) {
+        if (!svgList || svgList.length === 0) continue;
+
+        const isBTop = posKey.startsWith("top");
+        const isBRight = posKey.endsWith("right");
+        const isBCenter = posKey.includes("center");
+
+        let bTopOffset = isBTop ? (options.showLeavingSoon ? 90 : 35) : (1500 - 35);
+
+        if (isBCenter) {
+            // Render centered horizontally
+            let totalW = 0;
+            const items: { buf: Buffer; w: number; h: number }[] = [];
+            for (const svg of svgList) {
+                const buf = Buffer.from(svg);
+                const meta = await sharp(buf).metadata();
+                const w = meta.width || 140;
+                const h = meta.height || 46;
+                items.push({ buf, w, h });
+                totalW += w + 12;
+            }
+            totalW -= 12; // trim last margin
+            let curX = (1000 - totalW) / 2;
+            for (const it of items) {
+                overlays.push({
+                    input: it.buf,
+                    top: isBTop ? bTopOffset : bTopOffset - it.h,
+                    left: Math.round(curX)
+                });
+                curX += it.w + 12;
+            }
         } else {
-            currentX += (bWidth + 14);
+            let currentX = isBRight ? 1000 - 35 : 35;
+            for (const svg of svgList) {
+                const badgeBuf = Buffer.from(svg);
+                const meta = await sharp(badgeBuf).metadata();
+                const bWidth = meta.width || 140;
+                const bHeight = meta.height || 46;
+
+                let placeX = isBRight ? currentX - bWidth : currentX;
+                let placeY = isBTop ? bTopOffset : bTopOffset - bHeight;
+
+                overlays.push({
+                    input: badgeBuf,
+                    top: Math.round(placeY),
+                    left: Math.round(placeX)
+                });
+
+                if (isBRight) {
+                    currentX -= (bWidth + 12);
+                } else {
+                    currentX += (bWidth + 12);
+                }
+            }
         }
     }
 
-    // 4. Custom Uploaded Badges (Image files from disk)
+    // 5. Custom Uploaded Badges (Image files from disk)
     if (options.customBadges && Array.isArray(options.customBadges)) {
         for (const cb of options.customBadges) {
             if (cb.filePath && fs.existsSync(cb.filePath)) {
@@ -596,7 +726,7 @@ export async function applyOverlaysToPoster(
         }
     }
 
-    // 5. Ratings Badge (Render at bottom left or right)
+    // 6. Ratings Badge (Render at configured ratingPosition)
     if (options.showRatings && options.ratingsSource) {
         const ratingsSvg = generateRatingsBadgeSvg(options.ratingsSource);
         if (ratingsSvg) {
@@ -605,15 +735,20 @@ export async function applyOverlaysToPoster(
             const rWidth = rMeta.width || 200;
             const rHeight = rMeta.height || 42;
 
+            const isRTop = ratingPos.startsWith("top");
+            const isRRight = ratingPos.endsWith("right");
+            const rX = isRRight ? 1000 - rWidth - 35 : 35;
+            const rY = isRTop ? (options.showLeavingSoon ? 90 : 35) : 1500 - rHeight - 35;
+
             overlays.push({
                 input: ratingsBuf,
-                top: 1500 - rHeight - 35,
-                left: 35
+                top: Math.round(rY),
+                left: Math.round(rX)
             });
         }
     }
 
-    // 6. Digital Release Banner (if set)
+    // 7. Digital Release Banner (if set)
     if (options.showDigitalRelease && options.digitalReleaseDate && !options.showPlaceholder) {
         const relDate = new Date(options.digitalReleaseDate);
         const now = new Date();

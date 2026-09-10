@@ -58,6 +58,7 @@ export interface PlexMediaStreamInfo {
         audioFormatLabel?: string;
         videoFormatLabel?: string;
     };
+    isLeavingSoon?: boolean;
 }
 
 /**

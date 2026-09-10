@@ -879,6 +879,15 @@ export async function saveOverlayRuleAction(data: {
     sectionKey: string;
     overlayType: string;
     position?: string;
+    videoPosition?: string;
+    audioPosition?: string;
+    editionPosition?: string;
+    ratingPosition?: string;
+    showRibbon?: boolean;
+    ribbonPosition?: string;
+    ribbonTheme?: string;
+    ribbonText?: string;
+    ribbonType?: string;
     theme?: string;
     badgeStyle?: string;
     showResolution?: boolean;
@@ -902,6 +911,15 @@ export async function saveOverlayRuleAction(data: {
             sectionKey: data.sectionKey,
             overlayType: data.overlayType,
             position: data.position || "top-right",
+            videoPosition: data.videoPosition || data.position || "top-right",
+            audioPosition: data.audioPosition || "top-left",
+            editionPosition: data.editionPosition || "bottom-right",
+            ratingPosition: data.ratingPosition || "bottom-left",
+            showRibbon: data.showRibbon ?? false,
+            ribbonPosition: data.ribbonPosition || "top-right",
+            ribbonTheme: data.ribbonTheme || "purple",
+            ribbonText: data.ribbonText || null,
+            ribbonType: data.ribbonType || "auto_quality",
             theme: data.theme || "glass",
             badgeStyle: data.badgeStyle || "pill",
             showResolution: data.showResolution ?? true,
@@ -993,6 +1011,15 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
                     showRatings: rule.showRatings,
                     showLeavingSoon: rule.showLeavingSoon,
                     position: (rule.position as any) || "top-right",
+                    videoPosition: (rule.videoPosition as any) || (rule.position as any) || "top-right",
+                    audioPosition: (rule.audioPosition as any) || "top-left",
+                    editionPosition: (rule.editionPosition as any) || "bottom-right",
+                    ratingPosition: (rule.ratingPosition as any) || "bottom-left",
+                    showRibbon: rule.showRibbon ?? false,
+                    ribbonPosition: (rule.ribbonPosition as any) || "top-right",
+                    ribbonTheme: (rule.ribbonTheme as any) || "purple",
+                    ribbonText: rule.ribbonText || undefined,
+                    ribbonType: (rule.ribbonType as any) || "auto_quality",
                     theme: (rule.theme as any) || "glass",
                     customBadges: activeCustomBadges.map(cb => ({
                         id: cb.id,
@@ -1666,6 +1693,15 @@ export async function applyOverlayToSingleItemAction(
     ratingKey: string,
     options?: {
         position?: string;
+        videoPosition?: string;
+        audioPosition?: string;
+        editionPosition?: string;
+        ratingPosition?: string;
+        showRibbon?: boolean;
+        ribbonPosition?: string;
+        ribbonTheme?: string;
+        ribbonText?: string;
+        ribbonType?: string;
         theme?: string;
         showResolution?: boolean;
         showHdr?: boolean;
@@ -1702,6 +1738,15 @@ export async function applyOverlayToSingleItemAction(
             inspection.item,
             {
                 position: (options?.position as any) || "top-right",
+                videoPosition: (options?.videoPosition as any) || (options?.position as any) || "top-right",
+                audioPosition: (options?.audioPosition as any) || "top-left",
+                editionPosition: (options?.editionPosition as any) || "bottom-right",
+                ratingPosition: (options?.ratingPosition as any) || "bottom-left",
+                showRibbon: options?.showRibbon ?? false,
+                ribbonPosition: (options?.ribbonPosition as any) || "top-right",
+                ribbonTheme: (options?.ribbonTheme as any) || "purple",
+                ribbonText: options?.ribbonText || undefined,
+                ribbonType: (options?.ribbonType as any) || "auto_quality",
                 theme: (options?.theme as any) || "glass",
                 showResolution: options?.showResolution ?? true,
                 showHdr: options?.showHdr ?? true,

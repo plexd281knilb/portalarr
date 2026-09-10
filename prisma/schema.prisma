@@ -335,6 +335,15 @@ model MediaOverlayRule {
   sectionKey        String?
   overlayType       String    @default("combined")
   position          String    @default("top-right")
+  videoPosition     String?   @default("top-right")
+  audioPosition     String?   @default("top-left")
+  editionPosition   String?   @default("bottom-right")
+  ratingPosition    String?   @default("bottom-left")
+  showRibbon        Boolean   @default(false)
+  ribbonPosition    String    @default("top-right") // "top-right", "top-left", "bottom-right", "bottom-left"
+  ribbonTheme       String    @default("purple")    // "crimson", "emerald", "purple", "gold", "cyan", "pink", "glass", "orange"
+  ribbonText        String?                         // e.g. "4K UHD", "IMAX", "NEW RELEASE"
+  ribbonType        String    @default("auto_quality") // "auto_quality", "auto_edition", "leaving_soon", "custom"
   theme             String    @default("glass")
   badgeStyle        String    @default("pill")
   showResolution    Boolean   @default(true)

@@ -680,6 +680,27 @@ export async function ensureSchemaColumns(): Promise<void> {
                 );
             `);
 
+            try {
+                const overlayTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaOverlayRule");`);
+                const overlayCols = overlayTableInfo.map((c: any) => c.name);
+                const overlayAddCols: [string, string][] = [
+                    ["videoPosition", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "videoPosition" TEXT DEFAULT 'top-right';`],
+                    ["audioPosition", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "audioPosition" TEXT DEFAULT 'top-left';`],
+                    ["editionPosition", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "editionPosition" TEXT DEFAULT 'bottom-right';`],
+                    ["ratingPosition", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ratingPosition" TEXT DEFAULT 'bottom-left';`],
+                    ["showRibbon", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showRibbon" BOOLEAN NOT NULL DEFAULT 0;`],
+                    ["ribbonPosition", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ribbonPosition" TEXT NOT NULL DEFAULT 'top-right';`],
+                    ["ribbonTheme", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ribbonTheme" TEXT NOT NULL DEFAULT 'purple';`],
+                    ["ribbonText", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ribbonText" TEXT;`],
+                    ["ribbonType", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ribbonType" TEXT NOT NULL DEFAULT 'auto_quality';`]
+                ];
+                for (const [colName, ddl] of overlayAddCols) {
+                    if (!overlayCols.includes(colName)) {
+                        try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                    }
+                }
+            } catch (e) {}
+
             await prisma.$executeRawUnsafe(`
                 CREATE TABLE IF NOT EXISTS "MediaArtBackup" (
                     "id" TEXT PRIMARY KEY,
