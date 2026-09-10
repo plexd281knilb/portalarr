@@ -2,6 +2,7 @@
 
 import fs from "fs";
 import path from "path";
+import sharp from "sharp";
 import prisma from "@/lib/prisma";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getCurrentUser } from "@/app/auth-actions";
@@ -2145,5 +2146,521 @@ export async function saveItemParentalAdvisoryAction(
     await saveParentalAdvisory(ratingKey, serverId, title, advisory);
     return { success: true };
 }
+
+export interface DiscoveredBadgeItem {
+    id: string;
+    name: string;
+    filename: string;
+    path: string;
+    size: number;
+    downloadUrl: string;
+    previewUrl: string;
+    category: "resolution" | "hdr" | "codec" | "audio" | "edition" | "ratings" | "ribbon" | "studio" | "custom";
+    suggestedMatchRule: string;
+    suggestedPosition: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
+    width: number;
+    height: number;
+    is2x?: boolean;
+}
+
+export interface BadgePresetPack {
+    id: string;
+    title: string;
+    author: string;
+    description: string;
+    repoUrl: string;
+    badgeCount?: number;
+    category: "minimalist" | "codecs" | "editions" | "ratings" | "official" | "streaming";
+    icon: string;
+    previewUrls?: string[];
+}
+
+export const PRESET_BADGE_PACKS: BadgePresetPack[] = [
+    {
+        id: "jmxd-all",
+        title: "jmxd Minimalist Overlays (Full Collection)",
+        author: "jmxd",
+        description: "The complete iconic minimalist dark overlay set for Kometa & Plex. Includes 4K, HDR, Dolby Vision, Atmos, TrueHD, DTS:X, and special edition cuts.",
+        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images",
+        category: "minimalist",
+        icon: "💎",
+        previewUrls: [
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/resolution/Ultra-HD.png",
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/codec/DV-HDR-TrueHD-Atmos.png",
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/edition/IMAX.png"
+        ]
+    },
+    {
+        id: "jmxd-codecs",
+        title: "jmxd Video & Audio Codecs",
+        author: "jmxd",
+        description: "Comprehensive audio/video codec badges including Dolby Vision, Dolby Atmos, TrueHD 7.1, DTS:X, DTS-HD MA, and Digital Plus.",
+        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images/media_info/codec",
+        category: "codecs",
+        icon: "🔊",
+        previewUrls: [
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/codec/DV-Atmos.png",
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/codec/TrueHD-Atmos.png",
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/codec/DTS-X.png"
+        ]
+    },
+    {
+        id: "jmxd-editions",
+        title: "jmxd Special Editions & Cuts",
+        author: "jmxd",
+        description: "IMAX Enhanced, The Criterion Collection, Director's Cut, Extended Edition, Remastered, Theatrical, and Unrated cuts.",
+        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images/media_info/edition",
+        category: "editions",
+        icon: "🎞️",
+        previewUrls: [
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/edition/IMAX.png",
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/edition/Directors-Cut.png",
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/edition/Extended-Edition.png"
+        ]
+    },
+    {
+        id: "jmxd-resolutions",
+        title: "jmxd Resolution Badges (4K & 1080p)",
+        author: "jmxd",
+        description: "Ultra-HD (4K UHD) and 1080P Full HD minimalist badges with @2x retina scaling assets.",
+        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images/media_info/resolution",
+        category: "minimalist",
+        icon: "📺",
+        previewUrls: [
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/resolution/Ultra-HD.png",
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/resolution/1080P.png"
+        ]
+    },
+    {
+        id: "jmxd-audience",
+        title: "jmxd Audience Scores & Ratings",
+        author: "jmxd",
+        description: "Audience score and critic rating overlays with tiered colors for Rotten Tomatoes and IMDb.",
+        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images/audience_score",
+        category: "ratings",
+        icon: "🍅",
+        previewUrls: [
+            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/audience_score/tomato_fresh.png"
+        ]
+    },
+    {
+        id: "kometa-default",
+        title: "Kometa Team Official Default Images",
+        author: "Kometa Team",
+        description: "The official master default image collection for Kometa, Plex Meta Manager, and Agregarr ecosystems.",
+        repoUrl: "https://github.com/Kometa-Team/Default-Images",
+        category: "official",
+        icon: "🛡️",
+        previewUrls: []
+    },
+    {
+        id: "kometa-streaming",
+        title: "Kometa Streaming Services & Studios",
+        author: "Kometa Team",
+        description: "Logos and watermarks for Netflix, HBO Max, Disney+, Apple TV+, Prime Video, Paramount+, Hulu, and Peacock.",
+        repoUrl: "https://github.com/Kometa-Team/Default-Images/tree/master/streaming",
+        category: "streaming",
+        icon: "🎬",
+        previewUrls: []
+    },
+    {
+        id: "kometa-ratings",
+        title: "Kometa Content & Age Ratings",
+        author: "Kometa Team",
+        description: "Official MPAA & TV Parental Guidelines age rating badges (G, PG, PG-13, R, NC-17, TV-MA).",
+        repoUrl: "https://github.com/Kometa-Team/Default-Images/tree/master/content_rating",
+        category: "ratings",
+        icon: "🏷️",
+        previewUrls: []
+    }
+];
+
+function parseGitHubRepoUrl(input: string): { owner: string; repo: string; branch: string; subpath: string } | null {
+    if (!input || !input.trim()) return null;
+    let clean = input.trim();
+    clean = clean.replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "");
+    clean = clean.replace(/\.git$/i, "");
+    clean = clean.replace(/\/+$/, "");
+
+    // Pattern: owner/repo/tree/branch/subpath... or owner/repo/blob/branch/subpath...
+    const treeMatch = clean.match(/^([^\/]+)\/([^\/]+)\/(tree|blob)\/([^\/]+)(\/(.*))?$/i);
+    if (treeMatch) {
+        return {
+            owner: treeMatch[1],
+            repo: treeMatch[2],
+            branch: treeMatch[4],
+            subpath: treeMatch[6] || ""
+        };
+    }
+
+    // Pattern: owner/repo or owner/repo/subpath...
+    const parts = clean.split("/").filter(Boolean);
+    if (parts.length >= 2) {
+        return {
+            owner: parts[0],
+            repo: parts[1],
+            branch: "main",
+            subpath: parts.slice(2).join("/")
+        };
+    }
+
+    return null;
+}
+
+function inferBadgeCategoryAndRule(filePath: string, filename: string): {
+    category: "resolution" | "hdr" | "codec" | "audio" | "edition" | "ratings" | "ribbon" | "studio" | "custom";
+    suggestedPosition: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
+    suggestedMatchRule: string;
+} {
+    const lower = `${filePath}/${filename}`.toLowerCase();
+
+    // 1. Resolution
+    if (lower.includes("resolution") || /4k|1080p|720p|ultra-hd|uhd|fhd/i.test(lower)) {
+        const is4k = /4k|ultra-hd|uhd/i.test(lower);
+        return {
+            category: "resolution",
+            suggestedPosition: "top-right",
+            suggestedMatchRule: is4k ? "4k" : "1080p"
+        };
+    }
+
+    // 2. Audio & Surround Channels
+    if (lower.includes("audio") || /atmos|truehd|dts|flac|aac|eac3|ac3|5\.1|7\.1/i.test(lower)) {
+        let rule = "atmos";
+        if (lower.includes("truehd")) rule = "truehd";
+        else if (lower.includes("dts-x") || lower.includes("dts:x")) rule = "dts_x";
+        else if (lower.includes("dts")) rule = "dts";
+        else if (lower.includes("7.1")) rule = "7.1";
+        else if (lower.includes("5.1")) rule = "5.1";
+        return {
+            category: "audio",
+            suggestedPosition: "top-left",
+            suggestedMatchRule: rule
+        };
+    }
+
+    // 3. HDR & Dynamic Range
+    if (/dolby vision|dv-|dv\.|hdr10|hdr\+|hdr\./i.test(lower)) {
+        return {
+            category: "hdr",
+            suggestedPosition: "top-right",
+            suggestedMatchRule: lower.includes("dv") || lower.includes("dolby") ? "dv" : "hdr"
+        };
+    }
+
+    // 4. Video Codecs
+    if (lower.includes("codec") || /hevc|av1|avc|prores|h264|h265|x264|x265|vc1|vp9/i.test(lower)) {
+        return {
+            category: "codec",
+            suggestedPosition: "top-right",
+            suggestedMatchRule: lower.includes("av1") ? "av1" : lower.includes("hevc") || lower.includes("h265") ? "hevc" : "avc"
+        };
+    }
+
+    // 5. Editions & Cuts
+    if (lower.includes("edition") || /imax|criterion|remux|director|extended|theatrical|uncut|unrated|remastered|restored|special/i.test(lower)) {
+        let rule = "special";
+        if (lower.includes("imax")) rule = "imax";
+        else if (lower.includes("criterion")) rule = "criterion";
+        else if (lower.includes("remux")) rule = "remux";
+        else if (lower.includes("director")) rule = "directors_cut";
+        else if (lower.includes("extended")) rule = "extended";
+        else if (lower.includes("theatrical")) rule = "theatrical";
+        return {
+            category: "edition",
+            suggestedPosition: "bottom-right",
+            suggestedMatchRule: rule
+        };
+    }
+
+    // 6. Audience Scores & Ratings
+    if (lower.includes("rating") || lower.includes("audience") || /score|tomato|rotten|imdb|metacritic|tmdb/i.test(lower)) {
+        return {
+            category: "ratings",
+            suggestedPosition: "bottom-left",
+            suggestedMatchRule: lower.includes("tomato") || lower.includes("rotten") ? "rt" : "imdb"
+        };
+    }
+
+    // 7. Streaming & Studios
+    if (lower.includes("streaming") || lower.includes("studio") || lower.includes("network") || /netflix|disney|hbo|apple|prime|paramount|hulu|peacock|marvel|dc|a24/i.test(lower)) {
+        let rule = "netflix";
+        if (lower.includes("hbo")) rule = "hbo";
+        else if (lower.includes("disney")) rule = "disney";
+        else if (lower.includes("apple")) rule = "apple_tv";
+        else if (lower.includes("prime")) rule = "amazon";
+        else if (lower.includes("paramount")) rule = "paramount";
+        else if (lower.includes("marvel")) rule = "marvel";
+        else if (lower.includes("a24")) rule = "a24";
+        return {
+            category: "studio",
+            suggestedPosition: "bottom-left",
+            suggestedMatchRule: rule
+        };
+    }
+
+    // 8. Gradients & Ribbons
+    if (lower.includes("gradient") || lower.includes("ribbon") || lower.includes("banner")) {
+        return {
+            category: "ribbon",
+            suggestedPosition: "top-right",
+            suggestedMatchRule: "featured"
+        };
+    }
+
+    return {
+        category: "custom",
+        suggestedPosition: "top-right",
+        suggestedMatchRule: filename.replace(/\.[^/.]+$/, "").toLowerCase()
+    };
+}
+
+/**
+ * Server action to get curated preset overlay packs.
+ */
+export async function getPresetBadgePacksAction() {
+    return {
+        success: true,
+        presets: PRESET_BADGE_PACKS
+    };
+}
+
+/**
+ * Server action to discover and scan badge images from any GitHub repository.
+ */
+export async function fetchGitHubBadgeRepoAction(repoInput: string) {
+    await verifyAdmin();
+    try {
+        const parsed = parseGitHubRepoUrl(repoInput);
+        if (!parsed) {
+            return {
+                success: false,
+                error: "Invalid GitHub repository URL. Use format: https://github.com/jmxd/Kometa/tree/main/overlays or owner/repo"
+            };
+        }
+
+        const { owner, repo, subpath } = parsed;
+        let branch = parsed.branch || "main";
+
+        const headers = {
+            "User-Agent": "Portalarr-Overlay-Hub/1.0",
+            "Accept": "application/vnd.github.v3+json"
+        };
+
+        // 1. Try Git Trees API for recursive repository discovery
+        let treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, { headers });
+        
+        // If main branch 404s, automatically try master branch
+        if (!treeRes.ok && branch === "main") {
+            branch = "master";
+            treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, { headers });
+        }
+
+        const discoveredBadges: DiscoveredBadgeItem[] = [];
+
+        if (treeRes.ok) {
+            const treeData = await treeRes.json();
+            const tree: any[] = treeData.tree || [];
+
+            for (const item of tree) {
+                if (item.type !== "blob") continue;
+                const p: string = item.path || "";
+                
+                // Filter for image files
+                if (!/\.(png|svg|webp|jpg|jpeg)$/i.test(p)) continue;
+                
+                // Filter by subpath if user specified one
+                if (subpath && !p.toLowerCase().startsWith(subpath.toLowerCase().replace(/^\/+/, ""))) {
+                    continue;
+                }
+
+                const filename = p.split("/").pop() || "";
+                const is2x = filename.includes("@2x") || p.includes("@2x");
+                let displayName = filename.replace(/\.(png|svg|webp|jpg|jpeg)$/i, "");
+                displayName = displayName.replace(/@2x/gi, "").replace(/[-_]+/g, " ").trim();
+                
+                const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${p}`;
+                const { category, suggestedPosition, suggestedMatchRule } = inferBadgeCategoryAndRule(p, filename);
+
+                discoveredBadges.push({
+                    id: `gh_${owner}_${repo}_${p.replace(/[^a-zA-Z0-9_-]/g, "_")}`,
+                    name: displayName || filename,
+                    filename,
+                    path: p,
+                    size: item.size || 0,
+                    downloadUrl: rawUrl,
+                    previewUrl: rawUrl,
+                    category,
+                    suggestedPosition,
+                    suggestedMatchRule,
+                    width: 140,
+                    height: 46,
+                    is2x
+                });
+            }
+        } else {
+            // Fallback: Query contents API directly
+            const contentsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${subpath}?ref=${branch}`, { headers });
+            if (!contentsRes.ok) {
+                return {
+                    success: false,
+                    error: `Failed connecting to GitHub repository "${owner}/${repo}" (${contentsRes.statusText || contentsRes.status}). Check repository URL or branch name.`
+                };
+            }
+
+            const contents: any[] = await contentsRes.json();
+            for (const item of contents) {
+                if (item.type !== "file") continue;
+                const p = item.path || item.name;
+                if (!/\.(png|svg|webp|jpg|jpeg)$/i.test(p)) continue;
+
+                const filename = item.name;
+                const is2x = filename.includes("@2x");
+                let displayName = filename.replace(/\.(png|svg|webp|jpg|jpeg)$/i, "").replace(/@2x/gi, "").replace(/[-_]+/g, " ").trim();
+                const rawUrl = item.download_url || `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${p}`;
+                const { category, suggestedPosition, suggestedMatchRule } = inferBadgeCategoryAndRule(p, filename);
+
+                discoveredBadges.push({
+                    id: `gh_${owner}_${repo}_${p.replace(/[^a-zA-Z0-9_-]/g, "_")}`,
+                    name: displayName || filename,
+                    filename,
+                    path: p,
+                    size: item.size || 0,
+                    downloadUrl: rawUrl,
+                    previewUrl: rawUrl,
+                    category,
+                    suggestedPosition,
+                    suggestedMatchRule,
+                    width: 140,
+                    height: 46,
+                    is2x
+                });
+            }
+        }
+
+        const categories = Array.from(new Set(discoveredBadges.map(b => b.category)));
+
+        return {
+            success: true,
+            repoInfo: {
+                owner,
+                repo,
+                branch,
+                subpath,
+                title: `${owner}/${repo}${subpath ? ` (${subpath})` : ""}`,
+                url: `https://github.com/${owner}/${repo}/tree/${branch}/${subpath}`
+            },
+            badges: discoveredBadges,
+            totalCount: discoveredBadges.length,
+            categories
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed discovering badges from GitHub." };
+    }
+}
+
+/**
+ * Server action to download and install badges from GitHub into Portalarr custom badges vault.
+ */
+export async function importGitHubBadgesAction(badges: Array<{
+    name: string;
+    downloadUrl: string;
+    filename: string;
+    category?: string;
+    position?: string;
+    matchRule?: string;
+    width?: number;
+    height?: number;
+}>) {
+    await verifyAdmin();
+    if (!badges || badges.length === 0) {
+        return { success: false, error: "No badges selected for download." };
+    }
+
+    try {
+        const badgesDir = path.join(process.cwd(), "data", "custom_badges");
+        if (!fs.existsSync(badgesDir)) {
+            fs.mkdirSync(badgesDir, { recursive: true });
+        }
+
+        let importedCount = 0;
+        let skippedCount = 0;
+        const installedBadges: any[] = [];
+
+        for (const it of badges) {
+            try {
+                const res = await fetch(it.downloadUrl);
+                if (!res.ok) {
+                    skippedCount++;
+                    continue;
+                }
+
+                const arrayBuf = await res.arrayBuffer();
+                const buffer = Buffer.from(arrayBuf);
+                const ext = path.extname(it.filename || it.downloadUrl).toLowerCase() || ".png";
+                const cleanName = it.name.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+                const fileId = `badge_gh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                const fileName = `${fileId}_${cleanName}${ext}`;
+                const filePath = path.join(badgesDir, fileName);
+
+                let mimeType = ext === ".svg" ? "image/svg+xml" : "image/png";
+                let measuredWidth = it.width || 140;
+                let measuredHeight = it.height || 46;
+
+                if (ext === ".svg") {
+                    fs.writeFileSync(filePath, buffer);
+                } else {
+                    try {
+                        const meta = await sharp(buffer).metadata();
+                        measuredWidth = it.width || meta.width || 140;
+                        measuredHeight = it.height || meta.height || 46;
+                        if (meta.format) {
+                            mimeType = `image/${meta.format}`;
+                        }
+                        fs.writeFileSync(filePath, buffer);
+                    } catch (sErr) {
+                        fs.writeFileSync(filePath, buffer);
+                    }
+                }
+
+                const badge = await prisma.customBadge.create({
+                    data: {
+                        id: fileId,
+                        name: it.name,
+                        category: it.category || "custom",
+                        filePath,
+                        fileType: ext.replace(".", "").toLowerCase(),
+                        mimeType,
+                        position: it.position || "top-right",
+                        width: isNaN(measuredWidth) ? 140 : measuredWidth,
+                        height: isNaN(measuredHeight) ? 46 : measuredHeight,
+                        opacity: 1.0,
+                        matchRule: it.matchRule || null,
+                        enabled: true
+                    }
+                });
+
+                installedBadges.push(badge);
+                importedCount++;
+            } catch (bErr: any) {
+                console.warn(`[BADGE-IMPORT] Failed downloading badge ${it.name}:`, bErr.message);
+                skippedCount++;
+            }
+        }
+
+        logger.addLog("SUCCESS", "CURATION", `Imported ${importedCount} overlay badges from GitHub repository.`);
+
+        return {
+            success: true,
+            importedCount,
+            skippedCount,
+            badges: installedBadges,
+            message: `Successfully downloaded and installed ${importedCount} badges into your custom vault!`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed importing badges." };
+    }
+}
+
 
 

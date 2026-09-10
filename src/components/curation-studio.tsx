@@ -41,7 +41,13 @@ import {
     applyParentalTagsToLibraryAction,
     clearParentalTagsFromLibraryAction,
     inspectItemParentalAdvisoryAction,
-    saveItemParentalAdvisoryAction
+    saveItemParentalAdvisoryAction,
+    fetchGitHubBadgeRepoAction,
+    importGitHubBadgesAction,
+    getPresetBadgePacksAction,
+    PRESET_BADGE_PACKS,
+    DiscoveredBadgeItem,
+    BadgePresetPack
 } from "@/app/curation-actions";
 import { COLLECTION_PRESETS, CollectionPreset } from "@/lib/curation/presets";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -63,7 +69,7 @@ import {
     Server, Power, Ban, Archive, TestTube, Settings2, FolderCheck,
     Upload, Image as ImageIcon, MoveUp, MoveDown, CalendarClock,
     Palette, ChevronUp, ChevronDown, Tag, Compass, Home, Clock3,
-    Search, FileText, Info, Play, CheckCheck
+    Search, FileText, Info, Play, CheckCheck, Globe, Download, DownloadCloud, Package
 } from "lucide-react";
 
 export default function CurationStudio() {
@@ -114,6 +120,20 @@ export default function CurationStudio() {
     const [badgeMatchRule, setBadgeMatchRule] = useState("");
     const [uploadingBadge, setUploadingBadge] = useState(false);
     const [badgeUploadError, setBadgeUploadError] = useState<string | null>(null);
+
+    // GitHub Badge Hub & Downloader States
+    const [githubModalOpen, setGithubModalOpen] = useState(false);
+    const [githubRepoInput, setGithubRepoInput] = useState("https://github.com/jmxd/Kometa/tree/main/overlays/images");
+    const [scanningRepo, setScanningRepo] = useState(false);
+    const [scanError, setScanError] = useState<string | null>(null);
+    const [discoveredBadges, setDiscoveredBadges] = useState<DiscoveredBadgeItem[]>([]);
+    const [selectedBadgeIds, setSelectedBadgeIds] = useState<string[]>([]);
+    const [activeRepoInfo, setActiveRepoInfo] = useState<any | null>(null);
+    const [badgeSearchQuery, setBadgeSearchQuery] = useState("");
+    const [badgeCategoryFilter, setBadgeCategoryFilter] = useState("all");
+    const [importingBadges, setImportingBadges] = useState(false);
+    const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
+    const [presetPacks] = useState<BadgePresetPack[]>(PRESET_BADGE_PACKS);
 
     // Overlay Rules & Simulator
     const [overlayRules, setOverlayRules] = useState<any[]>([]);
@@ -634,6 +654,105 @@ export default function CurationStudio() {
         } catch (e) {
             console.error("Failed deleting badge:", e);
         }
+    };
+
+    // Scan GitHub repository for badge images
+    const handleScanGitHubRepo = async (overrideUrl?: string) => {
+        const urlToScan = (overrideUrl || githubRepoInput).trim();
+        if (!urlToScan) return;
+        setScanningRepo(true);
+        setScanError(null);
+        setImportSuccessMsg(null);
+        try {
+            const res = await fetchGitHubBadgeRepoAction(urlToScan);
+            if (res.success && res.badges) {
+                setDiscoveredBadges(res.badges);
+                setActiveRepoInfo(res.repoInfo);
+                // Preselect all non-2x items by default, or all items
+                setSelectedBadgeIds(res.badges.map(b => b.id));
+                if (overrideUrl) setGithubRepoInput(overrideUrl);
+            } else {
+                setScanError(res.error || "No overlay badges found in repository.");
+            }
+        } catch (e: any) {
+            setScanError(e.message || "Failed scanning GitHub repository.");
+        } finally {
+            setScanningRepo(false);
+        }
+    };
+
+    // Download and import selected badges
+    const handleImportSelectedBadges = async (forceAll = false) => {
+        const toImport = forceAll 
+            ? discoveredBadges 
+            : discoveredBadges.filter(b => selectedBadgeIds.includes(b.id));
+
+        if (toImport.length === 0) {
+            alert("Please select at least one badge to download.");
+            return;
+        }
+
+        setImportingBadges(true);
+        setImportSuccessMsg(null);
+        setScanError(null);
+
+        try {
+            const payload = toImport.map(b => ({
+                name: b.name,
+                downloadUrl: b.downloadUrl,
+                filename: b.filename,
+                category: b.category,
+                position: b.suggestedPosition,
+                matchRule: b.suggestedMatchRule,
+                width: b.width,
+                height: b.height
+            }));
+
+            const res = await importGitHubBadgesAction(payload);
+            if (res.success) {
+                setImportSuccessMsg(`✓ Successfully downloaded and installed ${res.importedCount} badges from GitHub!`);
+                await loadData();
+                setTimeout(() => setImportSuccessMsg(null), 5000);
+            } else {
+                setScanError(res.error || "Failed to download badges.");
+            }
+        } catch (e: any) {
+            setScanError(e.message || "Network error importing badges.");
+        } finally {
+            setImportingBadges(false);
+        }
+    };
+
+    // Toggle individual badge selection
+    const handleToggleSelectBadge = (badgeId: string) => {
+        setSelectedBadgeIds(prev => 
+            prev.includes(badgeId) ? prev.filter(id => id !== badgeId) : [...prev, badgeId]
+        );
+    };
+
+    // Toggle select all
+    const handleToggleSelectAll = () => {
+        const filtered = getFilteredDiscoveredBadges();
+        const allFilteredSelected = filtered.every(b => selectedBadgeIds.includes(b.id));
+        if (allFilteredSelected) {
+            const filteredIds = new Set(filtered.map(b => b.id));
+            setSelectedBadgeIds(prev => prev.filter(id => !filteredIds.has(id)));
+        } else {
+            const newIds = new Set([...selectedBadgeIds, ...filtered.map(b => b.id)]);
+            setSelectedBadgeIds(Array.from(newIds));
+        }
+    };
+
+    // Filter discovered badges by search and category
+    const getFilteredDiscoveredBadges = () => {
+        return discoveredBadges.filter(b => {
+            const matchesCat = badgeCategoryFilter === "all" || b.category === badgeCategoryFilter;
+            const matchesSearch = !badgeSearchQuery.trim() || 
+                b.name.toLowerCase().includes(badgeSearchQuery.toLowerCase()) || 
+                b.filename.toLowerCase().includes(badgeSearchQuery.toLowerCase()) ||
+                b.category.toLowerCase().includes(badgeSearchQuery.toLowerCase());
+            return matchesCat && matchesSearch;
+        });
     };
 
     // Handle Apply Overlays to Library
@@ -2959,6 +3078,268 @@ export default function CurationStudio() {
                                 </div>
 
                                 <div className="flex items-center gap-2">
+                                    {/* GitHub Badge Hub & Downloader Modal */}
+                                    <Dialog open={githubModalOpen} onOpenChange={open => {
+                                        setGithubModalOpen(open);
+                                        if (open && discoveredBadges.length === 0) {
+                                            handleScanGitHubRepo("https://github.com/jmxd/Kometa/tree/main/overlays/images");
+                                        }
+                                    }}>
+                                        <DialogTrigger asChild>
+                                            <Button size="sm" className="bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-purple-950/40 border border-purple-400/30">
+                                                <Globe className="h-3.5 w-3.5 text-purple-200" /> GitHub Badge Hub & Presets
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl">
+                                            {/* Modal Header */}
+                                            <div className="p-4 border-b border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="p-2 bg-purple-500/20 text-purple-400 rounded-xl border border-purple-500/30">
+                                                        <Globe className="h-5 w-5" />
+                                                    </div>
+                                                    <div>
+                                                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                                                            GitHub Overlay Badges Downloader & Repo Hub
+                                                        </DialogTitle>
+                                                        <DialogDescription className="text-xs text-slate-400">
+                                                            Browse, preview, and 1-click install custom overlay badge packs directly from GitHub repositories (jmxd, Kometa Defaults, custom repos).
+                                                        </DialogDescription>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+                                                {/* Quick Curated Preset Packs */}
+                                                <div className="space-y-2">
+                                                    <Label className="text-[11px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                                                        <Sparkles className="h-3.5 w-3.5" /> Curated Popular Repositories & Packs
+                                                    </Label>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                                                        {presetPacks.map(pack => (
+                                                            <button
+                                                                key={pack.id}
+                                                                type="button"
+                                                                onClick={() => handleScanGitHubRepo(pack.repoUrl)}
+                                                                className={`text-left p-2.5 rounded-xl border transition-all flex flex-col justify-between gap-1.5 ${
+                                                                    githubRepoInput === pack.repoUrl
+                                                                        ? 'bg-purple-950/60 border-purple-500 shadow-md shadow-purple-950/30 ring-1 ring-purple-400'
+                                                                        : 'bg-slate-950/60 border-slate-800 hover:border-purple-500/50 hover:bg-slate-800/60'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-base">{pack.icon}</span>
+                                                                    <Badge variant="outline" className="text-[9px] uppercase tracking-wider font-semibold border-slate-700 text-slate-300">
+                                                                        {pack.author}
+                                                                    </Badge>
+                                                                </div>
+                                                                <div>
+                                                                    <h4 className="font-bold text-white text-xs line-clamp-1">{pack.title}</h4>
+                                                                    <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5">{pack.description}</p>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Custom Repository URL Input Bar */}
+                                                <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2">
+                                                    <Label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                                                        <Search className="h-3.5 w-3.5 text-purple-400" /> GitHub Repository URL or Tree Path
+                                                    </Label>
+                                                    <div className="flex flex-col sm:flex-row gap-2">
+                                                        <Input
+                                                            value={githubRepoInput}
+                                                            onChange={e => setGithubRepoInput(e.target.value)}
+                                                            placeholder="https://github.com/jmxd/Kometa/tree/main/overlays or owner/repo"
+                                                            className="bg-slate-900 border-slate-700 text-xs h-8 flex-1 font-mono text-[11px]"
+                                                        />
+                                                        <Button
+                                                            disabled={scanningRepo}
+                                                            onClick={() => handleScanGitHubRepo()}
+                                                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-4 gap-1.5 shrink-0"
+                                                        >
+                                                            {scanningRepo ? (
+                                                                <>
+                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                                    <span>Scanning Repo...</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Search className="h-3.5 w-3.5" />
+                                                                    <span>Scan & Discover Badges</span>
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Scan Error Alert */}
+                                                {scanError && (
+                                                    <div className="p-3 bg-rose-950/80 border border-rose-800 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+                                                        <XCircle className="h-4 w-4 shrink-0" />
+                                                        <span>{scanError}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Import Success Alert */}
+                                                {importSuccessMsg && (
+                                                    <div className="p-3 bg-emerald-950/80 border border-emerald-800 text-emerald-300 rounded-xl text-xs flex items-center gap-2">
+                                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                        <span>{importSuccessMsg}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Discovered Badges Area */}
+                                                {discoveredBadges.length > 0 && (
+                                                    <div className="space-y-3">
+                                                        {/* Filter Bar & Controls */}
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="font-bold text-white text-xs">
+                                                                    Discovered Badges ({getFilteredDiscoveredBadges().length} of {discoveredBadges.length}):
+                                                                </span>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={handleToggleSelectAll}
+                                                                    className="h-6 text-[10px] px-2 border-slate-700 text-slate-300 hover:text-white"
+                                                                >
+                                                                    {getFilteredDiscoveredBadges().every(b => selectedBadgeIds.includes(b.id)) ? "Deselect All" : "Select All"}
+                                                                </Button>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2">
+                                                                <Input
+                                                                    value={badgeSearchQuery}
+                                                                    onChange={e => setBadgeSearchQuery(e.target.value)}
+                                                                    placeholder="Filter badges (e.g. atmos, 4k, imax)..."
+                                                                    className="bg-slate-900 border-slate-700 text-xs h-7 w-48"
+                                                                />
+                                                                <Select value={badgeCategoryFilter} onValueChange={setBadgeCategoryFilter}>
+                                                                    <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-7 w-32">
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="all">All Categories</SelectItem>
+                                                                        <SelectItem value="resolution">Resolution</SelectItem>
+                                                                        <SelectItem value="hdr">Dynamic Range</SelectItem>
+                                                                        <SelectItem value="codec">Video Codec</SelectItem>
+                                                                        <SelectItem value="audio">Audio Codec</SelectItem>
+                                                                        <SelectItem value="edition">Editions & Cuts</SelectItem>
+                                                                        <SelectItem value="ratings">Ratings & Scores</SelectItem>
+                                                                        <SelectItem value="studio">Studios</SelectItem>
+                                                                        <SelectItem value="ribbon">Ribbons</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Badges Grid */}
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 max-h-[380px] overflow-y-auto p-1">
+                                                            {getFilteredDiscoveredBadges().map(badge => {
+                                                                const isSelected = selectedBadgeIds.includes(badge.id);
+                                                                return (
+                                                                    <div
+                                                                        key={badge.id}
+                                                                        onClick={() => handleToggleSelectBadge(badge.id)}
+                                                                        className={`relative p-2 rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center gap-1.5 group select-none ${
+                                                                            isSelected
+                                                                                ? 'bg-purple-950/50 border-purple-500 ring-1 ring-purple-400 shadow-md shadow-purple-950/40'
+                                                                                : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
+                                                                        }`}
+                                                                    >
+                                                                        {/* Selection Checkbox */}
+                                                                        <div className={`absolute top-1.5 right-1.5 w-4 h-4 rounded flex items-center justify-center text-[10px] ${
+                                                                            isSelected ? 'bg-purple-500 text-white font-bold' : 'border border-slate-700 bg-slate-900'
+                                                                        }`}>
+                                                                            {isSelected && <Check className="h-3 w-3" />}
+                                                                        </div>
+
+                                                                        {/* Category Badge */}
+                                                                        <div className="w-full flex justify-start">
+                                                                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-900 text-purple-300 border border-purple-500/30">
+                                                                                {badge.category}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {/* Image Preview */}
+                                                                        <div className="h-14 w-full flex items-center justify-center p-1 bg-slate-900/90 rounded-lg border border-slate-800/80 group-hover:border-purple-500/40 transition-colors overflow-hidden">
+                                                                            <img
+                                                                                src={badge.previewUrl}
+                                                                                alt={badge.name}
+                                                                                className="max-h-full max-w-full object-contain filter drop-shadow-md"
+                                                                                loading="lazy"
+                                                                            />
+                                                                        </div>
+
+                                                                        {/* Badge Name & Placement */}
+                                                                        <div className="w-full">
+                                                                            <h5 className="font-bold text-white text-[11px] truncate" title={badge.name}>
+                                                                                {badge.name}
+                                                                            </h5>
+                                                                            <span className="text-[9px] text-slate-400 truncate block mt-0.5">
+                                                                                {badge.filename}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Modal Footer with Batch Actions */}
+                                            <div className="p-4 border-t border-slate-800/80 bg-slate-950 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                                <div className="text-xs text-slate-400 flex items-center gap-1.5">
+                                                    <Shield className="h-3.5 w-3.5 text-purple-400" />
+                                                    <span>Selected <strong>{selectedBadgeIds.length}</strong> of <strong>{discoveredBadges.length}</strong> badges</span>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setGithubModalOpen(false)}
+                                                        className="border-slate-700 text-slate-300 hover:text-white"
+                                                    >
+                                                        Close
+                                                    </Button>
+
+                                                    <Button
+                                                        disabled={importingBadges || discoveredBadges.length === 0}
+                                                        onClick={() => handleImportSelectedBadges(true)}
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs h-8 px-3 gap-1.5 border border-slate-700"
+                                                    >
+                                                        {importingBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-purple-400" />}
+                                                        <span>Install Entire Pack ({discoveredBadges.length})</span>
+                                                    </Button>
+
+                                                    <Button
+                                                        disabled={importingBadges || selectedBadgeIds.length === 0}
+                                                        onClick={() => handleImportSelectedBadges(false)}
+                                                        size="sm"
+                                                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-4 gap-1.5 shadow-lg shadow-purple-950/40"
+                                                    >
+                                                        {importingBadges ? (
+                                                            <>
+                                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                                <span>Downloading Badges...</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Download className="h-3.5 w-3.5" />
+                                                                <span>Download Selected ({selectedBadgeIds.length})</span>
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+
                                     <Dialog open={uploadModalOpen} onOpenChange={setUploadModalOpen}>
                                         <DialogTrigger asChild>
                                             <Button size="sm" className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-purple-950/40">
