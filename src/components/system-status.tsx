@@ -57,25 +57,35 @@ export default function SystemStatus() {
     // --- SORTING LOGIC ---
     
     // Order for the Streams section
-    const streamOrder = ["main", "kids", "backup"];
+    const streamOrder = ["main", "primary", "kids", "backup", "secondary"];
     const sortStreams = (a: any, b: any) => {
         const getIndex = (name: string) => {
-            const lowerName = name.toLowerCase();
+            const lowerName = (name || "").toLowerCase();
             const index = streamOrder.findIndex(keyword => lowerName.includes(keyword));
             return index === -1 ? 999 : index; 
         };
-        return getIndex(a.name) - getIndex(b.name);
+        const idxA = getIndex(a?.name);
+        const idxB = getIndex(b?.name);
+        if (idxA !== idxB) {
+            return idxA - idxB;
+        }
+        return (a?.name || "").localeCompare(b?.name || "");
     };
 
     // Order for the Hardware Stats section
-    const hardwareOrder = ["main", "backup"];
+    const hardwareOrder = ["main", "primary", "backup", "secondary"];
     const sortHardware = (a: any, b: any) => {
         const getIndex = (name: string) => {
-            const lowerName = name.toLowerCase();
+            const lowerName = (name || "").toLowerCase();
             const index = hardwareOrder.findIndex(keyword => lowerName.includes(keyword));
             return index === -1 ? 999 : index; 
         };
-        return getIndex(a.name) - getIndex(b.name);
+        const idxA = getIndex(a?.name);
+        const idxB = getIndex(b?.name);
+        if (idxA !== idxB) {
+            return idxA - idxB;
+        }
+        return (a?.name || "").localeCompare(b?.name || "");
     };
 
     return (
@@ -129,7 +139,7 @@ export default function SystemStatus() {
                     {stats.streamStats && stats.streamStats.length > 0 && (
                         <div className="space-y-2 mt-4 pt-4 border-t border-dashed border-border/40">
                             {[...stats.streamStats].sort(sortStreams).map((server: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/10 hover:bg-muted/20 transition-colors">
+                                <div key={server.name || idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/10 hover:bg-muted/20 transition-colors">
                                     <div className="flex items-center gap-2 text-foreground font-medium">
                                         <PlaySquare className="h-3.5 w-3.5 text-primary" />
                                         <span>{server.name}</span>

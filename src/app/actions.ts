@@ -3387,16 +3387,12 @@ export async function getLandingStats() {
     try {
         await ensureSchemaColumns();
         const [tautulli, glances, apps] = await Promise.all([
-            prisma.tautulliInstance.findMany().catch(() => []),
-            prisma.glancesInstance.findMany().catch(() => []),
-            prisma.mediaApp.findMany().catch(() => [])
+            prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.mediaApp.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
         ]);
 
-        let streamStats: { name: string, count: number }[] = [];
-        let serverStats: any[] = [];
-        let downApps: string[] = [];
-
-        await Promise.all(tautulli.map(async (t) => {
+        const streamStats = await Promise.all(tautulli.map(async (t) => {
             let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
             const apiKey = decryptData(t.apiKey);
             const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
@@ -3405,16 +3401,16 @@ export async function getLandingStats() {
                 const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 10 });
                 if (actResult.ok && actResult.data) {
                     const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
-                    streamStats.push({ name: t.name, count });
+                    return { name: t.name, count };
                 } else {
-                    streamStats.push({ name: t.name, count: 0 });
+                    return { name: t.name, count: 0 };
                 }
             } catch (e: any) { 
-                streamStats.push({ name: t.name, count: 0 }); 
+                return { name: t.name, count: 0 }; 
             }
         }));
 
-        await Promise.all(glances.map(async (g) => {
+        const serverStats = await Promise.all(glances.map(async (g) => {
             let clean = cleanUrl(g.url?.trim() || "");
             if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
                 clean = `http://${clean}`;
@@ -3450,17 +3446,18 @@ export async function getLandingStats() {
                     ? Math.round(mem.percent) 
                     : (mem?.total && mem?.used ? Math.round((mem.used / mem.total) * 100) : (typeof mem === 'number' ? Math.round(mem) : 0));
 
-                serverStats.push({ 
+                return { 
                     name: g.name, 
                     cpu: cpuTotal, 
                     ram: ramPercent, 
                     online: true 
-                });
+                };
             } catch (e: any) {
-                serverStats.push({ name: g.name, online: false });
+                return { name: g.name, cpu: 0, ram: 0, online: false };
             }
         }));
 
+        const downApps: string[] = [];
         await Promise.all(apps.map(async (app) => {
             try {
                 const controller = new AbortController();
