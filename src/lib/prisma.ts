@@ -952,6 +952,35 @@ if (!globalForScheduler.schedulerInitialized) {
             console.error("[BACKGROUND-JOB] Error in series auto-monitor runner:", seriesErr.message || seriesErr);
           }
 
+          // Auto-run automated Curation & Overlay Studio timer job
+          try {
+            const curationEnabled = settings?.curationSyncEnabled ?? true;
+            if (curationEnabled) {
+              const scheduleType = settings?.curationSyncSchedule || "every_6_hours";
+              let requiredIntervalMs = 6 * 60 * 60 * 1000; // Default 6 hours
+
+              if (scheduleType === "every_hour") requiredIntervalMs = 60 * 60 * 1000;
+              else if (scheduleType === "every_3_hours") requiredIntervalMs = 3 * 60 * 60 * 1000;
+              else if (scheduleType === "every_6_hours") requiredIntervalMs = 6 * 60 * 60 * 1000;
+              else if (scheduleType === "every_12_hours") requiredIntervalMs = 12 * 60 * 60 * 1000;
+              else if (scheduleType === "daily_3am") {
+                const curHour = now.getHours();
+                requiredIntervalMs = curHour === 3 ? 20 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+              }
+
+              const lastCurationRun = settings?.curationLastRunAt;
+              if (!lastCurationRun || (now.getTime() - lastCurationRun.getTime()) >= requiredIntervalMs) {
+                console.log(`[CURATION-TIMER] Triggering scheduled curation sync (${scheduleType})...`);
+                const { runFullCurationSyncInternal } = await import("../app/curation-actions");
+                await runFullCurationSyncInternal().catch(cErr => {
+                  console.error("[CURATION-TIMER] Error in curation background runner:", cErr.message || cErr);
+                });
+              }
+            }
+          } catch (curationJobErr: any) {
+            console.error("[BACKGROUND-JOB] Error in curation job checker:", curationJobErr.message || curationJobErr);
+          }
+
           await prisma.settings.upsert({
             where: { id: "global" },
             update: { lastAutoSync: new Date() },

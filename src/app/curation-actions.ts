@@ -1,5 +1,7 @@
 "use server";
 
+import fs from "fs";
+import path from "path";
 import prisma from "@/lib/prisma";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getCurrentUser } from "@/app/auth-actions";
@@ -10,8 +12,11 @@ import {
     getPlexLibraryCollections, 
     syncPlexCollection, 
     deletePlexCollection, 
+    updatePlexCollectionPromotionAndOrder,
     evaluatePruneCandidatesForServer,
     deleteMediaFromPlexServer,
+    searchPlexLibraryItems,
+    inspectPlexMediaItemFull,
     PlexMediaStreamInfo,
     PruneCandidateItem
 } from "@/lib/curation/plex-analyzer";
@@ -44,7 +49,7 @@ import {
     getMdblistRatings, 
     getMdblistItems 
 } from "@/lib/curation/mdblist";
-import { COLLECTION_PRESETS } from "@/lib/curation/presets";
+import { COLLECTION_PRESETS, CollectionPreset } from "@/lib/curation/presets";
 
 // Verify admin permissions
 async function verifyAdmin() {
@@ -79,7 +84,25 @@ export async function getCurationSettingsAction() {
         enabledServersForCollections: settings?.enabledServersForCollections ? JSON.parse(settings.enabledServersForCollections) : [],
         enabledServersForPruning: settings?.enabledServersForPruning ? JSON.parse(settings.enabledServersForPruning) : [],
         comingSoonShares: settings?.comingSoonShares ? JSON.parse(settings.comingSoonShares) : {},
-        serverStorageConfig: settings?.serverStorageConfig ? JSON.parse(settings.serverStorageConfig) : {}
+        serverStorageConfig: settings?.serverStorageConfig ? JSON.parse(settings.serverStorageConfig) : {},
+
+        // Placeholder Timing & Overlay Settings
+        placeholderTheatricalNoticeDays: settings?.placeholderTheatricalNoticeDays ?? 60,
+        placeholderDigitalCountdownDays: settings?.placeholderDigitalCountdownDays ?? 30,
+        placeholderNowStreamingGraceDays: settings?.placeholderNowStreamingGraceDays ?? 7,
+        placeholderAutoPruneDays: settings?.placeholderAutoPruneDays ?? 14,
+        placeholderBannerPosition: settings?.placeholderBannerPosition || "bottom",
+        placeholderBannerTheme: settings?.placeholderBannerTheme || "indigo-purple",
+        placeholderCustomText: settings?.placeholderCustomText || "",
+        placeholderEnabled: settings?.placeholderEnabled ?? true,
+
+        // Leaving Soon Home Hub & Schedule Settings
+        leavingSoonPromotedToHome: settings?.leavingSoonPromotedToHome ?? true,
+        leavingSoonPromotedToRecommended: settings?.leavingSoonPromotedToRecommended ?? true,
+        leavingSoonPromotedToSharedHome: settings?.leavingSoonPromotedToSharedHome ?? true,
+        leavingSoonHomeOrder: settings?.leavingSoonHomeOrder ?? 0,
+        leavingSoonAutoThresholdDays: settings?.leavingSoonAutoThresholdDays ?? 14,
+        leavingSoonAutoHideEmpty: settings?.leavingSoonAutoHideEmpty ?? true
     };
 }
 
@@ -104,6 +127,27 @@ export async function saveCurationSettingsAction(data: {
     enabledServersForPruning?: string[];
     comingSoonShares?: Record<string, string>;
     serverStorageConfig?: Record<string, any>;
+    placeholderTheatricalNoticeDays?: number;
+    placeholderDigitalCountdownDays?: number;
+    placeholderNowStreamingGraceDays?: number;
+    placeholderAutoPruneDays?: number;
+    placeholderBannerPosition?: string;
+    placeholderBannerTheme?: string;
+    placeholderCustomText?: string;
+    placeholderEnabled?: boolean;
+    leavingSoonPromotedToHome?: boolean;
+    leavingSoonPromotedToRecommended?: boolean;
+    leavingSoonPromotedToSharedHome?: boolean;
+    leavingSoonHomeOrder?: number;
+    leavingSoonAutoThresholdDays?: number;
+    leavingSoonAutoHideEmpty?: boolean;
+    curationSyncEnabled?: boolean;
+    curationSyncSchedule?: string;
+    curationSyncCron?: string | null;
+    curationSyncOverlays?: boolean;
+    curationSyncCollections?: boolean;
+    curationSyncReleases?: boolean;
+    curationSyncPruning?: boolean;
 }) {
     await verifyAdmin();
     try {
@@ -129,6 +173,32 @@ export async function saveCurationSettingsAction(data: {
         if (data.comingSoonShares !== undefined) updatePayload.comingSoonShares = JSON.stringify(data.comingSoonShares);
         if (data.serverStorageConfig !== undefined) updatePayload.serverStorageConfig = JSON.stringify(data.serverStorageConfig);
 
+        // Placeholder & Leaving Soon Settings
+        if (data.placeholderTheatricalNoticeDays !== undefined) updatePayload.placeholderTheatricalNoticeDays = data.placeholderTheatricalNoticeDays;
+        if (data.placeholderDigitalCountdownDays !== undefined) updatePayload.placeholderDigitalCountdownDays = data.placeholderDigitalCountdownDays;
+        if (data.placeholderNowStreamingGraceDays !== undefined) updatePayload.placeholderNowStreamingGraceDays = data.placeholderNowStreamingGraceDays;
+        if (data.placeholderAutoPruneDays !== undefined) updatePayload.placeholderAutoPruneDays = data.placeholderAutoPruneDays;
+        if (data.placeholderBannerPosition !== undefined) updatePayload.placeholderBannerPosition = data.placeholderBannerPosition;
+        if (data.placeholderBannerTheme !== undefined) updatePayload.placeholderBannerTheme = data.placeholderBannerTheme;
+        if (data.placeholderCustomText !== undefined) updatePayload.placeholderCustomText = data.placeholderCustomText;
+        if (data.placeholderEnabled !== undefined) updatePayload.placeholderEnabled = data.placeholderEnabled;
+
+        if (data.leavingSoonPromotedToHome !== undefined) updatePayload.leavingSoonPromotedToHome = data.leavingSoonPromotedToHome;
+        if (data.leavingSoonPromotedToRecommended !== undefined) updatePayload.leavingSoonPromotedToRecommended = data.leavingSoonPromotedToRecommended;
+        if (data.leavingSoonPromotedToSharedHome !== undefined) updatePayload.leavingSoonPromotedToSharedHome = data.leavingSoonPromotedToSharedHome;
+        if (data.leavingSoonHomeOrder !== undefined) updatePayload.leavingSoonHomeOrder = data.leavingSoonHomeOrder;
+        if (data.leavingSoonAutoThresholdDays !== undefined) updatePayload.leavingSoonAutoThresholdDays = data.leavingSoonAutoThresholdDays;
+        if (data.leavingSoonAutoHideEmpty !== undefined) updatePayload.leavingSoonAutoHideEmpty = data.leavingSoonAutoHideEmpty;
+
+        // Curation Scheduler Timer Settings
+        if (data.curationSyncEnabled !== undefined) updatePayload.curationSyncEnabled = data.curationSyncEnabled;
+        if (data.curationSyncSchedule !== undefined) updatePayload.curationSyncSchedule = data.curationSyncSchedule;
+        if (data.curationSyncCron !== undefined) updatePayload.curationSyncCron = data.curationSyncCron;
+        if (data.curationSyncOverlays !== undefined) updatePayload.curationSyncOverlays = data.curationSyncOverlays;
+        if (data.curationSyncCollections !== undefined) updatePayload.curationSyncCollections = data.curationSyncCollections;
+        if (data.curationSyncReleases !== undefined) updatePayload.curationSyncReleases = data.curationSyncReleases;
+        if (data.curationSyncPruning !== undefined) updatePayload.curationSyncPruning = data.curationSyncPruning;
+
         await prisma.settings.upsert({
             where: { id: "global" },
             update: updatePayload,
@@ -138,7 +208,7 @@ export async function saveCurationSettingsAction(data: {
             }
         });
 
-        logger.addLog("SUCCESS", "SETTINGS", "Updated Curation, Kometa & Agregarr Settings.");
+        logger.addLog("SUCCESS", "SETTINGS", "Updated Curation, Kometa, Agregarr & Hub Settings.");
         return { success: true, message: "Curation settings updated successfully." };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -166,7 +236,10 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
                 ...(serverId ? { serverId } : {}),
                 ...(sectionKey ? { sectionKey } : {})
             },
-            orderBy: { createdAt: "desc" }
+            orderBy: [
+                { orderIndex: "asc" },
+                { createdAt: "desc" }
+            ]
         });
 
         return { success: true, collections, presets: COLLECTION_PRESETS };
@@ -190,46 +263,56 @@ export async function saveMediaCollectionAction(data: {
     posterUrl?: string;
     autoSync?: boolean;
     syncInterval?: string;
+    orderIndex?: number;
+    promotedToHome?: boolean;
+    promotedToRecommended?: boolean;
+    promotedToSharedHome?: boolean;
+    sortPrefix?: string;
+    isSeasonal?: boolean;
+    scheduleStartMonth?: number | null;
+    scheduleStartDay?: number | null;
+    scheduleEndMonth?: number | null;
+    scheduleEndDay?: number | null;
+    seasonalAction?: string | null;
 }) {
     await verifyAdmin();
     try {
+        const dataPayload = {
+            title: data.title,
+            summary: data.summary,
+            sortTitle: data.sortTitle,
+            type: data.type,
+            category: data.category,
+            serverId: data.serverId,
+            sectionKey: data.sectionKey,
+            sourceType: data.sourceType,
+            sourceQuery: data.sourceQuery,
+            rules: data.rules ? JSON.stringify(data.rules) : null,
+            posterUrl: data.posterUrl,
+            autoSync: data.autoSync ?? true,
+            syncInterval: data.syncInterval || "daily",
+            orderIndex: data.orderIndex ?? 0,
+            promotedToHome: data.promotedToHome ?? true,
+            promotedToRecommended: data.promotedToRecommended ?? true,
+            promotedToSharedHome: data.promotedToSharedHome ?? true,
+            sortPrefix: data.sortPrefix || "!00_",
+            isSeasonal: data.isSeasonal ?? false,
+            scheduleStartMonth: data.scheduleStartMonth,
+            scheduleStartDay: data.scheduleStartDay,
+            scheduleEndMonth: data.scheduleEndMonth,
+            scheduleEndDay: data.scheduleEndDay,
+            seasonalAction: data.seasonalAction || "promote_hide"
+        };
+
         let collection;
         if (data.id) {
             collection = await prisma.mediaCollection.update({
                 where: { id: data.id },
-                data: {
-                    title: data.title,
-                    summary: data.summary,
-                    sortTitle: data.sortTitle,
-                    type: data.type,
-                    category: data.category,
-                    serverId: data.serverId,
-                    sectionKey: data.sectionKey,
-                    sourceType: data.sourceType,
-                    sourceQuery: data.sourceQuery,
-                    rules: data.rules ? JSON.stringify(data.rules) : null,
-                    posterUrl: data.posterUrl,
-                    autoSync: data.autoSync ?? true,
-                    syncInterval: data.syncInterval || "daily"
-                }
+                data: dataPayload
             });
         } else {
             collection = await prisma.mediaCollection.create({
-                data: {
-                    title: data.title,
-                    summary: data.summary,
-                    sortTitle: data.sortTitle,
-                    type: data.type,
-                    category: data.category,
-                    serverId: data.serverId,
-                    sectionKey: data.sectionKey,
-                    sourceType: data.sourceType,
-                    sourceQuery: data.sourceQuery,
-                    rules: data.rules ? JSON.stringify(data.rules) : null,
-                    posterUrl: data.posterUrl,
-                    autoSync: data.autoSync ?? true,
-                    syncInterval: data.syncInterval || "daily"
-                }
+                data: dataPayload
             });
         }
 
@@ -353,7 +436,10 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             };
         }
 
-        // 3. Sync to Plex
+        // 3. Sync to Plex with Sort Prefix and Home Promotion
+        const sortPrefix = collection.sortPrefix || `!${String(collection.orderIndex || 0).padStart(2, '0')}_`;
+        const effectiveSortTitle = `${sortPrefix}${collection.sortTitle || collection.title}`;
+
         const syncResult = await syncPlexCollection(
             serverUrl,
             token,
@@ -362,8 +448,12 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             matchingRatingKeys,
             {
                 summary: collection.summary || undefined,
-                sortTitle: collection.sortTitle || undefined,
-                posterUrl: collection.posterUrl || undefined
+                sortTitle: effectiveSortTitle,
+                posterUrl: collection.posterUrl || undefined,
+                promotedToHome: collection.promotedToHome,
+                promotedToRecommended: collection.promotedToRecommended,
+                promotedToSharedHome: collection.promotedToSharedHome,
+                orderIndex: collection.orderIndex
             }
         );
 
@@ -382,6 +472,274 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             syncedCount: matchingRatingKeys.length,
             collectionRatingKey: syncResult.collectionRatingKey,
             message: `Synced "${collection.title}" with ${matchingRatingKeys.length} items to Plex!`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function reorderPlexCollectionsAction(
+    serverId: string,
+    sectionKey: string,
+    orderedCollections: Array<{
+        id: string;
+        ratingKey?: string;
+        orderIndex: number;
+        sortPrefix?: string;
+        promotedToHome?: boolean;
+        promotedToRecommended?: boolean;
+        promotedToSharedHome?: boolean;
+    }>
+) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const servers = await getPlexServers(token);
+        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
+        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+
+        let updatedCount = 0;
+
+        for (const item of orderedCollections) {
+            const prefix = item.sortPrefix || `!${String(item.orderIndex).padStart(2, '0')}_`;
+
+            const updated = await prisma.mediaCollection.update({
+                where: { id: item.id },
+                data: {
+                    orderIndex: item.orderIndex,
+                    sortPrefix: prefix,
+                    promotedToHome: item.promotedToHome ?? true,
+                    promotedToRecommended: item.promotedToRecommended ?? true,
+                    promotedToSharedHome: item.promotedToSharedHome ?? true
+                }
+            });
+
+            if (serverUrl && updated.ratingKey) {
+                const effectiveSortTitle = `${prefix}${updated.sortTitle || updated.title}`;
+                await updatePlexCollectionPromotionAndOrder(
+                    serverUrl,
+                    token,
+                    sectionKey,
+                    updated.ratingKey,
+                    {
+                        sortTitle: effectiveSortTitle,
+                        promotedToHome: item.promotedToHome ?? true,
+                        promotedToRecommended: item.promotedToRecommended ?? true,
+                        promotedToSharedHome: item.promotedToSharedHome ?? true
+                    }
+                );
+                updatedCount++;
+            }
+        }
+
+        logger.addLog("SUCCESS", "PLEX", `Reordered ${orderedCollections.length} collections on Plex Home Screen.`);
+        return {
+            success: true,
+            message: `Updated ordering and home visibility for ${orderedCollections.length} collections.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function syncSeasonalAndScheduledCollectionsAction(serverId?: string, sectionKey?: string) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const servers = await getPlexServers(token);
+        const server = servers.find(s => (serverId ? s.clientIdentifier === serverId : true)) || servers[0];
+        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+
+        const seasonalCollections = await prisma.mediaCollection.findMany({
+            where: {
+                isSeasonal: true,
+                ...(serverId ? { serverId } : {}),
+                ...(sectionKey ? { sectionKey } : {})
+            }
+        });
+
+        const now = new Date();
+        const curMonth = now.getMonth() + 1; // 1-12
+        const curDay = now.getDate();        // 1-31
+        const curVal = curMonth * 100 + curDay;
+
+        const results: Array<{ title: string; active: boolean; action: string }> = [];
+
+        for (const coll of seasonalCollections) {
+            const startM = coll.scheduleStartMonth || 1;
+            const startD = coll.scheduleStartDay || 1;
+            const endM = coll.scheduleEndMonth || 12;
+            const endD = coll.scheduleEndDay || 31;
+
+            const startVal = startM * 100 + startD;
+            const endVal = endM * 100 + endD;
+
+            let isInSeason = false;
+            if (startVal <= endVal) {
+                isInSeason = curVal >= startVal && curVal <= endVal;
+            } else {
+                // Wrap around year end (e.g. Nov 20 to Jan 6)
+                isInSeason = curVal >= startVal || curVal <= endVal;
+            }
+
+            if (isInSeason) {
+                // Promote active seasonal collection
+                await prisma.mediaCollection.update({
+                    where: { id: coll.id },
+                    data: { promotedToHome: true, promotedToRecommended: true }
+                });
+
+                if (serverUrl && coll.ratingKey && coll.sectionKey) {
+                    const prefix = coll.sortPrefix || `!02_Seasonal_`;
+                    const effectiveSort = `${prefix}${coll.sortTitle || coll.title}`;
+                    await updatePlexCollectionPromotionAndOrder(
+                        serverUrl,
+                        token,
+                        coll.sectionKey,
+                        coll.ratingKey,
+                        {
+                            sortTitle: effectiveSort,
+                            promotedToHome: true,
+                            promotedToRecommended: true,
+                            promotedToSharedHome: coll.promotedToSharedHome
+                        }
+                    );
+                } else if (!coll.ratingKey) {
+                    // Auto-sync collection if not yet created on Plex
+                    await syncCollectionToPlexAction(coll.id).catch(() => {});
+                }
+
+                results.push({ title: coll.title, active: true, action: "Promoted to Plex Home & Recommended" });
+            } else {
+                // Demote / hide inactive seasonal collection
+                const shouldHide = coll.seasonalAction === "promote_hide" || coll.seasonalAction === "create_delete";
+
+                await prisma.mediaCollection.update({
+                    where: { id: coll.id },
+                    data: { promotedToHome: !shouldHide }
+                });
+
+                if (serverUrl && coll.ratingKey && coll.sectionKey) {
+                    await updatePlexCollectionPromotionAndOrder(
+                        serverUrl,
+                        token,
+                        coll.sectionKey,
+                        coll.ratingKey,
+                        {
+                            promotedToHome: !shouldHide,
+                            promotedToRecommended: !shouldHide
+                        }
+                    );
+                }
+
+                results.push({ title: coll.title, active: false, action: shouldHide ? "Hidden from Plex Home (Out of season)" : "Demoted" });
+            }
+        }
+
+        logger.addLog("INFO", "CURATION", `Evaluated ${seasonalCollections.length} seasonal collections schedules.`);
+        return {
+            success: true,
+            evaluatedCount: seasonalCollections.length,
+            results,
+            message: `Evaluated ${seasonalCollections.length} seasonal collection schedules.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function syncLeavingSoonCollectionHubAction(serverId?: string, sectionKey?: string) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const servers = await getPlexServers(token);
+        const server = servers.find(s => (serverId ? s.clientIdentifier === serverId : true)) || servers[0];
+        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+
+        // Query active leaving soon items
+        const leavingSoonItems = await prisma.mediaContentAdvisory.findMany({
+            where: {
+                isLeavingSoon: true,
+                ...(serverId ? { serverId } : {})
+            }
+        });
+
+        const autoHideEmpty = settings?.leavingSoonAutoHideEmpty ?? true;
+        const shouldPromote = leavingSoonItems.length > 0 ? (settings?.leavingSoonPromotedToHome ?? true) : !autoHideEmpty;
+
+        // Find or create Leaving Soon collection in DB
+        let collection = await prisma.mediaCollection.findFirst({
+            where: {
+                type: "dynamic",
+                sourceQuery: "tag:leaving-soon",
+                ...(serverId ? { serverId } : {})
+            }
+        });
+
+        if (!collection && serverId && sectionKey) {
+            collection = await prisma.mediaCollection.create({
+                data: {
+                    title: "⚠️ Leaving Soon",
+                    summary: "Items scheduled to be removed soon from storage. Watch before they are gone!",
+                    sortTitle: "Leaving Soon",
+                    type: "dynamic",
+                    category: "dynamic",
+                    serverId,
+                    sectionKey,
+                    sourceType: "plex_query",
+                    sourceQuery: "tag:leaving-soon",
+                    orderIndex: settings?.leavingSoonHomeOrder ?? 0,
+                    sortPrefix: "!00_",
+                    promotedToHome: shouldPromote,
+                    promotedToRecommended: settings?.leavingSoonPromotedToRecommended ?? true,
+                    promotedToSharedHome: settings?.leavingSoonPromotedToSharedHome ?? true
+                }
+            });
+        }
+
+        if (collection) {
+            await prisma.mediaCollection.update({
+                where: { id: collection.id },
+                data: {
+                    itemCount: leavingSoonItems.length,
+                    promotedToHome: shouldPromote,
+                    orderIndex: settings?.leavingSoonHomeOrder ?? 0,
+                    sortPrefix: "!00_"
+                }
+            });
+
+            if (collection.ratingKey && serverUrl && collection.sectionKey) {
+                await updatePlexCollectionPromotionAndOrder(
+                    serverUrl,
+                    token,
+                    collection.sectionKey,
+                    collection.ratingKey,
+                    {
+                        sortTitle: "!00_LeavingSoon",
+                        promotedToHome: shouldPromote,
+                        promotedToRecommended: settings?.leavingSoonPromotedToRecommended ?? true,
+                        promotedToSharedHome: settings?.leavingSoonPromotedToSharedHome ?? true
+                    }
+                );
+            } else if (leavingSoonItems.length > 0 && collection.sectionKey) {
+                await syncCollectionToPlexAction(collection.id).catch(() => {});
+            }
+        }
+
+        return {
+            success: true,
+            leavingCount: leavingSoonItems.length,
+            promotedToHome: shouldPromote,
+            message: `Leaving Soon collection synced: ${leavingSoonItems.length} items (${shouldPromote ? "Promoted to Home #1" : "Hidden from Home"}).`
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -415,6 +773,80 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
     }
 }
 
+export async function getCustomBadgesAction() {
+    await verifyAdmin();
+    try {
+        const badges = await prisma.customBadge.findMany({
+            orderBy: { createdAt: "desc" }
+        });
+        return { success: true, badges };
+    } catch (e: any) {
+        return { success: false, error: e.message, badges: [] };
+    }
+}
+
+export async function saveCustomBadgeAction(data: {
+    id: string;
+    name?: string;
+    category?: string;
+    position?: string;
+    width?: number;
+    height?: number;
+    opacity?: number;
+    enabled?: boolean;
+    matchRule?: string;
+}) {
+    await verifyAdmin();
+    try {
+        const badge = await prisma.customBadge.update({
+            where: { id: data.id },
+            data: {
+                ...(data.name !== undefined ? { name: data.name } : {}),
+                ...(data.category !== undefined ? { category: data.category } : {}),
+                ...(data.position !== undefined ? { position: data.position } : {}),
+                ...(data.width !== undefined ? { width: data.width } : {}),
+                ...(data.height !== undefined ? { height: data.height } : {}),
+                ...(data.opacity !== undefined ? { opacity: data.opacity } : {}),
+                ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
+                ...(data.matchRule !== undefined ? { matchRule: data.matchRule } : {})
+            }
+        });
+        return { success: true, badge, message: `Updated custom badge "${badge.name}".` };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function deleteCustomBadgeAction(id: string) {
+    await verifyAdmin();
+    try {
+        const badge = await prisma.customBadge.findUnique({ where: { id } });
+        if (badge) {
+            try {
+                const fs = require("fs");
+                if (fs.existsSync(badge.filePath)) fs.unlinkSync(badge.filePath);
+            } catch (err) {}
+            await prisma.customBadge.delete({ where: { id } });
+        }
+        return { success: true, message: "Custom badge removed." };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function toggleCustomBadgeAction(id: string, enabled: boolean) {
+    await verifyAdmin();
+    try {
+        await prisma.customBadge.update({
+            where: { id },
+            data: { enabled }
+        });
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function getOverlayRulesAction(serverId?: string, sectionKey?: string) {
     await verifyAdmin();
     try {
@@ -430,7 +862,11 @@ export async function getOverlayRulesAction(serverId?: string, sectionKey?: stri
             where: serverId ? { serverId } : {}
         });
 
-        return { success: true, rules, backupsCount };
+        const customBadges = await prisma.customBadge.findMany({
+            where: { enabled: true }
+        });
+
+        return { success: true, rules, backupsCount, customBadges };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -448,49 +884,49 @@ export async function saveOverlayRuleAction(data: {
     showResolution?: boolean;
     showHdr?: boolean;
     showAudio?: boolean;
+    showAudioChannels?: boolean;
+    showCodec?: boolean;
+    showEdition?: boolean;
+    showStudio?: boolean;
+    showContentRating?: boolean;
     showRatings?: boolean;
     showLeavingSoon?: boolean;
+    customBadgeIds?: string[];
     enabled?: boolean;
 }) {
     await verifyAdmin();
     try {
+        const ruleData = {
+            name: data.name,
+            serverId: data.serverId,
+            sectionKey: data.sectionKey,
+            overlayType: data.overlayType,
+            position: data.position || "top-right",
+            theme: data.theme || "glass",
+            badgeStyle: data.badgeStyle || "pill",
+            showResolution: data.showResolution ?? true,
+            showHdr: data.showHdr ?? true,
+            showAudio: data.showAudio ?? true,
+            showAudioChannels: data.showAudioChannels ?? false,
+            showCodec: data.showCodec ?? false,
+            showEdition: data.showEdition ?? false,
+            showStudio: data.showStudio ?? false,
+            showContentRating: data.showContentRating ?? false,
+            showRatings: data.showRatings ?? false,
+            showLeavingSoon: data.showLeavingSoon ?? true,
+            customBadgeIds: data.customBadgeIds ? JSON.stringify(data.customBadgeIds) : null,
+            enabled: data.enabled ?? true
+        };
+
         let rule;
         if (data.id) {
             rule = await prisma.mediaOverlayRule.update({
                 where: { id: data.id },
-                data: {
-                    name: data.name,
-                    serverId: data.serverId,
-                    sectionKey: data.sectionKey,
-                    overlayType: data.overlayType,
-                    position: data.position || "top-right",
-                    theme: data.theme || "glass",
-                    badgeStyle: data.badgeStyle || "pill",
-                    showResolution: data.showResolution ?? true,
-                    showHdr: data.showHdr ?? true,
-                    showAudio: data.showAudio ?? true,
-                    showRatings: data.showRatings ?? false,
-                    showLeavingSoon: data.showLeavingSoon ?? true,
-                    enabled: data.enabled ?? true
-                }
+                data: ruleData
             });
         } else {
             rule = await prisma.mediaOverlayRule.create({
-                data: {
-                    name: data.name,
-                    serverId: data.serverId,
-                    sectionKey: data.sectionKey,
-                    overlayType: data.overlayType,
-                    position: data.position || "top-right",
-                    theme: data.theme || "glass",
-                    badgeStyle: data.badgeStyle || "pill",
-                    showResolution: data.showResolution ?? true,
-                    showHdr: data.showHdr ?? true,
-                    showAudio: data.showAudio ?? true,
-                    showRatings: data.showRatings ?? false,
-                    showLeavingSoon: data.showLeavingSoon ?? true,
-                    enabled: data.enabled ?? true
-                }
+                data: ruleData
             });
         }
 
@@ -513,14 +949,33 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
 
         if (!serverUrl) return { success: false, error: "Plex server connection URL not found." };
 
+        // Fetch active custom badges
+        const activeCustomBadges = await prisma.customBadge.findMany({
+            where: { enabled: true }
+        });
+
         // Fetch rule options
         let overlayOpts: OverlayOptions = {
             showResolution: true,
             showHdr: true,
             showAudio: true,
+            showAudioChannels: false,
+            showCodec: false,
+            showEdition: false,
+            showStudio: false,
+            showContentRating: false,
             showRatings: false,
             position: "top-right",
-            theme: "glass"
+            theme: "glass",
+            customBadges: activeCustomBadges.map(cb => ({
+                id: cb.id,
+                name: cb.name,
+                filePath: cb.filePath,
+                position: cb.position,
+                width: cb.width,
+                height: cb.height,
+                opacity: cb.opacity
+            }))
         };
 
         if (ruleId) {
@@ -530,10 +985,24 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
                     showResolution: rule.showResolution,
                     showHdr: rule.showHdr,
                     showAudio: rule.showAudio,
+                    showAudioChannels: rule.showAudioChannels,
+                    showCodec: rule.showCodec,
+                    showEdition: rule.showEdition,
+                    showStudio: rule.showStudio,
+                    showContentRating: rule.showContentRating,
                     showRatings: rule.showRatings,
                     showLeavingSoon: rule.showLeavingSoon,
                     position: (rule.position as any) || "top-right",
-                    theme: (rule.theme as any) || "glass"
+                    theme: (rule.theme as any) || "glass",
+                    customBadges: activeCustomBadges.map(cb => ({
+                        id: cb.id,
+                        name: cb.name,
+                        filePath: cb.filePath,
+                        position: cb.position,
+                        width: cb.width,
+                        height: cb.height,
+                        opacity: cb.opacity
+                    }))
                 };
             }
         }
@@ -543,8 +1012,8 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
 
         let successCount = 0;
         for (const it of items) {
-            // Only apply if item has quality badges or is leaving soon
-            if (it.detectedBadges.resolution || it.detectedBadges.hdr || it.detectedBadges.audio) {
+            // Apply if item has quality badges, leaving soon, or custom badges are active
+            if (it.detectedBadges.resolution || it.detectedBadges.hdr || it.detectedBadges.audio || it.detectedBadges.edition || it.detectedBadges.studio || activeCustomBadges.length > 0) {
                 const res = await backupAndApplyOverlay(serverUrl, token, serverId, it, overlayOpts);
                 if (res.success) successCount++;
             }
@@ -564,7 +1033,7 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
             success: true,
             appliedCount: successCount,
             totalEvaluated: items.length,
-            message: `Applied poster overlays to ${successCount} items on Plex.`
+            message: `Applied poster overlays & badges to ${successCount} items on Plex.`
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -1046,4 +1515,375 @@ export async function saveComingSoonSharesAction(shares: Record<string, string>)
         return { success: false, error: e.message };
     }
 }
+
+export async function saveServerStorageConfigAction(storageConfig: Record<string, any>) {
+    await verifyAdmin();
+    try {
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { serverStorageConfig: JSON.stringify(storageConfig) },
+            create: { id: "global", serverStorageConfig: JSON.stringify(storageConfig) }
+        });
+        return { success: true, message: "Server storage mount paths saved successfully." };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function validateDirectoryPathAction(pathStr: string) {
+    await verifyAdmin();
+    if (!pathStr || !pathStr.trim()) return { success: false, error: "Path is empty." };
+    try {
+        const cleanPath = pathStr.trim();
+        if (!fs.existsSync(cleanPath)) {
+            return { success: false, exists: false, error: `Directory "${cleanPath}" does not exist on disk.` };
+        }
+        const stat = fs.statSync(cleanPath);
+        if (!stat.isDirectory()) {
+            return { success: false, exists: true, isDirectory: false, error: `Path "${cleanPath}" exists but is a file, not a directory.` };
+        }
+        const entries = fs.readdirSync(cleanPath);
+        return {
+            success: true,
+            exists: true,
+            isDirectory: true,
+            count: entries.length,
+            message: `Directory validated (${entries.length} items found).`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Cannot access directory." };
+    }
+}
+
+export async function getArtBackupAndBadgeStatsAction() {
+    await verifyAdmin();
+    try {
+        const backupDir = path.join(process.cwd(), "data", "art_backups");
+        const badgeDir = path.join(process.cwd(), "data", "custom_badges");
+
+        let backupCount = 0;
+        let backupBytes = 0;
+        if (fs.existsSync(backupDir)) {
+            const files = fs.readdirSync(backupDir);
+            backupCount = files.length;
+            for (const f of files) {
+                try {
+                    backupBytes += fs.statSync(path.join(backupDir, f)).size;
+                } catch (e) {}
+            }
+        }
+
+        let badgeCount = 0;
+        let badgeBytes = 0;
+        if (fs.existsSync(badgeDir)) {
+            const files = fs.readdirSync(badgeDir);
+            badgeCount = files.length;
+            for (const f of files) {
+                try {
+                    badgeBytes += fs.statSync(path.join(badgeDir, f)).size;
+                } catch (e) {}
+            }
+        }
+
+        const customBadgesInDb = await prisma.customBadge.count();
+
+        return {
+            success: true,
+            backupDir,
+            backupCount,
+            backupBytes,
+            badgeDir,
+            badgeCount: customBadgesInDb || badgeCount,
+            badgeBytes
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Searches Plex library items across hubs or a specific library section.
+ */
+export async function searchPlexLibraryItemsAction(serverId: string, query: string, sectionKey?: string) {
+    await verifyAdmin();
+    try {
+        if (!query || query.trim().length === 0) return { success: true, items: [] };
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const servers = await getPlexServers(token);
+        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
+        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+        if (!serverUrl) return { success: false, error: "Plex server unreachable." };
+
+        const items = await searchPlexLibraryItems(serverUrl, token, query.trim(), sectionKey);
+        return { success: true, items };
+    } catch (e: any) {
+        return { success: false, error: e.message, items: [] };
+    }
+}
+
+/**
+ * Deep inspection of a single Plex media item (full video/audio telemetry, streams, parts, and overlays).
+ */
+export async function inspectPlexMediaItemAction(serverId: string, ratingKey: string) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const servers = await getPlexServers(token);
+        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
+        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+        if (!serverUrl) return { success: false, error: "Plex server unreachable." };
+
+        const inspection = await inspectPlexMediaItemFull(serverUrl, token, ratingKey, serverId);
+        if (!inspection) return { success: false, error: "Media item not found on Plex." };
+
+        const customBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
+
+        return {
+            success: true,
+            serverName: server?.name || "Plex Server",
+            serverUrl,
+            ...inspection,
+            availableCustomBadges: customBadges
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Applies overlay badges to a single media item (for live testing/preview).
+ */
+export async function applyOverlayToSingleItemAction(
+    serverId: string,
+    sectionKey: string,
+    ratingKey: string,
+    options?: {
+        position?: string;
+        theme?: string;
+        showResolution?: boolean;
+        showHdr?: boolean;
+        showAudio?: boolean;
+        showAudioChannels?: boolean;
+        showCodec?: boolean;
+        showEdition?: boolean;
+        showStudio?: boolean;
+        showContentRating?: boolean;
+        showRatings?: boolean;
+        showLeavingSoon?: boolean;
+        customBadgeIds?: string[];
+    }
+) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const servers = await getPlexServers(token);
+        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
+        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+
+        const inspection = await inspectPlexMediaItemFull(serverUrl, token, ratingKey, serverId);
+        if (!inspection) return { success: false, error: "Media item not found on Plex." };
+
+        const customBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
+
+        const res = await backupAndApplyOverlay(
+            serverUrl,
+            token,
+            serverId,
+            inspection.item,
+            {
+                position: (options?.position as any) || "top-right",
+                theme: (options?.theme as any) || "glass",
+                showResolution: options?.showResolution ?? true,
+                showHdr: options?.showHdr ?? true,
+                showAudio: options?.showAudio ?? true,
+                showAudioChannels: options?.showAudioChannels ?? false,
+                showCodec: options?.showCodec ?? false,
+                showEdition: options?.showEdition ?? false,
+                showStudio: options?.showStudio ?? false,
+                showContentRating: options?.showContentRating ?? false,
+                showRatings: options?.showRatings ?? false,
+                showLeavingSoon: options?.showLeavingSoon ?? false,
+                customBadges
+            }
+        );
+
+        return {
+            success: res.success,
+            message: res.success ? `Applied overlays to "${inspection.item.title}" successfully!` : res.message
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Restores original poster artwork for a single item.
+ */
+export async function restoreSingleItemPosterAction(serverId: string, ratingKey: string) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        const serverUrl = settings?.mainPlexUrl || "";
+
+        if (!token || !serverUrl) return { success: false, error: "Plex server connection missing." };
+
+        const res = await restoreItemOriginalArtwork(serverUrl, token, serverId, ratingKey);
+        return {
+            success: res.success,
+            message: res.success ? "Restored original pristine poster!" : (res.message || "Artwork not found in backup vault.")
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Automated full curation sync job (Seasonal collections, Poster overlays, Release calendar & placeholders, Leaving soon).
+ * Can be called on-demand or by the background cron timer.
+ */
+export async function runFullCurationSyncInternal(): Promise<{
+    success: boolean;
+    seasonalCount: number;
+    overlaysAppliedCount: number;
+    leavingSoonCount: number;
+    timestamp: Date;
+    details: string[];
+}> {
+    const details: string[] = [];
+    let seasonalCount = 0;
+    let overlaysAppliedCount = 0;
+    let leavingSoonCount = 0;
+
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings) return { success: false, seasonalCount: 0, overlaysAppliedCount: 0, leavingSoonCount: 0, timestamp: new Date(), details: ["No global settings"] };
+
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) {
+            return { success: false, seasonalCount: 0, overlaysAppliedCount: 0, leavingSoonCount: 0, timestamp: new Date(), details: ["No Plex token configured"] };
+        }
+
+        const servers = await getPlexServers(token);
+        const enabledServersForOverlays: string[] = settings.enabledServersForOverlays 
+            ? JSON.parse(settings.enabledServersForOverlays) 
+            : [];
+        const enabledServersForCollections: string[] = settings.enabledServersForCollections 
+            ? JSON.parse(settings.enabledServersForCollections) 
+            : [];
+
+        // 1. Seasonal & Scheduled Collections Sync
+        if (settings.curationSyncCollections !== false) {
+            try {
+                const seasonalRes = await syncSeasonalAndScheduledCollectionsAction();
+                seasonalCount = seasonalRes.evaluatedCount || 0;
+                details.push(`Evaluated ${seasonalCount} seasonal collection schedules.`);
+            } catch (sErr: any) {
+                details.push(`Seasonal sync error: ${sErr.message}`);
+            }
+        }
+
+        // 2. Poster Overlays on New Library Additions
+        if (settings.curationSyncOverlays !== false) {
+            try {
+                const overlayServers = enabledServersForOverlays.length > 0 
+                    ? servers.filter(s => enabledServersForOverlays.includes(s.clientIdentifier))
+                    : servers;
+
+                const customBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
+
+                for (const srv of overlayServers) {
+                    const serverUrl = srv.connections[0]?.uri || settings.mainPlexUrl || "";
+                    if (!serverUrl) continue;
+
+                    const sectionsRes = await getPlexServerLibrarySections(token);
+                    const srvSections = sectionsRes.find(s => s.serverId === srv.clientIdentifier)?.sections || [];
+
+                    for (const sec of srvSections) {
+                        try {
+                            const res = await applyOverlaysToLibraryAction(srv.clientIdentifier, String(sec.key));
+                            if (res.success && res.appliedCount) {
+                                overlaysAppliedCount += res.appliedCount;
+                            }
+                        } catch (secErr: any) {
+                            console.warn(`[CURATION-SYNC] Error applying overlays to ${sec.title}:`, secErr.message);
+                        }
+                    }
+                }
+                details.push(`Applied overlays to ${overlaysAppliedCount} new/updated library posters.`);
+            } catch (oErr: any) {
+                details.push(`Overlay sync error: ${oErr.message}`);
+            }
+        }
+
+        // 3. Leaving Soon Hub Sync
+        if (settings.curationSyncPruning !== false) {
+            try {
+                const leaveRes = await syncLeavingSoonCollectionHubAction();
+                leavingSoonCount = leaveRes.leavingCount || 0;
+                details.push(`Leaving Soon hub synced: ${leavingSoonCount} items scheduled.`);
+            } catch (lErr: any) {
+                details.push(`Leaving Soon hub sync error: ${lErr.message}`);
+            }
+        }
+
+        // Save last run telemetry
+        const statusSummary = {
+            success: true,
+            timestamp: new Date().toISOString(),
+            seasonalCount,
+            overlaysAppliedCount,
+            leavingSoonCount,
+            details
+        };
+
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                curationLastRunAt: new Date(),
+                curationLastRunStatus: JSON.stringify(statusSummary)
+            }
+        });
+
+        logger.addLog("SUCCESS", "CURATION", `Automated Curation Sync Job completed: ${details.join(" • ")}`);
+
+        return {
+            success: true,
+            seasonalCount,
+            overlaysAppliedCount,
+            leavingSoonCount,
+            timestamp: new Date(),
+            details
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "CURATION", `Automated Curation Sync Job failed: ${e.message}`);
+        return {
+            success: false,
+            seasonalCount,
+            overlaysAppliedCount,
+            leavingSoonCount,
+            timestamp: new Date(),
+            details: [e.message]
+        };
+    }
+}
+
+/**
+ * Server action to trigger full curation sync on-demand.
+ */
+export async function runFullCurationSyncAction() {
+    await verifyAdmin();
+    return await runFullCurationSyncInternal();
+}
+
 

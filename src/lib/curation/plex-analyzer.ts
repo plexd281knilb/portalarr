@@ -50,13 +50,18 @@ export interface PlexMediaStreamInfo {
         resolution?: "4K" | "1080p" | "720p" | "SD";
         hdr?: "DV" | "HDR10+" | "HDR10" | "HDR";
         audio?: "ATMOS" | "TRUEHD" | "DTS:X" | "DTS-HD" | "5.1" | "7.1";
+        audioChannels?: string;
+        codec?: string;
+        edition?: string;
+        studio?: string;
+        contentRating?: string;
         audioFormatLabel?: string;
         videoFormatLabel?: string;
     };
 }
 
 /**
- * Parses Plex stream attributes to detect 4K, HDR, Dolby Vision, Atmos, etc.
+ * Parses Plex stream attributes to detect 4K, HDR, Dolby Vision, Atmos, audio channels, codecs, editions, etc.
  */
 export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
     const guids: { imdb?: string; tmdb?: string; tvdb?: string } = {};
@@ -83,13 +88,60 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
     let detectedRes: "4K" | "1080p" | "720p" | "SD" | undefined;
     let detectedHdr: "DV" | "HDR10+" | "HDR10" | "HDR" | undefined;
     let detectedAudio: "ATMOS" | "TRUEHD" | "DTS:X" | "DTS-HD" | "5.1" | "7.1" | undefined;
+    let detectedAudioChannels: string | undefined;
+    let detectedCodec: string | undefined;
+    let detectedEdition: string | undefined;
+    let detectedStudio: string | undefined;
+    let detectedContentRating: string | undefined;
     let audioFormatLabel: string | undefined;
     let videoFormatLabel: string | undefined;
+
+    // Detect edition from Plex editionTitle, title, or filePath
+    const titleLower = (metadata.title || "").toLowerCase();
+    const editionTitle = (metadata.editionTitle || "").toLowerCase();
+    const firstPartFile = (rawMediaList[0]?.Part?.[0] || rawMediaList[0]?.Part)?.file || "";
+    const fileLower = firstPartFile.toLowerCase();
+
+    if (editionTitle.includes("imax") || titleLower.includes("imax") || fileLower.includes("imax")) detectedEdition = "IMAX";
+    else if (editionTitle.includes("criterion") || titleLower.includes("criterion") || fileLower.includes("criterion")) detectedEdition = "Criterion";
+    else if (editionTitle.includes("director") || titleLower.includes("director's cut") || fileLower.includes("directors.cut") || fileLower.includes("director.cut")) detectedEdition = "Director's Cut";
+    else if (editionTitle.includes("extended") || titleLower.includes("extended") || fileLower.includes("extended.cut") || fileLower.includes("extended.edition")) detectedEdition = "Extended";
+    else if (editionTitle.includes("remaster") || titleLower.includes("remaster") || fileLower.includes("remastered")) detectedEdition = "Remastered";
+    else if (fileLower.includes("remux")) detectedEdition = "Remux";
+
+    // Detect Studio
+    const studioRaw = (metadata.studio || "").toLowerCase();
+    if (studioRaw.includes("hbo") || studioRaw.includes("max")) detectedStudio = "HBO";
+    else if (studioRaw.includes("netflix")) detectedStudio = "Netflix";
+    else if (studioRaw.includes("disney")) detectedStudio = "Disney+";
+    else if (studioRaw.includes("apple")) detectedStudio = "Apple TV+";
+    else if (studioRaw.includes("amazon") || studioRaw.includes("prime")) detectedStudio = "Prime";
+    else if (studioRaw.includes("marvel")) detectedStudio = "Marvel";
+    else if (studioRaw.includes("dc comics") || studioRaw.includes("dc entertainment")) detectedStudio = "DC";
+    else if (studioRaw.includes("a24")) detectedStudio = "A24";
+    else if (studioRaw.includes("paramount")) detectedStudio = "Paramount+";
+    else if (studioRaw.includes("hulu")) detectedStudio = "Hulu";
+
+    // Detect Content Rating
+    const crRaw = (metadata.contentRating || "").toUpperCase();
+    if (crRaw) {
+        if (crRaw.includes("PG-13") || crRaw.includes("TV-14")) detectedContentRating = "PG-13";
+        else if (crRaw.includes("PG") || crRaw.includes("TV-PG")) detectedContentRating = "PG";
+        else if (crRaw === "G" || crRaw.includes("TV-G") || crRaw.includes("TV-Y")) detectedContentRating = "G";
+        else if (crRaw.includes("NC-17")) detectedContentRating = "NC-17";
+        else if (crRaw.includes("TV-MA") || crRaw.includes("R")) detectedContentRating = "R";
+    }
 
     for (const m of rawMediaList) {
         const rawRes = (m.videoResolution || "").toLowerCase();
         const width = parseInt(m.width || "0", 10);
         const height = parseInt(m.height || "0", 10);
+        const rawCodec = (m.videoCodec || "").toLowerCase();
+
+        if (rawCodec.includes("hevc") || rawCodec.includes("h265") || rawCodec.includes("x265")) detectedCodec = "HEVC";
+        else if (rawCodec.includes("av1")) detectedCodec = "AV1";
+        else if (rawCodec.includes("prores")) detectedCodec = "ProRes";
+        else if (rawCodec.includes("h264") || rawCodec.includes("avc") || rawCodec.includes("x264")) detectedCodec = "AVC";
 
         let res: "4K" | "1080p" | "720p" | "SD" = "1080p";
         if (rawRes === "4k" || width >= 3800 || height >= 2100) res = "4K";
@@ -107,6 +159,10 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         let itemAudioProfile = (m.audioProfile || "").toLowerCase();
         let itemAudioChannels = parseInt(m.audioChannels || "2", 10);
         let itemAudioTitle = "";
+
+        if (itemAudioChannels >= 8) detectedAudioChannels = "7.1";
+        else if (itemAudioChannels >= 6) detectedAudioChannels = "5.1";
+        else if (itemAudioChannels === 2) detectedAudioChannels = "2.0";
 
         for (const part of rawParts) {
             const streams = Array.isArray(part.Stream) ? part.Stream : part.Stream ? [part.Stream] : [];
@@ -140,6 +196,9 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
                 const aExtended = (as.extendedDisplayTitle || "").toLowerCase();
                 const aCodec = (as.codec || "").toLowerCase();
                 const aChannels = parseInt(as.channels || "2", 10);
+
+                if (aChannels >= 8) detectedAudioChannels = "7.1";
+                else if (aChannels >= 6 && detectedAudioChannels !== "7.1") detectedAudioChannels = "5.1";
 
                 if (aTitle.includes("atmos") || aDisplay.includes("atmos") || aExtended.includes("atmos") || as.audioChannelLayout?.toLowerCase().includes("atmos")) {
                     detectedAudio = "ATMOS";
@@ -235,6 +294,11 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
             resolution: detectedRes,
             hdr: detectedHdr,
             audio: detectedAudio,
+            audioChannels: detectedAudioChannels,
+            codec: detectedCodec,
+            edition: detectedEdition,
+            studio: detectedStudio,
+            contentRating: detectedContentRating,
             audioFormatLabel,
             videoFormatLabel
         }
@@ -336,6 +400,10 @@ export async function syncPlexCollection(
         sortTitle?: string;
         posterBuffer?: Buffer;
         posterUrl?: string;
+        promotedToHome?: boolean;
+        promotedToRecommended?: boolean;
+        promotedToSharedHome?: boolean;
+        orderIndex?: number;
     }
 ): Promise<{ success: boolean; collectionRatingKey?: string; message?: string }> {
     if (!collectionTitle || itemRatingKeys.length === 0) {
@@ -383,19 +451,31 @@ export async function syncPlexCollection(
         } catch (e) {}
     }
 
-    // 3. Update collection summary or sort title if provided
-    if (collectionRatingKey && (options?.summary || options?.sortTitle)) {
+    // 3. Update collection summary, sort title, and Home Promotion if provided
+    if (collectionRatingKey) {
         try {
             const params = new URLSearchParams();
             params.set("type", "18"); // Collection metadata type
             params.set("id", collectionRatingKey);
-            if (options.summary) {
+            if (options?.summary) {
                 params.set("summary.value", options.summary);
                 params.set("summary.locked", "1");
             }
-            if (options.sortTitle) {
+            if (options?.sortTitle) {
                 params.set("titleSort.value", options.sortTitle);
                 params.set("titleSort.locked", "1");
+            }
+            if (options?.promotedToHome !== undefined) {
+                params.set("promotedToHome.value", options.promotedToHome ? "1" : "0");
+                params.set("promotedToHome.locked", "1");
+            }
+            if (options?.promotedToRecommended !== undefined) {
+                params.set("promotedToRecommended.value", options.promotedToRecommended ? "1" : "0");
+                params.set("promotedToRecommended.locked", "1");
+            }
+            if (options?.promotedToSharedHome !== undefined) {
+                params.set("promotedToSharedHome.value", options.promotedToSharedHome ? "1" : "0");
+                params.set("promotedToSharedHome.locked", "1");
             }
             params.set("X-Plex-Token", token);
 
@@ -419,6 +499,59 @@ export async function syncPlexCollection(
         collectionRatingKey,
         message: `Synced collection "${collectionTitle}" with ${addedCount} items.`
     };
+}
+
+/**
+ * Updates a Plex collection's sort title and Home / Recommended / Shared Home visibility flags.
+ */
+export async function updatePlexCollectionPromotionAndOrder(
+    serverUrl: string,
+    token: string,
+    sectionKey: string | number,
+    collectionRatingKey: string,
+    options: {
+        sortTitle?: string;
+        promotedToHome?: boolean;
+        promotedToRecommended?: boolean;
+        promotedToSharedHome?: boolean;
+    }
+): Promise<{ success: boolean; message?: string }> {
+    const cleanBase = serverUrl.replace(/\/+$/, "");
+    try {
+        const params = new URLSearchParams();
+        params.set("type", "18"); // Collection
+        params.set("id", collectionRatingKey);
+
+        if (options.sortTitle) {
+            params.set("titleSort.value", options.sortTitle);
+            params.set("titleSort.locked", "1");
+        }
+        if (options.promotedToHome !== undefined) {
+            params.set("promotedToHome.value", options.promotedToHome ? "1" : "0");
+            params.set("promotedToHome.locked", "1");
+        }
+        if (options.promotedToRecommended !== undefined) {
+            params.set("promotedToRecommended.value", options.promotedToRecommended ? "1" : "0");
+            params.set("promotedToRecommended.locked", "1");
+        }
+        if (options.promotedToSharedHome !== undefined) {
+            params.set("promotedToSharedHome.value", options.promotedToSharedHome ? "1" : "0");
+            params.set("promotedToSharedHome.locked", "1");
+        }
+        params.set("X-Plex-Token", token);
+
+        const res = await fetch(`${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}`, {
+            method: "PUT",
+            headers: {
+                "X-Plex-Token": token,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            }
+        });
+
+        return { success: res.ok };
+    } catch (e: any) {
+        return { success: false, message: e.message };
+    }
 }
 
 /**
@@ -672,17 +805,217 @@ export async function evaluatePruneCandidatesForServer(
 }
 
 /**
- * Directly removes media file via Plex Media Server API.
+ * Searches Plex library items across hubs or a specific library section.
+ */
+export async function searchPlexLibraryItems(
+    serverUrl: string,
+    token: string,
+    query: string,
+    sectionKey?: string
+): Promise<PlexMediaStreamInfo[]> {
+    const cleanBase = serverUrl.replace(/\/+$/, "");
+    let endpoint = `${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&limit=25`;
+    if (sectionKey) {
+        endpoint = `${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/all?title=${encodeURIComponent(query)}&X-Plex-Container-Start=0&X-Plex-Container-Size=25`;
+    }
+
+    try {
+        const res = await fetch(endpoint, {
+            headers: {
+                Accept: "application/json",
+                "X-Plex-Token": token,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            }
+        });
+
+        if (!res.ok) return [];
+
+        const data = await res.json();
+        const results: PlexMediaStreamInfo[] = [];
+
+        if (sectionKey) {
+            const rawMetadata = data.MediaContainer?.Metadata || [];
+            for (const item of rawMetadata) {
+                results.push(analyzeMediaStreamInfo(item));
+            }
+        } else {
+            const hubs = data.MediaContainer?.Hub || [];
+            for (const hub of hubs) {
+                const metadataList = hub.Metadata || [];
+                for (const item of metadataList) {
+                    if (item.type === "movie" || item.type === "show" || item.type === "season" || item.type === "episode") {
+                        results.push(analyzeMediaStreamInfo(item));
+                    }
+                }
+            }
+        }
+
+        return results;
+    } catch (e: any) {
+        logger.addLog("WARN", "PLEX", `Search failed for query "${query}": ${e.message}`);
+        return [];
+    }
+}
+
+/**
+ * Deep inspection of a single Plex media item (full video/audio telemetry, streams, parts, and overlays).
+ */
+export async function inspectPlexMediaItemFull(
+    serverUrl: string,
+    token: string,
+    ratingKey: string,
+    serverId?: string
+): Promise<{
+    item: PlexMediaStreamInfo;
+    rawStreams: {
+        video: any[];
+        audio: any[];
+        subtitles: any[];
+    };
+    parts: Array<{ id: number; file: string; sizeGb: number; container: string }>;
+    hasBackup: boolean;
+    isLeavingSoon: boolean;
+    leavingSoonDate?: Date | null;
+    leavingReason?: string | null;
+} | null> {
+    const cleanBase = serverUrl.replace(/\/+$/, "");
+    const endpoint = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?includeStreams=1&includeGuids=1`;
+
+    try {
+        const res = await fetch(endpoint, {
+            headers: {
+                Accept: "application/json",
+                "X-Plex-Token": token,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            }
+        });
+
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        const rawItem = data.MediaContainer?.Metadata?.[0];
+        if (!rawItem) return null;
+
+        const analyzed = analyzeMediaStreamInfo(rawItem);
+
+        const videoStreams: any[] = [];
+        const audioStreams: any[] = [];
+        const subtitleStreams: any[] = [];
+        const parts: Array<{ id: number; file: string; sizeGb: number; container: string }> = [];
+
+        const mediaList = Array.isArray(rawItem.Media) ? rawItem.Media : rawItem.Media ? [rawItem.Media] : [];
+        for (const m of mediaList) {
+            const partList = Array.isArray(m.Part) ? m.Part : m.Part ? [m.Part] : [];
+            for (const p of partList) {
+                const sizeBytes = p.size || 0;
+                parts.push({
+                    id: p.id,
+                    file: p.file || "",
+                    sizeGb: parseFloat((sizeBytes / (1024 * 1024 * 1024)).toFixed(2)),
+                    container: p.container || m.container || "mkv"
+                });
+
+                const streamList = Array.isArray(p.Stream) ? p.Stream : p.Stream ? [p.Stream] : [];
+                for (const st of streamList) {
+                    if (st.streamType === 1) {
+                        videoStreams.push({
+                            id: st.id,
+                            codec: st.codec,
+                            profile: st.profile,
+                            width: st.width,
+                            height: st.height,
+                            bitrate: st.bitrate ? `${Math.round(st.bitrate / 1000)} Mbps` : undefined,
+                            frameRate: st.frameRate || (st.displayTitle?.match(/(\d+p|\d+\.\d+fps)/i)?.[0]),
+                            bitDepth: st.bitDepth ? `${st.bitDepth}-bit` : undefined,
+                            colorSpace: st.colorSpace,
+                            colorRange: st.colorRange,
+                            colorPrimaries: st.colorPrimaries,
+                            dovTitle: st.DOVIBaselinePresent ? "Dolby Vision" : (st.colorPrimaries === "bt2020" ? "HDR10" : "SDR"),
+                            displayTitle: st.displayTitle || `${st.width}x${st.height} ${st.codec?.toUpperCase()}`
+                        });
+                    } else if (st.streamType === 2) {
+                        audioStreams.push({
+                            id: st.id,
+                            codec: st.codec,
+                            profile: st.profile,
+                            channels: st.channels,
+                            channelLayout: st.channelLayout,
+                            audioChannelLayout: st.audioChannelLayout,
+                            bitrate: st.bitrate ? `${Math.round(st.bitrate / 1000)} kbps` : undefined,
+                            language: st.language || "Unknown",
+                            languageCode: st.languageCode,
+                            title: st.title || st.displayTitle,
+                            selected: Boolean(st.selected),
+                            default: Boolean(st.default)
+                        });
+                    } else if (st.streamType === 3) {
+                        subtitleStreams.push({
+                            id: st.id,
+                            codec: st.codec,
+                            language: st.language || "Unknown",
+                            languageCode: st.languageCode,
+                            title: st.title || st.displayTitle,
+                            forced: Boolean(st.forced),
+                            selected: Boolean(st.selected),
+                            default: Boolean(st.default)
+                        });
+                    }
+                }
+            }
+        }
+
+        // Check if backed up
+        let hasBackup = false;
+        let isLeavingSoon = false;
+        let leavingSoonDate: Date | null = null;
+        let leavingReason: string | null = null;
+
+        if (serverId) {
+            const backup = await prisma.mediaArtBackup.findUnique({
+                where: { serverId_ratingKey: { serverId, ratingKey } }
+            });
+            hasBackup = Boolean(backup);
+
+            const adv = await prisma.mediaContentAdvisory.findUnique({
+                where: { ratingKey_serverId: { ratingKey, serverId } }
+            });
+            if (adv && adv.isLeavingSoon) {
+                isLeavingSoon = true;
+                leavingSoonDate = adv.leavingSoonDate;
+                leavingReason = adv.leavingReason;
+            }
+        }
+
+        return {
+            item: analyzed,
+            rawStreams: {
+                video: videoStreams,
+                audio: audioStreams,
+                subtitles: subtitleStreams
+            },
+            parts,
+            hasBackup,
+            isLeavingSoon,
+            leavingSoonDate,
+            leavingReason
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Deep inspection failed for ratingKey "${ratingKey}": ${e.message}`);
+        return null;
+    }
+}
+
+/**
+ * Permanently deletes a media item from Plex Media Server (and disk if Plex media deletion is enabled).
  */
 export async function deleteMediaFromPlexServer(
     serverUrl: string,
     token: string,
     ratingKey: string
 ): Promise<{ success: boolean; message?: string }> {
-    const cleanBase = serverUrl.replace(/\/+$/, "");
-    const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
-
     try {
+        const cleanBase = serverUrl.replace(/\/+$/, "");
+        const url = `${cleanBase}/library/metadata/${ratingKey}`;
         const res = await fetch(url, {
             method: "DELETE",
             headers: {
@@ -690,11 +1023,18 @@ export async function deleteMediaFromPlexServer(
                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
             }
         });
+
         if (res.ok) {
-            return { success: true, message: `Successfully deleted ratingKey ${ratingKey} from Plex and disk.` };
+            logger.addLog("SUCCESS", "PLEX", `Deleted media ratingKey "${ratingKey}" from Plex.`);
+            return { success: true, message: `Deleted item from Plex.` };
+        } else {
+            const txt = await res.text();
+            logger.addLog("WARN", "PLEX", `Failed to delete ratingKey "${ratingKey}" from Plex (${res.status}): ${txt}`);
+            return { success: false, message: `Plex returned HTTP ${res.status}` };
         }
-        return { success: false, message: `Plex returned HTTP ${res.status}: ${res.statusText}` };
     } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Exception deleting media from Plex: ${e.message}`);
         return { success: false, message: e.message };
     }
 }
+

@@ -9,43 +9,72 @@ export interface OverlayOptions {
     showResolution?: boolean;
     showHdr?: boolean;
     showAudio?: boolean;
+    showAudioChannels?: boolean;
+    showCodec?: boolean;
+    showEdition?: boolean;
+    showStudio?: boolean;
+    showContentRating?: boolean;
     showRatings?: boolean;
     showLeavingSoon?: boolean;
     leavingSoonDays?: number;
     showDigitalRelease?: boolean;
     digitalReleaseDate?: string;
+    showPlaceholder?: boolean;
+    placeholderType?: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "custom";
+    placeholderDays?: number;
+    placeholderDate?: string;
+    placeholderText?: string;
+    placeholderTheme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass";
+    placeholderPosition?: "top" | "bottom" | "corner";
     position?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
-    theme?: "glass" | "gold" | "classic" | "minimal";
+    theme?: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson";
     ratingsSource?: {
         imdb?: number;
         rtCritics?: number;
         rtAudience?: number;
         metacritic?: number;
     };
+    customBadges?: Array<{
+        id: string;
+        name: string;
+        filePath: string;
+        position?: string;
+        width?: number;
+        height?: number;
+        opacity?: number;
+    }>;
 }
 
 const BACKUP_DIR = path.join(process.cwd(), "data", "art_backups");
+const CUSTOM_BADGES_DIR = path.join(process.cwd(), "data", "custom_badges");
 
 function ensureBackupDir() {
     if (!fs.existsSync(BACKUP_DIR)) {
         fs.mkdirSync(BACKUP_DIR, { recursive: true });
     }
+    if (!fs.existsSync(CUSTOM_BADGES_DIR)) {
+        fs.mkdirSync(CUSTOM_BADGES_DIR, { recursive: true });
+    }
 }
 
 /**
- * Creates SVG for a resolution badge (4K UHD, 1080p FHD, 720p).
+ * Creates SVG for a resolution badge (4K UHD, 1080p FHD, 720p, SD).
  */
 export function generateResolutionBadgeSvg(
     resolution: "4K" | "1080p" | "720p" | "SD",
-    theme: "glass" | "gold" | "classic" | "minimal" = "glass"
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
 ): string {
     const is4k = resolution === "4K";
     const bgFill = theme === "gold" && is4k 
         ? "url(#goldGrad)" 
         : theme === "glass" 
-            ? "rgba(15, 23, 42, 0.85)" 
-            : "#0f172a";
-    const borderColor = is4k ? "#eab308" : "#94a3b8";
+            ? "rgba(15, 23, 42, 0.88)" 
+            : theme === "cyber"
+                ? "rgba(2, 6, 23, 0.92)"
+                : "#0f172a";
+    const borderColor = is4k 
+        ? (theme === "cyber" ? "#22d3ee" : "#eab308") 
+        : "#94a3b8";
     const textColor = is4k && theme === "gold" ? "#000000" : "#ffffff";
     const subColor = is4k && theme === "gold" ? "#333333" : "#cbd5e1";
     const textLabel = is4k ? "4K" : resolution;
@@ -75,7 +104,7 @@ export function generateResolutionBadgeSvg(
  */
 export function generateHdrBadgeSvg(
     hdrType: "DV" | "HDR10+" | "HDR10" | "HDR",
-    theme: "glass" | "gold" | "classic" | "minimal" = "glass"
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
 ): string {
     const isDv = hdrType === "DV";
     const width = isDv ? 170 : 140;
@@ -116,7 +145,7 @@ export function generateHdrBadgeSvg(
 }
 
 /**
- * Creates SVG for Audio codec badge (Dolby Atmos, TrueHD, DTS:X, DTS-HD).
+ * Creates SVG for Audio codec badge (Dolby Atmos, TrueHD, DTS:X, DTS-HD, etc.).
  */
 export function generateAudioBadgeSvg(
     audio: "ATMOS" | "TRUEHD" | "DTS:X" | "DTS-HD" | "5.1" | "7.1"
@@ -135,6 +164,114 @@ export function generateAudioBadgeSvg(
         </defs>
         <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(15, 23, 42, 0.88)" stroke="${borderColor}" stroke-width="1.8" filter="url(#shadow)"/>
         <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14" fill="#f1f5f9" text-anchor="middle" letter-spacing="1.5">${label}</text>
+    </svg>`;
+}
+
+/**
+ * Creates SVG for Audio Channels badge (7.1, 5.1, 2.0).
+ */
+export function generateAudioChannelBadgeSvg(channels: string): string {
+    const width = 110;
+    const label = `${channels} CH`;
+    return `
+    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.5"/>
+            </filter>
+        </defs>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(15, 23, 42, 0.88)" stroke="#38bdf8" stroke-width="1.8" filter="url(#shadow)"/>
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">${label}</text>
+    </svg>`;
+}
+
+/**
+ * Creates SVG for Video Codec badge (HEVC, AVC, AV1, ProRes).
+ */
+export function generateCodecBadgeSvg(codec: string): string {
+    const width = 120;
+    const label = codec.toUpperCase();
+    return `
+    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.5"/>
+            </filter>
+        </defs>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(15, 23, 42, 0.88)" stroke="#818cf8" stroke-width="1.8" filter="url(#shadow)"/>
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14" fill="#c7d2fe" text-anchor="middle" letter-spacing="1.5">${label}</text>
+    </svg>`;
+}
+
+/**
+ * Creates SVG for Movie Edition / Cut badge (IMAX, Criterion, Director's Cut, Extended, Remastered).
+ */
+export function generateEditionBadgeSvg(edition: string): string {
+    const isImax = edition.toUpperCase().includes("IMAX");
+    const isCriterion = edition.toUpperCase().includes("CRITERION");
+    const width = isImax ? 150 : isCriterion ? 165 : 180;
+    const strokeColor = isImax ? "#38bdf8" : isCriterion ? "#f59e0b" : "#ec4899";
+    const label = edition.toUpperCase();
+
+    return `
+    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.5"/>
+            </filter>
+        </defs>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(10, 15, 30, 0.92)" stroke="${strokeColor}" stroke-width="2" filter="url(#shadow)"/>
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="13" fill="#fdf4ff" text-anchor="middle" letter-spacing="1.5">${label}</text>
+    </svg>`;
+}
+
+/**
+ * Creates SVG for Studio / Network badge (HBO, Netflix, Disney+, Apple TV+, Prime, Marvel, DC, A24).
+ */
+export function generateStudioLogoBadgeSvg(studio: string): string {
+    const s = studio.toUpperCase();
+    const width = 140;
+    let strokeColor = "#a855f7";
+    let textColor = "#ffffff";
+
+    if (s.includes("NETFLIX")) strokeColor = "#ef4444";
+    else if (s.includes("DISNEY")) strokeColor = "#38bdf8";
+    else if (s.includes("APPLE")) strokeColor = "#94a3b8";
+    else if (s.includes("PRIME") || s.includes("AMAZON")) strokeColor = "#0284c7";
+    else if (s.includes("MARVEL")) strokeColor = "#dc2626";
+    else if (s.includes("DC")) strokeColor = "#2563eb";
+    else if (s.includes("A24")) strokeColor = "#f59e0b";
+
+    return `
+    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.5"/>
+            </filter>
+        </defs>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(10, 15, 30, 0.92)" stroke="${strokeColor}" stroke-width="2" filter="url(#shadow)"/>
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14" fill="${textColor}" text-anchor="middle" letter-spacing="1.5">${s}</text>
+    </svg>`;
+}
+
+/**
+ * Creates SVG for Content Rating badge (G, PG, PG-13, R, NC-17, TV-MA).
+ */
+export function generateContentRatingBadgeSvg(rating: string): string {
+    const r = rating.toUpperCase();
+    const isMature = r.includes("R") || r.includes("TV-MA") || r.includes("NC-17");
+    const width = 90;
+    const strokeColor = isMature ? "#f43f5e" : "#10b981";
+
+    return `
+    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.5"/>
+            </filter>
+        </defs>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(15, 23, 42, 0.9)" stroke="${strokeColor}" stroke-width="2" filter="url(#shadow)"/>
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14" fill="#f8fafc" text-anchor="middle" letter-spacing="1">${r}</text>
     </svg>`;
 }
 
@@ -247,7 +384,72 @@ export function generateDigitalReleaseRibbonSvg(daysRemaining: number, formatted
 }
 
 /**
- * Applies overlay SVG badges onto a poster image buffer using sharp.
+ * Creates SVG for Agregarr-Style Placeholder Banner Ribbon with customizable themes & timings.
+ */
+export function generatePlaceholderRibbonSvg(
+    type: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "custom",
+    options: {
+        daysRemaining?: number;
+        formattedDate?: string;
+        customText?: string;
+        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass";
+    } = {}
+): string {
+    const theme = options.theme || "indigo-purple";
+
+    let label = "🚀 COMING SOON";
+    if (type === "in_theaters") {
+        label = "🎬 IN THEATERS NOW";
+    } else if (type === "now_streaming") {
+        label = "🔥 NOW STREAMING ON DIGITAL";
+    } else if (type === "countdown") {
+        const days = options.daysRemaining ?? 7;
+        label = days === 0 ? "✨ STREAMING TODAY" : `✨ STREAMING IN ${days} DAYS${options.formattedDate ? ` (${options.formattedDate})` : ''}`;
+    } else if (type === "releasing_date") {
+        label = options.formattedDate ? `📅 RELEASING ${options.formattedDate}` : "📅 RELEASE DATE ANNOUNCED";
+    } else if (type === "custom" && options.customText) {
+        label = options.customText.toUpperCase();
+    }
+
+    // Themes
+    let gradStops = `<stop offset="0%" stop-color="#1e1b4b" /><stop offset="50%" stop-color="#6366f1" /><stop offset="100%" stop-color="#1e1b4b" />`;
+    let lineStroke = "#818cf8";
+
+    if (theme === "crimson-red") {
+        gradStops = `<stop offset="0%" stop-color="#881337" /><stop offset="50%" stop-color="#e11d48" /><stop offset="100%" stop-color="#881337" />`;
+        lineStroke = "#fda4af";
+    } else if (theme === "emerald-green") {
+        gradStops = `<stop offset="0%" stop-color="#064e3b" /><stop offset="50%" stop-color="#059669" /><stop offset="100%" stop-color="#064e3b" />`;
+        lineStroke = "#6ee7b7";
+    } else if (theme === "amber-gold") {
+        gradStops = `<stop offset="0%" stop-color="#78350f" /><stop offset="50%" stop-color="#d97706" /><stop offset="100%" stop-color="#78350f" />`;
+        lineStroke = "#fde68a";
+    } else if (theme === "cinematic-blue") {
+        gradStops = `<stop offset="0%" stop-color="#082f49" /><stop offset="50%" stop-color="#0284c7" /><stop offset="100%" stop-color="#082f49" />`;
+        lineStroke = "#7dd3fc";
+    } else if (theme === "glass") {
+        gradStops = `<stop offset="0%" stop-color="rgba(15,23,42,0.92)" /><stop offset="100%" stop-color="rgba(15,23,42,0.92)" />`;
+        lineStroke = "rgba(255,255,255,0.3)";
+    }
+
+    return `
+    <svg width="600" height="50" viewBox="0 0 600 50" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="phGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                ${gradStops}
+            </linearGradient>
+            <filter id="shadow" x="-5%" y="-10%" width="110%" height="130%">
+                <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.6"/>
+            </filter>
+        </defs>
+        <rect x="0" y="0" width="600" height="50" fill="url(#phGrad)" filter="url(#shadow)"/>
+        <line x1="0" y1="48" x2="600" y2="48" stroke="${lineStroke}" stroke-width="2"/>
+        <text x="300" y="32" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="17" fill="#ffffff" text-anchor="middle" letter-spacing="2.5">${label}</text>
+    </svg>`;
+}
+
+/**
+ * Applies overlay SVG badges & custom uploaded badges onto a poster image buffer using sharp.
  */
 export async function applyOverlaysToPoster(
     originalBuffer: Buffer,
@@ -266,7 +468,6 @@ export async function applyOverlaysToPoster(
     // 1. Leaving Soon Banner (Takes precedence at the very top)
     if (options.showLeavingSoon) {
         const leavingSoonSvg = generateLeavingSoonRibbonSvg(options.leavingSoonDays);
-        // Resize leaving soon to 1000px width
         const ribbonBuf = await sharp(Buffer.from(leavingSoonSvg)).resize(1000, 75).toBuffer();
         overlays.push({
             input: ribbonBuf,
@@ -275,7 +476,24 @@ export async function applyOverlaysToPoster(
         });
     }
 
-    // 2. Badges collection (Resolution, HDR, Audio)
+    // 2. Agregarr-Style Placeholder Banner (if active)
+    if (options.showPlaceholder) {
+        const phSvg = generatePlaceholderRibbonSvg(options.placeholderType || "countdown", {
+            daysRemaining: options.placeholderDays,
+            formattedDate: options.placeholderDate,
+            customText: options.placeholderText,
+            theme: options.placeholderTheme
+        });
+        const phBuf = await sharp(Buffer.from(phSvg)).resize(1000, 68).toBuffer();
+        const phPos = options.placeholderPosition || "bottom";
+        overlays.push({
+            input: phBuf,
+            top: phPos === "top" ? (options.showLeavingSoon ? 75 : 0) : 1500 - 68,
+            left: 0
+        });
+    }
+
+    // 3. Built-in Vector Badges Collection
     const badgeSvgs: string[] = [];
 
     if (options.showResolution !== false && mediaInfo.detectedBadges.resolution) {
@@ -290,10 +508,30 @@ export async function applyOverlaysToPoster(
         badgeSvgs.push(generateAudioBadgeSvg(mediaInfo.detectedBadges.audio));
     }
 
+    if (options.showAudioChannels && mediaInfo.detectedBadges.audioChannels) {
+        badgeSvgs.push(generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels));
+    }
+
+    if (options.showCodec && mediaInfo.detectedBadges.codec) {
+        badgeSvgs.push(generateCodecBadgeSvg(mediaInfo.detectedBadges.codec));
+    }
+
+    if (options.showEdition && mediaInfo.detectedBadges.edition) {
+        badgeSvgs.push(generateEditionBadgeSvg(mediaInfo.detectedBadges.edition));
+    }
+
+    if (options.showStudio && mediaInfo.detectedBadges.studio) {
+        badgeSvgs.push(generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio));
+    }
+
+    if (options.showContentRating && mediaInfo.detectedBadges.contentRating) {
+        badgeSvgs.push(generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating));
+    }
+
     let topOffset = options.showLeavingSoon ? 90 : 35;
     let bottomOffset = 1500 - 65;
 
-    // Stack badges horizontally or vertically
+    // Stack built-in badges horizontally
     let currentX = isRight ? 1000 - 35 : 35;
 
     for (const svg of badgeSvgs) {
@@ -318,7 +556,47 @@ export async function applyOverlaysToPoster(
         }
     }
 
-    // 3. Ratings Badge (Render at bottom left or right)
+    // 4. Custom Uploaded Badges (Image files from disk)
+    if (options.customBadges && Array.isArray(options.customBadges)) {
+        for (const cb of options.customBadges) {
+            if (cb.filePath && fs.existsSync(cb.filePath)) {
+                try {
+                    const cbWidth = cb.width || 140;
+                    const cbHeight = cb.height || 46;
+                    const cbPos = cb.position || options.position || "top-left";
+                    const isCbTop = cbPos.startsWith("top");
+                    const isCbRight = cbPos.endsWith("right");
+                    const isCbCenter = cbPos.includes("center");
+
+                    let cbBuffer = await sharp(cb.filePath)
+                        .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                        .toBuffer();
+
+                    // Adjust opacity if < 1.0
+                    if (cb.opacity !== undefined && cb.opacity < 1.0) {
+                        const alphaVal = Math.round(cb.opacity * 255);
+                        cbBuffer = await sharp(cbBuffer)
+                            .ensureAlpha()
+                            .linear(1, 0)
+                            .toBuffer();
+                    }
+
+                    let cbX = isCbCenter ? (1000 - cbWidth) / 2 : (isCbRight ? 1000 - cbWidth - 35 : 35);
+                    let cbY = isCbTop ? (options.showLeavingSoon ? 90 : 35) : (1500 - cbHeight - 35);
+
+                    overlays.push({
+                        input: cbBuffer,
+                        top: Math.round(cbY),
+                        left: Math.round(cbX)
+                    });
+                } catch (err) {
+                    logger.addLog("WARN", "CURATION", `Failed to composite custom badge ${cb.name}: ${err}`);
+                }
+            }
+        }
+    }
+
+    // 5. Ratings Badge (Render at bottom left or right)
     if (options.showRatings && options.ratingsSource) {
         const ratingsSvg = generateRatingsBadgeSvg(options.ratingsSource);
         if (ratingsSvg) {
@@ -335,8 +613,8 @@ export async function applyOverlaysToPoster(
         }
     }
 
-    // 4. Digital Release Banner (if set)
-    if (options.showDigitalRelease && options.digitalReleaseDate) {
+    // 6. Digital Release Banner (if set)
+    if (options.showDigitalRelease && options.digitalReleaseDate && !options.showPlaceholder) {
         const relDate = new Date(options.digitalReleaseDate);
         const now = new Date();
         const diffDays = Math.ceil((relDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));

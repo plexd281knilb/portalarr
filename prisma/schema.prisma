@@ -76,6 +76,35 @@ model Settings {
   enabledServersForPruning    String?   // JSON array of server clientIdentifiers
   comingSoonShares            String?   // JSON map of serverId -> share path e.g. {"main":"/mnt/user/coming_soon_main"}
   serverStorageConfig         String?   // JSON map of serverId -> { glancesUrl, shares, radarrId, sonarrId }
+
+  // Agregarr Placeholder Overlay & Timing Controls
+  placeholderTheatricalNoticeDays  Int?      @default(60) // Days before theatrical release to generate placeholder
+  placeholderDigitalCountdownDays  Int?      @default(30) // Switch to "Streaming in X Days" within 30 days
+  placeholderNowStreamingGraceDays Int?      @default(7)  // Keep "Now Streaming" for 7 days post-digital
+  placeholderAutoPruneDays         Int?      @default(14) // Auto-prune dummy stub 14 days after release or acquisition
+  placeholderBannerPosition        String?   @default("bottom") // "top", "bottom", "corner"
+  placeholderBannerTheme           String?   @default("indigo-purple") // "indigo-purple", "emerald-green", "crimson-red", "amber-gold", "glass"
+  placeholderCustomText            String?   // Custom subtitle text
+  placeholderEnabled               Boolean   @default(true)
+  
+  // Leaving Soon Home Hub & Schedule Controls
+  leavingSoonPromotedToHome        Boolean   @default(true)
+  leavingSoonPromotedToRecommended Boolean   @default(true)
+  leavingSoonPromotedToSharedHome  Boolean   @default(true)
+  leavingSoonHomeOrder             Int?      @default(0) // #1 Top Priority
+  leavingSoonAutoThresholdDays     Int?      @default(14) // Only show when items leaving within X days
+  leavingSoonAutoHideEmpty         Boolean   @default(true) // Auto-hide from Home when 0 items leaving
+
+  // Automated Curation Timer Job & Periodic Sync Controls
+  curationSyncEnabled              Boolean   @default(true) // Master timer job switch
+  curationSyncSchedule             String?   @default("every_6_hours") // "every_hour", "every_3_hours", "every_6_hours", "every_12_hours", "daily_3am", "custom"
+  curationSyncCron                 String?   // Custom cron expression
+  curationSyncOverlays             Boolean   @default(true) // Auto-scan new items and apply overlays
+  curationSyncCollections          Boolean   @default(true) // Auto-sync seasonal & scheduled collections
+  curationSyncReleases             Boolean   @default(true) // Auto-refresh upcoming digital releases & placeholders
+  curationSyncPruning              Boolean   @default(true) // Auto-evaluate Leaving Soon candidates
+  curationLastRunAt                DateTime?
+  curationLastRunStatus            String?   // JSON telemetry summary of last execution
 }
 
 model TautulliInstance {
@@ -265,46 +294,83 @@ model EmailTemplate {
 }
 
 model MediaCollection {
-  id           String    @id @default(cuid())
-  title        String
-  summary      String?
-  sortTitle    String?
-  type         String    @default("curated") // "curated", "smart", "schedule", "dynamic", "custom"
-  category     String?
-  serverId     String?
-  sectionKey   String?
-  sourceType   String?   // "tmdb", "trakt", "mdblist", "plex_query", "manual"
-  sourceQuery  String?
-  rules        String?
-  posterUrl    String?
-  ratingKey    String?
-  itemCount    Int       @default(0)
-  autoSync     Boolean   @default(true)
-  syncInterval String    @default("daily")
-  lastSyncedAt DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  title                String
+  summary              String?
+  sortTitle            String?
+  type                 String    @default("curated") // "curated", "smart", "schedule", "dynamic", "custom", "seasonal"
+  category             String?
+  serverId             String?
+  sectionKey           String?
+  sourceType           String?   // "tmdb", "trakt", "mdblist", "plex_query", "manual"
+  sourceQuery          String?
+  rules                String?
+  posterUrl            String?
+  ratingKey            String?
+  itemCount            Int       @default(0)
+  autoSync             Boolean   @default(true)
+  syncInterval         String    @default("daily")
+  lastSyncedAt         DateTime?
+  // Home Screen & Recommended Hub Ordering & Visibility
+  orderIndex           Int       @default(0)
+  promotedToHome       Boolean   @default(true)
+  promotedToRecommended Boolean  @default(true)
+  promotedToSharedHome Boolean   @default(true)
+  sortPrefix           String?   @default("!00_")
+  // Seasonal Scheduling Controls
+  isSeasonal           Boolean   @default(false)
+  scheduleStartMonth   Int?      // 1-12 (e.g. 10 for October)
+  scheduleStartDay     Int?      // 1-31 (e.g. 1 for 1st)
+  scheduleEndMonth     Int?      // 1-12 (e.g. 11 for November)
+  scheduleEndDay       Int?      // 1-31 (e.g. 5 for 5th)
+  seasonalAction       String?   @default("promote_hide") // "promote_hide", "keep_demoted", "create_delete"
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }
 
 model MediaOverlayRule {
-  id              String    @id @default(cuid())
-  name            String
-  serverId        String?
-  sectionKey      String?
-  overlayType     String    @default("combined")
-  position        String    @default("top-right")
-  theme           String    @default("glass")
-  badgeStyle      String    @default("pill")
-  showResolution  Boolean   @default(true)
-  showHdr         Boolean   @default(true)
-  showAudio       Boolean   @default(true)
-  showRatings     Boolean   @default(false)
-  showLeavingSoon Boolean   @default(true)
-  enabled         Boolean   @default(true)
-  itemCount       Int       @default(0)
-  lastAppliedAt   DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  name              String
+  serverId          String?
+  sectionKey        String?
+  overlayType       String    @default("combined")
+  position          String    @default("top-right")
+  theme             String    @default("glass")
+  badgeStyle        String    @default("pill")
+  showResolution    Boolean   @default(true)
+  showHdr           Boolean   @default(true)
+  showAudio         Boolean   @default(true)
+  showRatings       Boolean   @default(false)
+  showLeavingSoon   Boolean   @default(true)
+  // Expanded Badge Toggles
+  showAudioChannels Boolean   @default(false)
+  showCodec         Boolean   @default(false)
+  showEdition       Boolean   @default(false)
+  showStudio        Boolean   @default(false)
+  showContentRating Boolean   @default(false)
+  customBadgeIds    String?   // JSON array of CustomBadge IDs to apply
+  enabled           Boolean   @default(true)
+  itemCount         Int       @default(0)
+  lastAppliedAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model CustomBadge {
+  id          String   @id @default(cuid())
+  name        String
+  category    String   @default("custom") // "quality", "edition", "studio", "rating", "custom", "banner"
+  filePath    String   // Local path on disk to the uploaded badge image
+  fileType    String   @default("png") // "png", "svg", "webp", "jpg"
+  mimeType    String   @default("image/png")
+  position    String   @default("top-right") // "top-right", "top-left", "bottom-right", "bottom-left", "top-center", "bottom-center"
+  width       Int      @default(140)
+  height      Int      @default(46)
+  opacity     Float    @default(1.0)
+  enabled     Boolean  @default(true)
+  matchRule   String?  // JSON string or filter criteria e.g. {"resolution":"4K"} or {"genre":"Action"} or "all"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model MediaArtBackup {

@@ -1,7 +1,7 @@
 export interface CollectionPreset {
     id: string;
     title: string;
-    type: "curated" | "smart" | "schedule" | "dynamic" | "custom";
+    type: "curated" | "smart" | "schedule" | "dynamic" | "custom" | "seasonal";
     category: "awards" | "franchise" | "studio" | "decade" | "holiday" | "quality" | "dynamic";
     description: string;
     icon: string;
@@ -10,6 +10,14 @@ export interface CollectionPreset {
     sourceQuery?: string;
     mediaType: "movie" | "show" | "both";
     defaultSort?: "release" | "rating" | "title" | "random" | "custom";
+    defaultHomeOrder?: number;
+    defaultSortPrefix?: string;
+    isSeasonal?: boolean;
+    scheduleStartMonth?: number; // 1-12
+    scheduleStartDay?: number;   // 1-31
+    scheduleEndMonth?: number;   // 1-12
+    scheduleEndDay?: number;     // 1-31
+    seasonalAction?: "promote_hide" | "keep_demoted" | "create_delete";
 }
 
 export const COLLECTION_PRESETS: CollectionPreset[] = [
@@ -25,6 +33,8 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceQuery: "top-oscar-best-picture",
         mediaType: "movie",
         defaultSort: "release",
+        defaultHomeOrder: 4,
+        defaultSortPrefix: "!04_",
         defaultPosterUrl: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80"
     },
     {
@@ -37,7 +47,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "mdblist",
         sourceQuery: "top-imdb-250",
         mediaType: "movie",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        defaultHomeOrder: 5,
+        defaultSortPrefix: "!05_"
     },
     {
         id: "imdb-top-250-tv",
@@ -49,7 +61,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "mdblist",
         sourceQuery: "top-imdb-tv",
         mediaType: "show",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        defaultHomeOrder: 6,
+        defaultSortPrefix: "!06_"
     },
 
     // 🦸 FRANCHISES & UNIVERSES
@@ -63,7 +77,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "collection:86311", // Marvel Collection
         mediaType: "both",
-        defaultSort: "release"
+        defaultSort: "release",
+        defaultHomeOrder: 7,
+        defaultSortPrefix: "!07_"
     },
     {
         id: "star-wars-saga",
@@ -75,7 +91,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "collection:10",
         mediaType: "both",
-        defaultSort: "release"
+        defaultSort: "release",
+        defaultHomeOrder: 8,
+        defaultSortPrefix: "!08_"
     },
     {
         id: "dc-extended-universe",
@@ -87,7 +105,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "franchise:dceu",
         mediaType: "both",
-        defaultSort: "release"
+        defaultSort: "release",
+        defaultHomeOrder: 9,
+        defaultSortPrefix: "!09_"
     },
     {
         id: "pixar-animation-studios",
@@ -99,7 +119,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "company:3", // Pixar TMDb ID
         mediaType: "movie",
-        defaultSort: "release"
+        defaultSort: "release",
+        defaultHomeOrder: 10,
+        defaultSortPrefix: "!10_"
     },
     {
         id: "studio-ghibli-classics",
@@ -111,7 +133,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "company:10342", // Studio Ghibli
         mediaType: "movie",
-        defaultSort: "release"
+        defaultSort: "release",
+        defaultHomeOrder: 11,
+        defaultSortPrefix: "!11_"
     },
 
     // 📺 STREAMING NETWORKS & ORIGINALS
@@ -125,7 +149,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "network:49", // HBO
         mediaType: "show",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        defaultHomeOrder: 12,
+        defaultSortPrefix: "!12_"
     },
     {
         id: "apple-tv-plus-originals",
@@ -137,7 +163,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "network:2552", // Apple TV+
         mediaType: "show",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        defaultHomeOrder: 13,
+        defaultSortPrefix: "!13_"
     },
     {
         id: "netflix-originals",
@@ -149,7 +177,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "network:213", // Netflix
         mediaType: "both",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        defaultHomeOrder: 14,
+        defaultSortPrefix: "!14_"
     },
     {
         id: "disney-plus-originals",
@@ -161,7 +191,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "network:2739", // Disney+
         mediaType: "both",
-        defaultSort: "release"
+        defaultSort: "release",
+        defaultHomeOrder: 15,
+        defaultSortPrefix: "!15_"
     },
 
     // 📼 DECADES
@@ -175,7 +207,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "plex_query",
         sourceQuery: "year>=1980&year<=1989",
         mediaType: "movie",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        defaultHomeOrder: 16,
+        defaultSortPrefix: "!16_"
     },
     {
         id: "nineties-classics",
@@ -187,10 +221,12 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "plex_query",
         sourceQuery: "year>=1990&year<=1999",
         mediaType: "movie",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        defaultHomeOrder: 17,
+        defaultSortPrefix: "!17_"
     },
 
-    // 🎃 SEASONAL & HOLIDAYS
+    // 🎃 SEASONAL & HOLIDAYS (DYNAMIC TIMED SCHEDULES)
     {
         id: "halloween-horror-fest",
         title: "Halloween Horror & Spooky Nights",
@@ -201,7 +237,15 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "genre:27", // Horror
         mediaType: "movie",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        isSeasonal: true,
+        scheduleStartMonth: 10, // Oct
+        scheduleStartDay: 1,
+        scheduleEndMonth: 11,   // Nov
+        scheduleEndDay: 3,
+        seasonalAction: "promote_hide",
+        defaultHomeOrder: 2,
+        defaultSortPrefix: "!02_Seasonal"
     },
     {
         id: "christmas-holiday-cheer",
@@ -213,7 +257,75 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "keyword:christmas",
         mediaType: "movie",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        isSeasonal: true,
+        scheduleStartMonth: 11, // Nov
+        scheduleStartDay: 20,
+        scheduleEndMonth: 1,    // Jan
+        scheduleEndDay: 6,
+        seasonalAction: "promote_hide",
+        defaultHomeOrder: 2,
+        defaultSortPrefix: "!02_Seasonal"
+    },
+    {
+        id: "valentine-romance-date-night",
+        title: "Valentine's Romance & Date Night",
+        type: "schedule",
+        category: "holiday",
+        description: "Heartwarming rom-coms, timeless love stories, and unforgettable date night cinema.",
+        icon: "Heart",
+        sourceType: "tmdb",
+        sourceQuery: "genre:10749", // Romance
+        mediaType: "movie",
+        defaultSort: "rating",
+        isSeasonal: true,
+        scheduleStartMonth: 2,  // Feb
+        scheduleStartDay: 1,
+        scheduleEndMonth: 2,
+        scheduleEndDay: 16,
+        seasonalAction: "promote_hide",
+        defaultHomeOrder: 2,
+        defaultSortPrefix: "!02_Seasonal"
+    },
+    {
+        id: "summer-blockbusters",
+        title: "Summer Blockbusters & Action Thrills",
+        type: "schedule",
+        category: "holiday",
+        description: "High-octane explosions, superhero epics, popcorn sci-fi, and summer cinema adventures.",
+        icon: "Flame",
+        sourceType: "tmdb",
+        sourceQuery: "genre:28", // Action
+        mediaType: "movie",
+        defaultSort: "rating",
+        isSeasonal: true,
+        scheduleStartMonth: 5,  // May
+        scheduleStartDay: 15,
+        scheduleEndMonth: 8,    // Aug
+        scheduleEndDay: 31,
+        seasonalAction: "promote_hide",
+        defaultHomeOrder: 2,
+        defaultSortPrefix: "!02_Seasonal"
+    },
+    {
+        id: "thanksgiving-family-feast",
+        title: "Thanksgiving & Fall Family Cinema",
+        type: "schedule",
+        category: "holiday",
+        description: "Cozy autumn favorites, family comedies, and heartwarming holiday gatherings.",
+        icon: "Sparkles",
+        sourceType: "tmdb",
+        sourceQuery: "genre:10751", // Family
+        mediaType: "movie",
+        defaultSort: "rating",
+        isSeasonal: true,
+        scheduleStartMonth: 11, // Nov
+        scheduleStartDay: 1,
+        scheduleEndMonth: 11,
+        scheduleEndDay: 30,
+        seasonalAction: "promote_hide",
+        defaultHomeOrder: 3,
+        defaultSortPrefix: "!03_Seasonal"
     },
 
     // 💎 QUALITY & TECH FORMAT SHOWCASE
@@ -227,7 +339,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "plex_query",
         sourceQuery: "hdr:DV",
         mediaType: "movie",
-        defaultSort: "title"
+        defaultSort: "title",
+        defaultHomeOrder: 18,
+        defaultSortPrefix: "!18_"
     },
     {
         id: "dolby-atmos-audio-experience",
@@ -239,10 +353,26 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "plex_query",
         sourceQuery: "audio:ATMOS",
         mediaType: "movie",
-        defaultSort: "title"
+        defaultSort: "title",
+        defaultHomeOrder: 19,
+        defaultSortPrefix: "!19_"
     },
 
-    // ⚡ DYNAMIC AGREGARR SCHEDULES
+    // ⚡ DYNAMIC AGREGARR SCHEDULES & TOP HOME ORDER
+    {
+        id: "leaving-soon-prune-queue",
+        title: "⚠️ Leaving Soon / Deleting Soon",
+        type: "dynamic",
+        category: "dynamic",
+        description: "Items flagged for upcoming disk pruning due to storage limits or external cleanup webhooks.",
+        icon: "AlertTriangle",
+        sourceType: "plex_query",
+        sourceQuery: "tag:leaving-soon",
+        mediaType: "both",
+        defaultSort: "custom",
+        defaultHomeOrder: 0, // #1 TOP PRIORITY
+        defaultSortPrefix: "!00_LeavingSoon"
+    },
     {
         id: "trending-this-week",
         title: "Trending Worldwide This Week",
@@ -253,7 +383,9 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "trakt",
         sourceQuery: "trending",
         mediaType: "both",
-        defaultSort: "rating"
+        defaultSort: "rating",
+        defaultHomeOrder: 1,
+        defaultSortPrefix: "!01_Trending"
     },
     {
         id: "new-digital-releases",
@@ -265,18 +397,8 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceType: "tmdb",
         sourceQuery: "digital_releases",
         mediaType: "movie",
-        defaultSort: "release"
-    },
-    {
-        id: "leaving-soon-prune-queue",
-        title: "⚠️ Leaving Soon / Deleting Soon",
-        type: "dynamic",
-        category: "dynamic",
-        description: "Items flagged for upcoming disk pruning due to storage limits or external cleanup webhooks.",
-        icon: "AlertTriangle",
-        sourceType: "plex_query",
-        sourceQuery: "tag:leaving-soon",
-        mediaType: "both",
-        defaultSort: "custom"
+        defaultSort: "release",
+        defaultHomeOrder: 3,
+        defaultSortPrefix: "!03_NewReleases"
     }
 ];
