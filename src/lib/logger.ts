@@ -58,9 +58,35 @@ class SystemLogger {
     private logs: SystemLogEntry[] = [];
     private maxLogs = 5000;
     private writeCount = 0;
+    private diskLoaded = false;
 
     constructor() {
-        this.addLog("INFO", "SYSTEM", "Portalarr System Logger Initialized. Capturing real-time activity stream.", undefined, true);
+        this.loadRecentLogsFromDisk();
+        if (this.logs.length === 0) {
+            this.addLog("INFO", "SYSTEM", "Portalarr System Logger Initialized. Capturing real-time activity stream.", undefined, true);
+        }
+    }
+
+    private loadRecentLogsFromDisk() {
+        if (this.diskLoaded) return;
+        this.diskLoaded = true;
+        try {
+            if (fs.existsSync(logFilePath)) {
+                const lines = fs.readFileSync(logFilePath, 'utf8').trim().split('\n').filter(Boolean);
+                const recent = lines.slice(-this.maxLogs);
+                this.logs = recent.map(l => {
+                    try {
+                        const parsed = JSON.parse(l);
+                        if (parsed.category === "PLEX_HUB") parsed.category = "PLEX";
+                        return parsed;
+                    } catch (err) {
+                        return null; // Ignore corrupted interleaved lines
+                    }
+                }).filter(Boolean).reverse();
+            }
+        } catch (e) {
+            // Ignore disk load error
+        }
     }
 
     public addLog(
@@ -70,6 +96,10 @@ class SystemLogger {
         details?: string,
         preventConsoleOutput = false
     ) {
+        if (!this.diskLoaded) {
+            this.loadRecentLogsFromDisk();
+        }
+
         // Normalize legacy categories
         let finalCategory: LogCategory = category;
         if (category === "PLEX_HUB") finalCategory = "PLEX";
@@ -118,29 +148,40 @@ class SystemLogger {
         }
     }
 
-    public getLogs(): SystemLogEntry[] {
-        try {
-            if (fs.existsSync(logFilePath)) {
-                const lines = fs.readFileSync(logFilePath, 'utf8').trim().split('\n').filter(Boolean);
-                const recent = lines.slice(-this.maxLogs);
-                return recent.map(l => {
-                    try {
-                        const parsed = JSON.parse(l);
-                        if (parsed.category === "PLEX_HUB") parsed.category = "PLEX";
-                        return parsed;
-                    } catch (err) {
-                        return null; // Ignore corrupted interleaved lines
-                    }
-                }).filter(Boolean).reverse();
-            }
-        } catch (e) {
-            // Fallback to memory
+    public getLogs(limit = 1000, sinceId?: string): SystemLogEntry[] {
+        if (!this.diskLoaded) {
+            this.loadRecentLogsFromDisk();
         }
-        return this.logs;
+
+        const safeLimit = Math.min(Math.max(1, limit), this.maxLogs);
+
+        if (sinceId) {
+            const idx = this.logs.findIndex(l => l.id === sinceId);
+            if (idx === 0) {
+                // Client already has the most recent log
+                return [];
+            }
+            if (idx > 0) {
+                // Return all entries newer than sinceId
+                return this.logs.slice(0, idx);
+            }
+            // If sinceId was not found (e.g. pushed out of ring buffer), return the latest safeLimit logs
+            return this.logs.slice(0, safeLimit);
+        }
+
+        return this.logs.slice(0, safeLimit);
+    }
+
+    public getTotalCount(): number {
+        if (!this.diskLoaded) {
+            this.loadRecentLogsFromDisk();
+        }
+        return this.logs.length;
     }
 
     public clearLogs(): void {
         this.logs = [];
+        this.diskLoaded = true;
         try {
             fs.writeFileSync(logFilePath, '');
         } catch (e) {}

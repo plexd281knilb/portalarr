@@ -10929,9 +10929,9 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
     }
 }
 
-export async function getSystemLogsAction() {
+export async function getSystemLogsAction(limit = 1000, sinceId?: string) {
     try {
-        return logger.getLogs();
+        return logger.getLogs(limit, sinceId);
     } catch (e: any) {
         console.error("Error retrieving system logs:", e);
         return [];

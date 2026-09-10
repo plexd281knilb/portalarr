@@ -67,7 +67,7 @@ export async function proxy(req: NextRequest) {
     }
 
     // 5. Role-based protection for Admin routes
-    if ((pathname.startsWith("/admin") || pathname.startsWith("/api/debug")) && payload.role !== "ADMIN") {
+    if ((pathname.startsWith("/admin") || pathname.startsWith("/api/debug") || pathname.startsWith("/api/system")) && payload.role !== "ADMIN") {
       if (pathname.startsWith("/api")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }

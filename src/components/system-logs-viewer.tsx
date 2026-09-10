@@ -52,33 +52,122 @@ export default function SystemLogsViewer() {
     const [copied, setCopied] = useState(false);
     const [dumping, setDumping] = useState(false);
     const [runningPlexDiag, setRunningPlexDiag] = useState(false);
-    const scrollRef = useRef<HTMLDivElement>(null);
+    const [lastPolledTime, setLastPolledTime] = useState<string>("");
+    const [newLogsCount, setNewLogsCount] = useState<number>(0);
 
-    const fetchLogs = async () => {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const latestLogIdRef = useRef<string>("");
+    const isFetchingRef = useRef<boolean>(false);
+
+    const fetchLogs = async (isIncremental = false) => {
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
+
         try {
-            const data = await getSystemLogsAction();
-            setLogs(data || []);
+            const sinceId = isIncremental ? latestLogIdRef.current : "";
+            const url = sinceId 
+                ? `/api/system/logs?since=${encodeURIComponent(sinceId)}&limit=500`
+                : `/api/system/logs?limit=1000`;
+
+            const res = await fetch(url, {
+                cache: "no-store",
+                headers: { "Pragma": "no-cache" }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const fetchedLogs: SystemLogEntry[] = data.logs || [];
+
+                if (isIncremental) {
+                    if (fetchedLogs.length > 0) {
+                        latestLogIdRef.current = fetchedLogs[0].id;
+                        setLogs(prev => {
+                            // Filter out any duplicates if present
+                            const existingIds = new Set(prev.map(l => l.id));
+                            const uniqueNew = fetchedLogs.filter(l => !existingIds.has(l.id));
+                            if (uniqueNew.length === 0) return prev;
+                            setNewLogsCount(c => c + uniqueNew.length);
+                            return [...uniqueNew, ...prev].slice(0, 5000);
+                        });
+                    }
+                } else {
+                    if (fetchedLogs.length > 0) {
+                        latestLogIdRef.current = fetchedLogs[0].id;
+                    }
+                    setLogs(fetchedLogs);
+                    setNewLogsCount(0);
+                }
+            } else {
+                // Fallback to server action if API route is unavailable
+                const fallbackData = await getSystemLogsAction(1000, sinceId);
+                if (isIncremental) {
+                    if (fallbackData && fallbackData.length > 0) {
+                        latestLogIdRef.current = fallbackData[0].id;
+                        setLogs(prev => {
+                            const existingIds = new Set(prev.map(l => l.id));
+                            const uniqueNew = fallbackData.filter(l => !existingIds.has(l.id));
+                            if (uniqueNew.length === 0) return prev;
+                            return [...uniqueNew, ...prev].slice(0, 5000);
+                        });
+                    }
+                } else {
+                    if (fallbackData && fallbackData.length > 0) {
+                        latestLogIdRef.current = fallbackData[0].id;
+                    }
+                    setLogs(fallbackData || []);
+                }
+            }
+            setLastPolledTime(new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         } catch (e) {
             console.error("Failed to fetch system logs:", e);
         } finally {
+            isFetchingRef.current = false;
             setLoading(false);
         }
     };
 
+    // Initial load
     useEffect(() => {
-        fetchLogs();
+        fetchLogs(false);
     }, []);
 
+    // Live polling interval with visibility awareness
     useEffect(() => {
         if (!autoRefresh) return;
-        const interval = setInterval(fetchLogs, 2000);
+
+        const interval = setInterval(() => {
+            if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+                return;
+            }
+            fetchLogs(true);
+        }, 2000);
+
         return () => clearInterval(interval);
     }, [autoRefresh]);
 
+    // Handle tab focus / visibility change
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                fetchLogs(true);
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, []);
+
     const handleClear = async () => {
         if (!confirm("Are you sure you want to clear system logs?")) return;
-        await clearSystemLogsAction();
-        fetchLogs();
+        try {
+            await fetch("/api/system/logs", { method: "DELETE" });
+        } catch (e) {
+            await clearSystemLogsAction();
+        }
+        latestLogIdRef.current = "";
+        setLogs([]);
+        setNewLogsCount(0);
+        fetchLogs(false);
     };
 
     const handleCopy = () => {
@@ -113,7 +202,7 @@ export default function SystemLogsViewer() {
                 console.error("Failed to run Plex diagnostics:", res.error);
             }
             setCategoryFilter("PLEX");
-            await fetchLogs();
+            await fetchLogs(false);
         } catch (e) {
             console.error("Failed to run Plex diagnostics:", e);
         } finally {
@@ -129,7 +218,7 @@ export default function SystemLogsViewer() {
                 console.error("Failed to dump database:", res.error);
             }
             setCategoryFilter("DATABASE");
-            await fetchLogs();
+            await fetchLogs(false);
         } catch (e) {
             console.error("Failed to dump database:", e);
         } finally {
@@ -208,12 +297,33 @@ export default function SystemLogsViewer() {
             <CardHeader className="border-b border-slate-800/80 pb-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
-                        <CardTitle className="text-xl font-bold flex items-center gap-2 text-slate-100">
-                            <Terminal className="h-5 w-5 text-emerald-400" />
-                            Live System & Diagnostic Activity Stream
-                        </CardTitle>
-                        <CardDescription className="text-slate-400 text-xs mt-1">
-                            Real-time streaming audit log for Plex, Tautulli, download indexers, library scanners, AI agents, and system health.
+                        <div className="flex items-center gap-2.5">
+                            <CardTitle className="text-xl font-bold flex items-center gap-2 text-slate-100">
+                                <Terminal className="h-5 w-5 text-emerald-400" />
+                                Live System & Diagnostic Activity Stream
+                            </CardTitle>
+                            {autoRefresh && (
+                                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                    </span>
+                                    Live (2s)
+                                </span>
+                            )}
+                            {newLogsCount > 0 && (
+                                <Badge className="bg-blue-500/25 text-blue-300 border-blue-500/40 text-[10px] animate-pulse">
+                                    +{newLogsCount} new
+                                </Badge>
+                            )}
+                        </div>
+                        <CardDescription className="text-slate-400 text-xs mt-1 flex items-center gap-3">
+                            <span>Real-time streaming audit log for Plex, Tautulli, download indexers, library scanners, AI agents, and system health.</span>
+                            {lastPolledTime && (
+                                <span className="text-slate-500 text-[11px] font-mono hidden md:inline">
+                                    (Last synced: {lastPolledTime})
+                                </span>
+                            )}
                         </CardDescription>
                     </div>
 
@@ -240,7 +350,7 @@ export default function SystemLogsViewer() {
                         <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={fetchLogs} 
+                            onClick={() => fetchLogs(false)} 
                             disabled={loading}
                             className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
                         >
