@@ -50,7 +50,13 @@ import {
     getMdblistRatings, 
     getMdblistItems 
 } from "@/lib/curation/mdblist";
-import { COLLECTION_PRESETS, CollectionPreset } from "@/lib/curation/presets";
+import { 
+    COLLECTION_PRESETS, 
+    CollectionPreset,
+    BadgePresetPack,
+    DiscoveredBadgeItem,
+    PRESET_BADGE_PACKS 
+} from "@/lib/curation/presets";
 import {
     applyParentalTagsToLibrary,
     clearParentalTagsFromLibrary,
@@ -2146,134 +2152,6 @@ export async function saveItemParentalAdvisoryAction(
     await saveParentalAdvisory(ratingKey, serverId, title, advisory);
     return { success: true };
 }
-
-export interface DiscoveredBadgeItem {
-    id: string;
-    name: string;
-    filename: string;
-    path: string;
-    size: number;
-    downloadUrl: string;
-    previewUrl: string;
-    category: "resolution" | "hdr" | "codec" | "audio" | "edition" | "ratings" | "ribbon" | "studio" | "custom";
-    suggestedMatchRule: string;
-    suggestedPosition: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
-    width: number;
-    height: number;
-    is2x?: boolean;
-}
-
-export interface BadgePresetPack {
-    id: string;
-    title: string;
-    author: string;
-    description: string;
-    repoUrl: string;
-    badgeCount?: number;
-    category: "minimalist" | "codecs" | "editions" | "ratings" | "official" | "streaming";
-    icon: string;
-    previewUrls?: string[];
-}
-
-export const PRESET_BADGE_PACKS: BadgePresetPack[] = [
-    {
-        id: "jmxd-all",
-        title: "jmxd Minimalist Overlays (Full Collection)",
-        author: "jmxd",
-        description: "The complete iconic minimalist dark overlay set for Kometa & Plex. Includes 4K, HDR, Dolby Vision, Atmos, TrueHD, DTS:X, and special edition cuts.",
-        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images",
-        category: "minimalist",
-        icon: "💎",
-        previewUrls: [
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/resolution/Ultra-HD.png",
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/codec/DV-HDR-TrueHD-Atmos.png",
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/edition/IMAX.png"
-        ]
-    },
-    {
-        id: "jmxd-codecs",
-        title: "jmxd Video & Audio Codecs",
-        author: "jmxd",
-        description: "Comprehensive audio/video codec badges including Dolby Vision, Dolby Atmos, TrueHD 7.1, DTS:X, DTS-HD MA, and Digital Plus.",
-        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images/media_info/codec",
-        category: "codecs",
-        icon: "🔊",
-        previewUrls: [
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/codec/DV-Atmos.png",
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/codec/TrueHD-Atmos.png",
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/codec/DTS-X.png"
-        ]
-    },
-    {
-        id: "jmxd-editions",
-        title: "jmxd Special Editions & Cuts",
-        author: "jmxd",
-        description: "IMAX Enhanced, The Criterion Collection, Director's Cut, Extended Edition, Remastered, Theatrical, and Unrated cuts.",
-        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images/media_info/edition",
-        category: "editions",
-        icon: "🎞️",
-        previewUrls: [
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/edition/IMAX.png",
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/edition/Directors-Cut.png",
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/edition/Extended-Edition.png"
-        ]
-    },
-    {
-        id: "jmxd-resolutions",
-        title: "jmxd Resolution Badges (4K & 1080p)",
-        author: "jmxd",
-        description: "Ultra-HD (4K UHD) and 1080P Full HD minimalist badges with @2x retina scaling assets.",
-        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images/media_info/resolution",
-        category: "minimalist",
-        icon: "📺",
-        previewUrls: [
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/resolution/Ultra-HD.png",
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/media_info/resolution/1080P.png"
-        ]
-    },
-    {
-        id: "jmxd-audience",
-        title: "jmxd Audience Scores & Ratings",
-        author: "jmxd",
-        description: "Audience score and critic rating overlays with tiered colors for Rotten Tomatoes and IMDb.",
-        repoUrl: "https://github.com/jmxd/Kometa/tree/main/overlays/images/audience_score",
-        category: "ratings",
-        icon: "🍅",
-        previewUrls: [
-            "https://raw.githubusercontent.com/jmxd/Kometa/main/overlays/images/audience_score/tomato_fresh.png"
-        ]
-    },
-    {
-        id: "kometa-default",
-        title: "Kometa Team Official Default Images",
-        author: "Kometa Team",
-        description: "The official master default image collection for Kometa, Plex Meta Manager, and Agregarr ecosystems.",
-        repoUrl: "https://github.com/Kometa-Team/Default-Images",
-        category: "official",
-        icon: "🛡️",
-        previewUrls: []
-    },
-    {
-        id: "kometa-streaming",
-        title: "Kometa Streaming Services & Studios",
-        author: "Kometa Team",
-        description: "Logos and watermarks for Netflix, HBO Max, Disney+, Apple TV+, Prime Video, Paramount+, Hulu, and Peacock.",
-        repoUrl: "https://github.com/Kometa-Team/Default-Images/tree/master/streaming",
-        category: "streaming",
-        icon: "🎬",
-        previewUrls: []
-    },
-    {
-        id: "kometa-ratings",
-        title: "Kometa Content & Age Ratings",
-        author: "Kometa Team",
-        description: "Official MPAA & TV Parental Guidelines age rating badges (G, PG, PG-13, R, NC-17, TV-MA).",
-        repoUrl: "https://github.com/Kometa-Team/Default-Images/tree/master/content_rating",
-        category: "ratings",
-        icon: "🏷️",
-        previewUrls: []
-    }
-];
 
 function parseGitHubRepoUrl(input: string): { owner: string; repo: string; branch: string; subpath: string } | null {
     if (!input || !input.trim()) return null;

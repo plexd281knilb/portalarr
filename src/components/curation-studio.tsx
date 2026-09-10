@@ -44,12 +44,15 @@ import {
     saveItemParentalAdvisoryAction,
     fetchGitHubBadgeRepoAction,
     importGitHubBadgesAction,
-    getPresetBadgePacksAction,
-    PRESET_BADGE_PACKS,
-    DiscoveredBadgeItem,
-    BadgePresetPack
+    getPresetBadgePacksAction
 } from "@/app/curation-actions";
-import { COLLECTION_PRESETS, CollectionPreset } from "@/lib/curation/presets";
+import { 
+    COLLECTION_PRESETS, 
+    CollectionPreset,
+    PRESET_BADGE_PACKS,
+    BadgePresetPack,
+    DiscoveredBadgeItem
+} from "@/lib/curation/presets";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
