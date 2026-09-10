@@ -221,7 +221,57 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "renewalMonth" INTEGER DEFAULT 1,
                     "renewalDay" INTEGER DEFAULT 1,
                     "billingType" TEXT DEFAULT 'YEARLY_PRORATED',
-                    "requireReferralForSignup" BOOLEAN NOT NULL DEFAULT 0
+                    "requireReferralForSignup" BOOLEAN NOT NULL DEFAULT 0,
+                    "emailNotificationsEnabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "notifyUserApproval" BOOLEAN NOT NULL DEFAULT 1,
+                    "notifyAdminNewUserRequest" BOOLEAN NOT NULL DEFAULT 1,
+                    "notifyPasswordReset" BOOLEAN NOT NULL DEFAULT 1,
+                    "notifyMediaRequests" BOOLEAN NOT NULL DEFAULT 1,
+                    "notifySupportTickets" BOOLEAN NOT NULL DEFAULT 1,
+                    "notifySendToKindle" BOOLEAN NOT NULL DEFAULT 1,
+                    "tmdbApiKey" TEXT,
+                    "traktClientId" TEXT,
+                    "mdblistApiKey" TEXT,
+                    "autoOverlaySync" BOOLEAN NOT NULL DEFAULT 1,
+                    "autoCollectionSync" BOOLEAN NOT NULL DEFAULT 1,
+                    "leavingSoonDiskThreshold" INTEGER DEFAULT 15,
+                    "enableAutoPruneDeletion" BOOLEAN NOT NULL DEFAULT 0,
+                    "pruneDryRun" BOOLEAN NOT NULL DEFAULT 1,
+                    "pruneTagCollection" BOOLEAN NOT NULL DEFAULT 1,
+                    "pruneApplyOverlays" BOOLEAN NOT NULL DEFAULT 1,
+                    "pruneDeleteFromArr" BOOLEAN NOT NULL DEFAULT 0,
+                    "pruneDeleteFromDisk" BOOLEAN NOT NULL DEFAULT 0,
+                    "pruneDaysNotice" INTEGER DEFAULT 14,
+                    "pruneMinAgeDays" INTEGER DEFAULT 90,
+                    "pruneUnwatchedOnly" BOOLEAN NOT NULL DEFAULT 1,
+                    "enabledServersForOverlays" TEXT,
+                    "enabledServersForCollections" TEXT,
+                    "enabledServersForPruning" TEXT,
+                    "comingSoonShares" TEXT,
+                    "serverStorageConfig" TEXT,
+                    "placeholderTheatricalNoticeDays" INTEGER DEFAULT 60,
+                    "placeholderDigitalCountdownDays" INTEGER DEFAULT 30,
+                    "placeholderNowStreamingGraceDays" INTEGER DEFAULT 7,
+                    "placeholderAutoPruneDays" INTEGER DEFAULT 14,
+                    "placeholderBannerPosition" TEXT DEFAULT 'bottom',
+                    "placeholderBannerTheme" TEXT DEFAULT 'indigo-purple',
+                    "placeholderCustomText" TEXT,
+                    "placeholderEnabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "leavingSoonPromotedToHome" BOOLEAN NOT NULL DEFAULT 1,
+                    "leavingSoonPromotedToRecommended" BOOLEAN NOT NULL DEFAULT 1,
+                    "leavingSoonPromotedToSharedHome" BOOLEAN NOT NULL DEFAULT 1,
+                    "leavingSoonHomeOrder" INTEGER DEFAULT 0,
+                    "leavingSoonAutoThresholdDays" INTEGER DEFAULT 14,
+                    "leavingSoonAutoHideEmpty" BOOLEAN NOT NULL DEFAULT 1,
+                    "curationSyncEnabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "curationSyncSchedule" TEXT DEFAULT 'every_6_hours',
+                    "curationSyncCron" TEXT,
+                    "curationSyncOverlays" BOOLEAN NOT NULL DEFAULT 1,
+                    "curationSyncCollections" BOOLEAN NOT NULL DEFAULT 1,
+                    "curationSyncReleases" BOOLEAN NOT NULL DEFAULT 1,
+                    "curationSyncPruning" BOOLEAN NOT NULL DEFAULT 1,
+                    "curationLastRunAt" DATETIME,
+                    "curationLastRunStatus" TEXT
                 );
             `);
 
@@ -268,21 +318,44 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["mdblistApiKey", `ALTER TABLE "Settings" ADD COLUMN "mdblistApiKey" TEXT;`],
                 ["autoOverlaySync", `ALTER TABLE "Settings" ADD COLUMN "autoOverlaySync" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["autoCollectionSync", `ALTER TABLE "Settings" ADD COLUMN "autoCollectionSync" BOOLEAN NOT NULL DEFAULT 1;`],
-                ["leavingSoonDiskThreshold", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonDiskThreshold" INTEGER NOT NULL DEFAULT 15;`],
+                ["leavingSoonDiskThreshold", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonDiskThreshold" INTEGER DEFAULT 15;`],
                 ["enableAutoPruneDeletion", `ALTER TABLE "Settings" ADD COLUMN "enableAutoPruneDeletion" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["pruneDryRun", `ALTER TABLE "Settings" ADD COLUMN "pruneDryRun" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["pruneTagCollection", `ALTER TABLE "Settings" ADD COLUMN "pruneTagCollection" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["pruneApplyOverlays", `ALTER TABLE "Settings" ADD COLUMN "pruneApplyOverlays" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["pruneDeleteFromArr", `ALTER TABLE "Settings" ADD COLUMN "pruneDeleteFromArr" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["pruneDeleteFromDisk", `ALTER TABLE "Settings" ADD COLUMN "pruneDeleteFromDisk" BOOLEAN NOT NULL DEFAULT 0;`],
-                ["pruneDaysNotice", `ALTER TABLE "Settings" ADD COLUMN "pruneDaysNotice" INTEGER NOT NULL DEFAULT 14;`],
-                ["pruneMinAgeDays", `ALTER TABLE "Settings" ADD COLUMN "pruneMinAgeDays" INTEGER NOT NULL DEFAULT 90;`],
+                ["pruneDaysNotice", `ALTER TABLE "Settings" ADD COLUMN "pruneDaysNotice" INTEGER DEFAULT 14;`],
+                ["pruneMinAgeDays", `ALTER TABLE "Settings" ADD COLUMN "pruneMinAgeDays" INTEGER DEFAULT 90;`],
                 ["pruneUnwatchedOnly", `ALTER TABLE "Settings" ADD COLUMN "pruneUnwatchedOnly" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["enabledServersForOverlays", `ALTER TABLE "Settings" ADD COLUMN "enabledServersForOverlays" TEXT;`],
                 ["enabledServersForCollections", `ALTER TABLE "Settings" ADD COLUMN "enabledServersForCollections" TEXT;`],
                 ["enabledServersForPruning", `ALTER TABLE "Settings" ADD COLUMN "enabledServersForPruning" TEXT;`],
                 ["comingSoonShares", `ALTER TABLE "Settings" ADD COLUMN "comingSoonShares" TEXT;`],
-                ["serverStorageConfig", `ALTER TABLE "Settings" ADD COLUMN "serverStorageConfig" TEXT;`]
+                ["serverStorageConfig", `ALTER TABLE "Settings" ADD COLUMN "serverStorageConfig" TEXT;`],
+                ["placeholderTheatricalNoticeDays", `ALTER TABLE "Settings" ADD COLUMN "placeholderTheatricalNoticeDays" INTEGER DEFAULT 60;`],
+                ["placeholderDigitalCountdownDays", `ALTER TABLE "Settings" ADD COLUMN "placeholderDigitalCountdownDays" INTEGER DEFAULT 30;`],
+                ["placeholderNowStreamingGraceDays", `ALTER TABLE "Settings" ADD COLUMN "placeholderNowStreamingGraceDays" INTEGER DEFAULT 7;`],
+                ["placeholderAutoPruneDays", `ALTER TABLE "Settings" ADD COLUMN "placeholderAutoPruneDays" INTEGER DEFAULT 14;`],
+                ["placeholderBannerPosition", `ALTER TABLE "Settings" ADD COLUMN "placeholderBannerPosition" TEXT DEFAULT 'bottom';`],
+                ["placeholderBannerTheme", `ALTER TABLE "Settings" ADD COLUMN "placeholderBannerTheme" TEXT DEFAULT 'indigo-purple';`],
+                ["placeholderCustomText", `ALTER TABLE "Settings" ADD COLUMN "placeholderCustomText" TEXT;`],
+                ["placeholderEnabled", `ALTER TABLE "Settings" ADD COLUMN "placeholderEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["leavingSoonPromotedToHome", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonPromotedToHome" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["leavingSoonPromotedToRecommended", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonPromotedToRecommended" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["leavingSoonPromotedToSharedHome", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonPromotedToSharedHome" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["leavingSoonHomeOrder", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonHomeOrder" INTEGER DEFAULT 0;`],
+                ["leavingSoonAutoThresholdDays", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonAutoThresholdDays" INTEGER DEFAULT 14;`],
+                ["leavingSoonAutoHideEmpty", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonAutoHideEmpty" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["curationSyncEnabled", `ALTER TABLE "Settings" ADD COLUMN "curationSyncEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["curationSyncSchedule", `ALTER TABLE "Settings" ADD COLUMN "curationSyncSchedule" TEXT DEFAULT 'every_6_hours';`],
+                ["curationSyncCron", `ALTER TABLE "Settings" ADD COLUMN "curationSyncCron" TEXT;`],
+                ["curationSyncOverlays", `ALTER TABLE "Settings" ADD COLUMN "curationSyncOverlays" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["curationSyncCollections", `ALTER TABLE "Settings" ADD COLUMN "curationSyncCollections" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["curationSyncReleases", `ALTER TABLE "Settings" ADD COLUMN "curationSyncReleases" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["curationSyncPruning", `ALTER TABLE "Settings" ADD COLUMN "curationSyncPruning" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["curationLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "curationLastRunAt" DATETIME;`],
+                ["curationLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "curationLastRunStatus" TEXT;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -441,6 +514,21 @@ export async function ensureSchemaColumns(): Promise<void> {
 
         // --- 5. LIBRARY TABLE ---
         try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "Library" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL UNIQUE,
+                    "description" TEXT,
+                    "path" TEXT NOT NULL DEFAULT '',
+                    "allowedUsers" TEXT NOT NULL DEFAULT '',
+                    "restrictedUsers" TEXT NOT NULL DEFAULT '',
+                    "downloadCategory" TEXT NOT NULL DEFAULT 'books',
+                    "mediaType" TEXT NOT NULL DEFAULT 'ebook',
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
             const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Library");`);
             const columns = tableInfo.map((c: any) => c.name);
 
@@ -468,6 +556,25 @@ export async function ensureSchemaColumns(): Promise<void> {
 
         // --- 6. BOOK TABLE ---
         try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "Book" (
+                    "id" TEXT PRIMARY KEY,
+                    "title" TEXT NOT NULL,
+                    "author" TEXT,
+                    "series" TEXT,
+                    "volumeNumber" TEXT,
+                    "coverUrl" TEXT,
+                    "filePath" TEXT NOT NULL,
+                    "fileSize" REAL,
+                    "fileType" TEXT NOT NULL,
+                    "mediaType" TEXT NOT NULL DEFAULT 'ebook',
+                    "libraryId" TEXT NOT NULL,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "Book_libraryId_fkey" FOREIGN KEY ("libraryId") REFERENCES "Library" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+
             const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Book");`);
             const columns = tableInfo.map((c: any) => c.name);
             if (!columns.includes("mediaType")) {
@@ -479,10 +586,35 @@ export async function ensureSchemaColumns(): Promise<void> {
             if (!columns.includes("volumeNumber")) {
                 await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "volumeNumber" TEXT;`);
             }
+            if (!columns.includes("coverUrl")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "coverUrl" TEXT;`);
+            }
+            if (!columns.includes("fileSize")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "fileSize" REAL;`);
+            }
         } catch (e: any) {}
 
         // --- 7. BOOK REQUEST TABLE ---
         try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "BookRequest" (
+                    "id" TEXT PRIMARY KEY,
+                    "title" TEXT NOT NULL,
+                    "author" TEXT,
+                    "series" TEXT,
+                    "volumeNumber" TEXT,
+                    "coverUrl" TEXT,
+                    "publishYear" TEXT,
+                    "requestedBy" TEXT NOT NULL,
+                    "type" TEXT NOT NULL DEFAULT 'book',
+                    "mediaType" TEXT NOT NULL DEFAULT 'ebook',
+                    "status" TEXT NOT NULL DEFAULT 'Pending',
+                    "monitorSeries" BOOLEAN NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
             const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("BookRequest");`);
             const columns = tableInfo.map((c: any) => c.name);
             if (!columns.includes("mediaType")) {
@@ -499,6 +631,12 @@ export async function ensureSchemaColumns(): Promise<void> {
             }
             if (!columns.includes("monitorSeries")) {
                 await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "monitorSeries" BOOLEAN DEFAULT 0;`);
+            }
+            if (!columns.includes("coverUrl")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "coverUrl" TEXT;`);
+            }
+            if (!columns.includes("publishYear")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "publishYear" TEXT;`);
             }
         } catch (e: any) {}
 
@@ -652,10 +790,44 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "autoSync" BOOLEAN NOT NULL DEFAULT 1,
                     "syncInterval" TEXT NOT NULL DEFAULT 'daily',
                     "lastSyncedAt" DATETIME,
+                    "orderIndex" INTEGER NOT NULL DEFAULT 0,
+                    "promotedToHome" BOOLEAN NOT NULL DEFAULT 1,
+                    "promotedToRecommended" BOOLEAN NOT NULL DEFAULT 1,
+                    "promotedToSharedHome" BOOLEAN NOT NULL DEFAULT 1,
+                    "sortPrefix" TEXT DEFAULT '!00_',
+                    "isSeasonal" BOOLEAN NOT NULL DEFAULT 0,
+                    "scheduleStartMonth" INTEGER,
+                    "scheduleStartDay" INTEGER,
+                    "scheduleEndMonth" INTEGER,
+                    "scheduleEndDay" INTEGER,
+                    "seasonalAction" TEXT DEFAULT 'promote_hide',
                     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             `);
+
+            try {
+                const colTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaCollection");`);
+                const collCols = colTableInfo.map((c: any) => c.name);
+                const collAddCols: [string, string][] = [
+                    ["orderIndex", `ALTER TABLE "MediaCollection" ADD COLUMN "orderIndex" INTEGER NOT NULL DEFAULT 0;`],
+                    ["promotedToHome", `ALTER TABLE "MediaCollection" ADD COLUMN "promotedToHome" BOOLEAN NOT NULL DEFAULT 1;`],
+                    ["promotedToRecommended", `ALTER TABLE "MediaCollection" ADD COLUMN "promotedToRecommended" BOOLEAN NOT NULL DEFAULT 1;`],
+                    ["promotedToSharedHome", `ALTER TABLE "MediaCollection" ADD COLUMN "promotedToSharedHome" BOOLEAN NOT NULL DEFAULT 1;`],
+                    ["sortPrefix", `ALTER TABLE "MediaCollection" ADD COLUMN "sortPrefix" TEXT DEFAULT '!00_';`],
+                    ["isSeasonal", `ALTER TABLE "MediaCollection" ADD COLUMN "isSeasonal" BOOLEAN NOT NULL DEFAULT 0;`],
+                    ["scheduleStartMonth", `ALTER TABLE "MediaCollection" ADD COLUMN "scheduleStartMonth" INTEGER;`],
+                    ["scheduleStartDay", `ALTER TABLE "MediaCollection" ADD COLUMN "scheduleStartDay" INTEGER;`],
+                    ["scheduleEndMonth", `ALTER TABLE "MediaCollection" ADD COLUMN "scheduleEndMonth" INTEGER;`],
+                    ["scheduleEndDay", `ALTER TABLE "MediaCollection" ADD COLUMN "scheduleEndDay" INTEGER;`],
+                    ["seasonalAction", `ALTER TABLE "MediaCollection" ADD COLUMN "seasonalAction" TEXT DEFAULT 'promote_hide';`]
+                ];
+                for (const [colName, ddl] of collAddCols) {
+                    if (!collCols.includes(colName)) {
+                        try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                    }
+                }
+            } catch (e) {}
 
             await prisma.$executeRawUnsafe(`
                 CREATE TABLE IF NOT EXISTS "MediaOverlayRule" (
@@ -665,6 +837,15 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "sectionKey" TEXT,
                     "overlayType" TEXT NOT NULL DEFAULT 'combined',
                     "position" TEXT NOT NULL DEFAULT 'top-right',
+                    "videoPosition" TEXT DEFAULT 'top-right',
+                    "audioPosition" TEXT DEFAULT 'top-left',
+                    "editionPosition" TEXT DEFAULT 'bottom-right',
+                    "ratingPosition" TEXT DEFAULT 'bottom-left',
+                    "showRibbon" BOOLEAN NOT NULL DEFAULT 0,
+                    "ribbonPosition" TEXT NOT NULL DEFAULT 'top-right',
+                    "ribbonTheme" TEXT NOT NULL DEFAULT 'purple',
+                    "ribbonText" TEXT,
+                    "ribbonType" TEXT NOT NULL DEFAULT 'auto_quality',
                     "theme" TEXT NOT NULL DEFAULT 'glass',
                     "badgeStyle" TEXT NOT NULL DEFAULT 'pill',
                     "showResolution" BOOLEAN NOT NULL DEFAULT 1,
@@ -672,6 +853,12 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "showAudio" BOOLEAN NOT NULL DEFAULT 1,
                     "showRatings" BOOLEAN NOT NULL DEFAULT 0,
                     "showLeavingSoon" BOOLEAN NOT NULL DEFAULT 1,
+                    "showAudioChannels" BOOLEAN NOT NULL DEFAULT 0,
+                    "showCodec" BOOLEAN NOT NULL DEFAULT 0,
+                    "showEdition" BOOLEAN NOT NULL DEFAULT 0,
+                    "showStudio" BOOLEAN NOT NULL DEFAULT 0,
+                    "showContentRating" BOOLEAN NOT NULL DEFAULT 0,
+                    "customBadgeIds" TEXT,
                     "enabled" BOOLEAN NOT NULL DEFAULT 1,
                     "itemCount" INTEGER NOT NULL DEFAULT 0,
                     "lastAppliedAt" DATETIME,
@@ -692,10 +879,56 @@ export async function ensureSchemaColumns(): Promise<void> {
                     ["ribbonPosition", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ribbonPosition" TEXT NOT NULL DEFAULT 'top-right';`],
                     ["ribbonTheme", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ribbonTheme" TEXT NOT NULL DEFAULT 'purple';`],
                     ["ribbonText", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ribbonText" TEXT;`],
-                    ["ribbonType", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ribbonType" TEXT NOT NULL DEFAULT 'auto_quality';`]
+                    ["ribbonType", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "ribbonType" TEXT NOT NULL DEFAULT 'auto_quality';`],
+                    ["showAudioChannels", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showAudioChannels" BOOLEAN NOT NULL DEFAULT 0;`],
+                    ["showCodec", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showCodec" BOOLEAN NOT NULL DEFAULT 0;`],
+                    ["showEdition", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showEdition" BOOLEAN NOT NULL DEFAULT 0;`],
+                    ["showStudio", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showStudio" BOOLEAN NOT NULL DEFAULT 0;`],
+                    ["showContentRating", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showContentRating" BOOLEAN NOT NULL DEFAULT 0;`],
+                    ["customBadgeIds", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "customBadgeIds" TEXT;`]
                 ];
                 for (const [colName, ddl] of overlayAddCols) {
                     if (!overlayCols.includes(colName)) {
+                        try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                    }
+                }
+            } catch (e) {}
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "CustomBadge" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "category" TEXT NOT NULL DEFAULT 'custom',
+                    "filePath" TEXT NOT NULL,
+                    "fileType" TEXT NOT NULL DEFAULT 'png',
+                    "mimeType" TEXT NOT NULL DEFAULT 'image/png',
+                    "position" TEXT NOT NULL DEFAULT 'top-right',
+                    "width" INTEGER NOT NULL DEFAULT 140,
+                    "height" INTEGER NOT NULL DEFAULT 46,
+                    "opacity" REAL NOT NULL DEFAULT 1.0,
+                    "enabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "matchRule" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
+            try {
+                const badgeTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("CustomBadge");`);
+                const badgeCols = badgeTableInfo.map((c: any) => c.name);
+                const badgeAddCols: [string, string][] = [
+                    ["category", `ALTER TABLE "CustomBadge" ADD COLUMN "category" TEXT NOT NULL DEFAULT 'custom';`],
+                    ["fileType", `ALTER TABLE "CustomBadge" ADD COLUMN "fileType" TEXT NOT NULL DEFAULT 'png';`],
+                    ["mimeType", `ALTER TABLE "CustomBadge" ADD COLUMN "mimeType" TEXT NOT NULL DEFAULT 'image/png';`],
+                    ["position", `ALTER TABLE "CustomBadge" ADD COLUMN "position" TEXT NOT NULL DEFAULT 'top-right';`],
+                    ["width", `ALTER TABLE "CustomBadge" ADD COLUMN "width" INTEGER NOT NULL DEFAULT 140;`],
+                    ["height", `ALTER TABLE "CustomBadge" ADD COLUMN "height" INTEGER NOT NULL DEFAULT 46;`],
+                    ["opacity", `ALTER TABLE "CustomBadge" ADD COLUMN "opacity" REAL NOT NULL DEFAULT 1.0;`],
+                    ["enabled", `ALTER TABLE "CustomBadge" ADD COLUMN "enabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                    ["matchRule", `ALTER TABLE "CustomBadge" ADD COLUMN "matchRule" TEXT;`]
+                ];
+                for (const [colName, ddl] of badgeAddCols) {
+                    if (!badgeCols.includes(colName)) {
                         try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
                     }
                 }
