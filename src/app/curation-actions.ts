@@ -917,6 +917,13 @@ export async function saveOverlayRuleAction(data: {
     audioPosition?: string;
     editionPosition?: string;
     ratingPosition?: string;
+    resolutionPosition?: string;
+    hdrPosition?: string;
+    codecPosition?: string;
+    channelsPosition?: string;
+    studioPosition?: string;
+    contentRatingPosition?: string;
+    ratingsPosition?: string;
     showRibbon?: boolean;
     ribbonPosition?: string;
     ribbonTheme?: string;
@@ -949,6 +956,13 @@ export async function saveOverlayRuleAction(data: {
             audioPosition: data.audioPosition || "top-left",
             editionPosition: data.editionPosition || "bottom-right",
             ratingPosition: data.ratingPosition || "bottom-left",
+            resolutionPosition: data.resolutionPosition || data.videoPosition || data.position || "top-right",
+            hdrPosition: data.hdrPosition || data.videoPosition || data.position || "top-right",
+            codecPosition: data.codecPosition || data.videoPosition || data.position || "top-right",
+            channelsPosition: data.channelsPosition || data.audioPosition || "top-left",
+            studioPosition: data.studioPosition || data.editionPosition || "bottom-left",
+            contentRatingPosition: data.contentRatingPosition || data.ratingPosition || "bottom-left",
+            ratingsPosition: data.ratingsPosition || data.ratingPosition || "bottom-left",
             showRibbon: data.showRibbon ?? false,
             ribbonPosition: data.ribbonPosition || "top-right",
             ribbonTheme: data.ribbonTheme || "purple",
@@ -1018,6 +1032,15 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
             showContentRating: false,
             showRatings: false,
             position: "top-right",
+            resolutionPosition: "top-right",
+            hdrPosition: "top-right",
+            codecPosition: "top-right",
+            audioPosition: "top-left",
+            channelsPosition: "top-left",
+            editionPosition: "bottom-right",
+            studioPosition: "bottom-left",
+            contentRatingPosition: "bottom-left",
+            ratingsPosition: "bottom-left",
             theme: "glass",
             customBadges: activeCustomBadges.map(cb => ({
                 id: cb.id,
@@ -1049,6 +1072,13 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
                     audioPosition: (rule.audioPosition as any) || "top-left",
                     editionPosition: (rule.editionPosition as any) || "bottom-right",
                     ratingPosition: (rule.ratingPosition as any) || "bottom-left",
+                    resolutionPosition: (rule.resolutionPosition as any) || (rule.videoPosition as any) || (rule.position as any) || "top-right",
+                    hdrPosition: (rule.hdrPosition as any) || (rule.videoPosition as any) || (rule.position as any) || "top-right",
+                    codecPosition: (rule.codecPosition as any) || (rule.videoPosition as any) || (rule.position as any) || "top-right",
+                    channelsPosition: (rule.channelsPosition as any) || (rule.audioPosition as any) || "top-left",
+                    studioPosition: (rule.studioPosition as any) || (rule.editionPosition as any) || "bottom-left",
+                    contentRatingPosition: (rule.contentRatingPosition as any) || (rule.ratingPosition as any) || "bottom-left",
+                    ratingsPosition: (rule.ratingsPosition as any) || (rule.ratingPosition as any) || "bottom-left",
                     showRibbon: rule.showRibbon ?? false,
                     ribbonPosition: (rule.ribbonPosition as any) || "top-right",
                     ribbonTheme: (rule.ribbonTheme as any) || "purple",
@@ -1731,6 +1761,13 @@ export async function applyOverlayToSingleItemAction(
         audioPosition?: string;
         editionPosition?: string;
         ratingPosition?: string;
+        resolutionPosition?: string;
+        hdrPosition?: string;
+        codecPosition?: string;
+        channelsPosition?: string;
+        studioPosition?: string;
+        contentRatingPosition?: string;
+        ratingsPosition?: string;
         showRibbon?: boolean;
         ribbonPosition?: string;
         ribbonTheme?: string;
@@ -1776,6 +1813,13 @@ export async function applyOverlayToSingleItemAction(
                 audioPosition: (options?.audioPosition as any) || "top-left",
                 editionPosition: (options?.editionPosition as any) || "bottom-right",
                 ratingPosition: (options?.ratingPosition as any) || "bottom-left",
+                resolutionPosition: (options?.resolutionPosition as any) || (options?.videoPosition as any) || (options?.position as any) || "top-right",
+                hdrPosition: (options?.hdrPosition as any) || (options?.videoPosition as any) || (options?.position as any) || "top-right",
+                codecPosition: (options?.codecPosition as any) || (options?.videoPosition as any) || (options?.position as any) || "top-right",
+                channelsPosition: (options?.channelsPosition as any) || (options?.audioPosition as any) || "top-left",
+                studioPosition: (options?.studioPosition as any) || (options?.editionPosition as any) || "bottom-left",
+                contentRatingPosition: (options?.contentRatingPosition as any) || (options?.ratingPosition as any) || "bottom-left",
+                ratingsPosition: (options?.ratingsPosition as any) || (options?.ratingPosition as any) || "bottom-left",
                 showRibbon: options?.showRibbon ?? false,
                 ribbonPosition: (options?.ribbonPosition as any) || "top-right",
                 ribbonTheme: (options?.ribbonTheme as any) || "purple",

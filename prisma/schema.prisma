@@ -348,6 +348,13 @@ model MediaOverlayRule {
   audioPosition     String?   @default("top-left")
   editionPosition   String?   @default("bottom-right")
   ratingPosition    String?   @default("bottom-left")
+  resolutionPosition String?   @default("top-right")
+  hdrPosition       String?   @default("top-right")
+  codecPosition     String?   @default("top-right")
+  channelsPosition  String?   @default("top-left")
+  studioPosition    String?   @default("bottom-left")
+  contentRatingPosition String? @default("bottom-left")
+  ratingsPosition   String?   @default("bottom-left")
   showRibbon        Boolean   @default(false)
   ribbonPosition    String    @default("top-right") // "top-right", "top-left", "bottom-right", "bottom-left"
   ribbonTheme       String    @default("purple")    // "crimson", "emerald", "purple", "gold", "cyan", "pink", "glass", "orange"

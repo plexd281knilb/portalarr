@@ -136,9 +136,15 @@ export default function CurationStudio() {
     const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal">("glass");
     const [simPosition, setSimPosition] = useState<"top-right" | "top-left" | "bottom-right">("top-right");
     const [simVideoPosition, setSimVideoPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-right");
+    const [simResolutionPosition, setSimResolutionPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-right");
+    const [simHdrPosition, setSimHdrPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-right");
+    const [simCodecPosition, setSimCodecPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-right");
     const [simAudioPosition, setSimAudioPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-left");
+    const [simChannelsPosition, setSimChannelsPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-left");
     const [simEditionPosition, setSimEditionPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("bottom-right");
+    const [simStudioPosition, setSimStudioPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("bottom-left");
     const [simRatingPosition, setSimRatingPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("bottom-left");
+    const [simRatingsPosition, setSimRatingsPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("bottom-left");
     const [simShowRibbon, setSimShowRibbon] = useState(false);
     const [simRibbonPosition, setSimRibbonPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left">("top-right");
     const [simRibbonTheme, setSimRibbonTheme] = useState<"purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange">("purple");
@@ -650,9 +656,16 @@ export default function CurationStudio() {
                 overlayType: "combined",
                 position: simPosition,
                 videoPosition: simVideoPosition,
+                resolutionPosition: simResolutionPosition,
+                hdrPosition: simHdrPosition,
+                codecPosition: simCodecPosition,
                 audioPosition: simAudioPosition,
+                channelsPosition: simChannelsPosition,
                 editionPosition: simEditionPosition,
+                studioPosition: simStudioPosition,
                 ratingPosition: simRatingPosition,
+                contentRatingPosition: simRatingPosition,
+                ratingsPosition: simRatingsPosition,
                 showRibbon: simShowRibbon,
                 ribbonPosition: simRibbonPosition,
                 ribbonTheme: simRibbonTheme,
@@ -958,9 +971,16 @@ export default function CurationStudio() {
                 {
                     position: simPosition,
                     videoPosition: simVideoPosition,
+                    resolutionPosition: simResolutionPosition,
+                    hdrPosition: simHdrPosition,
+                    codecPosition: simCodecPosition,
                     audioPosition: simAudioPosition,
+                    channelsPosition: simChannelsPosition,
                     editionPosition: simEditionPosition,
+                    studioPosition: simStudioPosition,
                     ratingPosition: simRatingPosition,
+                    contentRatingPosition: simRatingPosition,
+                    ratingsPosition: simRatingsPosition,
                     showRibbon: simShowRibbon,
                     ribbonPosition: simRibbonPosition,
                     ribbonTheme: simRibbonTheme,
@@ -1260,97 +1280,141 @@ export default function CurationStudio() {
     const renderBadgesForPosition = (pos: string) => {
         const badges: React.ReactNode[] = [];
 
-        // Video badges (Resolution, HDR, Codec)
-        if (simVideoPosition === pos) {
-            if (simResolution !== "none") {
-                badges.push(
-                    <div key="res" className={`px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-md ${
-                        simTheme === "gold" 
-                            ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
-                            : 'bg-slate-950/90 text-white border-amber-400/80'
-                    }`}>
-                        <span>{simResolution}</span>
-                        {simResolution === "4K" && <span className="text-[8px] opacity-70 border-l border-current pl-1 ml-0.5">UHD</span>}
-                    </div>
-                );
-            }
-            if (simHdr !== "none") {
-                badges.push(
-                    <div key="hdr" className="px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-md">
-                        {simHdr === "DV" ? "DOLBY VISION" : simHdr}
-                    </div>
-                );
-            }
-            if (simCodec !== "none") {
-                badges.push(
-                    <div key="codec" className="px-1.5 py-0.5 rounded-md border border-emerald-400/70 bg-slate-950/90 text-emerald-300 text-[8px] font-black tracking-wider shadow-md">
-                        {simCodec}
-                    </div>
-                );
-            }
-        }
-
-        // Audio badges (Audio format, Surround Channels)
-        if (simAudioPosition === pos) {
-            if (simAudio !== "none") {
-                badges.push(
-                    <div key="audio" className="px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-md">
-                        {simAudio === "ATMOS" ? "DOLBY ATMOS" : simAudio}
-                    </div>
-                );
-            }
-            if (simChannels !== "none") {
-                badges.push(
-                    <div key="channels" className="px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-md">
-                        {simChannels} SURROUND
-                    </div>
-                );
-            }
-        }
-
-        // Edition & Studio badges
-        if (simEditionPosition === pos) {
-            if (simEdition !== "none") {
-                badges.push(
-                    <div key="edition" className="px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-md">
-                        {simEdition}
-                    </div>
-                );
-            }
-            if (simStudio !== "none") {
-                badges.push(
-                    <div key="studio" className="px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-md">
-                        {simStudio}
-                    </div>
-                );
-            }
-            if (simRating !== "none") {
-                badges.push(
-                    <div key="rating" className="px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider shadow-md">
-                        {simRating}
-                    </div>
-                );
-            }
-        }
-
-        // Community Ratings badge
-        if (simRatingPosition === pos && simRatings) {
+        // 1. Resolution (4K UHD / 1080p FHD)
+        if (simResolutionPosition === pos && simResolution !== "none") {
             badges.push(
-                <div key="ratings" className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-950/90 border border-slate-600/80 shadow-lg text-[10px]">
-                    <div className="bg-yellow-400 text-black font-black px-1 rounded text-[9px]">IMDb</div>
-                    <span className="font-bold text-white">8.6</span>
-                    <span className="text-xs">🍅</span>
-                    <span className="font-bold text-white">94%</span>
+                <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
+                    simTheme === "gold" 
+                        ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
+                        : 'bg-slate-950/90 text-white border-amber-400/80'
+                }`}>
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    <span>{simResolution}</span>
+                    {simResolution === "4K" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>}
+                    {simResolution === "1080p" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-sky-300">FHD</span>}
                 </div>
             );
         }
 
-        // Custom Badges assigned to this position
+        // 2. HDR / Dolby Vision
+        if (simHdrPosition === pos && simHdr !== "none") {
+            badges.push(
+                <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {simHdr === "DV" ? (
+                        <>
+                            <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
+                            <span>DOLBY VISION</span>
+                        </>
+                    ) : (
+                        <span>{simHdr}</span>
+                    )}
+                </div>
+            );
+        }
+
+        // 3. Video Codec (HEVC / AV1 / AVC / ProRes)
+        if (simCodecPosition === pos && simCodec !== "none") {
+            badges.push(
+                <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {simCodec === "HEVC" ? "HEVC • 10b" : simCodec === "AV1" ? "AV1 • HDR" : simCodec}
+                </div>
+            );
+        }
+
+        // 4. Audio format (Dolby Atmos / TrueHD / DTS:X / 5.1)
+        if (simAudioPosition === pos && simAudio !== "none") {
+            badges.push(
+                <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {simAudio === "ATMOS" ? "DOLBY ATMOS" : simAudio === "TRUEHD" ? "TRUEHD 7.1" : simAudio}
+                </div>
+            );
+        }
+
+        // 5. Audio Surround Channels (7.1 / 5.1 / 2.0)
+        if (simChannelsPosition === pos && simChannels !== "none") {
+            badges.push(
+                <div key="channels" className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {simChannels} SURROUND
+                </div>
+            );
+        }
+
+        // 6. Edition Cuts (IMAX / Criterion / Extended / Director's Cut / Remux)
+        if (simEditionPosition === pos && simEdition !== "none") {
+            badges.push(
+                <div key="edition" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${
+                    simEdition === "IMAX" 
+                        ? 'border-sky-400 bg-slate-950/95 text-sky-300' 
+                        : simEdition === "CRITERION" 
+                            ? 'border-amber-400 bg-slate-950/95 text-amber-300'
+                            : simEdition === "REMUX"
+                                ? 'border-emerald-400 bg-slate-950/95 text-emerald-300'
+                                : 'border-pink-400 bg-slate-950/95 text-pink-300'
+                }`}>
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {simEdition === "IMAX" ? "IMAX ENHANCED" : simEdition === "REMUX" ? "REMUX • LOSSLESS" : simEdition}
+                </div>
+            );
+        }
+
+        // 7. Studio / Network Logos (HBO / Disney+ / Netflix / Apple TV+ / etc.)
+        if (simStudioPosition === pos && simStudio !== "none") {
+            badges.push(
+                <div key="studio" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${
+                    simStudio === "NETFLIX" ? 'border-red-500 text-red-400 bg-slate-950/95' :
+                    simStudio === "DISNEY+" ? 'border-sky-400 text-sky-300 bg-slate-950/95' :
+                    simStudio === "HBO" ? 'border-purple-500 text-purple-300 bg-slate-950/95' :
+                    simStudio === "APPLE TV+" ? 'border-slate-300 text-slate-200 bg-slate-950/95' :
+                    'border-indigo-400 text-indigo-200 bg-slate-950/95'
+                }`}>
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {simStudio}
+                </div>
+            );
+        }
+
+        // 8. Content Rating (G, PG, PG-13, R, NC-17, TV-MA)
+        if (simRatingPosition === pos && simRating !== "none") {
+            const isMature = simRating.includes("R") || simRating.includes("TV-MA") || simRating.includes("NC-17");
+            const isTeen = simRating.includes("PG-13") || simRating.includes("TV-14");
+            badges.push(
+                <div key="rating" className={`relative px-1.5 py-0.5 rounded border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${
+                    isMature ? 'border-rose-500 text-rose-300 bg-slate-950/90' :
+                    isTeen ? 'border-amber-500 text-amber-300 bg-slate-950/90' :
+                    'border-emerald-500 text-emerald-300 bg-slate-950/90'
+                }`}>
+                    <div className="absolute top-0 left-0.5 right-0.5 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {simRating}
+                </div>
+            );
+        }
+
+        // 9. Community Ratings (IMDb, Rotten Tomatoes, Metacritic)
+        if (simRatingsPosition === pos && simRatings) {
+            badges.push(
+                <div key="ratings" className="relative flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-950/95 border border-white/20 shadow-lg text-[10px] overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    <div className="bg-yellow-400 text-black font-black px-1 rounded text-[8.5px] leading-tight">IMDb</div>
+                    <span className="font-bold text-white text-[10px]">8.6</span>
+                    <span className="text-[10px]">🍅</span>
+                    <span className="font-bold text-white text-[10px]">94%</span>
+                    <span className="text-[10px]">🍿</span>
+                    <span className="font-bold text-white text-[10px]">92%</span>
+                </div>
+            );
+        }
+
+        // 10. Custom Badges assigned to this position
         if (simCustomBadgeId !== "none") {
             const cb = customBadges.find(b => b.id === simCustomBadgeId);
             if (cb && (cb.position || "top-right") === pos) {
                 badges.push(
-                    <div key="custom" className="px-2 py-1 rounded bg-purple-950/90 border border-purple-400 text-[9px] font-bold text-purple-200 shadow-lg flex items-center gap-1">
+                    <div key="custom" className="relative px-2 py-1 rounded bg-purple-950/90 border border-purple-400 text-[9px] font-bold text-purple-200 shadow-lg flex items-center gap-1 overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
                         <Sparkles className="h-3 w-3 text-purple-300" />
                         <span>{cb.name}</span>
                     </div>
@@ -1366,74 +1430,89 @@ export default function CurationStudio() {
         const badges: React.ReactNode[] = [];
         const detected = item?.detectedBadges || {};
 
-        if (simVideoPosition === pos) {
-            if (detected.resolution) {
-                badges.push(
-                    <div key="res" className={`px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-md ${
-                        simTheme === "gold" 
-                            ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
-                            : 'bg-slate-950/90 text-white border-amber-400/80'
-                    }`}>
-                        <span>{detected.resolution}</span>
-                        {detected.resolution === "4K" && <span className="text-[8px] opacity-70 border-l border-current pl-1 ml-0.5">UHD</span>}
-                    </div>
-                );
-            }
-            if (detected.hdr) {
-                badges.push(
-                    <div key="hdr" className="px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-md">
-                        {detected.hdr === "DV" ? "DOLBY VISION" : detected.hdr}
-                    </div>
-                );
-            }
-            if (detected.codec) {
-                badges.push(
-                    <div key="codec" className="px-1.5 py-0.5 rounded-md border border-emerald-400/70 bg-slate-950/90 text-emerald-300 text-[8px] font-black tracking-wider shadow-md">
-                        {detected.codec}
-                    </div>
-                );
-            }
+        if (detected.resolution && simResolutionPosition === pos) {
+            badges.push(
+                <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
+                    simTheme === "gold" 
+                        ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
+                        : 'bg-slate-950/90 text-white border-amber-400/80'
+                }`}>
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    <span>{detected.resolution}</span>
+                    {detected.resolution === "4K" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>}
+                    {detected.resolution === "1080p" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-sky-300">FHD</span>}
+                </div>
+            );
         }
 
-        if (simAudioPosition === pos) {
-            if (detected.audio) {
-                badges.push(
-                    <div key="audio" className="px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-md">
-                        {detected.audio}
-                    </div>
-                );
-            }
-            if (detected.audioChannels) {
-                badges.push(
-                    <div key="channels" className="px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-md">
-                        {detected.audioChannels}
-                    </div>
-                );
-            }
+        if (detected.hdr && simHdrPosition === pos) {
+            badges.push(
+                <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {detected.hdr === "DV" ? (
+                        <>
+                            <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
+                            <span>DOLBY VISION</span>
+                        </>
+                    ) : (
+                        <span>{detected.hdr}</span>
+                    )}
+                </div>
+            );
         }
 
-        if (simEditionPosition === pos) {
-            if (detected.edition) {
-                badges.push(
-                    <div key="edition" className="px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-md">
-                        {detected.edition}
-                    </div>
-                );
-            }
-            if (detected.studio) {
-                badges.push(
-                    <div key="studio" className="px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-md">
-                        {detected.studio}
-                    </div>
-                );
-            }
-            if (detected.contentRating) {
-                badges.push(
-                    <div key="rating" className="px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider shadow-md">
-                        {detected.contentRating}
-                    </div>
-                );
-            }
+        if (detected.codec && simCodecPosition === pos) {
+            badges.push(
+                <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {detected.codec}
+                </div>
+            );
+        }
+
+        if (detected.audio && simAudioPosition === pos) {
+            badges.push(
+                <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {detected.audio === "ATMOS" ? "DOLBY ATMOS" : detected.audio}
+                </div>
+            );
+        }
+
+        if (detected.audioChannels && simChannelsPosition === pos) {
+            badges.push(
+                <div key="channels" className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {detected.audioChannels} SURROUND
+                </div>
+            );
+        }
+
+        if (detected.edition && simEditionPosition === pos) {
+            badges.push(
+                <div key="edition" className="relative px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {detected.edition}
+                </div>
+            );
+        }
+
+        if (detected.studio && simStudioPosition === pos) {
+            badges.push(
+                <div key="studio" className="relative px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {detected.studio}
+                </div>
+            );
+        }
+
+        if (detected.contentRating && simRatingPosition === pos) {
+            badges.push(
+                <div key="rating" className="relative px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                    {detected.contentRating}
+                </div>
+            );
         }
 
         return badges;
@@ -2360,218 +2439,372 @@ export default function CurationStudio() {
                                         Select and customize format, audio channels, video codecs, edition cuts, and studio badges.
                                     </CardDescription>
                                 </CardHeader>
-                                <CardContent className="p-4 space-y-4 text-xs">
-                                    {/* Grid of Toggle Switches */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60">
-                                            <div className="space-y-0.5">
-                                                <Label className="font-semibold text-white">4K UHD Resolution</Label>
-                                                <p className="text-[10px] text-slate-400">Auto-detects 2160p stream</p>
-                                            </div>
-                                            <Switch 
-                                                checked={simResolution !== "none"} 
-                                                onCheckedChange={checked => setSimResolution(checked ? "4K" : "none")} 
-                                            />
+                                <CardContent className="p-4 space-y-3.5 text-xs">
+                                    {/* Global Style Theme Bar */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                                        <div className="space-y-0.5">
+                                            <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                                                <Palette className="h-3.5 w-3.5 text-purple-400" /> Kometa Glassmorphic Style Theme
+                                            </span>
+                                            <p className="text-[11px] text-slate-400">Backdrop style, specular highlights, and border luminance</p>
                                         </div>
-
-                                        <div className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60">
-                                            <div className="space-y-0.5">
-                                                <Label className="font-semibold text-white">Dolby Vision & HDR</Label>
-                                                <p className="text-[10px] text-slate-400">Auto-detects dynamic color</p>
-                                            </div>
-                                            <Switch 
-                                                checked={simHdr !== "none"} 
-                                                onCheckedChange={checked => setSimHdr(checked ? "DV" : "none")} 
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60">
-                                            <div className="space-y-0.5">
-                                                <Label className="font-semibold text-white">Dolby Atmos & Spatial</Label>
-                                                <p className="text-[10px] text-slate-400">Auto-detects 3D audio</p>
-                                            </div>
-                                            <Switch 
-                                                checked={simAudio !== "none"} 
-                                                onCheckedChange={checked => setSimAudio(checked ? "ATMOS" : "none")} 
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60">
-                                            <div className="space-y-0.5">
-                                                <Label className="font-semibold text-white">Audio Channels (7.1 / 5.1)</Label>
-                                                <p className="text-[10px] text-slate-400">Surround channel layout</p>
-                                            </div>
-                                            <Switch 
-                                                checked={simChannels !== "none"} 
-                                                onCheckedChange={checked => setSimChannels(checked ? "7.1" : "none")} 
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60">
-                                            <div className="space-y-0.5">
-                                                <Label className="font-semibold text-white">Video Codec (HEVC/AV1)</Label>
-                                                <p className="text-[10px] text-slate-400">H.265 / AV1 / ProRes</p>
-                                            </div>
-                                            <Switch 
-                                                checked={simCodec !== "none"} 
-                                                onCheckedChange={checked => setSimCodec(checked ? "HEVC" : "none")} 
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60">
-                                            <div className="space-y-0.5">
-                                                <Label className="font-semibold text-white">Edition Cut (IMAX / Criterion)</Label>
-                                                <p className="text-[10px] text-slate-400">Director&apos;s Cut / Extended</p>
-                                            </div>
-                                            <Switch 
-                                                checked={simEdition !== "none"} 
-                                                onCheckedChange={checked => setSimEdition(checked ? "IMAX" : "none")} 
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60">
-                                            <div className="space-y-0.5">
-                                                <Label className="font-semibold text-white">Studio Logos (HBO/Disney+)</Label>
-                                                <p className="text-[10px] text-slate-400">Network & production logos</p>
-                                            </div>
-                                            <Switch 
-                                                checked={simStudio !== "none"} 
-                                                onCheckedChange={checked => setSimStudio(checked ? "HBO" : "none")} 
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60">
-                                            <div className="space-y-0.5">
-                                                <Label className="font-semibold text-white">Content Rating (PG-13 / R)</Label>
-                                                <p className="text-[10px] text-slate-400">Age advisory badge</p>
-                                            </div>
-                                            <Switch 
-                                                checked={simRating !== "none"} 
-                                                onCheckedChange={checked => setSimRating(checked ? "PG-13" : "none")} 
-                                            />
-                                        </div>
+                                        <Select value={simTheme} onValueChange={(val: any) => setSimTheme(val)}>
+                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7.5 w-full sm:w-44">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="glass">✨ Obsidian Glass (Kometa)</SelectItem>
+                                                <SelectItem value="gold">💛 Amber Gold Metallic</SelectItem>
+                                                <SelectItem value="classic">🛡️ Classic Solid Dark</SelectItem>
+                                                <SelectItem value="minimal">🔲 Minimalist Framed</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
-                                    {/* Styling & Custom Badge Selectors */}
-                                    <div className="grid grid-cols-2 gap-3 pt-2">
-                                        <div className="space-y-1">
-                                            <Label className="text-slate-300">Badge Theme</Label>
-                                            <Select value={simTheme} onValueChange={(val: any) => setSimTheme(val)}>
-                                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="glass">Dark Glass Minimal</SelectItem>
-                                                    <SelectItem value="gold">Metallic Gold 4K</SelectItem>
-                                                    <SelectItem value="classic">Classic Solid Slate</SelectItem>
-                                                    <SelectItem value="minimal">Ultra Minimal</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <Label className="text-slate-300">Simulator Custom Badge</Label>
-                                            <Select value={simCustomBadgeId} onValueChange={setSimCustomBadgeId}>
-                                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
-                                                    <SelectValue placeholder="None" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="none">None</SelectItem>
-                                                    {customBadges.map(b => (
-                                                        <SelectItem key={b.id} value={b.id}>
-                                                            {b.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-
-                                    {/* Independent Badge Placement Pickers */}
-                                    <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
-                                        <div className="flex items-center gap-2">
-                                            <Layers className="h-4 w-4 text-sky-400" />
-                                            <span className="font-bold text-white text-xs">Independent Badge Placements & Positioning</span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-400">
-                                            Freely arrange quality, audio, edition, and rating badge clusters into any corner or center of the poster.
-                                        </p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                                            <div className="space-y-1">
-                                                <Label className="text-[11px] text-slate-300 flex items-center gap-1">
-                                                    <Film className="h-3.5 w-3.5 text-amber-400" /> Video (4K / HDR / Codec)
-                                                </Label>
-                                                <Select value={simVideoPosition} onValueChange={(val: any) => setSimVideoPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                    {/* Badge Layers & Independent Positions Matrix */}
+                                    <div className="space-y-2">
+                                        {/* Resolution / 4K UHD */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
+                                            <div className="sm:col-span-5 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                                                <span className="font-semibold text-white text-[11px]">Resolution (4K / 1080p)</span>
+                                            </div>
+                                            <div className="sm:col-span-4">
+                                                <Select value={simResolution} onValueChange={(val: any) => setSimResolution(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right Corner</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left Corner</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
-                                                        <SelectItem value="top-center">Top Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                                                        <SelectItem value="4K">4K Ultra HD</SelectItem>
+                                                        <SelectItem value="1080p">1080p Full HD</SelectItem>
+                                                        <SelectItem value="none">Disabled</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                            <div className="sm:col-span-3">
+                                                <Select value={simResolutionPosition} onValueChange={(val: any) => setSimResolutionPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
 
-                                            <div className="space-y-1">
-                                                <Label className="text-[11px] text-slate-300 flex items-center gap-1">
-                                                    <Volume2 className="h-3.5 w-3.5 text-sky-400" /> Audio & Surround Channels
-                                                </Label>
+                                        {/* HDR / Dolby Vision */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
+                                            <div className="sm:col-span-5 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                                                <span className="font-semibold text-white text-[11px]">Dynamic Range (DV / HDR)</span>
+                                            </div>
+                                            <div className="sm:col-span-4">
+                                                <Select value={simHdr} onValueChange={(val: any) => setSimHdr(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="DV">Dolby Vision</SelectItem>
+                                                        <SelectItem value="HDR10+">HDR10+</SelectItem>
+                                                        <SelectItem value="HDR">HDR</SelectItem>
+                                                        <SelectItem value="none">Disabled</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="sm:col-span-3">
+                                                <Select value={simHdrPosition} onValueChange={(val: any) => setSimHdrPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        {/* Video Codec */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
+                                            <div className="sm:col-span-5 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                                                <span className="font-semibold text-white text-[11px]">Video Codec (HEVC / AV1)</span>
+                                            </div>
+                                            <div className="sm:col-span-4">
+                                                <Select value={simCodec} onValueChange={(val: any) => setSimCodec(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="HEVC">HEVC (H.265)</SelectItem>
+                                                        <SelectItem value="AV1">AV1</SelectItem>
+                                                        <SelectItem value="AVC">AVC (H.264)</SelectItem>
+                                                        <SelectItem value="ProRes">Apple ProRes</SelectItem>
+                                                        <SelectItem value="none">Disabled</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="sm:col-span-3">
+                                                <Select value={simCodecPosition} onValueChange={(val: any) => setSimCodecPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        {/* Audio Codec */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
+                                            <div className="sm:col-span-5 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-sky-400"></span>
+                                                <span className="font-semibold text-white text-[11px]">Audio Codec (Atmos / DTS)</span>
+                                            </div>
+                                            <div className="sm:col-span-4">
+                                                <Select value={simAudio} onValueChange={(val: any) => setSimAudio(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="ATMOS">Dolby Atmos</SelectItem>
+                                                        <SelectItem value="TRUEHD">Dolby TrueHD</SelectItem>
+                                                        <SelectItem value="DTS:X">DTS:X Lossless</SelectItem>
+                                                        <SelectItem value="5.1">5.1 Surround</SelectItem>
+                                                        <SelectItem value="none">Disabled</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="sm:col-span-3">
                                                 <Select value={simAudioPosition} onValueChange={(val: any) => setSimAudioPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="top-left">Top-Left Corner</SelectItem>
-                                                        <SelectItem value="top-right">Top-Right Corner</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
-                                                        <SelectItem value="top-center">Top Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                        </div>
 
-                                            <div className="space-y-1">
-                                                <Label className="text-[11px] text-slate-300 flex items-center gap-1">
-                                                    <Trophy className="h-3.5 w-3.5 text-purple-400" /> Edition & Studio Logos
-                                                </Label>
+                                        {/* Audio Channels */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
+                                            <div className="sm:col-span-5 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                                                <span className="font-semibold text-white text-[11px]">Audio Channels (7.1 / 5.1)</span>
+                                            </div>
+                                            <div className="sm:col-span-4">
+                                                <Select value={simChannels} onValueChange={(val: any) => setSimChannels(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="7.1">7.1 Surround</SelectItem>
+                                                        <SelectItem value="5.1">5.1 Surround</SelectItem>
+                                                        <SelectItem value="2.0">2.0 Stereo</SelectItem>
+                                                        <SelectItem value="none">Disabled</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="sm:col-span-3">
+                                                <Select value={simChannelsPosition} onValueChange={(val: any) => setSimChannelsPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        {/* Edition / Cut */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
+                                            <div className="sm:col-span-5 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                                <span className="font-semibold text-white text-[11px]">Edition / Cut (IMAX / Remux)</span>
+                                            </div>
+                                            <div className="sm:col-span-4">
+                                                <Select value={simEdition} onValueChange={(val: any) => setSimEdition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="IMAX">IMAX Enhanced</SelectItem>
+                                                        <SelectItem value="CRITERION">The Criterion Collection</SelectItem>
+                                                        <SelectItem value="REMUX">Remux Lossless</SelectItem>
+                                                        <SelectItem value="DIRECTOR'S CUT">Director's Cut</SelectItem>
+                                                        <SelectItem value="EXTENDED">Extended Edition</SelectItem>
+                                                        <SelectItem value="none">Disabled</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="sm:col-span-3">
                                                 <Select value={simEditionPosition} onValueChange={(val: any) => setSimEditionPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left Corner</SelectItem>
-                                                        <SelectItem value="top-right">Top-Right Corner</SelectItem>
-                                                        <SelectItem value="top-center">Top Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                        </div>
 
-                                            <div className="space-y-1">
-                                                <Label className="text-[11px] text-slate-300 flex items-center gap-1">
-                                                    <Star className="h-3.5 w-3.5 text-amber-300" /> Community Ratings (IMDb / RT)
-                                                </Label>
-                                                <Select value={simRatingPosition} onValueChange={(val: any) => setSimRatingPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
+                                        {/* Studio / Network */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
+                                            <div className="sm:col-span-5 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-pink-400"></span>
+                                                <span className="font-semibold text-white text-[11px]">Studio / Network (HBO / Netflix)</span>
+                                            </div>
+                                            <div className="sm:col-span-4">
+                                                <Select value={simStudio} onValueChange={(val: any) => setSimStudio(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left Corner</SelectItem>
-                                                        <SelectItem value="top-right">Top-Right Corner</SelectItem>
-                                                        <SelectItem value="top-center">Top Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                                                        <SelectItem value="HBO">HBO Max</SelectItem>
+                                                        <SelectItem value="NETFLIX">Netflix</SelectItem>
+                                                        <SelectItem value="DISNEY+">Disney+</SelectItem>
+                                                        <SelectItem value="APPLE TV+">Apple TV+</SelectItem>
+                                                        <SelectItem value="PRIME">Prime Video</SelectItem>
+                                                        <SelectItem value="MARVEL">Marvel Studios</SelectItem>
+                                                        <SelectItem value="DC">DC Studios</SelectItem>
+                                                        <SelectItem value="A24">A24 Films</SelectItem>
+                                                        <SelectItem value="PARAMOUNT+">Paramount+</SelectItem>
+                                                        <SelectItem value="none">Disabled</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                            <div className="sm:col-span-3">
+                                                <Select value={simStudioPosition} onValueChange={(val: any) => setSimStudioPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        {/* Content Rating */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
+                                            <div className="sm:col-span-5 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+                                                <span className="font-semibold text-white text-[11px]">Age Rating (PG-13 / R / TV-MA)</span>
+                                            </div>
+                                            <div className="sm:col-span-4">
+                                                <Select value={simRating} onValueChange={(val: any) => setSimRating(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="G">G (All Ages)</SelectItem>
+                                                        <SelectItem value="PG">PG</SelectItem>
+                                                        <SelectItem value="PG-13">PG-13</SelectItem>
+                                                        <SelectItem value="R">R (Restricted)</SelectItem>
+                                                        <SelectItem value="NC-17">NC-17</SelectItem>
+                                                        <SelectItem value="TV-MA">TV-MA</SelectItem>
+                                                        <SelectItem value="none">Disabled</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="sm:col-span-3">
+                                                <Select value={simRatingPosition} onValueChange={(val: any) => setSimRatingPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        {/* Community Ratings Bar */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
+                                            <div className="sm:col-span-5 flex items-center justify-between sm:justify-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                                                    <span className="font-semibold text-white text-[11px]">IMDb / RT Ratings Bar</span>
+                                                </div>
+                                                <Switch 
+                                                    checked={simRatings}
+                                                    onCheckedChange={setSimRatings}
+                                                />
+                                            </div>
+                                            <div className="sm:col-span-4 text-[11px] text-slate-400 flex items-center">
+                                                <span>IMDb 8.6 • 🍅 94% • 🍿 92%</span>
+                                            </div>
+                                            <div className="sm:col-span-3">
+                                                <Select value={simRatingsPosition} onValueChange={(val: any) => setSimRatingsPosition(val)}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        {/* Leaving Soon Header Banner */}
+                                        <div className="p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                                                <span className="font-semibold text-white text-[11px]">Leaving Soon Top Banner</span>
+                                            </div>
+                                            <Switch 
+                                                checked={simLeavingSoon}
+                                                onCheckedChange={setSimLeavingSoon}
+                                            />
                                         </div>
                                     </div>
 
