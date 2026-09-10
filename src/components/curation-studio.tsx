@@ -37,7 +37,11 @@ import {
     inspectPlexMediaItemAction,
     applyOverlayToSingleItemAction,
     restoreSingleItemPosterAction,
-    runFullCurationSyncAction
+    runFullCurationSyncAction,
+    applyParentalTagsToLibraryAction,
+    clearParentalTagsFromLibraryAction,
+    inspectItemParentalAdvisoryAction,
+    saveItemParentalAdvisoryAction
 } from "@/app/curation-actions";
 import { COLLECTION_PRESETS, CollectionPreset } from "@/lib/curation/presets";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -218,6 +222,25 @@ export default function CurationStudio() {
     const [savingServerTargets, setSavingServerTargets] = useState(false);
     const [serverTargetsSavedMsg, setServerTargetsSavedMsg] = useState(false);
 
+    // IMDb Parental Rating & Tagging States
+    const [parentalTaggingEnabled, setParentalTaggingEnabled] = useState(true);
+    const [parentalTagFormat, setParentalTagFormat] = useState("prefix_category_severity");
+    const [parentalTagPrefix, setParentalTagPrefix] = useState("IMDb");
+    const [parentalTagTarget, setParentalTagTarget] = useState("labels");
+    const [parentalMinSeverity, setParentalMinSeverity] = useState("Mild");
+    const [parentalCategories, setParentalCategories] = useState<string[]>(["nudity", "violence", "profanity", "alcohol", "frightening"]);
+    const [savingParentalSettings, setSavingParentalSettings] = useState(false);
+    const [parentalTagsSavedMsg, setParentalTagsSavedMsg] = useState(false);
+    const [applyingParentalTags, setApplyingParentalTags] = useState(false);
+    const [clearingParentalTags, setClearingParentalTags] = useState(false);
+    const [parentalTagMsg, setParentalTagMsg] = useState<{ success: boolean; text: string } | null>(null);
+
+    // Inspected Item Parental Advisory State
+    const [inspectedAdvisory, setInspectedAdvisory] = useState<any | null>(null);
+    const [loadingAdvisory, setLoadingAdvisory] = useState(false);
+    const [taggingSingleItem, setTaggingSingleItem] = useState(false);
+    const [singleItemTagMsg, setSingleItemTagMsg] = useState<{ success: boolean; text: string } | null>(null);
+
     // User Content Preferences
     const [userPrefs, setUserPrefs] = useState<any>({
         excludedGenres: [],
@@ -266,6 +289,12 @@ export default function CurationStudio() {
                 if ((settRes as any).serverStorageConfig) {
                     setServerStorageConfig((settRes as any).serverStorageConfig);
                 }
+                if ((settRes as any).parentalTaggingEnabled !== undefined) setParentalTaggingEnabled((settRes as any).parentalTaggingEnabled);
+                if ((settRes as any).parentalTagFormat) setParentalTagFormat((settRes as any).parentalTagFormat);
+                if ((settRes as any).parentalTagPrefix) setParentalTagPrefix((settRes as any).parentalTagPrefix);
+                if ((settRes as any).parentalTagTarget) setParentalTagTarget((settRes as any).parentalTagTarget);
+                if ((settRes as any).parentalMinSeverity) setParentalMinSeverity((settRes as any).parentalMinSeverity);
+                if ((settRes as any).parentalCategories) setParentalCategories((settRes as any).parentalCategories);
             }
             if (vaultData?.success) {
                 setVaultStats(vaultData);
@@ -775,10 +804,27 @@ export default function CurationStudio() {
     const handleInspectItem = async (ratingKey: string) => {
         setLoadingInspection(true);
         setSingleItemMsg(null);
+        setSingleItemTagMsg(null);
+        setInspectedAdvisory(null);
         try {
-            const res = await inspectPlexMediaItemAction(selectedServerId, ratingKey);
-            if (res.success) {
+            const res: any = await inspectPlexMediaItemAction(selectedServerId, ratingKey);
+            if (res.success && res.item) {
                 setInspectingItem(res);
+                // Fetch IMDb parental advisory in parallel
+                try {
+                    const advRes = await inspectItemParentalAdvisoryAction(ratingKey, selectedServerId, {
+                        title: res.item.title,
+                        year: res.item.year,
+                        type: res.item.type,
+                        imdbId: res.item.guids?.imdb,
+                        contentRating: res.item.contentRating
+                    });
+                    if (advRes.success && advRes.advisory) {
+                        setInspectedAdvisory(advRes.advisory);
+                    }
+                } catch (aErr) {
+                    console.warn("Failed fetching parental advisory for item:", aErr);
+                }
             } else {
                 alert(res.error || "Inspection failed.");
             }
@@ -786,6 +832,115 @@ export default function CurationStudio() {
             alert(err.message || "Error inspecting media item.");
         } finally {
             setLoadingInspection(false);
+        }
+    };
+
+    // Handle Save IMDb Parental Settings
+    const handleSaveParentalSettings = async () => {
+        setSavingParentalSettings(true);
+        setParentalTagsSavedMsg(false);
+        try {
+            await saveCurationSettingsAction({
+                parentalTaggingEnabled,
+                parentalTagFormat,
+                parentalTagPrefix,
+                parentalTagTarget,
+                parentalMinSeverity,
+                parentalCategories,
+                curationSyncParentalTags: settings.curationSyncParentalTags ?? true
+            });
+            setParentalTagsSavedMsg(true);
+            setTimeout(() => setParentalTagsSavedMsg(false), 3500);
+        } catch (e: any) {
+            alert(e.message || "Failed saving parental tagging settings.");
+        } finally {
+            setSavingParentalSettings(false);
+        }
+    };
+
+    // Handle Apply Parental Tags to Selected Library Section
+    const handleApplyParentalTags = async () => {
+        if (!selectedServerId || !selectedSectionKey) {
+            alert("Please select a Plex Server and Library Section above.");
+            return;
+        }
+        setApplyingParentalTags(true);
+        setParentalTagMsg(null);
+        try {
+            const res = await applyParentalTagsToLibraryAction(
+                selectedServerId,
+                selectedSectionKey,
+                {
+                    format: parentalTagFormat as any,
+                    prefix: parentalTagPrefix,
+                    target: parentalTagTarget as any,
+                    minSeverity: parentalMinSeverity as any,
+                    categories: parentalCategories as any
+                }
+            );
+            setParentalTagMsg({
+                success: res.success,
+                text: res.success 
+                    ? `Tagged ${res.taggedCount} items in library (${res.skippedCount} skipped/none).` 
+                    : (res.error || "Failed applying parental tags.")
+            });
+            await loadData();
+        } catch (err: any) {
+            setParentalTagMsg({ success: false, text: err.message || "Error applying parental tags." });
+        } finally {
+            setApplyingParentalTags(false);
+        }
+    };
+
+    // Handle Clear All Parental Tags from Selected Library Section
+    const handleClearParentalTags = async () => {
+        if (!selectedServerId || !selectedSectionKey) {
+            alert("Please select a Plex Server and Library Section above.");
+            return;
+        }
+        if (!confirm(`Are you sure you want to clear all '${parentalTagPrefix}' parental tags from this Plex library?`)) {
+            return;
+        }
+        setClearingParentalTags(true);
+        setParentalTagMsg(null);
+        try {
+            const res = await clearParentalTagsFromLibraryAction(selectedServerId, selectedSectionKey, parentalTagPrefix);
+            setParentalTagMsg({
+                success: res.success,
+                text: res.success 
+                    ? `Cleared parental tags from ${res.clearedCount} items!` 
+                    : (res.error || "Failed clearing parental tags.")
+            });
+        } catch (err: any) {
+            setParentalTagMsg({ success: false, text: err.message || "Error clearing parental tags." });
+        } finally {
+            setClearingParentalTags(false);
+        }
+    };
+
+    // Handle Apply Parental Tags to Inspected Single Item
+    const handleApplySingleParentalTag = async () => {
+        if (!inspectingItem || !inspectedAdvisory || !selectedServerId || !selectedSectionKey) return;
+        setTaggingSingleItem(true);
+        setSingleItemTagMsg(null);
+        try {
+            const res = await applyParentalTagsToLibraryAction(
+                selectedServerId,
+                selectedSectionKey,
+                {
+                    format: parentalTagFormat as any,
+                    prefix: parentalTagPrefix,
+                    target: parentalTagTarget as any,
+                    minSeverity: parentalMinSeverity as any,
+                    categories: parentalCategories as any
+                }
+            );
+            setSingleItemTagMsg({ success: true, text: "Parental tags updated for item!" });
+            await handleInspectItem(inspectingItem.item.ratingKey);
+        } catch (err: any) {
+            setSingleItemTagMsg({ success: false, text: err.message });
+        } finally {
+            setTaggingSingleItem(false);
         }
     };
 
@@ -3167,6 +3322,95 @@ export default function CurationStudio() {
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {/* IMDb Parents Guide / Parental Advisory Card */}
+                                            <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                                                        <Shield className="h-4 w-4 text-amber-400" /> IMDb Parents Guide & Severity Ratings
+                                                    </span>
+                                                    {inspectedAdvisory && (
+                                                        <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-300 bg-amber-950/30">
+                                                            Source: {inspectedAdvisory.source?.toUpperCase() || "AI"}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+
+                                                {inspectedAdvisory ? (
+                                                    <div className="space-y-3">
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                            {[
+                                                                { label: "Sex & Nudity", val: inspectedAdvisory.nudity, icon: "🔞" },
+                                                                { label: "Violence & Gore", val: inspectedAdvisory.violence, icon: "🩸" },
+                                                                { label: "Profanity", val: inspectedAdvisory.profanity, icon: "🤬" },
+                                                                { label: "Alcohol & Drugs", val: inspectedAdvisory.alcohol, icon: "🍷" },
+                                                                { label: "Frightening Scenes", val: inspectedAdvisory.frightening, icon: "😱" }
+                                                            ].map(cat => {
+                                                                const s = cat.val || "None";
+                                                                let badgeStyle = "bg-slate-900 border-slate-800 text-slate-400";
+                                                                if (s === "Severe") badgeStyle = "bg-rose-950/80 border-rose-700 text-rose-300 font-bold";
+                                                                else if (s === "Moderate") badgeStyle = "bg-amber-950/80 border-amber-700 text-amber-300 font-semibold";
+                                                                else if (s === "Mild") badgeStyle = "bg-sky-950/80 border-sky-700 text-sky-300";
+
+                                                                return (
+                                                                    <div key={cat.label} className="p-2 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center justify-between">
+                                                                        <span className="text-[11px] text-slate-300 flex items-center gap-1">
+                                                                            <span>{cat.icon}</span> {cat.label}
+                                                                        </span>
+                                                                        <Badge className={`text-[9px] px-1.5 py-0.5 border ${badgeStyle}`}>
+                                                                            {s}
+                                                                        </Badge>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+
+                                                        {inspectedAdvisory.certificate && (
+                                                            <p className="text-[11px] text-slate-300 bg-slate-900/80 p-2 rounded border border-slate-800">
+                                                                <strong className="text-amber-400">Certification:</strong> {inspectedAdvisory.certificate}
+                                                                {inspectedAdvisory.summary ? ` — ${inspectedAdvisory.summary}` : ""}
+                                                            </p>
+                                                        )}
+
+                                                        <div className="flex items-center justify-between pt-1">
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {parentalCategories.map(catKey => {
+                                                                    const sev = (inspectedAdvisory as any)[catKey] || "None";
+                                                                    if (sev === "None" && parentalMinSeverity !== "None") return null;
+                                                                    let formatted = `${parentalTagPrefix}-${catKey.charAt(0).toUpperCase() + catKey.slice(1)}: ${sev}`;
+                                                                    if (parentalTagFormat === "severity_category") formatted = `${sev} ${catKey.charAt(0).toUpperCase() + catKey.slice(1)}`;
+                                                                    if (parentalTagFormat === "category_severity_paren") formatted = `${catKey.charAt(0).toUpperCase() + catKey.slice(1)} (${sev})`;
+                                                                    return (
+                                                                        <Badge key={catKey} variant="secondary" className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                                                            {formatted}
+                                                                        </Badge>
+                                                                    );
+                                                                })}
+                                                            </div>
+
+                                                            <Button 
+                                                                size="sm"
+                                                                onClick={handleApplySingleParentalTag}
+                                                                disabled={taggingSingleItem}
+                                                                className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs h-7 px-2.5 gap-1"
+                                                            >
+                                                                {taggingSingleItem ? <Loader2 className="h-3 w-3 animate-spin" /> : <Tag className="h-3 w-3" />}
+                                                                <span>Sync Tags to Item</span>
+                                                            </Button>
+                                                        </div>
+
+                                                        {singleItemTagMsg && (
+                                                            <p className={`text-[10px] ${singleItemTagMsg.success ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                {singleItemTagMsg.text}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="py-3 text-center text-slate-500 text-xs">
+                                                        Fetching consensus IMDb parental guide severity...
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -4272,6 +4516,219 @@ export default function CurationStudio() {
                                 </Button>
                             </div>
                         </CardFooter>
+                    </Card>
+
+                    {/* IMDb Parental Guide Ratings Tagging Engine */}
+                    <Card className="bg-slate-900/60 border-slate-800 shadow-xl overflow-hidden">
+                        <CardHeader className="p-6 pb-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                        <Shield className="h-5 w-5 text-amber-400" /> IMDb Parental Ratings Tagging Engine
+                                    </CardTitle>
+                                    <CardDescription className="text-xs text-slate-400 max-w-2xl">
+                                        Scan your Plex movies and TV shows to automatically apply consensus IMDb Parents Guide severity ratings (Severe, Moderate, Mild, None). Use Plex Labels to seamlessly restrict mature or violent content for Kids & Family managed accounts.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Switch 
+                                        checked={parentalTaggingEnabled}
+                                        onCheckedChange={setParentalTaggingEnabled}
+                                    />
+                                    <span className="text-xs font-semibold text-slate-300">
+                                        {parentalTaggingEnabled ? "Enabled" : "Disabled"}
+                                    </span>
+                                </div>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-6 space-y-6 text-xs">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                                {/* Format Template */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-slate-300 font-semibold">Tag Format Style</Label>
+                                    <Select 
+                                        value={parentalTagFormat} 
+                                        onValueChange={setParentalTagFormat}
+                                    >
+                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="prefix_category_severity">Prefix-Category: Severity (IMDb-Violence: Severe)</SelectItem>
+                                            <SelectItem value="severity_category">Severity Category (Severe Violence)</SelectItem>
+                                            <SelectItem value="category_severity_paren">Category (Severity) (Violence (Severe))</SelectItem>
+                                            <SelectItem value="custom">Prefix: Category - Severity (IMDb: Violence - Severe)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Custom Prefix */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-slate-300 font-semibold">Tag Prefix</Label>
+                                    <Input 
+                                        value={parentalTagPrefix}
+                                        onChange={e => setParentalTagPrefix(e.target.value)}
+                                        placeholder="IMDb"
+                                        className="bg-slate-800 border-slate-700 text-xs"
+                                    />
+                                    <p className="text-[10px] text-slate-500">Used to identify & clear tags cleanly</p>
+                                </div>
+
+                                {/* Target Field in Plex */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-slate-300 font-semibold">Plex Target Field</Label>
+                                    <Select 
+                                        value={parentalTagTarget} 
+                                        onValueChange={setParentalTagTarget}
+                                    >
+                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="labels">🏷️ Plex Labels (Best for Kids / Sharing Restrictions)</SelectItem>
+                                            <SelectItem value="genres">🎭 Plex Genres</SelectItem>
+                                            <SelectItem value="both">🏷️🎭 Both Labels & Genres</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Minimum Severity Threshold */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-slate-300 font-semibold">Minimum Severity to Tag</Label>
+                                    <Select 
+                                        value={parentalMinSeverity} 
+                                        onValueChange={setParentalMinSeverity}
+                                    >
+                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Severe">🔴 Severe Only (Extreme Content)</SelectItem>
+                                            <SelectItem value="Moderate">🟠 Moderate & Severe</SelectItem>
+                                            <SelectItem value="Mild">🟡 Mild, Moderate & Severe</SelectItem>
+                                            <SelectItem value="None">⚪ All Levels (Including None)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            {/* Categories Selector */}
+                            <div className="space-y-2">
+                                <Label className="text-slate-300 font-semibold block">Advisory Categories to Evaluate & Tag</Label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                                    {[
+                                        { key: "nudity", label: "Sex & Nudity", icon: "🔞", desc: "Sexual scenes, nudity" },
+                                        { key: "violence", label: "Violence & Gore", icon: "🩸", desc: "Physical violence, gore" },
+                                        { key: "profanity", label: "Profanity", icon: "🤬", desc: "Strong language, slurs" },
+                                        { key: "alcohol", label: "Alcohol & Drugs", icon: "🍷", desc: "Substance & drug use" },
+                                        { key: "frightening", label: "Frightening", icon: "😱", desc: "Horror, intense scenes" }
+                                    ].map(cat => {
+                                        const isChecked = parentalCategories.includes(cat.key);
+                                        return (
+                                            <div 
+                                                key={cat.key}
+                                                onClick={() => {
+                                                    if (isChecked) {
+                                                        setParentalCategories(parentalCategories.filter(k => k !== cat.key));
+                                                    } else {
+                                                        setParentalCategories([...parentalCategories, cat.key]);
+                                                    }
+                                                }}
+                                                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start justify-between ${
+                                                    isChecked 
+                                                        ? 'bg-amber-950/40 border-amber-500/50 text-white' 
+                                                        : 'bg-slate-800/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                                                }`}
+                                            >
+                                                <div className="space-y-0.5">
+                                                    <span className="font-bold text-xs flex items-center gap-1.5">
+                                                        <span>{cat.icon}</span> {cat.label}
+                                                    </span>
+                                                    <p className="text-[10px] opacity-70">{cat.desc}</p>
+                                                </div>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={isChecked} 
+                                                    readOnly 
+                                                    className="rounded border-slate-700 text-amber-500 focus:ring-0 h-4 w-4 mt-0.5" 
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Tag Preview Box */}
+                            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Sample Generated Tag Output Preview:
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                    {parentalCategories.map(cat => {
+                                        let sample = `${parentalTagPrefix}-${cat.charAt(0).toUpperCase() + cat.slice(1)}: Severe`;
+                                        if (parentalTagFormat === "severity_category") sample = `Severe ${cat.charAt(0).toUpperCase() + cat.slice(1)}`;
+                                        if (parentalTagFormat === "category_severity_paren") sample = `${cat.charAt(0).toUpperCase() + cat.slice(1)} (Severe)`;
+                                        if (parentalTagFormat === "custom") sample = `${parentalTagPrefix}: ${cat.charAt(0).toUpperCase() + cat.slice(1)} - Severe`;
+                                        return (
+                                            <Badge key={cat} variant="secondary" className="bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono text-[11px] px-2 py-0.5">
+                                                {sample}
+                                            </Badge>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Status and Action Buttons */}
+                            {parentalTagMsg && (
+                                <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                                    parentalTagMsg.success 
+                                        ? 'bg-emerald-950/70 border border-emerald-800 text-emerald-300' 
+                                        : 'bg-rose-950/70 border border-rose-800 text-rose-300'
+                                }`}>
+                                    {parentalTagMsg.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+                                    <span>{parentalTagMsg.text}</span>
+                                </div>
+                            )}
+
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button 
+                                        onClick={handleApplyParentalTags}
+                                        disabled={applyingParentalTags}
+                                        className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs h-9 px-4 gap-2 shadow-lg shadow-amber-950/40"
+                                    >
+                                        {applyingParentalTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Tag className="h-4 w-4" />}
+                                        <span>🏷️ Scan & Apply Tags to Library</span>
+                                    </Button>
+
+                                    <Button 
+                                        variant="outline"
+                                        onClick={handleClearParentalTags}
+                                        disabled={clearingParentalTags}
+                                        className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-semibold text-xs h-9 gap-1.5"
+                                    >
+                                        {clearingParentalTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-rose-400" />}
+                                        <span>🧹 Clear Parental Tags from Library</span>
+                                    </Button>
+                                </div>
+
+                                <Button 
+                                    onClick={handleSaveParentalSettings}
+                                    disabled={savingParentalSettings}
+                                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-9 px-4 gap-1.5"
+                                >
+                                    {savingParentalSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                    <span>Save Parental Settings</span>
+                                </Button>
+                            </div>
+
+                            {parentalTagsSavedMsg && (
+                                <div className="text-xs text-emerald-400 flex items-center gap-1.5 justify-end">
+                                    <CheckCircle2 className="h-4 w-4" /> Parental tagging settings saved successfully!
+                                </div>
+                            )}
+                        </CardContent>
                     </Card>
                 </TabsContent>
             </Tabs>

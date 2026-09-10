@@ -103,8 +103,17 @@ model Settings {
   curationSyncCollections          Boolean   @default(true) // Auto-sync seasonal & scheduled collections
   curationSyncReleases             Boolean   @default(true) // Auto-refresh upcoming digital releases & placeholders
   curationSyncPruning              Boolean   @default(true) // Auto-evaluate Leaving Soon candidates
+  curationSyncParentalTags         Boolean   @default(true) // Auto-apply IMDb parental rating tags
   curationLastRunAt                DateTime?
   curationLastRunStatus            String?   // JSON telemetry summary of last execution
+
+  // IMDb Parental Advisory & Rating Tagging Controls
+  parentalTaggingEnabled           Boolean   @default(true)
+  parentalTagFormat                String?   @default("prefix_category_severity") // "prefix_category_severity", "severity_category", "category_severity_paren", "custom"
+  parentalTagPrefix                String?   @default("IMDb")
+  parentalTagTarget                String?   @default("labels") // "labels" (Plex Sharing Labels), "genres" (Plex Genres), "both"
+  parentalMinSeverity              String?   @default("Mild") // "Severe", "Moderate", "Mild", "None"
+  parentalCategories               String?   @default("[\"nudity\",\"violence\",\"profanity\",\"alcohol\",\"frightening\"]") // JSON array
 }
 
 model TautulliInstance {

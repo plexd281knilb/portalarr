@@ -270,8 +270,15 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "curationSyncCollections" BOOLEAN NOT NULL DEFAULT 1,
                     "curationSyncReleases" BOOLEAN NOT NULL DEFAULT 1,
                     "curationSyncPruning" BOOLEAN NOT NULL DEFAULT 1,
+                    "curationSyncParentalTags" BOOLEAN NOT NULL DEFAULT 1,
                     "curationLastRunAt" DATETIME,
-                    "curationLastRunStatus" TEXT
+                    "curationLastRunStatus" TEXT,
+                    "parentalTaggingEnabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "parentalTagFormat" TEXT DEFAULT 'prefix_category_severity',
+                    "parentalTagPrefix" TEXT DEFAULT 'IMDb',
+                    "parentalTagTarget" TEXT DEFAULT 'labels',
+                    "parentalMinSeverity" TEXT DEFAULT 'Mild',
+                    "parentalCategories" TEXT DEFAULT '["nudity","violence","profanity","alcohol","frightening"]'
                 );
             `);
 
@@ -354,8 +361,15 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["curationSyncCollections", `ALTER TABLE "Settings" ADD COLUMN "curationSyncCollections" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["curationSyncReleases", `ALTER TABLE "Settings" ADD COLUMN "curationSyncReleases" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["curationSyncPruning", `ALTER TABLE "Settings" ADD COLUMN "curationSyncPruning" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["curationSyncParentalTags", `ALTER TABLE "Settings" ADD COLUMN "curationSyncParentalTags" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["curationLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "curationLastRunAt" DATETIME;`],
-                ["curationLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "curationLastRunStatus" TEXT;`]
+                ["curationLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "curationLastRunStatus" TEXT;`],
+                ["parentalTaggingEnabled", `ALTER TABLE "Settings" ADD COLUMN "parentalTaggingEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["parentalTagFormat", `ALTER TABLE "Settings" ADD COLUMN "parentalTagFormat" TEXT DEFAULT 'prefix_category_severity';`],
+                ["parentalTagPrefix", `ALTER TABLE "Settings" ADD COLUMN "parentalTagPrefix" TEXT DEFAULT 'IMDb';`],
+                ["parentalTagTarget", `ALTER TABLE "Settings" ADD COLUMN "parentalTagTarget" TEXT DEFAULT 'labels';`],
+                ["parentalMinSeverity", `ALTER TABLE "Settings" ADD COLUMN "parentalMinSeverity" TEXT DEFAULT 'Mild';`],
+                ["parentalCategories", `ALTER TABLE "Settings" ADD COLUMN "parentalCategories" TEXT DEFAULT '["nudity","violence","profanity","alcohol","frightening"]';`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {

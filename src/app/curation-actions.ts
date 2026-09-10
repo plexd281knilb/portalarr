@@ -50,6 +50,15 @@ import {
     getMdblistItems 
 } from "@/lib/curation/mdblist";
 import { COLLECTION_PRESETS, CollectionPreset } from "@/lib/curation/presets";
+import {
+    applyParentalTagsToLibrary,
+    clearParentalTagsFromLibrary,
+    resolveParentalAdvisory,
+    saveParentalAdvisory,
+    ParentalTaggingOptions,
+    ParentalCategoryKey,
+    ParentalSeverity
+} from "@/lib/curation/parental-guide";
 
 // Verify admin permissions
 async function verifyAdmin() {
@@ -102,7 +111,16 @@ export async function getCurationSettingsAction() {
         leavingSoonPromotedToSharedHome: settings?.leavingSoonPromotedToSharedHome ?? true,
         leavingSoonHomeOrder: settings?.leavingSoonHomeOrder ?? 0,
         leavingSoonAutoThresholdDays: settings?.leavingSoonAutoThresholdDays ?? 14,
-        leavingSoonAutoHideEmpty: settings?.leavingSoonAutoHideEmpty ?? true
+        leavingSoonAutoHideEmpty: settings?.leavingSoonAutoHideEmpty ?? true,
+
+        // IMDb Parental Advisory Tagging Settings
+        parentalTaggingEnabled: settings?.parentalTaggingEnabled ?? true,
+        parentalTagFormat: settings?.parentalTagFormat || "prefix_category_severity",
+        parentalTagPrefix: settings?.parentalTagPrefix || "IMDb",
+        parentalTagTarget: settings?.parentalTagTarget || "labels",
+        parentalMinSeverity: settings?.parentalMinSeverity || "Mild",
+        parentalCategories: settings?.parentalCategories ? JSON.parse(settings.parentalCategories) : ["nudity", "violence", "profanity", "alcohol", "frightening"],
+        curationSyncParentalTags: settings?.curationSyncParentalTags ?? true
     };
 }
 
@@ -148,6 +166,13 @@ export async function saveCurationSettingsAction(data: {
     curationSyncCollections?: boolean;
     curationSyncReleases?: boolean;
     curationSyncPruning?: boolean;
+    curationSyncParentalTags?: boolean;
+    parentalTaggingEnabled?: boolean;
+    parentalTagFormat?: string;
+    parentalTagPrefix?: string;
+    parentalTagTarget?: string;
+    parentalMinSeverity?: string;
+    parentalCategories?: string[];
 }) {
     await verifyAdmin();
     try {
@@ -198,6 +223,15 @@ export async function saveCurationSettingsAction(data: {
         if (data.curationSyncCollections !== undefined) updatePayload.curationSyncCollections = data.curationSyncCollections;
         if (data.curationSyncReleases !== undefined) updatePayload.curationSyncReleases = data.curationSyncReleases;
         if (data.curationSyncPruning !== undefined) updatePayload.curationSyncPruning = data.curationSyncPruning;
+        if (data.curationSyncParentalTags !== undefined) updatePayload.curationSyncParentalTags = data.curationSyncParentalTags;
+
+        // IMDb Parental Advisory Tagging Settings
+        if (data.parentalTaggingEnabled !== undefined) updatePayload.parentalTaggingEnabled = data.parentalTaggingEnabled;
+        if (data.parentalTagFormat !== undefined) updatePayload.parentalTagFormat = data.parentalTagFormat;
+        if (data.parentalTagPrefix !== undefined) updatePayload.parentalTagPrefix = data.parentalTagPrefix;
+        if (data.parentalTagTarget !== undefined) updatePayload.parentalTagTarget = data.parentalTagTarget;
+        if (data.parentalMinSeverity !== undefined) updatePayload.parentalMinSeverity = data.parentalMinSeverity;
+        if (data.parentalCategories !== undefined) updatePayload.parentalCategories = JSON.stringify(data.parentalCategories);
 
         await prisma.settings.upsert({
             where: { id: "global" },
@@ -1802,6 +1836,7 @@ export async function runFullCurationSyncInternal(): Promise<{
     seasonalCount: number;
     overlaysAppliedCount: number;
     leavingSoonCount: number;
+    parentalTaggedCount?: number;
     timestamp: Date;
     details: string[];
 }> {
@@ -1882,6 +1917,30 @@ export async function runFullCurationSyncInternal(): Promise<{
             }
         }
 
+        // 4. Automated IMDb Parental Rating Tags Sync
+        let parentalTaggedCount = 0;
+        if (settings.curationSyncParentalTags !== false && settings.parentalTaggingEnabled !== false) {
+            try {
+                for (const srv of servers) {
+                    const sectionsRes = await getPlexServerLibrarySections(token);
+                    const srvSections = sectionsRes.find(s => s.serverId === srv.clientIdentifier)?.sections || [];
+                    for (const sec of srvSections) {
+                        try {
+                            const pRes = await applyParentalTagsToLibraryAction(srv.clientIdentifier, String(sec.key));
+                            if (pRes.success && pRes.taggedCount) {
+                                parentalTaggedCount += pRes.taggedCount;
+                            }
+                        } catch (secErr: any) {
+                            console.warn(`[CURATION-SYNC] Error applying parental tags in ${sec.title}:`, secErr.message);
+                        }
+                    }
+                }
+                details.push(`Applied IMDb parental ratings tags to ${parentalTaggedCount} library items.`);
+            } catch (pErr: any) {
+                details.push(`Parental tagging error: ${pErr.message}`);
+            }
+        }
+
         // Save last run telemetry
         const statusSummary = {
             success: true,
@@ -1889,6 +1948,7 @@ export async function runFullCurationSyncInternal(): Promise<{
             seasonalCount,
             overlaysAppliedCount,
             leavingSoonCount,
+            parentalTaggedCount,
             details
         };
 
@@ -1907,6 +1967,7 @@ export async function runFullCurationSyncInternal(): Promise<{
             seasonalCount,
             overlaysAppliedCount,
             leavingSoonCount,
+            parentalTaggedCount,
             timestamp: new Date(),
             details
         };
@@ -1929,6 +1990,116 @@ export async function runFullCurationSyncInternal(): Promise<{
 export async function runFullCurationSyncAction() {
     await verifyAdmin();
     return await runFullCurationSyncInternal();
+}
+
+/**
+ * Server action to scan library section and apply IMDb Parental Advisory Tags.
+ */
+export async function applyParentalTagsToLibraryAction(
+    serverId: string,
+    sectionKey: string | number,
+    options?: {
+        format?: "prefix_category_severity" | "severity_category" | "category_severity_paren" | "custom";
+        prefix?: string;
+        target?: "labels" | "genres" | "both";
+        minSeverity?: "Severe" | "Moderate" | "Mild" | "None";
+        categories?: ParentalCategoryKey[];
+        dryRun?: boolean;
+    }
+) {
+    await verifyAdmin();
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    const mergedOptions: ParentalTaggingOptions = {
+        enabled: settings?.parentalTaggingEnabled ?? true,
+        format: options?.format || (settings?.parentalTagFormat as any) || "prefix_category_severity",
+        prefix: options?.prefix || settings?.parentalTagPrefix || "IMDb",
+        target: options?.target || (settings?.parentalTagTarget as any) || "labels",
+        minSeverity: options?.minSeverity || (settings?.parentalMinSeverity as any) || "Mild",
+        categories: options?.categories || (settings?.parentalCategories ? JSON.parse(settings.parentalCategories) : ["nudity", "violence", "profanity", "alcohol", "frightening"]),
+        dryRun: options?.dryRun ?? false
+    };
+
+    return await applyParentalTagsToLibrary(serverId, sectionKey, mergedOptions);
+}
+
+/**
+ * Server action to clear all IMDb Parental Advisory Tags from a library section.
+ */
+export async function clearParentalTagsFromLibraryAction(
+    serverId: string,
+    sectionKey: string | number,
+    prefix?: string
+) {
+    await verifyAdmin();
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    const tagPrefix = prefix || settings?.parentalTagPrefix || "IMDb";
+    return await clearParentalTagsFromLibrary(serverId, sectionKey, tagPrefix);
+}
+
+/**
+ * Server action to inspect an individual item's IMDb Parental Advisory breakdown.
+ */
+export async function inspectItemParentalAdvisoryAction(
+    ratingKey: string,
+    serverId: string = "main",
+    metadata?: {
+        title: string;
+        year?: number;
+        type?: string;
+        imdbId?: string;
+        contentRating?: string;
+    }
+) {
+    await verifyAdmin();
+    if (!metadata || !metadata.title) {
+        const stored = await prisma.mediaContentAdvisory.findFirst({
+            where: { ratingKey, serverId }
+        });
+        if (stored) {
+            return {
+                success: true,
+                advisory: {
+                    nudity: stored.nudityLevel || "None",
+                    violence: stored.violenceLevel || "None",
+                    profanity: stored.profanityLevel || "None",
+                    alcohol: stored.alcoholLevel || "None",
+                    frightening: stored.frighteningLevel || "None",
+                    certificate: stored.mpaaRating,
+                    summary: stored.leavingReason,
+                    source: "cache"
+                }
+            };
+        }
+        return { success: false, error: "Item metadata required to inspect advisory." };
+    }
+
+    const advisory = await resolveParentalAdvisory({
+        ratingKey,
+        title: metadata.title,
+        year: metadata.year,
+        type: metadata.type,
+        imdbId: metadata.imdbId,
+        contentRating: metadata.contentRating
+    }, serverId);
+
+    return {
+        success: true,
+        advisory
+    };
+}
+
+/**
+ * Server action to manually save / edit an individual item's parental advisory breakdown.
+ */
+export async function saveItemParentalAdvisoryAction(
+    ratingKey: string,
+    serverId: string,
+    title: string,
+    advisory: any
+) {
+    await verifyAdmin();
+    await saveParentalAdvisory(ratingKey, serverId, title, advisory);
+    return { success: true };
 }
 
 
