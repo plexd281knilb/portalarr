@@ -39,7 +39,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
 import EmailManagement from "@/components/email-management";
-import CurationStudio from "@/components/curation-studio";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -673,10 +672,6 @@ function SettingsPageContent() {
                     <TabsTrigger value="monitoring" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80">
                         <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span>Monitoring & Apps</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="curation" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
-                        <Sparkles className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Curation & Overlays</span>
                     </TabsTrigger>
                     <TabsTrigger value="beta" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
                         <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
@@ -2236,11 +2231,6 @@ function SettingsPageContent() {
                             </CardContent>
                         </Card>
                     </div>
-                </TabsContent>
-
-                {/* --- TAB: CURATION & OVERLAYS (KOMETA & AGREGARR REPLACEMENT) --- */}
-                <TabsContent value="curation" className="space-y-6">
-                    <CurationStudio />
                 </TabsContent>
 
                 {/* --- TAB 4: BETA TESTING & ROADMAP --- */}
