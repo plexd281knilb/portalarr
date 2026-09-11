@@ -16,6 +16,11 @@
 
 - **🎯 Agregarr & Kometa Replacement:** Native built-in collection generator, dynamic smart playlists, automated poster badges (4K HDR, Dolby Atmos), and trending hubs (Trakt/IMDb)—no extra containers needed.
 
+- **🍿 Native *Seerr Replacement (Overseerr / Jellyseerr):** All-in-one Movie & TV media discovery, interactive trailer playback, trending carousels (TMDb, Trakt, IMDb), and unified request management natively built into Portalarr without needing external Overseerr or Jellyseerr containers.
+  - Seamless 1-click requests dispatched directly to Radarr & Sonarr with multi-server root folder and quality profile routing.
+  - Granular user request quotas, role-based auto-approval rules, and live request progress tracking (`Requested` → `Searching` → `Downloading` → `Available on Plex`).
+  - Automated Plex library availability checks, 4K/HDR edition detection, and instant SMTP/Discord notifications when requested titles are ready to watch.
+
 - **🏷️ Interactive User Movie & TV Tagging:** Personal user tag management to customize and filter genres, collections, and content ratings you do and don't want to see on your shelves.
 
 
