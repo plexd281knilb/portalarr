@@ -388,6 +388,20 @@ export default function CurationStudio() {
         }
     };
 
+    const loadCollections = async (srvId?: string, secKey?: string) => {
+        try {
+            const targetSrv = srvId || selectedServerId;
+            const targetSec = secKey || selectedSectionKey;
+            const collRes = await getMediaCollectionsAction(targetSrv || undefined, targetSec || undefined);
+            if (collRes?.success) {
+                const sorted = [...(collRes.collections || [])].sort((a, b) => (a.orderIndex ?? 99) - (b.orderIndex ?? 99));
+                setCollections(sorted);
+            }
+        } catch (e) {
+            console.error("Failed loading collections:", e);
+        }
+    };
+
     const loadReleases = async () => {
         setReleasesLoading(true);
         try {
@@ -410,6 +424,12 @@ export default function CurationStudio() {
     useEffect(() => {
         loadData();
     }, []);
+
+    useEffect(() => {
+        if (selectedServerId && selectedSectionKey) {
+            loadCollections(selectedServerId, selectedSectionKey);
+        }
+    }, [selectedServerId, selectedSectionKey]);
 
     useEffect(() => {
         if (subTab === "releases") {
@@ -461,8 +481,16 @@ export default function CurationStudio() {
         setSyncingCollId(preset.id);
         setSyncMessage(null);
 
+        // Check if collection already exists in state to update rather than duplicate
+        const existing = collections.find(c => 
+            (!c.serverId || c.serverId === selectedServerId) &&
+            (!c.sectionKey || c.sectionKey === selectedSectionKey) &&
+            (c.title.trim().toLowerCase() === preset.title.trim().toLowerCase() || (c.sourceQuery && preset.sourceQuery && c.sourceQuery === preset.sourceQuery))
+        );
+
         try {
             const saveRes = await saveMediaCollectionAction({
+                id: existing?.id,
                 title: preset.title,
                 summary: preset.description,
                 type: preset.type,
@@ -472,17 +500,17 @@ export default function CurationStudio() {
                 sourceType: preset.sourceType,
                 sourceQuery: preset.sourceQuery,
                 posterUrl: preset.defaultPosterUrl,
-                orderIndex: preset.defaultHomeOrder ?? collections.length,
-                sortPrefix: preset.defaultSortPrefix ?? `!${String(preset.defaultHomeOrder ?? collections.length).padStart(2, '0')}_`,
-                promotedToHome: true,
-                promotedToRecommended: true,
-                promotedToSharedHome: true,
-                isSeasonal: preset.isSeasonal ?? false,
-                scheduleStartMonth: preset.scheduleStartMonth,
-                scheduleStartDay: preset.scheduleStartDay,
-                scheduleEndMonth: preset.scheduleEndMonth,
-                scheduleEndDay: preset.scheduleEndDay,
-                seasonalAction: preset.seasonalAction ?? "promote_hide",
+                orderIndex: existing?.orderIndex ?? preset.defaultHomeOrder ?? collections.length,
+                sortPrefix: existing?.sortPrefix ?? preset.defaultSortPrefix ?? `!${String(preset.defaultHomeOrder ?? collections.length).padStart(2, '0')}_`,
+                promotedToHome: existing?.promotedToHome ?? true,
+                promotedToRecommended: existing?.promotedToRecommended ?? true,
+                promotedToSharedHome: existing?.promotedToSharedHome ?? true,
+                isSeasonal: existing?.isSeasonal ?? preset.isSeasonal ?? false,
+                scheduleStartMonth: existing?.scheduleStartMonth ?? preset.scheduleStartMonth,
+                scheduleStartDay: existing?.scheduleStartDay ?? preset.scheduleStartDay,
+                scheduleEndMonth: existing?.scheduleEndMonth ?? preset.scheduleEndMonth,
+                scheduleEndDay: existing?.scheduleEndDay ?? preset.scheduleEndDay,
+                seasonalAction: existing?.seasonalAction ?? preset.seasonalAction ?? "promote_hide",
                 autoSync: true
             });
 
@@ -493,7 +521,7 @@ export default function CurationStudio() {
                     success: syncRes.success,
                     text: syncRes.message || (syncRes.success ? "Synced to Plex successfully!" : "Sync failed.")
                 });
-                await loadData();
+                await loadCollections(selectedServerId, selectedSectionKey);
             } else {
                 setSyncMessage({ id: preset.id, success: false, text: saveRes.error || "Failed to create collection." });
             }
@@ -546,7 +574,11 @@ export default function CurationStudio() {
 
     // Handle Open Edit Preset
     const handleOpenEditPreset = (preset: CollectionPreset) => {
-        const existing = collections.find(c => c.title.toLowerCase() === preset.title.toLowerCase() || (c.sourceQuery && c.sourceQuery === preset.sourceQuery));
+        const existing = collections.find(c => 
+            (!c.serverId || c.serverId === selectedServerId) &&
+            (!c.sectionKey || c.sectionKey === selectedSectionKey) &&
+            (c.title.trim().toLowerCase() === preset.title.trim().toLowerCase() || (c.sourceQuery && preset.sourceQuery && c.sourceQuery === preset.sourceQuery))
+        );
         setEditingPresetData({
             presetId: preset.id,
             id: existing?.id,
@@ -603,8 +635,19 @@ export default function CurationStudio() {
         }
         setSavingPresetEdit(true);
         try {
+            let existingId = editingPresetData.id;
+            if (!existingId) {
+                const existing = collections.find(c => 
+                    (!c.serverId || c.serverId === selectedServerId) &&
+                    (!c.sectionKey || c.sectionKey === selectedSectionKey) &&
+                    (c.title.trim().toLowerCase() === editingPresetData.title.trim().toLowerCase() ||
+                     (editingPresetData.sourceQuery && c.sourceQuery === editingPresetData.sourceQuery))
+                );
+                if (existing) existingId = existing.id;
+            }
+
             const res = await saveMediaCollectionAction({
-                id: editingPresetData.id,
+                id: existingId,
                 title: editingPresetData.title,
                 summary: editingPresetData.summary,
                 type: editingPresetData.type || "smart",
@@ -629,7 +672,7 @@ export default function CurationStudio() {
             });
             if (res.success) {
                 setEditPresetModalOpen(false);
-                await loadData();
+                await loadCollections(selectedServerId, selectedSectionKey);
             } else {
                 alert(res.error || "Failed to save collection.");
             }
@@ -642,10 +685,17 @@ export default function CurationStudio() {
 
     // Handle Custom Collection Create
     const handleCreateCustomCollection = async () => {
-        if (!newCollTitle) return;
+        if (!newCollTitle || !selectedServerId || !selectedSectionKey) return;
         setCreateModalOpen(false);
 
+        const existing = collections.find(c => 
+            (!c.serverId || c.serverId === selectedServerId) &&
+            (!c.sectionKey || c.sectionKey === selectedSectionKey) &&
+            c.title.trim().toLowerCase() === newCollTitle.trim().toLowerCase()
+        );
+
         const saveRes = await saveMediaCollectionAction({
+            id: existing?.id,
             title: newCollTitle,
             summary: newCollSummary,
             type: "custom",
@@ -654,8 +704,8 @@ export default function CurationStudio() {
             sourceType: newCollSourceType,
             sourceQuery: newCollSourceQuery,
             posterUrl: newCollPosterUrl,
-            orderIndex: collections.length,
-            sortPrefix: `!${String(collections.length).padStart(2, '0')}_`,
+            orderIndex: existing?.orderIndex ?? collections.length,
+            sortPrefix: existing?.sortPrefix ?? `!${String(collections.length).padStart(2, '0')}_`,
             promotedToHome: true,
             promotedToRecommended: true,
             promotedToSharedHome: true,
@@ -670,7 +720,7 @@ export default function CurationStudio() {
 
         if (saveRes.success && saveRes.collection) {
             await syncCollectionToPlexAction(saveRes.collection.id);
-            await loadData();
+            await loadCollections(selectedServerId, selectedSectionKey);
         }
         setNewCollTitle("");
         setNewCollSummary("");
@@ -742,7 +792,7 @@ export default function CurationStudio() {
                 success: res.success,
                 text: res.message || `Seasonal sync complete! Evaluated ${res.evaluatedCount || 0} collections.`
             });
-            await loadData();
+            await loadCollections(selectedServerId, selectedSectionKey);
             setTimeout(() => setSeasonalSyncMsg(null), 5000);
         } catch (e: any) {
             setSeasonalSyncMsg({ success: false, text: e.message || "Failed seasonal sync." });
@@ -778,7 +828,7 @@ export default function CurationStudio() {
                 promotedToRecommended: editingColl.promotedToRecommended,
                 promotedToSharedHome: editingColl.promotedToSharedHome
             });
-            await loadData();
+            await loadCollections(selectedServerId, selectedSectionKey);
         } catch (e: any) {
             alert(e.message || "Failed updating collection schedule.");
         }
@@ -2871,7 +2921,7 @@ export default function CurationStudio() {
                                                         onClick={async () => {
                                                             if (!confirm(`Delete collection "${coll.title}"?`)) return;
                                                             await deleteMediaCollectionAction(coll.id);
-                                                            await loadData();
+                                                            await loadCollections(selectedServerId, selectedSectionKey);
                                                         }}
                                                         className="h-7 px-2 text-[10px] text-rose-400 hover:bg-rose-950/40 hover:text-rose-300"
                                                     >

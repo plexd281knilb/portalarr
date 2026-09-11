@@ -272,7 +272,7 @@ export async function getPlexServersAndSectionsAction() {
 export async function getMediaCollectionsAction(serverId?: string, sectionKey?: string) {
     await verifyAdmin();
     try {
-        const collections = await prisma.mediaCollection.findMany({
+        const rawCollections = await prisma.mediaCollection.findMany({
             where: {
                 ...(serverId ? { serverId } : {}),
                 ...(sectionKey ? { sectionKey } : {})
@@ -283,7 +283,60 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
             ]
         });
 
-        return { success: true, collections, presets: COLLECTION_PRESETS };
+        // Deduplicate duplicate entries if any exist for the same (serverId, sectionKey, lowercased title)
+        const groups = new Map<string, typeof rawCollections>();
+        for (const coll of rawCollections) {
+            const key = `${coll.serverId || "all"}_${coll.sectionKey || "all"}_${coll.title.trim().toLowerCase()}`;
+            if (!groups.has(key)) {
+                groups.set(key, []);
+            }
+            groups.get(key)!.push(coll);
+        }
+
+        const duplicateIdsToDelete: string[] = [];
+        const dedupedCollections: typeof rawCollections = [];
+
+        for (const [_, group] of groups.entries()) {
+            if (group.length === 1) {
+                dedupedCollections.push(group[0]);
+            } else {
+                // Group has duplicates!
+                // Prioritize keeping:
+                // 1. Record with ratingKey (synced to Plex)
+                // 2. Record with highest itemCount
+                // 3. Most recently updated / created
+                group.sort((a, b) => {
+                    if (a.ratingKey && !b.ratingKey) return -1;
+                    if (!a.ratingKey && b.ratingKey) return 1;
+                    if ((a.itemCount || 0) !== (b.itemCount || 0)) {
+                        return (b.itemCount || 0) - (a.itemCount || 0);
+                    }
+                    const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+                    const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+                    return bTime - aTime;
+                });
+
+                const canonical = group[0];
+                dedupedCollections.push(canonical);
+
+                const dupeIds = group.slice(1).map(c => c.id);
+                duplicateIdsToDelete.push(...dupeIds);
+            }
+        }
+
+        if (duplicateIdsToDelete.length > 0) {
+            logger.addLog("INFO", "PLEX", `Auto-healing ${duplicateIdsToDelete.length} duplicate collection records from database.`);
+            await prisma.mediaCollection.deleteMany({
+                where: {
+                    id: { in: duplicateIdsToDelete }
+                }
+            }).catch(err => logger.addLog("WARN", "PLEX", `Failed deleting duplicate collections: ${err.message}`));
+        }
+
+        // Re-sort dedupedCollections by orderIndex
+        dedupedCollections.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+        return { success: true, collections: dedupedCollections, presets: COLLECTION_PRESETS };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -345,10 +398,31 @@ export async function saveMediaCollectionAction(data: {
             seasonalAction: data.seasonalAction || "promote_hide"
         };
 
-        let collection;
+        let existing = null;
         if (data.id) {
+            existing = await prisma.mediaCollection.findUnique({
+                where: { id: data.id }
+            });
+        }
+
+        // If not found by explicit ID, look up matching collection for this server + section by title or query
+        if (!existing && data.serverId && data.sectionKey) {
+            const sameSectionColls = await prisma.mediaCollection.findMany({
+                where: {
+                    serverId: data.serverId,
+                    sectionKey: data.sectionKey
+                }
+            });
+            existing = sameSectionColls.find(c => 
+                c.title.trim().toLowerCase() === data.title.trim().toLowerCase() ||
+                (data.sourceQuery && c.sourceQuery && c.sourceQuery === data.sourceQuery)
+            ) || null;
+        }
+
+        let collection;
+        if (existing) {
             collection = await prisma.mediaCollection.update({
-                where: { id: data.id },
+                where: { id: existing.id },
                 data: dataPayload
             });
         } else {
@@ -931,12 +1005,11 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
         if (!collection) return { success: false, error: "Collection not found." };
 
         if (deleteFromPlex && collection.ratingKey) {
-            const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-            const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-            const serverUrl = settings?.mainPlexUrl || "";
-
-            if (token && serverUrl) {
-                await deletePlexCollection(serverUrl, token, collection.ratingKey);
+            const resolved = await resolveWorkingPlexServerConnection(collection.serverId || undefined);
+            if (resolved && resolved.serverUrl && resolved.token) {
+                await deletePlexCollection(resolved.serverUrl, resolved.token, collection.ratingKey).catch(err => {
+                    logger.addLog("WARN", "PLEX", `Could not delete collection "${collection.title}" from Plex: ${err.message}`);
+                });
             }
         }
 
