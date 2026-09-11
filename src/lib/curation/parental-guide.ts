@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
-import { getPlexServers, getPlexCloudServersMap } from "@/lib/plex";
+import { getPlexServers, getPlexCloudServersMap, resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { getPlexLibraryMediaItems, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 
 export type ParentalCategoryKey = "nudity" | "violence" | "profanity" | "alcohol" | "frightening";
@@ -616,23 +616,16 @@ export async function applyParentalTagsToLibrary(
     appliedTagsSummary: Record<string, number>;
     error?: string;
 }> {
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-    if (!token) {
-        return { success: false, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, appliedTagsSummary: {}, error: "Plex token not configured." };
+    const resolved = await resolveWorkingPlexServerConnection(serverId);
+    if (!resolved || !resolved.serverUrl) {
+        return { success: false, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, appliedTagsSummary: {}, error: "Plex server unreachable or token not configured." };
     }
 
-    const servers = await getPlexServers(token);
-    const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
+    const serverToken = resolved.token;
+    const serverUrl = resolved.serverUrl;
+    const serverName = resolved.serverName;
 
-    if (!server) {
-        return { success: false, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, appliedTagsSummary: {}, error: "Plex Server not found" };
-    }
-
-    const serverToken = server.accessToken || token;
-    const serverUrl = server.connections?.[0]?.uri || settings?.mainPlexUrl || "";
-
-    logger.addLog("INFO", "CURATION", `Starting IMDb Parental Rating Tagging for library section ${sectionKey} on "${server.name}"...`);
+    logger.addLog("INFO", "CURATION", `Starting IMDb Parental Rating Tagging for library section ${sectionKey} on "${serverName}"...`);
 
     const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(serverUrl, serverToken, sectionKey, 1000);
     if (items.length === 0) {
@@ -653,7 +646,7 @@ export async function applyParentalTagsToLibrary(
         const batchAdvisories: Record<string, ImdbParentalAdvisory> = {};
 
         for (const it of batch) {
-            const cached = await getStoredParentalAdvisory(it.ratingKey, server.clientIdentifier);
+            const cached = await getStoredParentalAdvisory(it.ratingKey, resolved.serverId);
             if (cached) {
                 batchAdvisories[it.ratingKey] = cached;
             } else {
@@ -675,7 +668,7 @@ export async function applyParentalTagsToLibrary(
                 const adv = aiResults[it.ratingKey] || resolveParentalAdvisoryFallback(it);
                 batchAdvisories[it.ratingKey] = adv;
                 // Save to DB cache
-                await saveParentalAdvisory(it.ratingKey, server.clientIdentifier, it.title, adv, {
+                await saveParentalAdvisory(it.ratingKey, resolved.serverId, it.title, adv, {
                     imdbId: it.imdbId,
                     mpaaRating: it.mpaaRating
                 });
@@ -702,7 +695,7 @@ export async function applyParentalTagsToLibrary(
         }
     }
 
-    logger.addLog("SUCCESS", "CURATION", `Completed IMDb Parental Tagging for "${server.name}": Tagged ${taggedCount} items (${skippedCount} skipped/none).`);
+    logger.addLog("SUCCESS", "CURATION", `Completed IMDb Parental Tagging for "${serverName}": Tagged ${taggedCount} items (${skippedCount} skipped/none).`);
 
     return {
         success: true,
@@ -721,23 +714,16 @@ export async function clearParentalTagsFromLibrary(
     sectionKey: string | number,
     prefix = "IMDb"
 ): Promise<{ success: boolean; clearedCount: number; error?: string }> {
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-    if (!token) {
-        return { success: false, clearedCount: 0, error: "Plex token not configured." };
+    const resolved = await resolveWorkingPlexServerConnection(serverId);
+    if (!resolved || !resolved.serverUrl) {
+        return { success: false, clearedCount: 0, error: "Plex server unreachable or token not configured." };
     }
 
-    const servers = await getPlexServers(token);
-    const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
+    const serverToken = resolved.token;
+    const serverUrl = resolved.serverUrl;
+    const serverName = resolved.serverName;
 
-    if (!server) {
-        return { success: false, clearedCount: 0, error: "Plex Server not found" };
-    }
-
-    const serverToken = server.accessToken || token;
-    const serverUrl = server.connections?.[0]?.uri || settings?.mainPlexUrl || "";
-
-    logger.addLog("INFO", "CURATION", `Clearing all IMDb Parental Tags from library section ${sectionKey} on "${server.name}"...`);
+    logger.addLog("INFO", "CURATION", `Clearing all IMDb Parental Tags from library section ${sectionKey} on "${serverName}"...`);
 
     const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(serverUrl, serverToken, sectionKey, 1000);
     let clearedCount = 0;
@@ -747,7 +733,7 @@ export async function clearParentalTagsFromLibrary(
         if (res.success) clearedCount++;
     }
 
-    logger.addLog("SUCCESS", "CURATION", `Cleared parental tags from ${clearedCount} items on "${server.name}".`);
+    logger.addLog("SUCCESS", "CURATION", `Cleared parental tags from ${clearedCount} items on "${serverName}".`);
 
     return { success: true, clearedCount };
 }

@@ -815,47 +815,87 @@ export async function searchPlexLibraryItems(
     sectionKey?: string
 ): Promise<PlexMediaStreamInfo[]> {
     const cleanBase = serverUrl.replace(/\/+$/, "");
-    let endpoint = `${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&limit=25`;
+    const endpointsToTry: string[] = [];
+
     if (sectionKey) {
-        endpoint = `${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/all?title=${encodeURIComponent(query)}&X-Plex-Container-Start=0&X-Plex-Container-Size=25`;
+        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/search?query=${encodeURIComponent(query)}&limit=30`);
+        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&sectionId=${encodeURIComponent(sectionKey)}&limit=30`);
+        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/all?title=${encodeURIComponent(query)}&X-Plex-Container-Start=0&X-Plex-Container-Size=30`);
+        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&limit=50`);
+    } else {
+        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&limit=50`);
+        endpointsToTry.push(`${cleanBase}/search?query=${encodeURIComponent(query)}&limit=50`);
     }
 
-    try {
-        const res = await fetch(endpoint, {
-            headers: {
-                Accept: "application/json",
-                "X-Plex-Token": token,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+    const seenKeys = new Set<string>();
+    const results: PlexMediaStreamInfo[] = [];
+
+    for (const endpoint of endpointsToTry) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4500);
+            const res = await fetch(endpoint, {
+                headers: {
+                    Accept: "application/json",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) continue;
+
+            const data = await res.json();
+            const rawMetadata = data.MediaContainer?.Metadata;
+            const items: any[] = [];
+
+            if (rawMetadata) {
+                if (Array.isArray(rawMetadata)) items.push(...rawMetadata);
+                else items.push(rawMetadata);
             }
-        });
 
-        if (!res.ok) return [];
-
-        const data = await res.json();
-        const results: PlexMediaStreamInfo[] = [];
-
-        if (sectionKey) {
-            const rawMetadata = data.MediaContainer?.Metadata || [];
-            for (const item of rawMetadata) {
-                results.push(analyzeMediaStreamInfo(item));
-            }
-        } else {
-            const hubs = data.MediaContainer?.Hub || [];
-            for (const hub of hubs) {
-                const metadataList = hub.Metadata || [];
-                for (const item of metadataList) {
-                    if (item.type === "movie" || item.type === "show" || item.type === "season" || item.type === "episode") {
-                        results.push(analyzeMediaStreamInfo(item));
-                    }
+            const hubs = data.MediaContainer?.Hub;
+            if (Array.isArray(hubs)) {
+                for (const hub of hubs) {
+                    const hubMeta = hub.Metadata || [];
+                    if (Array.isArray(hubMeta)) items.push(...hubMeta);
+                    else if (hubMeta) items.push(hubMeta);
                 }
             }
-        }
 
-        return results;
-    } catch (e: any) {
-        logger.addLog("WARN", "PLEX", `Search failed for query "${query}": ${e.message}`);
-        return [];
+            for (const item of items) {
+                const rKey = String(item.ratingKey || item.key || "");
+                if (!rKey || seenKeys.has(rKey)) continue;
+
+                const itemType = (item.type || "").toLowerCase();
+                // Filter out non-media items (e.g. actors, directors, genres) unless they are media
+                if (itemType && !["movie", "show", "season", "episode"].includes(itemType)) {
+                    continue;
+                }
+
+                // If sectionKey filter is present and item has section info, match it
+                if (sectionKey) {
+                    const itemSecId = String(item.librarySectionID || item.librarySectionKey || "");
+                    if (itemSecId && itemSecId !== String(sectionKey) && endpointsToTry.indexOf(endpoint) < 3) {
+                        continue;
+                    }
+                }
+
+                seenKeys.add(rKey);
+                results.push(analyzeMediaStreamInfo(item));
+            }
+
+            if (results.length > 0) {
+                return results;
+            }
+        } catch (e: any) {
+            // Try next search endpoint
+        }
     }
+
+    return results;
 }
 
 /**
@@ -883,18 +923,23 @@ export async function inspectPlexMediaItemFull(
     const endpoint = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?includeStreams=1&includeGuids=1`;
 
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
         const res = await fetch(endpoint, {
             headers: {
                 Accept: "application/json",
                 "X-Plex-Token": token,
                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-            }
+            },
+            signal: controller.signal,
+            cache: "no-store"
         });
+        clearTimeout(timeoutId);
 
         if (!res.ok) return null;
 
         const data = await res.json();
-        const rawItem = data.MediaContainer?.Metadata?.[0];
+        const rawItem = data.MediaContainer?.Metadata?.[0] || data.MediaContainer?.Metadata;
         if (!rawItem) return null;
 
         const analyzed = analyzeMediaStreamInfo(rawItem);

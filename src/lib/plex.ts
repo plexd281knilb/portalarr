@@ -928,6 +928,179 @@ export async function getPlexServerLibrarySections(adminToken: string, customPle
     return results;
 }
 
+export interface ResolvedPlexConnection {
+    serverId: string;
+    serverName: string;
+    serverUrl: string;
+    token: string;
+    allCandidateUrls: string[];
+}
+
+const resolvedServerCache = new Map<string, { timestamp: number; data: ResolvedPlexConnection }>();
+const RESOLVED_SERVER_CACHE_TTL = 60 * 1000; // 60 seconds
+
+export async function resolveWorkingPlexServerConnection(
+    serverIdOrName?: string,
+    adminToken?: string,
+    customPlexUrl?: string,
+    forceRefresh = false
+): Promise<ResolvedPlexConnection | null> {
+    let token = adminToken || "";
+    let mainPlexUrl = customPlexUrl || "";
+
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!token && settings?.mainPlexToken) {
+            token = decryptData(settings.mainPlexToken);
+        }
+        if (!mainPlexUrl && settings?.mainPlexUrl) {
+            mainPlexUrl = settings.mainPlexUrl;
+        }
+    } catch (dbErr) {}
+
+    if (!token) return null;
+
+    const cacheKey = `${serverIdOrName || "default"}_${token}`;
+    if (!forceRefresh && resolvedServerCache.has(cacheKey)) {
+        const cached = resolvedServerCache.get(cacheKey)!;
+        if (Date.now() - cached.timestamp < RESOLVED_SERVER_CACHE_TTL) {
+            return cached.data;
+        }
+    }
+
+    const cloudServersMap = await getPlexCloudServersMap(token).catch(() => new Map());
+    const servers = await getPlexServers(token, forceRefresh).catch(() => []);
+
+    // Also check media apps in DB
+    const dbPlexUrls: string[] = [];
+    if (mainPlexUrl) dbPlexUrls.push(mainPlexUrl);
+    try {
+        const plexApps = await prisma.mediaApp.findMany({ where: { type: "plex" } });
+        for (const app of plexApps) {
+            if (app.url && !dbPlexUrls.includes(app.url)) dbPlexUrls.push(app.url);
+        }
+    } catch (e) {}
+
+    // Locate target server
+    let targetServer: PlexServerResource | undefined;
+    if (serverIdOrName) {
+        targetServer = servers.find(s => 
+            s.clientIdentifier.toLowerCase() === serverIdOrName.toLowerCase() ||
+            s.name.toLowerCase() === serverIdOrName.toLowerCase()
+        );
+    }
+    if (!targetServer && servers.length > 0) {
+        targetServer = servers[0];
+    }
+
+    // Cloud fallback
+    const targetCloud = serverIdOrName ? (
+        cloudServersMap.get(serverIdOrName) ||
+        Array.from(cloudServersMap.values()).find((c: any) => 
+            c.serverId?.toLowerCase() === serverIdOrName.toLowerCase() ||
+            c.serverName?.toLowerCase() === serverIdOrName.toLowerCase()
+        )
+    ) : Array.from(cloudServersMap.values())[0];
+
+    const serverId = targetServer?.clientIdentifier || (targetCloud as any)?.serverId || serverIdOrName || "plex-server";
+    const serverName = targetServer?.name || (targetCloud as any)?.serverName || "Plex Server";
+    const serverToken = targetServer?.accessToken || token;
+
+    // Build candidates in optimal priority order:
+    // 1. Configured custom/DB URLs
+    // 2. Direct LAN IP:port (http://<ip>:<port>) -> bypasses .plex.direct DNS rebinding & cert issues!
+    // 3. Cloud directUrl
+    // 4. Connection URIs (local connections first)
+    // 5. Http alternatives for https://*.plex.direct URIs
+    const candidateUrls: string[] = [];
+
+    const addCandidate = (u?: string) => {
+        if (!u) return;
+        const clean = u.replace(/\/+$/, "");
+        if (clean && !candidateUrls.includes(clean)) {
+            candidateUrls.push(clean);
+        }
+    };
+
+    for (const u of dbPlexUrls) addCandidate(u);
+
+    if (targetServer?.connections) {
+        for (const c of targetServer.connections) {
+            if (c.address && c.port) {
+                addCandidate(`http://${c.address}:${c.port}`);
+            }
+        }
+    }
+
+    if ((targetCloud as any)?.directUrl) {
+        addCandidate((targetCloud as any).directUrl);
+    }
+
+    if (targetServer?.connections) {
+        for (const c of targetServer.connections) {
+            if (c.uri) {
+                addCandidate(c.uri);
+                if (c.uri.startsWith("https://") && c.uri.includes(".plex.direct")) {
+                    addCandidate(c.uri.replace("https://", "http://"));
+                }
+            }
+            if (c.address && c.port) {
+                addCandidate(`https://${c.address}:${c.port}`);
+            }
+        }
+    }
+
+    // Default fallback if no candidates found
+    if (candidateUrls.length === 0) {
+        addCandidate("http://127.0.0.1:32400");
+        addCandidate("http://localhost:32400");
+    }
+
+    // Probe candidates quickly to find the first working connection
+    let workingUrl = "";
+    for (const cand of candidateUrls) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2500);
+            const res = await fetch(`${cand}/identity`, {
+                headers: {
+                    Accept: "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": serverToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId);
+            if (res.ok || res.status === 401 || res.status === 403) {
+                workingUrl = cand;
+                break;
+            }
+        } catch (e) {
+            // Connection failed, proceed to next candidate
+        }
+    }
+
+    // If probing didn't succeed, fallback to the top candidate
+    if (!workingUrl && candidateUrls.length > 0) {
+        workingUrl = candidateUrls[0];
+    }
+
+    const result: ResolvedPlexConnection = {
+        serverId,
+        serverName,
+        serverUrl: workingUrl,
+        token: serverToken,
+        allCandidateUrls: candidateUrls
+    };
+
+    if (workingUrl) {
+        resolvedServerCache.set(cacheKey, { timestamp: Date.now(), data: result });
+    }
+
+    return result;
+}
+
 export interface PlexSharedServerItem {
     id: number | string;
     serverId: string;

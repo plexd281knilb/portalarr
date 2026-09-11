@@ -7,7 +7,7 @@ import prisma from "@/lib/prisma";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getCurrentUser } from "@/app/auth-actions";
 import { logger } from "@/lib/logger";
-import { getPlexServerLibrarySections, getPlexServers } from "@/lib/plex";
+import { getPlexServerLibrarySections, getPlexServers, resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { 
     getPlexLibraryMediaItems, 
     getPlexLibraryCollections, 
@@ -373,14 +373,10 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         if (!collection) return { success: false, error: "Collection record not found." };
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
-
-        const servers = await getPlexServers(token);
-        const server = servers.find(s => s.clientIdentifier === collection.serverId) || servers[0];
-        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
-
-        if (!serverUrl) return { success: false, error: "Plex server connection URL not found." };
+        const resolved = await resolveWorkingPlexServerConnection(collection.serverId || undefined);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
+        const serverUrl = resolved.serverUrl;
+        const token = resolved.token;
 
         // 1. Fetch library media items
         const libraryItems = await getPlexLibraryMediaItems(serverUrl, token, collection.sectionKey || "", 1000);
@@ -537,13 +533,10 @@ export async function previewCollectionMatchingAction(
     await verifyAdmin();
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
-
-        const servers = await getPlexServers(token);
-        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
-        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
-        if (!serverUrl) return { success: false, error: "Plex server connection URL not found." };
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
+        const serverUrl = resolved.serverUrl;
+        const token = resolved.token;
 
         const libraryItems = await getPlexLibraryMediaItems(serverUrl, token, sectionKey || "", 500);
 
@@ -681,13 +674,10 @@ export async function reorderPlexCollectionsAction(
 ) {
     await verifyAdmin();
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
-
-        const servers = await getPlexServers(token);
-        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
-        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
+        const serverUrl = resolved.serverUrl;
+        const token = resolved.token;
 
         let updatedCount = 0;
 
@@ -736,13 +726,10 @@ export async function reorderPlexCollectionsAction(
 export async function syncSeasonalAndScheduledCollectionsAction(serverId?: string, sectionKey?: string) {
     await verifyAdmin();
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
-
-        const servers = await getPlexServers(token);
-        const server = servers.find(s => (serverId ? s.clientIdentifier === serverId : true)) || servers[0];
-        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
+        const serverUrl = resolved.serverUrl;
+        const token = resolved.token;
 
         const seasonalCollections = await prisma.mediaCollection.findMany({
             where: {
@@ -846,12 +833,10 @@ export async function syncLeavingSoonCollectionHubAction(serverId?: string, sect
     await verifyAdmin();
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
-
-        const servers = await getPlexServers(token);
-        const server = servers.find(s => (serverId ? s.clientIdentifier === serverId : true)) || servers[0];
-        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
+        const serverUrl = resolved.serverUrl;
+        const token = resolved.token;
 
         // Query active leaving soon items
         const leavingSoonItems = await prisma.mediaContentAdvisory.findMany({
@@ -1211,15 +1196,10 @@ export async function saveOverlayRuleAction(data: {
 export async function applyOverlaysToLibraryAction(serverId: string, sectionKey: string, ruleId?: string) {
     await verifyAdmin();
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
-
-        const servers = await getPlexServers(token);
-        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
-        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
-
-        if (!serverUrl) return { success: false, error: "Plex server connection URL not found." };
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
+        const serverUrl = resolved.serverUrl;
+        const token = resolved.token;
 
         // Fetch active custom badges
         const activeCustomBadges = await prisma.customBadge.findMany({
@@ -1593,10 +1573,10 @@ export async function runPruneSimulationAction(targetServerId?: string, criteria
         let totalEvaluated = 0;
 
         for (const s of targetServers) {
-            const serverUrl = s.connections[0]?.uri || settings?.mainPlexUrl || "";
-            if (!serverUrl) continue;
+            const resolved = await resolveWorkingPlexServerConnection(s.clientIdentifier);
+            if (!resolved || !resolved.serverUrl) continue;
 
-            const res = await evaluatePruneCandidatesForServer(serverUrl, token, s.clientIdentifier, s.name, {
+            const res = await evaluatePruneCandidatesForServer(resolved.serverUrl, resolved.token, s.clientIdentifier, s.name, {
                 minAgeDays: criteria?.minAgeDays ?? settings?.pruneMinAgeDays ?? 90,
                 unwatchedOnly: criteria?.unwatchedOnly ?? settings?.pruneUnwatchedOnly ?? true,
                 maxCandidates: criteria?.maxCandidates ?? 50
@@ -1658,9 +1638,10 @@ export async function executePruneAction(
         const results: { ratingKey: string; title: string; serverName: string; action: string; success: boolean }[] = [];
 
         for (const it of items) {
-            const server = servers.find(s => s.clientIdentifier === it.serverId) || servers[0];
-            const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
-            const serverName = server?.name || it.serverId;
+            const resolved = await resolveWorkingPlexServerConnection(it.serverId);
+            const serverUrl = resolved?.serverUrl || "";
+            const serverName = resolved?.serverName || it.serverId;
+            const serverToken = resolved?.token || token;
 
             // 1. If dry run or deletion not explicitly armed, flag as Leaving Soon and stage
             if (isDryRun || !isMasterEnabled) {
@@ -1689,7 +1670,7 @@ export async function executePruneAction(
                 if (shouldTagCollection && canTagCollection && serverUrl && it.sectionKey) {
                     await syncPlexCollection(
                         serverUrl,
-                        token,
+                        serverToken,
                         it.sectionKey,
                         "⚠️ Leaving Soon",
                         [it.ratingKey],
@@ -1703,12 +1684,12 @@ export async function executePruneAction(
                 // Apply overlay if server enabled
                 const canApplyOverlay = enabledServersForOverlays.length === 0 || enabledServersForOverlays.includes(it.serverId);
                 if (shouldApplyOverlay && canApplyOverlay && serverUrl && it.sectionKey) {
-                    const mediaItems = await getPlexLibraryMediaItems(serverUrl, token, it.sectionKey, 50);
+                    const mediaItems = await getPlexLibraryMediaItems(serverUrl, serverToken, it.sectionKey, 50);
                     const matched = mediaItems.find(m => m.ratingKey === it.ratingKey);
                     if (matched) {
                         await backupAndApplyOverlay(
                             serverUrl,
-                            token,
+                            serverToken,
                             it.serverId,
                             matched,
                             {
@@ -1733,7 +1714,7 @@ export async function executePruneAction(
                 let deleted = false;
 
                 if (serverUrl) {
-                    const plexDelRes = await deleteMediaFromPlexServer(serverUrl, token, it.ratingKey);
+                    const plexDelRes = await deleteMediaFromPlexServer(serverUrl, serverToken, it.ratingKey);
                     deleted = plexDelRes.success;
                 }
 
@@ -1911,16 +1892,21 @@ export async function searchPlexLibraryItemsAction(serverId: string, query: stri
     try {
         if (!query || query.trim().length === 0) return { success: true, items: [] };
 
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured.", items: [] };
 
-        const servers = await getPlexServers(token);
-        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
-        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
-        if (!serverUrl) return { success: false, error: "Plex server unreachable." };
+        let items: PlexMediaStreamInfo[] = [];
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
 
-        const items = await searchPlexLibraryItems(serverUrl, token, query.trim(), sectionKey);
+        for (const url of urlsToTry) {
+            try {
+                items = await searchPlexLibraryItems(url, resolved.token, query.trim(), sectionKey);
+                if (items.length > 0) break;
+            } catch (e) {
+                // try next candidate URL
+            }
+        }
+
         return { success: true, items };
     } catch (e: any) {
         return { success: false, error: e.message, items: [] };
@@ -1933,24 +1919,27 @@ export async function searchPlexLibraryItemsAction(serverId: string, query: stri
 export async function inspectPlexMediaItemAction(serverId: string, ratingKey: string) {
     await verifyAdmin();
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
 
-        const servers = await getPlexServers(token);
-        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
-        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
-        if (!serverUrl) return { success: false, error: "Plex server unreachable." };
+        let inspection: any = null;
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
 
-        const inspection = await inspectPlexMediaItemFull(serverUrl, token, ratingKey, serverId);
+        for (const url of urlsToTry) {
+            try {
+                inspection = await inspectPlexMediaItemFull(url, resolved.token, ratingKey, resolved.serverId);
+                if (inspection) break;
+            } catch (e) {}
+        }
+
         if (!inspection) return { success: false, error: "Media item not found on Plex." };
 
         const customBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
 
         return {
             success: true,
-            serverName: server?.name || "Plex Server",
-            serverUrl,
+            serverName: resolved.serverName,
+            serverUrl: resolved.serverUrl,
             ...inspection,
             availableCustomBadges: customBadges
         };
@@ -2001,15 +1990,21 @@ export async function applyOverlayToSingleItemAction(
 ) {
     await verifyAdmin();
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
 
-        const servers = await getPlexServers(token);
-        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
-        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+        const serverUrl = resolved.serverUrl;
+        const token = resolved.token;
 
-        const inspection = await inspectPlexMediaItemFull(serverUrl, token, ratingKey, serverId);
+        let inspection: any = null;
+        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+        for (const url of urlsToTry) {
+            try {
+                inspection = await inspectPlexMediaItemFull(url, token, ratingKey, resolved.serverId);
+                if (inspection) break;
+            } catch (e) {}
+        }
+
         if (!inspection) return { success: false, error: "Media item not found on Plex." };
 
         const allCustomBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
@@ -2153,10 +2148,10 @@ export async function runFullCurationSyncInternal(): Promise<{
                 const customBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
 
                 for (const srv of overlayServers) {
-                    const serverUrl = srv.connections[0]?.uri || settings.mainPlexUrl || "";
-                    if (!serverUrl) continue;
+                    const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
+                    if (!resolved || !resolved.serverUrl) continue;
 
-                    const sectionsRes = await getPlexServerLibrarySections(token);
+                    const sectionsRes = await getPlexServerLibrarySections(resolved.token);
                     const srvSections = sectionsRes.find(s => s.serverId === srv.clientIdentifier)?.sections || [];
 
                     for (const sec of srvSections) {
