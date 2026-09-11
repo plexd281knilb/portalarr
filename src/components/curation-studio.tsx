@@ -2920,7 +2920,17 @@ export default function CurationStudio() {
                                                         variant="ghost"
                                                         onClick={async () => {
                                                             if (!confirm(`Delete collection "${coll.title}"?`)) return;
-                                                            await deleteMediaCollectionAction(coll.id);
+                                                            // 1. Optimistically remove from state immediately
+                                                            setCollections(prev => prev.filter(c => c.id !== coll.id && c.title.trim().toLowerCase() !== coll.title.trim().toLowerCase()));
+                                                            try {
+                                                                const res = await deleteMediaCollectionAction(coll.id);
+                                                                if (!res.success) {
+                                                                    console.warn("Delete collection warning:", res.error);
+                                                                }
+                                                            } catch (err: any) {
+                                                                console.error("Failed deleting collection:", err);
+                                                            }
+                                                            // 2. Refresh server collections
                                                             await loadCollections(selectedServerId, selectedSectionKey);
                                                         }}
                                                         className="h-7 px-2 text-[10px] text-rose-400 hover:bg-rose-950/40 hover:text-rose-300"

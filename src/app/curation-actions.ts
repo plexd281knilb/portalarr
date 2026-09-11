@@ -998,24 +998,57 @@ export async function syncLeavingSoonCollectionHubAction(serverId?: string, sect
 export async function deleteMediaCollectionAction(collectionId: string, deleteFromPlex = true) {
     await verifyAdmin();
     try {
-        const collection = await prisma.mediaCollection.findUnique({
+        let collection = await prisma.mediaCollection.findUnique({
             where: { id: collectionId }
         });
 
-        if (!collection) return { success: false, error: "Collection not found." };
-
-        if (deleteFromPlex && collection.ratingKey) {
-            const resolved = await resolveWorkingPlexServerConnection(collection.serverId || undefined);
-            if (resolved && resolved.serverUrl && resolved.token) {
-                await deletePlexCollection(resolved.serverUrl, resolved.token, collection.ratingKey).catch(err => {
-                    logger.addLog("WARN", "PLEX", `Could not delete collection "${collection.title}" from Plex: ${err.message}`);
-                });
-            }
+        if (!collection) {
+            // Check by title or ratingKey in case collectionId was auto-healed or mismatched
+            collection = await prisma.mediaCollection.findFirst({
+                where: {
+                    OR: [
+                        { id: collectionId },
+                        { title: collectionId },
+                        { ratingKey: collectionId }
+                    ]
+                }
+            });
         }
 
-        await prisma.mediaCollection.delete({ where: { id: collectionId } });
+        if (collection) {
+            if (deleteFromPlex && collection.ratingKey) {
+                try {
+                    const resolved = await resolveWorkingPlexServerConnection(collection.serverId || undefined);
+                    if (resolved && resolved.serverUrl && resolved.token) {
+                        await deletePlexCollection(resolved.serverUrl, resolved.token, collection.ratingKey);
+                    }
+                } catch (err: any) {
+                    logger.addLog("WARN", "PLEX", `Could not delete collection "${collection.title}" from Plex: ${err.message}`);
+                }
+            }
 
-        return { success: true, message: `Deleted collection "${collection.title}".` };
+            // Delete the canonical record AND any duplicate records matching this title / server / sectionKey
+            await prisma.mediaCollection.deleteMany({
+                where: {
+                    OR: [
+                        { id: collection.id },
+                        { id: collectionId },
+                        {
+                            ...(collection.serverId ? { serverId: collection.serverId } : {}),
+                            ...(collection.sectionKey ? { sectionKey: collection.sectionKey } : {}),
+                            title: collection.title
+                        }
+                    ]
+                }
+            });
+        } else {
+            // Even if record wasn't found by findUnique, attempt deletion by id anyway
+            await prisma.mediaCollection.deleteMany({
+                where: { id: collectionId }
+            }).catch(() => {});
+        }
+
+        return { success: true, message: `Deleted collection.` };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
