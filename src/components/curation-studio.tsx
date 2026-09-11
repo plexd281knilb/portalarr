@@ -4026,15 +4026,15 @@ export default function CurationStudio() {
                                                 <Globe className="h-3.5 w-3.5 text-purple-200" /> GitHub Badge Hub & Presets
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl">
+                                        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 w-[95vw] sm:max-w-5xl lg:max-w-6xl h-[90vh] max-h-[92vh] flex flex-col p-0 overflow-hidden shadow-2xl">
                                             {/* Modal Header */}
-                                            <div className="p-4 border-b border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between">
-                                                <div className="flex items-center gap-2.5">
-                                                    <div className="p-2 bg-purple-500/20 text-purple-400 rounded-xl border border-purple-500/30">
+                                            <div className="p-4 sm:p-5 border-b border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between shrink-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2.5 bg-purple-500/20 text-purple-400 rounded-xl border border-purple-500/30 shrink-0">
                                                         <Globe className="h-5 w-5" />
                                                     </div>
-                                                    <div>
-                                                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                                                    <div className="space-y-0.5">
+                                                        <DialogTitle className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                                                             GitHub Overlay Badges Downloader & Repo Hub
                                                         </DialogTitle>
                                                         <DialogDescription className="text-xs text-slate-400">
@@ -4044,33 +4044,33 @@ export default function CurationStudio() {
                                                 </div>
                                             </div>
 
-                                            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+                                            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
                                                 {/* Quick Curated Preset Packs */}
-                                                <div className="space-y-2">
+                                                <div className="space-y-2.5">
                                                     <Label className="text-[11px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
                                                         <Sparkles className="h-3.5 w-3.5" /> Curated Popular Repositories & Packs
                                                     </Label>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                                                         {presetPacks.map(pack => (
                                                             <button
                                                                 key={pack.id}
                                                                 type="button"
                                                                 onClick={() => handleScanGitHubRepo(pack.repoUrl)}
-                                                                className={`text-left p-2.5 rounded-xl border transition-all flex flex-col justify-between gap-1.5 ${
+                                                                className={`text-left p-3 rounded-xl border transition-all flex flex-col justify-between gap-2 ${
                                                                     githubRepoInput === pack.repoUrl
                                                                         ? 'bg-purple-950/60 border-purple-500 shadow-md shadow-purple-950/30 ring-1 ring-purple-400'
                                                                         : 'bg-slate-950/60 border-slate-800 hover:border-purple-500/50 hover:bg-slate-800/60'
                                                                 }`}
                                                             >
                                                                 <div className="flex items-center justify-between">
-                                                                    <span className="text-base">{pack.icon}</span>
+                                                                    <span className="text-xl">{pack.icon}</span>
                                                                     <Badge variant="outline" className="text-[9px] uppercase tracking-wider font-semibold border-slate-700 text-slate-300">
                                                                         {pack.author}
                                                                     </Badge>
                                                                 </div>
-                                                                <div>
+                                                                <div className="space-y-0.5">
                                                                     <h4 className="font-bold text-white text-xs line-clamp-1">{pack.title}</h4>
-                                                                    <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5">{pack.description}</p>
+                                                                    <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">{pack.description}</p>
                                                                 </div>
                                                             </button>
                                                         ))}
@@ -4078,7 +4078,7 @@ export default function CurationStudio() {
                                                 </div>
 
                                                 {/* Custom Repository URL Input Bar */}
-                                                <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2">
+                                                <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2">
                                                     <Label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
                                                         <Search className="h-3.5 w-3.5 text-purple-400" /> GitHub Repository URL or Tree Path
                                                     </Label>
@@ -4087,12 +4087,13 @@ export default function CurationStudio() {
                                                             value={githubRepoInput}
                                                             onChange={e => setGithubRepoInput(e.target.value)}
                                                             placeholder="https://github.com/jmxd/Kometa/tree/main/overlays or owner/repo"
-                                                            className="bg-slate-900 border-slate-700 text-xs h-8 flex-1 font-mono text-[11px]"
+                                                            className="bg-slate-900 border-slate-700 text-xs h-9 flex-1 font-mono text-[11px]"
                                                         />
                                                         <Button
+                                                            type="button"
                                                             disabled={scanningRepo}
                                                             onClick={() => handleScanGitHubRepo()}
-                                                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-4 gap-1.5 shrink-0"
+                                                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-9 px-4 gap-1.5 shrink-0 shadow-sm"
                                                         >
                                                             {scanningRepo ? (
                                                                 <>
@@ -4127,32 +4128,38 @@ export default function CurationStudio() {
 
                                                 {/* Discovered Badges Area */}
                                                 {discoveredBadges.length > 0 && (
-                                                    <div className="space-y-3">
+                                                    <div className="space-y-3.5 pt-2 border-t border-slate-800/80">
                                                         {/* Filter Bar & Controls */}
-                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 <span className="font-bold text-white text-xs">
-                                                                    Discovered Badges ({getFilteredDiscoveredBadges().length} of {discoveredBadges.length}):
+                                                                    Discovered Badges:
                                                                 </span>
+                                                                <Badge className="bg-purple-950/60 text-purple-300 border border-purple-800 text-[10px]">
+                                                                    {getFilteredDiscoveredBadges().length} of {discoveredBadges.length} items
+                                                                </Badge>
                                                                 <Button
+                                                                    type="button"
                                                                     variant="outline"
                                                                     size="sm"
                                                                     onClick={handleToggleSelectAll}
-                                                                    className="h-6 text-[10px] px-2 border-slate-700 text-slate-300 hover:text-white"
+                                                                    className="h-7 text-[10px] px-2.5 border-slate-700 text-slate-300 hover:text-white bg-slate-900"
                                                                 >
                                                                     {getFilteredDiscoveredBadges().every(b => selectedBadgeIds.includes(b.id)) ? "Deselect All" : "Select All"}
                                                                 </Button>
                                                             </div>
 
-                                                            <div className="flex items-center gap-2">
-                                                                <Input
-                                                                    value={badgeSearchQuery}
-                                                                    onChange={e => setBadgeSearchQuery(e.target.value)}
-                                                                    placeholder="Filter badges (e.g. atmos, 4k, imax)..."
-                                                                    className="bg-slate-900 border-slate-700 text-xs h-7 w-48"
-                                                                />
+                                                            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                                                <div className="relative flex-1 sm:w-52 min-w-[160px]">
+                                                                    <Input
+                                                                        value={badgeSearchQuery}
+                                                                        onChange={e => setBadgeSearchQuery(e.target.value)}
+                                                                        placeholder="Filter badges (atmos, 4k)..."
+                                                                        className="bg-slate-900 border-slate-700 text-xs h-7.5"
+                                                                    />
+                                                                </div>
                                                                 <Select value={badgeCategoryFilter} onValueChange={setBadgeCategoryFilter}>
-                                                                    <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-7 w-32">
+                                                                    <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-7.5 w-36 shrink-0">
                                                                         <SelectValue />
                                                                     </SelectTrigger>
                                                                     <SelectContent>
@@ -4170,50 +4177,50 @@ export default function CurationStudio() {
                                                             </div>
                                                         </div>
 
-                                                        {/* Badges Grid */}
-                                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 max-h-[380px] overflow-y-auto p-1">
+                                                        {/* Badges Grid without nested double scrollbars */}
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-1">
                                                             {getFilteredDiscoveredBadges().map(badge => {
                                                                 const isSelected = selectedBadgeIds.includes(badge.id);
                                                                 return (
                                                                     <div
                                                                         key={badge.id}
                                                                         onClick={() => handleToggleSelectBadge(badge.id)}
-                                                                        className={`relative p-2 rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center gap-1.5 group select-none ${
+                                                                        className={`relative p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center gap-2 group select-none ${
                                                                             isSelected
-                                                                                ? 'bg-purple-950/50 border-purple-500 ring-1 ring-purple-400 shadow-md shadow-purple-950/40'
-                                                                                : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
+                                                                                ? 'bg-purple-950/60 border-purple-500 ring-1 ring-purple-400 shadow-lg shadow-purple-950/40'
+                                                                                : 'bg-slate-950/80 border-slate-800/90 hover:border-purple-500/40 hover:bg-slate-900/80'
                                                                         }`}
                                                                     >
                                                                         {/* Selection Checkbox */}
-                                                                        <div className={`absolute top-1.5 right-1.5 w-4 h-4 rounded flex items-center justify-center text-[10px] ${
-                                                                            isSelected ? 'bg-purple-500 text-white font-bold' : 'border border-slate-700 bg-slate-900'
+                                                                        <div className={`absolute top-2 right-2 w-4 h-4 rounded flex items-center justify-center text-[10px] transition-colors ${
+                                                                            isSelected ? 'bg-purple-500 text-white font-bold' : 'border border-slate-700 bg-slate-900/90 group-hover:border-slate-500'
                                                                         }`}>
                                                                             {isSelected && <Check className="h-3 w-3" />}
                                                                         </div>
 
                                                                         {/* Category Badge */}
-                                                                        <div className="w-full flex justify-start">
-                                                                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-900 text-purple-300 border border-purple-500/30">
+                                                                        <div className="w-full flex justify-start pr-6">
+                                                                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-900/90 text-purple-300 border border-purple-500/30 truncate">
                                                                                 {badge.category}
                                                                             </span>
                                                                         </div>
 
-                                                                        {/* Image Preview */}
-                                                                        <div className="h-14 w-full flex items-center justify-center p-1 bg-slate-900/90 rounded-lg border border-slate-800/80 group-hover:border-purple-500/40 transition-colors overflow-hidden">
+                                                                        {/* Image Preview Box */}
+                                                                        <div className="h-16 w-full flex items-center justify-center p-2 bg-slate-900/90 rounded-lg border border-slate-800/80 group-hover:border-purple-500/40 transition-colors overflow-hidden">
                                                                             <img
                                                                                 src={badge.previewUrl}
                                                                                 alt={badge.name}
-                                                                                className="max-h-full max-w-full object-contain filter drop-shadow-md"
+                                                                                className="max-h-full max-w-full object-contain filter drop-shadow-md group-hover:scale-105 transition-transform"
                                                                                 loading="lazy"
                                                                             />
                                                                         </div>
 
                                                                         {/* Badge Name & Placement */}
-                                                                        <div className="w-full">
-                                                                            <h5 className="font-bold text-white text-[11px] truncate" title={badge.name}>
+                                                                        <div className="w-full text-center space-y-0.5 px-0.5">
+                                                                            <h5 className="font-bold text-white text-[11px] truncate group-hover:text-purple-200 transition-colors" title={badge.name}>
                                                                                 {badge.name}
                                                                             </h5>
-                                                                            <span className="text-[9px] text-slate-400 truncate block mt-0.5">
+                                                                            <span className="text-[9px] text-slate-400 font-mono truncate block" title={badge.filename}>
                                                                                 {badge.filename}
                                                                             </span>
                                                                         </div>
@@ -4226,38 +4233,41 @@ export default function CurationStudio() {
                                             </div>
 
                                             {/* Modal Footer with Batch Actions */}
-                                            <div className="p-4 border-t border-slate-800/80 bg-slate-950 flex flex-col sm:flex-row items-center justify-between gap-3">
-                                                <div className="text-xs text-slate-400 flex items-center gap-1.5">
-                                                    <Shield className="h-3.5 w-3.5 text-purple-400" />
-                                                    <span>Selected <strong>{selectedBadgeIds.length}</strong> of <strong>{discoveredBadges.length}</strong> badges</span>
+                                            <div className="p-4 sm:p-5 border-t border-slate-800/80 bg-slate-950 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+                                                <div className="text-xs text-slate-400 flex items-center gap-2">
+                                                    <Shield className="h-4 w-4 text-purple-400 shrink-0" />
+                                                    <span>Selected <strong className="text-white font-semibold">{selectedBadgeIds.length}</strong> of <strong className="text-white font-semibold">{discoveredBadges.length}</strong> badges</span>
                                                 </div>
 
-                                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-2">
                                                     <Button
+                                                        type="button"
                                                         variant="outline"
                                                         size="sm"
                                                         onClick={() => setGithubModalOpen(false)}
-                                                        className="border-slate-700 text-slate-300 hover:text-white"
+                                                        className="border-slate-700 text-slate-300 hover:text-white bg-slate-900 h-9 px-3 text-xs"
                                                     >
                                                         Close
                                                     </Button>
 
                                                     <Button
+                                                        type="button"
                                                         disabled={importingBadges || discoveredBadges.length === 0}
                                                         onClick={() => handleImportSelectedBadges(true)}
                                                         variant="secondary"
                                                         size="sm"
-                                                        className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs h-8 px-3 gap-1.5 border border-slate-700"
+                                                        className="bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs h-9 px-3 gap-1.5 border border-slate-700"
                                                     >
                                                         {importingBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-purple-400" />}
                                                         <span>Install Entire Pack ({discoveredBadges.length})</span>
                                                     </Button>
 
                                                     <Button
+                                                        type="button"
                                                         disabled={importingBadges || selectedBadgeIds.length === 0}
                                                         onClick={() => handleImportSelectedBadges(false)}
                                                         size="sm"
-                                                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-4 gap-1.5 shadow-lg shadow-purple-950/40"
+                                                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-9 px-4 gap-1.5 shadow-lg shadow-purple-950/40"
                                                     >
                                                         {importingBadges ? (
                                                             <>
