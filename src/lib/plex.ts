@@ -1007,11 +1007,10 @@ export async function resolveWorkingPlexServerConnection(
     const serverToken = targetServer?.accessToken || token;
 
     // Build candidates in optimal priority order:
-    // 1. Configured custom/DB URLs
-    // 2. Direct LAN IP:port (http://<ip>:<port>) -> bypasses .plex.direct DNS rebinding & cert issues!
-    // 3. Cloud directUrl
-    // 4. Connection URIs (local connections first)
-    // 5. Http alternatives for https://*.plex.direct URIs
+    // 1. Direct LAN IP:port from target server (http://<ip>:<port>) -> bypasses .plex.direct DNS rebinding & cert issues!
+    // 2. Cloud directUrl for target server
+    // 3. Target server connection URIs (local connections first) and http alternatives for https://*.plex.direct
+    // 4. Configured DB URLs (fallback for main server)
     const candidateUrls: string[] = [];
 
     const addCandidate = (u?: string) => {
@@ -1021,8 +1020,6 @@ export async function resolveWorkingPlexServerConnection(
             candidateUrls.push(clean);
         }
     };
-
-    for (const u of dbPlexUrls) addCandidate(u);
 
     if (targetServer?.connections) {
         for (const c of targetServer.connections) {
@@ -1050,19 +1047,21 @@ export async function resolveWorkingPlexServerConnection(
         }
     }
 
+    for (const u of dbPlexUrls) addCandidate(u);
+
     // Default fallback if no candidates found
     if (candidateUrls.length === 0) {
         addCandidate("http://127.0.0.1:32400");
         addCandidate("http://localhost:32400");
     }
 
-    // Probe candidates quickly to find the first working connection
+    // Probe candidates to find the verified working connection
     let workingUrl = "";
     for (const cand of candidateUrls) {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 2500);
-            const res = await fetch(`${cand}/identity`, {
+            const res = await fetch(`${cand}/library/sections?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                 headers: {
                     Accept: "application/json, application/xml, text/xml, */*",
                     "X-Plex-Token": serverToken,
@@ -1072,16 +1071,40 @@ export async function resolveWorkingPlexServerConnection(
                 cache: "no-store"
             });
             clearTimeout(timeoutId);
-            if (res.ok || res.status === 401 || res.status === 403) {
+            if (res.ok) {
                 workingUrl = cand;
                 break;
             }
         } catch (e) {
-            // Connection failed, proceed to next candidate
+            // Try next candidate
         }
     }
 
-    // If probing didn't succeed, fallback to the top candidate
+    // Secondary fallback: test /identity if /library/sections timed out
+    if (!workingUrl) {
+        for (const cand of candidateUrls) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                const res = await fetch(`${cand}/identity`, {
+                    headers: {
+                        Accept: "application/json, application/xml, text/xml, */*",
+                        "X-Plex-Token": serverToken,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    },
+                    signal: controller.signal,
+                    cache: "no-store"
+                });
+                clearTimeout(timeoutId);
+                if (res.ok) {
+                    workingUrl = cand;
+                    break;
+                }
+            } catch (e) {}
+        }
+    }
+
+    // Final fallback: use top candidate
     if (!workingUrl && candidateUrls.length > 0) {
         workingUrl = candidateUrls[0];
     }

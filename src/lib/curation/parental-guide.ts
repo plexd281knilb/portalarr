@@ -627,7 +627,8 @@ export async function applyParentalTagsToLibrary(
 
     logger.addLog("INFO", "CURATION", `Starting IMDb Parental Rating Tagging for library section ${sectionKey} on "${serverName}"...`);
 
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(serverUrl, serverToken, sectionKey, 1000);
+    const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 1000);
     if (items.length === 0) {
         return { success: true, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, appliedTagsSummary: {} };
     }
@@ -725,7 +726,8 @@ export async function clearParentalTagsFromLibrary(
 
     logger.addLog("INFO", "CURATION", `Clearing all IMDb Parental Tags from library section ${sectionKey} on "${serverName}"...`);
 
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(serverUrl, serverToken, sectionKey, 1000);
+    const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 1000);
     let clearedCount = 0;
 
     for (const it of items) {

@@ -379,7 +379,8 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         const token = resolved.token;
 
         // 1. Fetch library media items
-        const libraryItems = await getPlexLibraryMediaItems(serverUrl, token, collection.sectionKey || "", 1000);
+        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+        const libraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 1000);
 
         // 2. Resolve matching rating keys based on collection source type
         const matchingRatingKeys: string[] = [];
@@ -538,7 +539,8 @@ export async function previewCollectionMatchingAction(
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
 
-        const libraryItems = await getPlexLibraryMediaItems(serverUrl, token, sectionKey || "", 500);
+        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+        const libraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 500);
 
         let matchedItems: any[] = [];
         let executionMethod = "";
@@ -1290,7 +1292,8 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
         }
 
         // Fetch library media items
-        const items = await getPlexLibraryMediaItems(serverUrl, token, sectionKey, 200);
+        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+        const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 200);
 
         let successCount = 0;
         for (const it of items) {

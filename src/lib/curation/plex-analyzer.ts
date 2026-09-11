@@ -310,42 +310,56 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
  * Fetches all media items from a Plex library section with stream metadata.
  */
 export async function getPlexLibraryMediaItems(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     sectionKey: string | number,
     limit = 500
 ): Promise<PlexMediaStreamInfo[]> {
-    const cleanBase = serverUrl.replace(/\/+$/, "");
-    const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+    const urlsToTry = Array.isArray(serverUrlOrCandidates) 
+        ? serverUrlOrCandidates 
+        : [serverUrlOrCandidates];
 
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
-        const res = await fetch(url, {
-            headers: {
-                "Accept": "application/json",
-                "X-Plex-Token": token,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-            },
-            signal: controller.signal,
-            cache: "no-store"
-        });
-        clearTimeout(timeoutId);
+    let lastError: any = null;
 
-        if (!res.ok) {
-            logger.addLog("WARN", "PLEX", `Failed to query library section ${sectionKey} items: HTTP ${res.status}`);
-            return [];
+    for (const rawUrl of urlsToTry) {
+        if (!rawUrl) continue;
+        const cleanBase = rawUrl.replace(/\/+$/, "");
+        const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const res = await fetch(url, {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                lastError = new Error(`HTTP ${res.status}`);
+                continue;
+            }
+
+            const data = await res.json();
+            const metadata = data.MediaContainer?.Metadata || [];
+            const rawItems = Array.isArray(metadata) ? metadata : [metadata];
+
+            return rawItems.map(analyzeMediaStreamInfo);
+        } catch (e: any) {
+            lastError = e;
+            // Try next candidate URL
         }
-
-        const data = await res.json();
-        const metadata = data.MediaContainer?.Metadata || [];
-        const rawItems = Array.isArray(metadata) ? metadata : [metadata];
-
-        return rawItems.map(analyzeMediaStreamInfo);
-    } catch (e: any) {
-        logger.addLog("ERROR", "PLEX", `Error querying library section ${sectionKey} items: ${e.message}`);
-        return [];
     }
+
+    if (lastError) {
+        logger.addLog("WARN", "PLEX", `Query library section ${sectionKey} items failed: ${lastError.message}`);
+    }
+    return [];
 }
 
 /**
