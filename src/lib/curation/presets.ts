@@ -520,6 +520,16 @@ export const PRESET_BADGE_PACKS: BadgePresetPack[] = [
         previewUrls: []
     },
     {
+        id: "kometa-dovetail",
+        title: "Kometa Dovetail Resolution & HDR Combos",
+        author: "Kometa Team",
+        description: "Official dovetailed multi-spec badges: 4K HDR, 4K Dolby Vision, 4K Plus, 1080p HDR, 720p HDR, and 480p SD combos.",
+        repoUrl: "https://github.com/Kometa-Team/Default-Images/tree/master/resolution",
+        category: "codecs",
+        icon: "⚡",
+        previewUrls: []
+    },
+    {
         id: "kometa-ratings",
         title: "Kometa Content & Age Ratings",
         author: "Kometa Team",

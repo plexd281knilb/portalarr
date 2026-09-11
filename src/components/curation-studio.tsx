@@ -1643,103 +1643,157 @@ export default function CurationStudio() {
         }
     };
 
+    // Helper to evaluate an individual condition token in a badge matchRule
+    const evaluateBadgeConditionClient = (
+        condition: string,
+        detected: {
+            resolution?: string | null;
+            hdr?: string | null;
+            audio?: string | null;
+            audioChannels?: string | null;
+            codec?: string | null;
+            edition?: string | null;
+            studio?: string | null;
+            contentRating?: string | null;
+        }
+    ): boolean => {
+        const c = condition.trim().toLowerCase();
+        if (!c || c === "all" || c === "*") return true;
+
+        // 1. Resolution
+        if (c === "4k" || c === "2160p" || c === "uhd" || c === "ultra-hd" || c === "ultra hd") {
+            return detected.resolution === "4K";
+        }
+        if (c === "1080p" || c === "1080" || c === "fhd") {
+            return detected.resolution === "1080p";
+        }
+        if (c === "720p" || c === "720" || c === "hd") {
+            return detected.resolution === "720p";
+        }
+        if (c === "480p" || c === "480" || c === "576p" || c === "576" || c === "sd") {
+            return detected.resolution === "SD";
+        }
+
+        // 2. Dynamic Range / HDR
+        if (c === "dv" || c === "dolby vision" || c === "dovi") {
+            return detected.hdr === "DV";
+        }
+        if (c === "hdr10+" || c === "hdr+" || c === "hdrplus" || c === "plus") {
+            return detected.hdr === "HDR10+";
+        }
+        if (c === "hdr10") {
+            return detected.hdr === "HDR10" || detected.hdr === "HDR10+";
+        }
+        if (c === "hdr") {
+            return Boolean(detected.hdr);
+        }
+        if (c === "sdr") {
+            return !detected.hdr;
+        }
+
+        // 3. Audio & Channels
+        if (c === "atmos") {
+            return (detected.audio || "").toLowerCase().includes("atmos");
+        }
+        if (c === "truehd") {
+            return (detected.audio || "").toLowerCase().includes("truehd");
+        }
+        if (c === "dts:x" || c === "dts-x" || c === "dts_x") {
+            return (detected.audio || "").toLowerCase().includes("dts:x") || (detected.audio || "").toLowerCase().includes("dts-x");
+        }
+        if (c === "dts-hd" || c === "dtshd" || c === "dts-ma" || c === "ma") {
+            return (detected.audio || "").toLowerCase().includes("dts-hd") || (detected.audio || "").toLowerCase().includes("ma");
+        }
+        if (c === "dts") {
+            return (detected.audio || "").toLowerCase().includes("dts");
+        }
+        if (c === "flac") return (detected.audio || "").toLowerCase() === "flac";
+        if (c === "eac3" || c === "digital+") return (detected.audio || "").toLowerCase() === "eac3";
+        if (c === "ac3") return (detected.audio || "").toLowerCase() === "ac3";
+        if (c === "aac") return (detected.audio || "").toLowerCase() === "aac";
+
+        if (c === "7.1" || c === "7_1") return detected.audioChannels === "7.1";
+        if (c === "5.1" || c === "5_1") return detected.audioChannels === "5.1";
+        if (c === "2.0" || c === "2_0") return detected.audioChannels === "2.0";
+
+        // 4. Video Codecs
+        if (c === "hevc" || c === "h265" || c === "x265") return detected.codec === "HEVC";
+        if (c === "av1") return detected.codec === "AV1";
+        if (c === "prores") return detected.codec === "ProRes";
+        if (c === "avc" || c === "h264" || c === "x264") return detected.codec === "AVC";
+
+        // 5. Editions
+        if (c === "imax") return (detected.edition || "").toLowerCase().includes("imax");
+        if (c === "criterion") return (detected.edition || "").toLowerCase().includes("criterion");
+        if (c === "remux") return (detected.edition || "").toLowerCase().includes("remux");
+        if (c === "directors_cut" || c === "director") return (detected.edition || "").toLowerCase().includes("director");
+        if (c === "extended") return (detected.edition || "").toLowerCase().includes("extended");
+        if (c === "theatrical") return (detected.edition || "").toLowerCase().includes("theatrical");
+        if (c === "remastered" || c === "remaster") return (detected.edition || "").toLowerCase().includes("remaster");
+
+        // 6. Studios
+        if (c === "netflix") return (detected.studio || "").toLowerCase().includes("netflix");
+        if (c === "disney") return (detected.studio || "").toLowerCase().includes("disney");
+        if (c === "hbo" || c === "max") return (detected.studio || "").toLowerCase().includes("hbo") || (detected.studio || "").toLowerCase().includes("max");
+        if (c === "apple" || c === "apple_tv") return (detected.studio || "").toLowerCase().includes("apple");
+        if (c === "amazon" || c === "prime") return (detected.studio || "").toLowerCase().includes("amazon") || (detected.studio || "").toLowerCase().includes("prime");
+        if (c === "paramount") return (detected.studio || "").toLowerCase().includes("paramount");
+        if (c === "marvel") return (detected.studio || "").toLowerCase().includes("marvel");
+        if (c === "dc") return (detected.studio || "").toLowerCase().includes("dc");
+        if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
+
+        // 7. Ratings
+        if (c === "pg-13") return (detected.contentRating || "").toUpperCase() === "PG-13";
+        if (c === "nc-17") return (detected.contentRating || "").toUpperCase() === "NC-17";
+        if (c === "r") return (detected.contentRating || "").toUpperCase() === "R";
+        if (c === "pg") return (detected.contentRating || "").toUpperCase() === "PG";
+        if (c === "g") return (detected.contentRating || "").toUpperCase() === "G";
+
+        return true;
+    };
+
     // Helper to test if a custom badge matches detected media properties
     const doesCustomBadgeMatchDetected = (
         cb: { category?: string; matchRule?: string | null; name?: string; filePath?: string },
         detected: { resolution?: string; hdr?: string; audio?: string; audioChannels?: string; codec?: string; edition?: string; studio?: string; contentRating?: string }
     ): boolean => {
-        const rawRule = (cb.matchRule || "").toLowerCase().trim();
-        const rawCategory = (cb.category || "").toLowerCase().trim();
+        const rawRule = (cb.matchRule || "").trim().toLowerCase();
+        const rawCategory = (cb.category || "").trim().toLowerCase();
         const rawName = (cb.name || "").toLowerCase();
-        const combined = `${rawRule} ${rawCategory} ${rawName}`;
+        const rawFile = (cb.filePath || "").split("/").pop()?.toLowerCase() || "";
 
         // Wildcard or ribbon/banner without rule
         if (rawRule === "all" || rawRule === "*" || (rawCategory === "ribbon" && !rawRule) || (rawCategory === "banner" && !rawRule)) {
             return true;
         }
 
-        // 1. Resolution
-        if (rawCategory === "resolution" || /4k|uhd|2160|1080|fhd|720|hd|sd|480|576/.test(rawRule) || /ultra-hd|1080p|720p/.test(rawName)) {
-            const itemRes = detected.resolution;
-            if (!itemRes) return false;
-            if (/4k|uhd|2160|ultra-hd/i.test(combined)) return itemRes === "4K";
-            if (/1080|fhd/i.test(combined)) return itemRes === "1080p";
-            if (/720|hd/i.test(combined) && !/1080|4k|fhd|uhd/i.test(combined)) return itemRes === "720p";
-            if (/sd|480|576/i.test(combined)) return itemRes === "SD";
+        let tokens: string[] = [];
+        if (rawRule.includes("+") || rawRule.includes(",") || rawRule.includes("&")) {
+            tokens = rawRule.split(/[+,&]/).map(t => t.trim()).filter(Boolean);
+        } else if (rawRule) {
+            tokens = [rawRule];
+        } else {
+            const baseName = rawName || rawFile.replace(/\.[^/.]+$/, "");
+            const inferredTokens: string[] = [];
+            if (/4k|2160/i.test(baseName)) inferredTokens.push("4k");
+            else if (/1080/i.test(baseName)) inferredTokens.push("1080p");
+            else if (/720/i.test(baseName)) inferredTokens.push("720p");
+            else if (/480|576|sd/i.test(baseName)) inferredTokens.push("480p");
+
+            if (/dv|dolby.*vision/i.test(baseName)) inferredTokens.push("dv");
+            if (/hdr10\+|hdr\+|hdrplus|plus/i.test(baseName) && !/disney/i.test(baseName)) inferredTokens.push("hdr10+");
+            else if (/hdr10/i.test(baseName)) inferredTokens.push("hdr10");
+            else if (/hdr/i.test(baseName)) inferredTokens.push("hdr");
+
+            if (/atmos/i.test(baseName)) inferredTokens.push("atmos");
+            if (/truehd/i.test(baseName)) inferredTokens.push("truehd");
+            if (/7\.1/i.test(baseName)) inferredTokens.push("7.1");
+            else if (/5\.1/i.test(baseName)) inferredTokens.push("5.1");
+
+            tokens = inferredTokens.length > 0 ? inferredTokens : [baseName];
         }
 
-        // 2. HDR
-        if (rawCategory === "hdr" || /dv|dolby.*vision|hdr10\+|hdr10|hdr/i.test(combined)) {
-            const itemHdr = detected.hdr;
-            if (!itemHdr) return false;
-            if (/dv|dolby.*vision/i.test(combined)) return itemHdr === "DV";
-            if (/hdr10\+/i.test(combined)) return itemHdr === "HDR10+";
-            if (/hdr10/i.test(combined)) return itemHdr === "HDR10" || itemHdr === "HDR10+";
-            if (/hdr/i.test(combined)) return !!itemHdr;
-        }
-
-        // 3. Audio & Channels
-        if (rawCategory === "audio" || /atmos|truehd|dts|flac|aac|eac3|ac3|5\.1|7\.1/i.test(combined)) {
-            const itemAudio = (detected.audio || "").toLowerCase();
-            const itemChannels = detected.audioChannels;
-            if (/atmos/i.test(combined)) return itemAudio.includes("atmos");
-            if (/truehd/i.test(combined)) return itemAudio.includes("truehd");
-            if (/dts[-:_]?x/i.test(combined)) return itemAudio.includes("dts:x") || itemAudio.includes("dts-x");
-            if (/dts[-:_]?hd|dtshd|dts[-:_]?ma/i.test(combined)) return itemAudio.includes("dts-hd") || itemAudio.includes("ma");
-            if (/dts/i.test(combined) && !/dts[-:_]?x|dts[-:_]?hd/i.test(combined)) return itemAudio.includes("dts");
-            if (/7\.1/i.test(combined)) return itemChannels === "7.1";
-            if (/5\.1/i.test(combined)) return itemChannels === "5.1";
-        }
-
-        // 4. Video Codecs
-        if (rawCategory === "codec" || /hevc|h265|x265|av1|prores|h264|x264|avc/i.test(combined)) {
-            const itemCodec = detected.codec;
-            if (!itemCodec) return false;
-            if (/hevc|h265|x265/i.test(combined)) return itemCodec === "HEVC";
-            if (/av1/i.test(combined)) return itemCodec === "AV1";
-            if (/prores/i.test(combined)) return itemCodec === "ProRes";
-            if (/h264|x264|avc/i.test(combined)) return itemCodec === "AVC";
-        }
-
-        // 5. Editions
-        if (rawCategory === "edition" || /imax|criterion|director|extended|remaster|remux/i.test(combined)) {
-            const itemEdition = (detected.edition || "").toLowerCase();
-            if (!itemEdition) return false;
-            if (/imax/i.test(combined)) return itemEdition.includes("imax");
-            if (/criterion/i.test(combined)) return itemEdition.includes("criterion");
-            if (/director/i.test(combined)) return itemEdition.includes("director");
-            if (/extended/i.test(combined)) return itemEdition.includes("extended");
-            if (/remaster/i.test(combined)) return itemEdition.includes("remaster");
-            if (/remux/i.test(combined)) return itemEdition.includes("remux");
-        }
-
-        // 6. Studios
-        if (rawCategory === "studio" || /netflix|disney|hbo|apple|prime|paramount|marvel|dc|a24/i.test(combined)) {
-            const itemStudio = (detected.studio || "").toLowerCase();
-            if (!itemStudio) return false;
-            if (/netflix/i.test(combined)) return itemStudio.includes("netflix");
-            if (/disney/i.test(combined)) return itemStudio.includes("disney");
-            if (/hbo/i.test(combined)) return itemStudio.includes("hbo") || itemStudio.includes("max");
-            if (/apple/i.test(combined)) return itemStudio.includes("apple");
-            if (/prime|amazon/i.test(combined)) return itemStudio.includes("prime") || itemStudio.includes("amazon");
-            if (/paramount/i.test(combined)) return itemStudio.includes("paramount");
-            if (/marvel/i.test(combined)) return itemStudio.includes("marvel");
-            if (/dc/i.test(combined)) return itemStudio.includes("dc");
-            if (/a24/i.test(combined)) return itemStudio.includes("a24");
-        }
-
-        // 7. Content Ratings
-        if (rawCategory === "ratings" || /pg-13|tv-14|pg|tv-pg|nc-17|tv-ma|\br\b|\bg\b/i.test(combined)) {
-            const itemRating = (detected.contentRating || "").toUpperCase();
-            if (!itemRating) return false;
-            if (/pg-13|tv-14/i.test(combined)) return itemRating === "PG-13";
-            if (/nc-17/i.test(combined)) return itemRating === "NC-17";
-            if (/\br\b|tv-ma/i.test(combined)) return itemRating === "R";
-            if (/pg\b|tv-pg/i.test(combined)) return itemRating === "PG";
-            if (/\bg\b|tv-g|tv-y/i.test(combined)) return itemRating === "G";
-        }
-
-        return rawCategory === "custom" || rawCategory === "";
+        return tokens.every(tok => evaluateBadgeConditionClient(tok, detected));
     };
 
     // Helper to get which human category an active custom badge overrides
@@ -1749,8 +1803,8 @@ export default function CurationStudio() {
         const name = (cb.name || "").toLowerCase();
         const combined = `${cat} ${rule} ${name}`;
 
-        if (cat === "resolution" || /4k|1080|720|sd|uhd|fhd/i.test(combined)) return "Resolution (4K / 1080p)";
-        if (cat === "hdr" || /dv|hdr|dolby.*vision/i.test(combined)) return "Dynamic Range (DV / HDR)";
+        if (cat === "resolution" || /4k|1080|720|sd|uhd|fhd|480|576/i.test(combined)) return "Resolution (4K / 1080p / 720p / SD)";
+        if (cat === "hdr" || /dv|hdr|dolby.*vision|plus/i.test(combined)) return "Dynamic Range (DV / HDR)";
         if (cat === "codec" || /hevc|av1|prores|avc/i.test(combined)) return "Video Codec";
         if (cat === "audio" || /atmos|truehd|dts/i.test(combined)) return "Audio Format";
         if (/7\.1|5\.1|2\.0|channels|surround/i.test(combined)) return "Audio Channels";
@@ -1769,8 +1823,8 @@ export default function CurationStudio() {
             const rule = (cb.matchRule || "").toLowerCase();
             const name = (cb.name || "").toLowerCase();
             const combined = `${cat} ${rule} ${name}`;
-            if (category === "resolution") return cat === "resolution" || /4k|1080|720|sd|uhd|fhd/i.test(combined);
-            if (category === "hdr") return cat === "hdr" || /dv|hdr|dolby.*vision/i.test(combined);
+            if (category === "resolution") return cat === "resolution" || /4k|1080|720|sd|uhd|fhd|480|576/i.test(combined);
+            if (category === "hdr") return cat === "hdr" || /dv|hdr|dolby.*vision|plus/i.test(combined);
             if (category === "codec") return cat === "codec" || /hevc|av1|prores|avc/i.test(combined);
             if (category === "audio") return cat === "audio" || /atmos|truehd|dts/i.test(combined);
             if (category === "channels") return /7\.1|5\.1|2\.0|channels|surround/i.test(combined);
