@@ -511,6 +511,67 @@ function parsePlexXmlCollections(xml: string): {
     return items;
 }
 
+function parsePlexXmlHubs(xml: string): {
+    ratingKey: string;
+    title: string;
+    summary?: string;
+    thumb?: string;
+    art?: string;
+    childCount: number;
+    sortTitle?: string;
+    smart?: boolean;
+    isHub?: boolean;
+    hubIdentifier?: string;
+    promotedToHome?: boolean;
+    promotedToRecommended?: boolean;
+    promotedToSharedHome?: boolean;
+}[] {
+    const hubs: {
+        ratingKey: string;
+        title: string;
+        summary?: string;
+        thumb?: string;
+        art?: string;
+        childCount: number;
+        sortTitle?: string;
+        smart?: boolean;
+        isHub?: boolean;
+        hubIdentifier?: string;
+        promotedToHome?: boolean;
+        promotedToRecommended?: boolean;
+        promotedToSharedHome?: boolean;
+    }[] = [];
+    const hubMatches = xml.matchAll(/<Hub\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Hub>)/gi);
+    for (const match of hubMatches) {
+        const attrs = match[1] || "";
+        const getAttr = (name: string) => {
+            const m = attrs.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"));
+            return m ? m[1] : undefined;
+        };
+
+        const title = getAttr("title") || "";
+        const hubIdentifier = getAttr("hubIdentifier") || getAttr("key") || "";
+        if (title) {
+            hubs.push({
+                ratingKey: `hub:${hubIdentifier || title.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+                title,
+                summary: getAttr("summary") || `Plex Hub: ${title}`,
+                thumb: getAttr("thumb"),
+                art: getAttr("art"),
+                childCount: parseInt(getAttr("size") || getAttr("count") || "0", 10),
+                sortTitle: getAttr("titleSort") || title,
+                smart: true,
+                isHub: true,
+                hubIdentifier,
+                promotedToHome: getAttr("promoted") !== "0",
+                promotedToRecommended: true,
+                promotedToSharedHome: true
+            });
+        }
+    }
+    return hubs;
+}
+
 /**
  * Fetches all media items from a Plex library section with stream metadata.
  */
@@ -612,7 +673,7 @@ export async function getPlexLibraryMediaItems(
 }
 
 /**
- * Fetches existing Plex collections for a library section.
+ * Fetches existing Plex collections, smart collections, and section hubs for a library section.
  */
 export async function getPlexLibraryCollections(
     serverUrlOrCandidates: string | string[],
@@ -627,17 +688,21 @@ export async function getPlexLibraryCollections(
     childCount: number;
     sortTitle?: string;
     smart?: boolean;
+    isHub?: boolean;
+    hubIdentifier?: string;
     promotedToHome?: boolean;
     promotedToRecommended?: boolean;
     promotedToSharedHome?: boolean;
 }[]> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    const discoveredMap = new Map<string, any>();
 
     for (const cleanBase of urlsToTry) {
         if (!cleanBase) continue;
-        const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/collections?X-Plex-Token=${encodeURIComponent(token)}`;
 
+        // 1. Try /library/sections/{sectionKey}/collections (Standard Collections endpoint)
         try {
+            const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/collections?X-Plex-Token=${encodeURIComponent(token)}`;
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 8000);
             const res = await fetch(url, {
@@ -651,43 +716,164 @@ export async function getPlexLibraryCollections(
             });
             clearTimeout(timeoutId);
 
-            if (!res.ok) continue;
+            if (res.ok) {
+                const text = await res.text();
+                const trimmed = text.trim();
 
-            const text = await res.text();
-            const trimmed = text.trim();
-
-            if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-                try {
-                    const data = JSON.parse(trimmed);
-                    const metadata = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || [];
-                    const collections = Array.isArray(metadata) ? metadata : [metadata];
-                    if (collections.length > 0) {
-                        return collections.map((c: any) => ({
-                            ratingKey: String(c.ratingKey || c.key?.replace("/library/metadata/", "") || ""),
-                            title: c.title || "Untitled Collection",
-                            summary: c.summary,
-                            thumb: c.thumb,
-                            art: c.art,
-                            childCount: parseInt(c.childCount || "0", 10),
-                            sortTitle: c.titleSort,
-                            smart: Boolean(c.smart === "1" || c.smart === 1 || c.subtype === "smart"),
-                            promotedToHome: c.promotedToHome !== "0" && c.promotedToHome !== 0,
-                            promotedToRecommended: c.promotedToRecommended !== "0" && c.promotedToRecommended !== 0,
-                            promotedToSharedHome: c.promotedToSharedHome !== "0" && c.promotedToSharedHome !== 0
-                        })).filter(c => Boolean(c.ratingKey));
+                if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                    try {
+                        const data = JSON.parse(trimmed);
+                        const metadata = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || [];
+                        const collections = Array.isArray(metadata) ? metadata : [metadata];
+                        for (const c of collections) {
+                            const rKey = String(c.ratingKey || c.key?.replace("/library/metadata/", "") || "");
+                            if (rKey && !discoveredMap.has(rKey)) {
+                                discoveredMap.set(rKey, {
+                                    ratingKey: rKey,
+                                    title: c.title || "Untitled Collection",
+                                    summary: c.summary,
+                                    thumb: c.thumb,
+                                    art: c.art,
+                                    childCount: parseInt(c.childCount || "0", 10),
+                                    sortTitle: c.titleSort,
+                                    smart: Boolean(c.smart === "1" || c.smart === 1 || c.subtype === "smart"),
+                                    promotedToHome: c.promotedToHome !== "0" && c.promotedToHome !== 0,
+                                    promotedToRecommended: c.promotedToRecommended !== "0" && c.promotedToRecommended !== 0,
+                                    promotedToSharedHome: c.promotedToSharedHome !== "0" && c.promotedToSharedHome !== 0
+                                });
+                            }
+                        }
+                    } catch (e) {}
+                } else if (trimmed.includes("<MediaContainer") || trimmed.includes("<Directory") || trimmed.includes("<Video")) {
+                    const parsed = parsePlexXmlCollections(trimmed);
+                    for (const p of parsed) {
+                        if (p.ratingKey && !discoveredMap.has(p.ratingKey)) discoveredMap.set(p.ratingKey, p);
                     }
-                } catch (e) {}
+                }
             }
+        } catch (e) {}
 
-            if (trimmed.includes("<MediaContainer") || trimmed.includes("<Directory") || trimmed.includes("<Video")) {
-                const parsed = parsePlexXmlCollections(trimmed);
-                if (parsed.length > 0) return parsed;
+        // 2. Try /library/sections/{sectionKey}/all?type=18 (Type 18 collections in PMS)
+        try {
+            const url2 = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?type=18&X-Plex-Token=${encodeURIComponent(token)}`;
+            const controller2 = new AbortController();
+            const timeoutId2 = setTimeout(() => controller2.abort(), 8000);
+            const res2 = await fetch(url2, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller2.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId2);
+
+            if (res2.ok) {
+                const text2 = await res2.text();
+                const trimmed2 = text2.trim();
+                if (trimmed2.startsWith("{") || trimmed2.startsWith("[")) {
+                    try {
+                        const data2 = JSON.parse(trimmed2);
+                        const metadata2 = data2.MediaContainer?.Metadata || data2.MediaContainer?.Directory || [];
+                        const collections2 = Array.isArray(metadata2) ? metadata2 : [metadata2];
+                        for (const c of collections2) {
+                            const rKey = String(c.ratingKey || c.key?.replace("/library/metadata/", "") || "");
+                            if (rKey && !discoveredMap.has(rKey)) {
+                                discoveredMap.set(rKey, {
+                                    ratingKey: rKey,
+                                    title: c.title || "Untitled Collection",
+                                    summary: c.summary,
+                                    thumb: c.thumb,
+                                    art: c.art,
+                                    childCount: parseInt(c.childCount || "0", 10),
+                                    sortTitle: c.titleSort,
+                                    smart: Boolean(c.smart === "1" || c.smart === 1 || c.subtype === "smart"),
+                                    promotedToHome: c.promotedToHome !== "0" && c.promotedToHome !== 0,
+                                    promotedToRecommended: c.promotedToRecommended !== "0" && c.promotedToRecommended !== 0,
+                                    promotedToSharedHome: c.promotedToSharedHome !== "0" && c.promotedToSharedHome !== 0
+                                });
+                            }
+                        }
+                    } catch (e) {}
+                } else if (trimmed2.includes("<MediaContainer") || trimmed2.includes("<Directory") || trimmed2.includes("<Video")) {
+                    const parsed2 = parsePlexXmlCollections(trimmed2);
+                    for (const p of parsed2) {
+                        if (p.ratingKey && !discoveredMap.has(p.ratingKey)) discoveredMap.set(p.ratingKey, p);
+                    }
+                }
             }
-        } catch (e) {
-            // Try next candidate
+        } catch (e) {}
+
+        // 3. Try /hubs/sections/{sectionKey} to discover Section Hubs & Recommended Carousels (Recently Added, Top Movies, Adventure, etc.)
+        try {
+            const url3 = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}?X-Plex-Token=${encodeURIComponent(token)}`;
+            const controller3 = new AbortController();
+            const timeoutId3 = setTimeout(() => controller3.abort(), 8000);
+            const res3 = await fetch(url3, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller3.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId3);
+
+            if (res3.ok) {
+                const text3 = await res3.text();
+                const trimmed3 = text3.trim();
+                if (trimmed3.startsWith("{") || trimmed3.startsWith("[")) {
+                    try {
+                        const data3 = JSON.parse(trimmed3);
+                        const hubs = data3.MediaContainer?.Hub || [];
+                        const hubList = Array.isArray(hubs) ? hubs : [hubs];
+                        for (const h of hubList) {
+                            const hubTitle = h.title?.trim();
+                            if (hubTitle) {
+                                const alreadyExists = Array.from(discoveredMap.values()).some(
+                                    x => x.title.toLowerCase() === hubTitle.toLowerCase()
+                                );
+                                if (!alreadyExists) {
+                                    const hubKey = `hub:${h.hubIdentifier || hubTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                                    discoveredMap.set(hubKey, {
+                                        ratingKey: hubKey,
+                                        title: hubTitle,
+                                        summary: h.summary || `Plex Built-in Hub: ${hubTitle}`,
+                                        thumb: h.thumb || h.Metadata?.[0]?.thumb || undefined,
+                                        art: h.art,
+                                        childCount: parseInt(h.size || h.count || "0", 10),
+                                        smart: true,
+                                        isHub: true,
+                                        hubIdentifier: h.hubIdentifier,
+                                        promotedToHome: h.promoted !== "0" && h.promoted !== 0,
+                                        promotedToRecommended: true,
+                                        promotedToSharedHome: true
+                                    });
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                } else if (trimmed3.includes("<MediaContainer") || trimmed3.includes("<Hub")) {
+                    const parsedHubs = parsePlexXmlHubs(trimmed3);
+                    for (const ph of parsedHubs) {
+                        const alreadyExists = Array.from(discoveredMap.values()).some(
+                            x => x.title.toLowerCase() === ph.title.toLowerCase()
+                        );
+                        if (!alreadyExists && ph.ratingKey) {
+                            discoveredMap.set(ph.ratingKey, ph);
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
+        if (discoveredMap.size > 0) {
+            return Array.from(discoveredMap.values());
         }
     }
-    return [];
+    return Array.from(discoveredMap.values());
 }
 
 /**

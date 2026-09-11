@@ -2316,6 +2316,13 @@ export default function CurationStudio() {
                 </Badge>
             );
         }
+        if (s === "plex_hub") {
+            return (
+                <Badge variant="secondary" className="text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 gap-1">
+                    <span>📺</span> Plex Hub
+                </Badge>
+            );
+        }
         if (s === "plex_smart") {
             return (
                 <Badge variant="secondary" className="text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 gap-1">

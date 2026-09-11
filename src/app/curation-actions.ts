@@ -366,11 +366,11 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
                                         title: pColl.title,
                                         summary: pColl.summary || "",
                                         sortTitle: pColl.sortTitle || "",
-                                        category: pColl.smart ? "Plex Smart" : "Plex Library",
+                                        category: pColl.isHub ? "Plex Hub" : (pColl.smart ? "Plex Smart" : "Plex Library"),
                                         type: "movie",
                                         serverId,
                                         sectionKey: String(sectionKey),
-                                        sourceType: pColl.smart ? "plex_smart" : "plex_native",
+                                        sourceType: pColl.isHub ? "plex_hub" : (pColl.smart ? "plex_smart" : "plex_native"),
                                         sourceQuery: `plex_collection:${pColl.ratingKey}`,
                                         ratingKey: pColl.ratingKey,
                                         itemCount: pColl.childCount || 0,
@@ -433,7 +433,7 @@ export async function importPlexLibraryCollectionsAction(serverId?: string, sect
         const plexCollections = await getPlexLibraryCollections(urlsToTry, resolved.token, sectionKey);
 
         if (plexCollections.length === 0) {
-            return { success: true, count: 0, message: "No existing collections found in this Plex library section." };
+            return { success: true, count: 0, message: "No existing collections or hubs found in this Plex library section." };
         }
 
         // Fetch current DB collections for this server & section
@@ -477,11 +477,11 @@ export async function importPlexLibraryCollectionsAction(serverId?: string, sect
                         title: pColl.title,
                         summary: pColl.summary || "",
                         sortTitle: pColl.sortTitle || "",
-                        category: pColl.smart ? "Plex Smart" : "Plex Library",
+                        category: pColl.isHub ? "Plex Hub" : (pColl.smart ? "Plex Smart" : "Plex Library"),
                         type: "movie",
                         serverId,
                         sectionKey: String(sectionKey),
-                        sourceType: pColl.smart ? "plex_smart" : "plex_native",
+                        sourceType: pColl.isHub ? "plex_hub" : (pColl.smart ? "plex_smart" : "plex_native"),
                         sourceQuery: `plex_collection:${pColl.ratingKey}`,
                         ratingKey: pColl.ratingKey,
                         itemCount: pColl.childCount || 0,
@@ -622,12 +622,15 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         const token = resolved.token;
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
 
-        // If this is an existing Plex-native collection or already has a ratingKey in PMS:
+        // If this is an existing Plex-native collection, hub, or already has a ratingKey in PMS:
         const isNativePlex = collection.sourceType === "plex_native" || 
                              collection.sourceType === "plex_smart" || 
+                             collection.sourceType === "plex_hub" || 
                              collection.category === "Plex" || 
                              collection.category === "Plex Library" || 
                              collection.category === "Plex Smart" ||
+                             collection.category === "Plex Hub" ||
+                             collection.ratingKey?.startsWith("hub:") ||
                              (collection.sourceType === "plex_query" && !collection.sourceQuery?.includes("hdr:") && !collection.sourceQuery?.includes("audio:") && !collection.sourceQuery?.includes("1980") && !collection.sourceQuery?.includes("1990") && !collection.sourceQuery?.includes("tag:"));
 
         if (isNativePlex || collection.ratingKey) {
@@ -638,19 +641,21 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             );
 
             if (found) {
-                const sortTitle = `${collection.sortPrefix || "!00_"}${collection.sortTitle || collection.title}`;
-                await updatePlexCollectionPromotionAndOrder(
-                    urlsToTry,
-                    token,
-                    collection.sectionKey || "",
-                    found.ratingKey,
-                    {
-                        sortTitle,
-                        promotedToHome: collection.promotedToHome ?? true,
-                        promotedToRecommended: collection.promotedToRecommended ?? true,
-                        promotedToSharedHome: collection.promotedToSharedHome ?? true
-                    }
-                );
+                if (!found.ratingKey?.startsWith("hub:") && !found.isHub) {
+                    const sortTitle = `${collection.sortPrefix || "!00_"}${collection.sortTitle || collection.title}`;
+                    await updatePlexCollectionPromotionAndOrder(
+                        urlsToTry,
+                        token,
+                        collection.sectionKey || "",
+                        found.ratingKey,
+                        {
+                            sortTitle,
+                            promotedToHome: collection.promotedToHome ?? true,
+                            promotedToRecommended: collection.promotedToRecommended ?? true,
+                            promotedToSharedHome: collection.promotedToSharedHome ?? true
+                        }
+                    );
+                }
 
                 await prisma.mediaCollection.update({
                     where: { id: collection.id },
@@ -661,11 +666,12 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                     }
                 });
 
+                const label = found.isHub ? "Hub" : "collection";
                 return {
                     success: true,
                     itemCount: found.childCount,
                     collectionRatingKey: found.ratingKey,
-                    message: `Synced Plex collection "${collection.title}" (${found.childCount} items) to Plex with prefix ${collection.sortPrefix || "!00_"}!`
+                    message: `Synced Plex ${label} "${collection.title}" (${found.childCount} items) with prefix ${collection.sortPrefix || "!00_"}!`
                 };
             }
         }
