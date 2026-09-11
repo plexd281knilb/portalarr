@@ -76,7 +76,7 @@ import {
     Upload, Image as ImageIcon, MoveUp, MoveDown, CalendarClock,
     Palette, ChevronUp, ChevronDown, Tag, Compass, Home, Clock3,
     Search, FileText, Info, Play, CheckCheck, Globe, Download, DownloadCloud, Package, Maximize2,
-    RotateCcw, Edit2
+    RotateCcw, Edit2, Bookmark
 } from "lucide-react";
 
 export default function CurationStudio() {
@@ -350,12 +350,23 @@ export default function CurationStudio() {
             }
             if (srvData?.success && Array.isArray(srvData.servers) && srvData.servers.length > 0) {
                 setServers(srvData.servers);
-                if (!selectedServerId) {
-                    setSelectedServerId(srvData.servers[0].serverId);
-                    if (srvData.servers[0].sections?.length > 0) {
-                        setSelectedSectionKey(String(srvData.servers[0].sections[0].key));
-                    }
-                }
+                
+                const savedSrvId = typeof window !== "undefined" ? localStorage.getItem("portalarr_curation_server") : null;
+                const savedSecKey = typeof window !== "undefined" ? localStorage.getItem("portalarr_curation_section") : null;
+
+                const matchedServer = (savedSrvId && srvData.servers.find((s: any) => s.serverId === savedSrvId)) ||
+                                      (selectedServerId && srvData.servers.find((s: any) => s.serverId === selectedServerId)) ||
+                                      srvData.servers[0];
+                
+                const effectiveSrvId = matchedServer.serverId;
+                setSelectedServerId(effectiveSrvId);
+
+                const matchedSec = (savedSecKey && matchedServer.sections?.find((sec: any) => String(sec.key) === savedSecKey)) ||
+                                   (selectedSectionKey && matchedServer.sections?.find((sec: any) => String(sec.key) === selectedSectionKey)) ||
+                                   matchedServer.sections?.[0];
+                
+                const effectiveSecKey = matchedSec ? String(matchedSec.key) : "";
+                setSelectedSectionKey(effectiveSecKey);
             }
             if (collData?.success) {
                 const sorted = [...(collData.collections || [])].sort((a, b) => (a.orderIndex ?? 99) - (b.orderIndex ?? 99));
@@ -386,6 +397,26 @@ export default function CurationStudio() {
         } finally {
             setLoading(false);
         }
+    };
+
+    // Dedicated Static Tab Selection Handlers with localStorage Persistence
+    const handleSelectServer = (srvId: string) => {
+        setSelectedServerId(srvId);
+        if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_server", srvId);
+        const srv = servers.find(s => s.serverId === srvId);
+        if (srv?.sections && srv.sections.length > 0) {
+            const hasExisting = srv.sections.some((sec: any) => String(sec.key) === selectedSectionKey);
+            if (!hasExisting) {
+                const firstKey = String(srv.sections[0].key);
+                setSelectedSectionKey(firstKey);
+                if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_section", firstKey);
+            }
+        }
+    };
+
+    const handleSelectSection = (secKey: string) => {
+        setSelectedSectionKey(secKey);
+        if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_section", secKey);
     };
 
     const loadCollections = async (srvId?: string, secKey?: string) => {
@@ -2466,6 +2497,8 @@ export default function CurationStudio() {
         );
     }
 
+    const activeServer = currentServer;
+
     return (
         <div className="space-y-6">
             {/* Header Banner */}
@@ -2487,51 +2520,94 @@ export default function CurationStudio() {
                     </p>
                 </div>
 
-                {/* Interactive Preview & Library Scope Bar */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 bg-slate-900/90 p-2.5 px-3 border border-slate-800 rounded-2xl shadow-inner w-full sm:w-auto">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold pr-1 sm:border-r border-slate-800">
-                        <Eye className="h-3.5 w-3.5 text-purple-400" />
-                        <span className="text-slate-300">Preview & Manual Target:</span>
-                    </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
-                            <Tv className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-                            <Select value={selectedServerId} onValueChange={(val) => {
-                                setSelectedServerId(val);
-                                const srv = servers.find(s => s.serverId === val);
-                                if (srv?.sections?.length > 0) setSelectedSectionKey(String(srv.sections[0].key));
-                            }}>
-                                <SelectTrigger className="h-8 min-w-[135px] text-xs bg-slate-800/90 border-slate-700">
-                                    <SelectValue placeholder="Select Server" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {servers.map(s => (
-                                        <SelectItem key={s.serverId} value={s.serverId} className="text-xs">
-                                            {s.serverName || "Plex Server"}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
-                            <Film className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-                            <Select value={selectedSectionKey} onValueChange={setSelectedSectionKey}>
-                                <SelectTrigger className="h-8 min-w-[135px] text-xs bg-slate-800/90 border-slate-700">
-                                    <SelectValue placeholder="Select Library" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {currentSections.map((sec: any) => (
-                                        <SelectItem key={sec.key} value={String(sec.key)} className="text-xs">
-                                            {sec.title}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
+                <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-slate-900/80 border-slate-800 text-slate-300 px-3 py-1.5 text-xs font-semibold flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>{servers.length} Connected {servers.length === 1 ? 'Server' : 'Servers'}</span>
+                    </Badge>
                 </div>
             </div>
+
+            {/* Dedicated Static Server & Library Section Navigator (No Dropdowns) */}
+            {servers.length > 0 && (
+                <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                    <div className="p-4 space-y-3.5">
+                        {/* Row 1: Plex Servers Static Tabs */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
+                                <Tv className="h-4 w-4 text-purple-400" />
+                                <span>Plex Server:</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                {servers.map(s => {
+                                    const isSelected = s.serverId === selectedServerId;
+                                    const secCount = s.sections?.length || 0;
+                                    return (
+                                        <button
+                                            key={s.serverId}
+                                            type="button"
+                                            onClick={() => handleSelectServer(s.serverId)}
+                                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-950/60 border border-purple-400/50 ring-1 ring-purple-400/40'
+                                                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                            }`}
+                                        >
+                                            <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white shadow-sm' : 'bg-emerald-400'}`} />
+                                            <span>{s.serverName || "Plex Server"}</span>
+                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-purple-300 text-purple-100 bg-purple-700/60' : 'border-slate-700 text-slate-400'}`}>
+                                                {secCount} {secCount === 1 ? 'lib' : 'libs'}
+                                            </Badge>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Row 2: Library Sections Static Tabs */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
+                                <Film className="h-4 w-4 text-sky-400" />
+                                <span>Library Section:</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                {currentSections.length === 0 ? (
+                                    <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
+                                ) : (
+                                    currentSections.map((sec: any) => {
+                                        const isSelected = String(sec.key) === selectedSectionKey;
+                                        const isMovie = sec.type === "movie" || sec.title?.toLowerCase().includes("movie");
+                                        const isShow = sec.type === "show" || sec.title?.toLowerCase().includes("show") || sec.title?.toLowerCase().includes("tv");
+                                        const isMusic = sec.type === "artist" || sec.title?.toLowerCase().includes("music");
+
+                                        return (
+                                            <button
+                                                key={sec.key}
+                                                type="button"
+                                                onClick={() => handleSelectSection(String(sec.key))}
+                                                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                    isSelected
+                                                        ? 'bg-sky-600 text-white shadow-md shadow-sky-950/60 border border-sky-400/50 ring-1 ring-sky-400/40'
+                                                        : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                                }`}
+                                            >
+                                                {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
+                                                {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
+                                                {isMusic && <Sparkles className="h-3.5 w-3.5 text-purple-300 shrink-0" />}
+                                                {!isMovie && !isShow && !isMusic && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                                                <span>{sec.title}</span>
+                                                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-sky-700/80 text-sky-100' : 'bg-slate-900 text-slate-400'}`}>
+                                                    Key: {sec.key}
+                                                </span>
+                                            </button>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+            )}
 
             {/* Automated Periodic Timer Job & Full Sync Banner */}
             <Card className="bg-slate-900/80 border-slate-800 shadow-xl overflow-hidden">
@@ -6452,110 +6528,177 @@ export default function CurationStudio() {
                     </Card>
 
                     {/* IMDb Parental Guide Ratings Tagging Engine */}
-                    <Card className="bg-slate-900/60 border-slate-800 shadow-xl overflow-hidden">
-                        <CardHeader className="p-6 pb-2">
+                    <Card className="bg-slate-900/80 border-slate-800 shadow-2xl overflow-hidden rounded-2xl">
+                        {/* Header Banner */}
+                        <CardHeader className="p-6 bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border-b border-slate-800/80">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="space-y-1">
-                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                        <Shield className="h-5 w-5 text-amber-400" /> IMDb Parental Ratings Tagging Engine
-                                    </CardTitle>
-                                    <CardDescription className="text-xs text-slate-400 max-w-2xl">
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 bg-amber-500/20 rounded-xl text-amber-400 border border-amber-500/30">
+                                            <Shield className="h-5 w-5" />
+                                        </div>
+                                        <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+                                            IMDb Parental Ratings Tagging Engine
+                                        </CardTitle>
+                                        <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-[10px] font-semibold">
+                                            Kids & Family Protection
+                                        </Badge>
+                                    </div>
+                                    <CardDescription className="text-xs text-slate-400 max-w-2xl leading-relaxed">
                                         Scan your Plex movies and TV shows to automatically apply consensus IMDb Parents Guide severity ratings (Severe, Moderate, Mild, None). Use Plex Labels to seamlessly restrict mature or violent content for Kids & Family managed accounts.
                                     </CardDescription>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-3 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700/80 shrink-0">
+                                    <span className="text-xs font-semibold text-slate-300">
+                                        {parentalTaggingEnabled ? "Tagging Enabled" : "Tagging Disabled"}
+                                    </span>
                                     <Switch 
                                         checked={parentalTaggingEnabled}
                                         onCheckedChange={setParentalTaggingEnabled}
                                     />
-                                    <span className="text-xs font-semibold text-slate-300">
-                                        {parentalTaggingEnabled ? "Enabled" : "Disabled"}
-                                    </span>
                                 </div>
                             </div>
                         </CardHeader>
 
-                        <CardContent className="p-6 space-y-6 text-xs">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                                {/* Format Template */}
-                                <div className="space-y-1.5">
-                                    <Label className="text-slate-300 font-semibold">Tag Format Style</Label>
-                                    <Select 
-                                        value={parentalTagFormat} 
-                                        onValueChange={setParentalTagFormat}
-                                    >
-                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="prefix_category_severity">Prefix-Category: Severity (IMDb-Violence: Severe)</SelectItem>
-                                            <SelectItem value="severity_category">Severity Category (Severe Violence)</SelectItem>
-                                            <SelectItem value="category_severity_paren">Category (Severity) (Violence (Severe))</SelectItem>
-                                            <SelectItem value="custom">Prefix: Category - Severity (IMDb: Violence - Severe)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                        <CardContent className="p-6 sm:p-8 space-y-8 text-xs">
+                            {/* Target Server & Library Info Pill */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                                <div className="flex items-center gap-2 text-slate-300">
+                                    <Compass className="h-4 w-4 text-amber-400 shrink-0" />
+                                    <span className="font-semibold text-xs">Target Destination:</span>
+                                    <Badge variant="outline" className="bg-purple-950/50 border-purple-500/40 text-purple-300 text-xs font-semibold">
+                                        {activeServer?.serverName || "Selected Plex Server"}
+                                    </Badge>
+                                    <span className="text-slate-600">/</span>
+                                    <Badge variant="outline" className="bg-sky-950/50 border-sky-500/40 text-sky-300 text-xs font-semibold">
+                                        {currentSections.find((s: any) => String(s.key) === selectedSectionKey)?.title || "Selected Library"}
+                                    </Badge>
+                                </div>
+                                <span className="text-[11px] text-slate-500">
+                                    Switch server or section using the static tabs bar at the top
+                                </span>
+                            </div>
+
+                            {/* Section 1: Engine Configuration */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+                                    <Settings2 className="h-4 w-4 text-amber-400" />
+                                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                                        1. Plex Tagging & Severity Settings
+                                    </h3>
                                 </div>
 
-                                {/* Custom Prefix */}
-                                <div className="space-y-1.5">
-                                    <Label className="text-slate-300 font-semibold">Tag Prefix</Label>
-                                    <Input 
-                                        value={parentalTagPrefix}
-                                        onChange={e => setParentalTagPrefix(e.target.value)}
-                                        placeholder="IMDb"
-                                        className="bg-slate-800 border-slate-700 text-xs"
-                                    />
-                                    <p className="text-[10px] text-slate-500">Used to identify & clear tags cleanly</p>
-                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    {/* Plex Target Field */}
+                                    <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-800 space-y-2">
+                                        <Label className="text-slate-200 font-bold text-xs flex items-center gap-1.5">
+                                            <span>🏷️</span> Plex Target Field
+                                        </Label>
+                                        <Select 
+                                            value={parentalTagTarget} 
+                                            onValueChange={setParentalTagTarget}
+                                        >
+                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="labels">🏷️ Plex Labels (Best for Kids / Sharing Restrictions)</SelectItem>
+                                                <SelectItem value="genres">🎭 Plex Genres</SelectItem>
+                                                <SelectItem value="both">🏷️🎭 Both Labels & Genres</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                                            Plex Labels let you restrict managed accounts (e.g. &quot;Kids&quot; or &quot;Family&quot;) from seeing media with specific tags in Plex Home Sharing restrictions.
+                                        </p>
+                                    </div>
 
-                                {/* Target Field in Plex */}
-                                <div className="space-y-1.5">
-                                    <Label className="text-slate-300 font-semibold">Plex Target Field</Label>
-                                    <Select 
-                                        value={parentalTagTarget} 
-                                        onValueChange={setParentalTagTarget}
-                                    >
-                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="labels">🏷️ Plex Labels (Best for Kids / Sharing Restrictions)</SelectItem>
-                                            <SelectItem value="genres">🎭 Plex Genres</SelectItem>
-                                            <SelectItem value="both">🏷️🎭 Both Labels & Genres</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                    {/* Minimum Severity Threshold */}
+                                    <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-800 space-y-2">
+                                        <Label className="text-slate-200 font-bold text-xs flex items-center gap-1.5">
+                                            <span>⚡</span> Minimum Severity Threshold
+                                        </Label>
+                                        <Select 
+                                            value={parentalMinSeverity} 
+                                            onValueChange={setParentalMinSeverity}
+                                        >
+                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Severe">🔴 Severe Only (Extreme Content)</SelectItem>
+                                                <SelectItem value="Moderate">🟠 Moderate & Severe</SelectItem>
+                                                <SelectItem value="Mild">🟡 Mild, Moderate & Severe</SelectItem>
+                                                <SelectItem value="None">⚪ All Levels (Including None)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                                            Only advisories that meet or exceed this severity level will have tags written to Plex.
+                                        </p>
+                                    </div>
 
-                                {/* Minimum Severity Threshold */}
-                                <div className="space-y-1.5">
-                                    <Label className="text-slate-300 font-semibold">Minimum Severity to Tag</Label>
-                                    <Select 
-                                        value={parentalMinSeverity} 
-                                        onValueChange={setParentalMinSeverity}
-                                    >
-                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Severe">🔴 Severe Only (Extreme Content)</SelectItem>
-                                            <SelectItem value="Moderate">🟠 Moderate & Severe</SelectItem>
-                                            <SelectItem value="Mild">🟡 Mild, Moderate & Severe</SelectItem>
-                                            <SelectItem value="None">⚪ All Levels (Including None)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    {/* Format Template */}
+                                    <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-800 space-y-2">
+                                        <Label className="text-slate-200 font-bold text-xs flex items-center gap-1.5">
+                                            <span>📝</span> Tag Format Style
+                                        </Label>
+                                        <Select 
+                                            value={parentalTagFormat} 
+                                            onValueChange={setParentalTagFormat}
+                                        >
+                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="prefix_category_severity">Prefix-Category: Severity (IMDb-Violence: Severe)</SelectItem>
+                                                <SelectItem value="severity_category">Severity Category (Severe Violence)</SelectItem>
+                                                <SelectItem value="category_severity_paren">Category (Severity) (Violence (Severe))</SelectItem>
+                                                <SelectItem value="custom">Prefix: Category - Severity (IMDb: Violence - Severe)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                                            Controls how the label string is structured when created in Plex metadata.
+                                        </p>
+                                    </div>
+
+                                    {/* Custom Prefix */}
+                                    <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-800 space-y-2">
+                                        <Label className="text-slate-200 font-bold text-xs flex items-center gap-1.5">
+                                            <span>🔖</span> Tag Namespace Prefix
+                                        </Label>
+                                        <Input 
+                                            value={parentalTagPrefix}
+                                            onChange={e => setParentalTagPrefix(e.target.value)}
+                                            placeholder="IMDb"
+                                            className="bg-slate-800 border-slate-700 text-xs h-9 font-medium"
+                                        />
+                                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                                            Used to identify and bulk-clear parental tags cleanly without touching your other custom labels.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Categories Selector */}
-                            <div className="space-y-2">
-                                <Label className="text-slate-300 font-semibold block">Advisory Categories to Evaluate & Tag</Label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                            {/* Section 2: Advisory Categories */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                                    <div className="flex items-center gap-2">
+                                        <ShieldAlert className="h-4 w-4 text-amber-400" />
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                                            2. Content Advisory Categories to Tag
+                                        </h3>
+                                    </div>
+                                    <span className="text-[11px] text-slate-400">
+                                        {parentalCategories.length} of 5 categories enabled
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
                                     {[
-                                        { key: "nudity", label: "Sex & Nudity", icon: "🔞", desc: "Sexual scenes, nudity" },
-                                        { key: "violence", label: "Violence & Gore", icon: "🩸", desc: "Physical violence, gore" },
-                                        { key: "profanity", label: "Profanity", icon: "🤬", desc: "Strong language, slurs" },
-                                        { key: "alcohol", label: "Alcohol & Drugs", icon: "🍷", desc: "Substance & drug use" },
-                                        { key: "frightening", label: "Frightening", icon: "😱", desc: "Horror, intense scenes" }
+                                        { key: "nudity", label: "Sex & Nudity", icon: "🔞", desc: "Sexual scenes, nudity & intimacy" },
+                                        { key: "violence", label: "Violence & Gore", icon: "🩸", desc: "Physical violence, combat & gore" },
+                                        { key: "profanity", label: "Profanity", icon: "🤬", desc: "Strong language, slurs & cursing" },
+                                        { key: "alcohol", label: "Alcohol & Drugs", icon: "🍷", desc: "Substance use, smoking & drugs" },
+                                        { key: "frightening", label: "Frightening", icon: "😱", desc: "Horror, jumpscares & intense scenes" }
                                     ].map(cat => {
                                         const isChecked = parentalCategories.includes(cat.key);
                                         return (
@@ -6568,68 +6711,95 @@ export default function CurationStudio() {
                                                         setParentalCategories([...parentalCategories, cat.key]);
                                                     }
                                                 }}
-                                                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start justify-between ${
+                                                className={`p-4 rounded-xl border transition-all cursor-pointer select-none flex flex-col justify-between gap-3 ${
                                                     isChecked 
-                                                        ? 'bg-amber-950/40 border-amber-500/50 text-white' 
-                                                        : 'bg-slate-800/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                                                        ? 'bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-900 border-amber-500/50 text-white shadow-md ring-1 ring-amber-500/30' 
+                                                        : 'bg-slate-900/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:bg-slate-850'
                                                 }`}
                                             >
-                                                <div className="space-y-0.5">
-                                                    <span className="font-bold text-xs flex items-center gap-1.5">
-                                                        <span>{cat.icon}</span> {cat.label}
-                                                    </span>
-                                                    <p className="text-[10px] opacity-70">{cat.desc}</p>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="text-2xl p-1.5 bg-slate-800/60 rounded-xl border border-slate-700/50">
+                                                        {cat.icon}
+                                                    </div>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={isChecked} 
+                                                        readOnly 
+                                                        className="rounded border-slate-700 text-amber-500 focus:ring-0 h-4 w-4 mt-1" 
+                                                    />
                                                 </div>
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={isChecked} 
-                                                    readOnly 
-                                                    className="rounded border-slate-700 text-amber-500 focus:ring-0 h-4 w-4 mt-0.5" 
-                                                />
+                                                <div className="space-y-1">
+                                                    <span className="font-bold text-xs block text-slate-100">
+                                                        {cat.label}
+                                                    </span>
+                                                    <p className="text-[11px] text-slate-400 leading-snug">
+                                                        {cat.desc}
+                                                    </p>
+                                                </div>
                                             </div>
                                         );
                                     })}
                                 </div>
                             </div>
 
-                            {/* Tag Preview Box */}
-                            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Sample Generated Tag Output Preview:
-                                </span>
-                                <div className="flex flex-wrap gap-2">
-                                    {parentalCategories.map(cat => {
-                                        let sample = `${parentalTagPrefix}-${cat.charAt(0).toUpperCase() + cat.slice(1)}: Severe`;
-                                        if (parentalTagFormat === "severity_category") sample = `Severe ${cat.charAt(0).toUpperCase() + cat.slice(1)}`;
-                                        if (parentalTagFormat === "category_severity_paren") sample = `${cat.charAt(0).toUpperCase() + cat.slice(1)} (Severe)`;
-                                        if (parentalTagFormat === "custom") sample = `${parentalTagPrefix}: ${cat.charAt(0).toUpperCase() + cat.slice(1)} - Severe`;
-                                        return (
-                                            <Badge key={cat} variant="secondary" className="bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono text-[11px] px-2 py-0.5">
-                                                {sample}
-                                            </Badge>
-                                        );
-                                    })}
+                            {/* Section 3: Live Preview */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                                    <div className="flex items-center gap-2">
+                                        <Tag className="h-4 w-4 text-amber-400" />
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                                            3. Sample Generated Tag Preview
+                                        </h3>
+                                    </div>
+                                    <span className="text-[11px] text-slate-400">
+                                        Previewing with &quot;Severe&quot; level
+                                    </span>
+                                </div>
+
+                                <div className="p-4 bg-slate-950/80 border border-slate-800/80 rounded-xl space-y-3">
+                                    <div className="flex flex-wrap gap-2.5">
+                                        {parentalCategories.length === 0 ? (
+                                            <span className="text-xs text-slate-500 italic">No categories selected. Click categories above to enable.</span>
+                                        ) : (
+                                            parentalCategories.map(cat => {
+                                                let sample = `${parentalTagPrefix}-${cat.charAt(0).toUpperCase() + cat.slice(1)}: Severe`;
+                                                if (parentalTagFormat === "severity_category") sample = `Severe ${cat.charAt(0).toUpperCase() + cat.slice(1)}`;
+                                                if (parentalTagFormat === "category_severity_paren") sample = `${cat.charAt(0).toUpperCase() + cat.slice(1)} (Severe)`;
+                                                if (parentalTagFormat === "custom") sample = `${parentalTagPrefix}: ${cat.charAt(0).toUpperCase() + cat.slice(1)} - Severe`;
+                                                return (
+                                                    <Badge 
+                                                        key={cat} 
+                                                        variant="secondary" 
+                                                        className="bg-amber-500/15 text-amber-300 border border-amber-500/40 font-mono text-xs px-3 py-1 rounded-lg"
+                                                    >
+                                                        {sample}
+                                                    </Badge>
+                                                );
+                                            })
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Status and Action Buttons */}
+                            {/* Status Messages */}
                             {parentalTagMsg && (
-                                <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                                <div className={`p-4 rounded-xl text-xs flex items-center gap-3 ${
                                     parentalTagMsg.success 
                                         ? 'bg-emerald-950/70 border border-emerald-800 text-emerald-300' 
                                         : 'bg-rose-950/70 border border-rose-800 text-rose-300'
                                 }`}>
-                                    {parentalTagMsg.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
-                                    <span>{parentalTagMsg.text}</span>
+                                    {parentalTagMsg.success ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <XCircle className="h-5 w-5 shrink-0" />}
+                                    <span className="font-medium leading-relaxed">{parentalTagMsg.text}</span>
                                 </div>
                             )}
 
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
-                                <div className="flex flex-wrap items-center gap-2">
+                            {/* Section 4: Action Toolbar */}
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-slate-800/80">
+                                <div className="flex flex-wrap items-center gap-3">
                                     <Button 
                                         onClick={handleApplyParentalTags}
                                         disabled={applyingParentalTags}
-                                        className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs h-9 px-4 gap-2 shadow-lg shadow-amber-950/40"
+                                        className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold text-xs h-10 px-5 gap-2 rounded-xl shadow-lg shadow-amber-950/40 cursor-pointer"
                                     >
                                         {applyingParentalTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Tag className="h-4 w-4" />}
                                         <span>🏷️ Scan & Apply Tags to Library</span>
@@ -6639,28 +6809,29 @@ export default function CurationStudio() {
                                         variant="outline"
                                         onClick={handleClearParentalTags}
                                         disabled={clearingParentalTags}
-                                        className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-semibold text-xs h-9 gap-1.5"
+                                        className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-semibold text-xs h-10 px-4 rounded-xl gap-2 cursor-pointer"
                                     >
                                         {clearingParentalTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-rose-400" />}
                                         <span>🧹 Clear Parental Tags from Library</span>
                                     </Button>
                                 </div>
 
-                                <Button 
-                                    onClick={handleSaveParentalSettings}
-                                    disabled={savingParentalSettings}
-                                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-9 px-4 gap-1.5"
-                                >
-                                    {savingParentalSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                                    <span>Save Parental Settings</span>
-                                </Button>
-                            </div>
-
-                            {parentalTagsSavedMsg && (
-                                <div className="text-xs text-emerald-400 flex items-center gap-1.5 justify-end">
-                                    <CheckCircle2 className="h-4 w-4" /> Parental tagging settings saved successfully!
+                                <div className="flex items-center gap-3 justify-end">
+                                    {parentalTagsSavedMsg && (
+                                        <div className="text-xs text-emerald-400 flex items-center gap-1.5 font-medium">
+                                            <CheckCircle2 className="h-4 w-4" /> Settings saved!
+                                        </div>
+                                    )}
+                                    <Button 
+                                        onClick={handleSaveParentalSettings}
+                                        disabled={savingParentalSettings}
+                                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-10 px-5 rounded-xl gap-2 cursor-pointer"
+                                    >
+                                        {savingParentalSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                        <span>Save Parental Settings</span>
+                                    </Button>
                                 </div>
-                            )}
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
