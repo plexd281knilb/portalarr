@@ -460,13 +460,18 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         } else if (collection.sourceType === "mdblist") {
             if (collection.sourceQuery) {
                 const items = await getMdblistItems(collection.sourceQuery);
-                const imdbIds = items.map((t: any) => t.imdbId).filter(Boolean);
-                const titles = items.map((t: any) => t.title?.toLowerCase()).filter(Boolean);
+                if (items && items.length > 0) {
+                    const imdbIds = items.map((t: any) => t.imdbId).filter(Boolean);
+                    const titles = items.map((t: any) => t.title?.toLowerCase()).filter(Boolean);
 
-                matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids.imdb && imdbIds.includes(it.guids.imdb)) ||
-                    (it.title && titles.includes(it.title.toLowerCase()))
-                ).map(it => it.ratingKey));
+                    matchingRatingKeys.push(...libraryItems.filter(it => 
+                        (it.guids.imdb && imdbIds.includes(it.guids.imdb)) ||
+                        (it.title && titles.includes(it.title.toLowerCase()))
+                    ).map(it => it.ratingKey));
+                } else if (collection.sourceQuery === "top-imdb-250" || collection.sourceQuery === "top-imdb-tv") {
+                    // Smart library fallback if MDBList API key not present: items with rating >= 8.0
+                    matchingRatingKeys.push(...libraryItems.filter(it => it.rating && it.rating >= 8.0).map(it => it.ratingKey));
+                }
             }
         }
 
@@ -478,9 +483,6 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         }
 
         // 3. Sync to Plex with Sort Prefix and Home Promotion
-        const sortPrefix = collection.sortPrefix || `!${String(collection.orderIndex || 0).padStart(2, '0')}_`;
-        const effectiveSortTitle = `${sortPrefix}${collection.sortTitle || collection.title}`;
-
         const syncResult = await syncPlexCollection(
             serverUrl,
             token,
@@ -489,16 +491,15 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             matchingRatingKeys,
             {
                 summary: collection.summary || undefined,
-                sortTitle: effectiveSortTitle,
-                posterUrl: collection.posterUrl || undefined,
-                promotedToHome: collection.promotedToHome,
-                promotedToRecommended: collection.promotedToRecommended,
-                promotedToSharedHome: collection.promotedToSharedHome,
-                orderIndex: collection.orderIndex
+                sortTitle: `${collection.sortPrefix || "!00_"}${collection.title}`,
+                promotedToHome: collection.promotedToHome ?? true,
+                promotedToRecommended: collection.promotedToRecommended ?? true,
+                promotedToSharedHome: collection.promotedToSharedHome ?? true,
+                posterUrl: collection.posterUrl || undefined
             }
         );
 
-        // 4. Update DB record
+        // 4. Update local DB with item count and synced time
         await prisma.mediaCollection.update({
             where: { id: collection.id },
             data: {
@@ -510,9 +511,155 @@ export async function syncCollectionToPlexAction(collectionId: string) {
 
         return {
             success: true,
-            syncedCount: matchingRatingKeys.length,
+            itemCount: matchingRatingKeys.length,
             collectionRatingKey: syncResult.collectionRatingKey,
             message: `Synced "${collection.title}" with ${matchingRatingKeys.length} items to Plex!`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Preview matched media items in user library for a collection rule/preset
+ */
+export async function previewCollectionMatchingAction(
+    serverId: string,
+    sectionKey: string,
+    collectionConfig: {
+        sourceType: string;
+        sourceQuery?: string;
+        mediaType?: string;
+        title?: string;
+        type?: string;
+    }
+) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const servers = await getPlexServers(token);
+        const server = servers.find(s => s.clientIdentifier === serverId) || servers[0];
+        const serverUrl = server?.connections[0]?.uri || settings?.mainPlexUrl || "";
+        if (!serverUrl) return { success: false, error: "Plex server connection URL not found." };
+
+        const libraryItems = await getPlexLibraryMediaItems(serverUrl, token, sectionKey || "", 500);
+
+        let matchedItems: any[] = [];
+        let executionMethod = "";
+
+        const sourceType = collectionConfig.sourceType;
+        const sourceQuery = collectionConfig.sourceQuery || "";
+
+        if (sourceType === "plex_query") {
+            if (sourceQuery.includes("hdr:DV")) {
+                matchedItems = libraryItems.filter(it => it.detectedBadges.hdr === "DV");
+                executionMethod = "Plex Stream Telemetry: Filtering for Dolby Vision (DV) video streams.";
+            } else if (sourceQuery.includes("audio:ATMOS")) {
+                matchedItems = libraryItems.filter(it => it.detectedBadges.audio === "ATMOS");
+                executionMethod = "Plex Audio Telemetry: Filtering for Dolby Atmos immersive audio tracks.";
+            } else if (sourceQuery.includes("1980") && sourceQuery.includes("1989")) {
+                matchedItems = libraryItems.filter(it => it.year && it.year >= 1980 && it.year <= 1989);
+                executionMethod = "Plex Metadata Filter: Released between 1980 and 1989.";
+            } else if (sourceQuery.includes("1990") && sourceQuery.includes("1999")) {
+                matchedItems = libraryItems.filter(it => it.year && it.year >= 1990 && it.year <= 1999);
+                executionMethod = "Plex Metadata Filter: Released between 1990 and 1999.";
+            } else if (sourceQuery.includes("tag:leaving-soon")) {
+                const leavingSoon = await prisma.mediaContentAdvisory.findMany({ where: { isLeavingSoon: true } });
+                const lKeys = leavingSoon.map(l => l.ratingKey);
+                matchedItems = libraryItems.filter(it => lKeys.includes(it.ratingKey));
+                executionMethod = "Portalarr Prune Engine: Flagged as 'Leaving Soon' by storage disk policy.";
+            } else if (sourceQuery.startsWith("rating>=") || sourceQuery.startsWith("rating:")) {
+                const minRating = parseFloat(sourceQuery.replace(/[^0-9.]/g, "")) || 8.0;
+                matchedItems = libraryItems.filter(it => it.rating && it.rating >= minRating);
+                executionMethod = `Plex Metadata Filter: Audience rating >= ${minRating}.`;
+            } else {
+                matchedItems = libraryItems.slice(0, 50);
+                executionMethod = `Plex Smart Filter: ${sourceQuery}`;
+            }
+        } else if (sourceType === "tmdb") {
+            const tmdbKey = settings?.tmdbApiKey || "";
+            if (sourceQuery.startsWith("collection:")) {
+                const collId = sourceQuery.replace("collection:", "");
+                executionMethod = `TMDb Franchise API: Querying collection ID #${collId} parts list.`;
+                if (tmdbKey) {
+                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
+                    if (tmdbRes.ok) {
+                        const data = await tmdbRes.json();
+                        const parts: any[] = data.parts || [];
+                        const titles = parts.map((p: any) => p.title.toLowerCase());
+                        const tmdbIds = parts.map((p: any) => String(p.id));
+                        matchedItems = libraryItems.filter(it => 
+                            (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
+                            titles.includes(it.title.toLowerCase())
+                        );
+                    }
+                }
+            } else if (sourceQuery.startsWith("company:") || sourceQuery.startsWith("network:")) {
+                const compId = sourceQuery.replace(/^(company|network):/, "");
+                executionMethod = `TMDb Studio/Network API: Querying company/network ID #${compId} filmography.`;
+                if (tmdbKey) {
+                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
+                    if (tmdbRes.ok) {
+                        const data = await tmdbRes.json();
+                        const results: any[] = data.results || [];
+                        const tmdbIds = results.map((r: any) => String(r.id));
+                        const titles = results.map((r: any) => r.title.toLowerCase());
+                        matchedItems = libraryItems.filter(it => 
+                            (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
+                            titles.includes(it.title.toLowerCase())
+                        );
+                    }
+                }
+            } else {
+                executionMethod = `TMDb Query: ${sourceQuery}`;
+            }
+        } else if (sourceType === "mdblist") {
+            executionMethod = `MDBList API: Resolving curated chart "${sourceQuery}". Matches against Plex IMDb/TMDb metadata.`;
+            const items = await getMdblistItems(sourceQuery);
+            if (items && items.length > 0) {
+                const imdbIds = items.map((t: any) => t.imdbId).filter(Boolean);
+                const titles = items.map((t: any) => t.title?.toLowerCase()).filter(Boolean);
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids.imdb && imdbIds.includes(it.guids.imdb)) ||
+                    (it.title && titles.includes(it.title.toLowerCase()))
+                );
+            } else {
+                if (sourceQuery === "top-imdb-250" || sourceQuery === "top-imdb-tv") {
+                    executionMethod += " (No MDBList key found — showing smart library fallback: items with Plex rating ≥ 8.0).";
+                    matchedItems = libraryItems.filter(it => it.rating && it.rating >= 8.0);
+                } else if (sourceQuery === "top-oscar-best-picture") {
+                    executionMethod += " (MDBList key not configured; configure in settings to fetch official Oscar list).";
+                }
+            }
+        } else if (sourceType === "trakt") {
+            executionMethod = `Trakt API: Querying list "${sourceQuery}".`;
+            if (sourceQuery === "trending") {
+                const trending = await getTraktTrendingMovies(50);
+                const imdbIds = trending.map((t: any) => t.imdbId).filter(Boolean);
+                const titles = trending.map((t: any) => t.title?.toLowerCase()).filter(Boolean);
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids.imdb && imdbIds.includes(it.guids.imdb)) ||
+                    (it.title && titles.includes(it.title.toLowerCase()))
+                );
+            }
+        }
+
+        return {
+            success: true,
+            totalEvaluated: libraryItems.length,
+            matchCount: matchedItems.length,
+            executionMethod,
+            sampleMatches: matchedItems.slice(0, 18).map(m => ({
+                ratingKey: m.ratingKey,
+                title: m.title,
+                year: m.year,
+                rating: m.rating,
+                thumb: m.thumb,
+                detectedBadges: m.detectedBadges
+            }))
         };
     } catch (e: any) {
         return { success: false, error: e.message };

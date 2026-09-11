@@ -46,7 +46,8 @@ import {
     saveItemParentalAdvisoryAction,
     fetchGitHubBadgeRepoAction,
     importGitHubBadgesAction,
-    getPresetBadgePacksAction
+    getPresetBadgePacksAction,
+    previewCollectionMatchingAction
 } from "@/app/curation-actions";
 import { 
     COLLECTION_PRESETS, 
@@ -74,7 +75,8 @@ import {
     Server, Power, Ban, Archive, TestTube, Settings2, FolderCheck,
     Upload, Image as ImageIcon, MoveUp, MoveDown, CalendarClock,
     Palette, ChevronUp, ChevronDown, Tag, Compass, Home, Clock3,
-    Search, FileText, Info, Play, CheckCheck, Globe, Download, DownloadCloud, Package, Maximize2
+    Search, FileText, Info, Play, CheckCheck, Globe, Download, DownloadCloud, Package, Maximize2,
+    RotateCcw, Edit2
 } from "lucide-react";
 
 export default function CurationStudio() {
@@ -111,6 +113,16 @@ export default function CurationStudio() {
     const [seasonalSyncMsg, setSeasonalSyncMsg] = useState<{ success: boolean; text: string } | null>(null);
     const [seasonalModalOpen, setSeasonalModalOpen] = useState(false);
     const [editingColl, setEditingColl] = useState<any | null>(null);
+
+    // Preset Blueprint Inspection & Edit States
+    const [inspectModalOpen, setInspectModalOpen] = useState(false);
+    const [inspectingPreset, setInspectingPreset] = useState<CollectionPreset | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [previewData, setPreviewData] = useState<{ totalEvaluated: number; matchCount: number; executionMethod: string; sampleMatches: any[] } | null>(null);
+    const [editPresetModalOpen, setEditPresetModalOpen] = useState(false);
+    const [editingPresetData, setEditingPresetData] = useState<any | null>(null);
+    const [savingPresetEdit, setSavingPresetEdit] = useState(false);
+    const [resetDefaultSuccess, setResetDefaultSuccess] = useState(false);
 
     // Custom Badges & Overlays
     const [customBadges, setCustomBadges] = useState<any[]>([]);
@@ -489,6 +501,142 @@ export default function CurationStudio() {
             setSyncMessage({ id: preset.id, success: false, text: err.message || "Error syncing preset." });
         } finally {
             setSyncingCollId(null);
+        }
+    };
+
+    // Handle Inspect Blueprint
+    const handleInspectPreset = async (preset: CollectionPreset) => {
+        if (!selectedServerId || !selectedSectionKey) {
+            alert("Please select a Plex Server and Library Section above first.");
+            return;
+        }
+        setInspectingPreset(preset);
+        setInspectModalOpen(true);
+        setPreviewLoading(true);
+        setPreviewData(null);
+        try {
+            const res = await previewCollectionMatchingAction(selectedServerId, selectedSectionKey, {
+                sourceType: preset.sourceType,
+                sourceQuery: preset.sourceQuery,
+                mediaType: preset.mediaType,
+                title: preset.title,
+                type: preset.type
+            });
+            if (res.success) {
+                setPreviewData(res as any);
+            } else {
+                setPreviewData({
+                    totalEvaluated: 0,
+                    matchCount: 0,
+                    executionMethod: res.error || "Failed to preview collection.",
+                    sampleMatches: []
+                });
+            }
+        } catch (err: any) {
+            setPreviewData({
+                totalEvaluated: 0,
+                matchCount: 0,
+                executionMethod: err.message || "Failed to preview collection.",
+                sampleMatches: []
+            });
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
+
+    // Handle Open Edit Preset
+    const handleOpenEditPreset = (preset: CollectionPreset) => {
+        const existing = collections.find(c => c.title.toLowerCase() === preset.title.toLowerCase() || (c.sourceQuery && c.sourceQuery === preset.sourceQuery));
+        setEditingPresetData({
+            presetId: preset.id,
+            id: existing?.id,
+            title: existing?.title || preset.title,
+            summary: existing?.summary || preset.description,
+            sourceType: existing?.sourceType || preset.sourceType,
+            sourceQuery: existing?.sourceQuery || preset.sourceQuery,
+            posterUrl: existing?.posterUrl || preset.defaultPosterUrl || "",
+            defaultHomeOrder: existing?.orderIndex ?? preset.defaultHomeOrder ?? 1,
+            sortPrefix: existing?.sortPrefix || preset.defaultSortPrefix || "",
+            isSeasonal: existing?.isSeasonal ?? preset.isSeasonal ?? false,
+            scheduleStartMonth: existing?.scheduleStartMonth ?? preset.scheduleStartMonth ?? 10,
+            scheduleStartDay: existing?.scheduleStartDay ?? preset.scheduleStartDay ?? 1,
+            scheduleEndMonth: existing?.scheduleEndMonth ?? preset.scheduleEndMonth ?? 11,
+            scheduleEndDay: existing?.scheduleEndDay ?? preset.scheduleEndDay ?? 5,
+            seasonalAction: existing?.seasonalAction || preset.seasonalAction || "promote_hide",
+            category: preset.category,
+            type: preset.type
+        });
+        setResetDefaultSuccess(false);
+        setEditPresetModalOpen(true);
+    };
+
+    // Handle Reset Preset to Pristine Default
+    const handleResetPresetToDefault = () => {
+        if (!editingPresetData?.presetId) return;
+        const defaultPreset = COLLECTION_PRESETS.find(p => p.id === editingPresetData.presetId);
+        if (!defaultPreset) return;
+        setEditingPresetData((prev: any) => ({
+            ...prev,
+            title: defaultPreset.title,
+            summary: defaultPreset.description,
+            sourceType: defaultPreset.sourceType,
+            sourceQuery: defaultPreset.sourceQuery,
+            posterUrl: defaultPreset.defaultPosterUrl || "",
+            defaultHomeOrder: defaultPreset.defaultHomeOrder ?? 1,
+            sortPrefix: defaultPreset.defaultSortPrefix || "",
+            isSeasonal: defaultPreset.isSeasonal ?? false,
+            scheduleStartMonth: defaultPreset.scheduleStartMonth ?? 10,
+            scheduleStartDay: defaultPreset.scheduleStartDay ?? 1,
+            scheduleEndMonth: defaultPreset.scheduleEndMonth ?? 11,
+            scheduleEndDay: defaultPreset.scheduleEndDay ?? 5,
+            seasonalAction: defaultPreset.seasonalAction ?? "promote_hide",
+        }));
+        setResetDefaultSuccess(true);
+        setTimeout(() => setResetDefaultSuccess(false), 3000);
+    };
+
+    // Handle Save Edited Preset
+    const handleSaveEditedPreset = async () => {
+        if (!editingPresetData || !selectedServerId || !selectedSectionKey) {
+            alert("Please select a Plex server and library first.");
+            return;
+        }
+        setSavingPresetEdit(true);
+        try {
+            const res = await saveMediaCollectionAction({
+                id: editingPresetData.id,
+                title: editingPresetData.title,
+                summary: editingPresetData.summary,
+                type: editingPresetData.type || "smart",
+                category: editingPresetData.category || "General",
+                serverId: selectedServerId,
+                sectionKey: selectedSectionKey,
+                sourceType: editingPresetData.sourceType,
+                sourceQuery: editingPresetData.sourceQuery,
+                posterUrl: editingPresetData.posterUrl,
+                orderIndex: editingPresetData.defaultHomeOrder,
+                sortPrefix: editingPresetData.sortPrefix,
+                promotedToHome: true,
+                promotedToRecommended: true,
+                promotedToSharedHome: true,
+                isSeasonal: editingPresetData.isSeasonal,
+                scheduleStartMonth: editingPresetData.scheduleStartMonth,
+                scheduleStartDay: editingPresetData.scheduleStartDay,
+                scheduleEndMonth: editingPresetData.scheduleEndMonth,
+                scheduleEndDay: editingPresetData.scheduleEndDay,
+                seasonalAction: editingPresetData.seasonalAction,
+                autoSync: true
+            });
+            if (res.success) {
+                setEditPresetModalOpen(false);
+                await loadData();
+            } else {
+                alert(res.error || "Failed to save collection.");
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed to save collection.");
+        } finally {
+            setSavingPresetEdit(false);
         }
     };
 
@@ -2861,6 +3009,29 @@ export default function CurationStudio() {
                                                 <span className="truncate">{syncMessage.text}</span>
                                             </div>
                                         )}
+
+                                        <div className="grid grid-cols-2 gap-2 w-full">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleInspectPreset(preset)}
+                                                className="w-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white border-slate-700 text-xs font-semibold gap-1.5 h-8"
+                                            >
+                                                <Search className="h-3.5 w-3.5 text-cyan-400" />
+                                                <span>Blueprint</span>
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleOpenEditPreset(preset)}
+                                                className="w-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white border-slate-700 text-xs font-semibold gap-1.5 h-8"
+                                            >
+                                                <Edit2 className="h-3.5 w-3.5 text-amber-400" />
+                                                <span>Customize</span>
+                                            </Button>
+                                        </div>
 
                                         <Button 
                                             size="sm" 
@@ -6461,8 +6632,396 @@ export default function CurationStudio() {
                             </div>
 
                             <DialogFooter>
-                                <Button variant="outline" size="sm" onClick={() => setSeasonalModalOpen(false)}>Cancel</Button>
-                                <Button size="sm" onClick={handleSaveSeasonalSchedule} className="bg-amber-600 hover:bg-amber-500 text-white">Save Schedule</Button>
+                                <Button type="button" variant="outline" size="sm" onClick={() => setSeasonalModalOpen(false)}>Cancel</Button>
+                                <Button type="button" size="sm" onClick={handleSaveSeasonalSchedule} className="bg-amber-600 hover:bg-amber-500 text-white">Save Schedule</Button>
+                            </DialogFooter>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Preset Blueprint & Media Inspection Modal */}
+            <Dialog open={inspectModalOpen} onOpenChange={setInspectModalOpen}>
+                <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-3xl max-h-[85vh] flex flex-col p-6 overflow-hidden">
+                    {inspectingPreset && (
+                        <div className="flex flex-col space-y-4 h-full overflow-hidden">
+                            <DialogHeader className="pb-2 border-b border-slate-800">
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="space-y-1">
+                                        <DialogTitle className="flex items-center gap-2 text-lg text-white">
+                                            <Search className="h-5 w-5 text-cyan-400" />
+                                            <span>Blueprint: {inspectingPreset.title}</span>
+                                        </DialogTitle>
+                                        <DialogDescription className="text-slate-400 text-xs">
+                                            {inspectingPreset.description}
+                                        </DialogDescription>
+                                    </div>
+                                    <Badge variant="outline" className="bg-slate-800/80 text-cyan-300 border-cyan-500/30 text-xs">
+                                        {inspectingPreset.category}
+                                    </Badge>
+                                </div>
+                            </DialogHeader>
+
+                            <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+                                {/* Query Execution Blueprint Card */}
+                                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <FileText className="h-4 w-4 text-purple-400" />
+                                            <span className="font-semibold text-slate-200">How This Collection Operates</span>
+                                        </div>
+                                        {getSourceBadge(inspectingPreset.sourceType, inspectingPreset.title, inspectingPreset.sourceQuery)}
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
+                                        <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                            <div className="text-slate-400 text-[10px]">Source Provider</div>
+                                            <div className="font-mono text-cyan-300 font-semibold uppercase">{inspectingPreset.sourceType}</div>
+                                        </div>
+                                        <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                            <div className="text-slate-400 text-[10px]">Query / Parameter</div>
+                                            <div className="font-mono text-purple-300 font-semibold truncate" title={inspectingPreset.sourceQuery}>{inspectingPreset.sourceQuery || "Smart Default"}</div>
+                                        </div>
+                                        <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                            <div className="text-slate-400 text-[10px]">Home Slot Order</div>
+                                            <div className="text-amber-300 font-semibold font-mono">Slot #{inspectingPreset.defaultHomeOrder ?? 1}</div>
+                                        </div>
+                                        <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                            <div className="text-slate-400 text-[10px]">Seasonal Routine</div>
+                                            <div className="text-emerald-300 font-semibold">{inspectingPreset.isSeasonal ? `${inspectingPreset.scheduleStartMonth}/${inspectingPreset.scheduleStartDay} → ${inspectingPreset.scheduleEndMonth}/${inspectingPreset.scheduleEndDay}` : "Year-Round"}</div>
+                                        </div>
+                                    </div>
+
+                                    {previewData?.executionMethod && (
+                                        <div className="p-2.5 rounded-lg bg-cyan-950/30 border border-cyan-800/40 text-cyan-200 text-[11px] leading-relaxed flex items-start gap-2">
+                                            <Info className="h-4 w-4 text-cyan-400 shrink-0 mt-0.5" />
+                                            <div>
+                                                <span className="font-semibold text-cyan-300">Live Matching Logic: </span>
+                                                {previewData.executionMethod}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Live Library Matching Preview */}
+                                <div className="space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Film className="h-4 w-4 text-amber-400" />
+                                            <span className="font-semibold text-slate-200">Matching Items in Current Library</span>
+                                            {previewLoading ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                                            ) : previewData ? (
+                                                <Badge className="bg-emerald-950/60 text-emerald-300 border border-emerald-800 text-[10px]">
+                                                    {previewData.matchCount} matched of {previewData.totalEvaluated} scanned
+                                                </Badge>
+                                            ) : null}
+                                        </div>
+                                    </div>
+
+                                    {previewLoading ? (
+                                        <div className="flex flex-col items-center justify-center p-8 bg-slate-950/40 border border-slate-800/80 rounded-xl space-y-2">
+                                            <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+                                            <p className="text-xs text-slate-400">Inspecting Plex media library items & querying sources...</p>
+                                        </div>
+                                    ) : previewData?.sampleMatches && previewData.sampleMatches.length > 0 ? (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                                            {previewData.sampleMatches.map((item: any, idx: number) => (
+                                                <div key={item.ratingKey || idx} className="group relative bg-slate-950 rounded-lg border border-slate-800 overflow-hidden flex flex-col">
+                                                    <div className="aspect-[2/3] w-full bg-slate-900 relative overflow-hidden flex items-center justify-center">
+                                                        {item.thumb ? (
+                                                            <img 
+                                                                src={`/api/media/image?serverId=${selectedServerId}&thumb=${encodeURIComponent(item.thumb)}`} 
+                                                                alt={item.title} 
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                                                                loading="lazy" 
+                                                            />
+                                                        ) : (
+                                                            <Film className="h-8 w-8 text-slate-700" />
+                                                        )}
+                                                        {item.rating && (
+                                                            <div className="absolute top-1 right-1 bg-black/80 backdrop-blur-md px-1 py-0.5 rounded text-[9px] font-bold text-amber-300 flex items-center gap-0.5 border border-amber-500/20">
+                                                                <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                                                                {item.rating.toFixed(1)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="p-1.5 flex flex-col justify-between flex-1 bg-slate-900/90">
+                                                        <span className="font-semibold text-[11px] text-white line-clamp-1 group-hover:text-purple-300 transition-colors" title={item.title}>
+                                                            {item.title}
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-400">
+                                                            {item.year || "Unknown"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="p-6 text-center bg-slate-950/40 border border-slate-800/80 rounded-xl space-y-1">
+                                            <p className="text-slate-300 text-xs font-semibold">No matching media in the currently selected library section.</p>
+                                            <p className="text-[11px] text-slate-500">Ensure this library section matches the content type (e.g. Movies for movie presets, TV for TV presets).</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <DialogFooter className="pt-2 border-t border-slate-800 flex items-center justify-between sm:justify-between w-full">
+                                <Button 
+                                    type="button"
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => {
+                                        setInspectModalOpen(false);
+                                        handleOpenEditPreset(inspectingPreset);
+                                    }}
+                                    className="bg-slate-800 hover:bg-slate-700 text-amber-300 border-amber-600/30 text-xs gap-1.5"
+                                >
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                    <span>Customize Blueprint</span>
+                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button type="button" variant="outline" size="sm" onClick={() => setInspectModalOpen(false)}>Close</Button>
+                                    <Button 
+                                        type="button"
+                                        size="sm" 
+                                        onClick={() => {
+                                            setInspectModalOpen(false);
+                                            handleSyncPreset(inspectingPreset);
+                                        }}
+                                        className="bg-purple-600 hover:bg-purple-500 text-white text-xs gap-1.5"
+                                    >
+                                        <Sparkles className="h-3.5 w-3.5" />
+                                        <span>Sync to Plex</span>
+                                    </Button>
+                                </div>
+                            </DialogFooter>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit / Customize Collection Modal with Reset to Default */}
+            <Dialog open={editPresetModalOpen} onOpenChange={setEditPresetModalOpen}>
+                <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-xl max-h-[85vh] flex flex-col p-6 overflow-hidden">
+                    {editingPresetData && (
+                        <div className="flex flex-col space-y-4 h-full overflow-hidden">
+                            <DialogHeader className="pb-2 border-b border-slate-800">
+                                <div className="flex items-center justify-between">
+                                    <DialogTitle className="flex items-center gap-2 text-lg text-white">
+                                        <Edit2 className="h-5 w-5 text-amber-400" />
+                                        <span>Customize Collection: {editingPresetData.title}</span>
+                                    </DialogTitle>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleResetPresetToDefault}
+                                        className="bg-slate-800 hover:bg-rose-950/50 text-rose-300 hover:text-rose-200 border-rose-800/40 text-xs gap-1.5 h-7"
+                                        title="Reset all settings to official preset defaults"
+                                    >
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                        <span>Reset to Default</span>
+                                    </Button>
+                                </div>
+                                <DialogDescription className="text-slate-400 text-xs">
+                                    Adjust query criteria, sort priority, home slot, and seasonal automation rules.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            {resetDefaultSuccess && (
+                                <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                    <span>Successfully restored all fields to preset factory default configuration.</span>
+                                </div>
+                            )}
+
+                            <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+                                <div className="space-y-1.5">
+                                    <Label className="font-semibold text-slate-200">Collection Title</Label>
+                                    <Input 
+                                        value={editingPresetData.title} 
+                                        onChange={e => setEditingPresetData({ ...editingPresetData, title: e.target.value })}
+                                        className="bg-slate-800 border-slate-700 text-xs" 
+                                        placeholder="e.g. IMDb Top 250 Movies"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label className="font-semibold text-slate-200">Description / Summary</Label>
+                                    <Textarea 
+                                        rows={2}
+                                        value={editingPresetData.summary} 
+                                        onChange={e => setEditingPresetData({ ...editingPresetData, summary: e.target.value })}
+                                        className="bg-slate-800 border-slate-700 text-xs resize-none" 
+                                        placeholder="Collection summary displayed on Plex..."
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="font-semibold text-slate-200">Source Provider</Label>
+                                        <Select 
+                                            value={editingPresetData.sourceType} 
+                                            onValueChange={val => setEditingPresetData({ ...editingPresetData, sourceType: val })}
+                                        >
+                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="mdblist">MDBList (Curated Top Lists)</SelectItem>
+                                                <SelectItem value="tmdb">TMDb (Franchise Collection/Studio)</SelectItem>
+                                                <SelectItem value="trakt">Trakt (Trending/Popular Lists)</SelectItem>
+                                                <SelectItem value="plex_query">Plex Filter (Smart Search/Tag)</SelectItem>
+                                                <SelectItem value="manual">Manual (Static Item Pinning)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <Label className="font-semibold text-slate-200">Source Query / Parameter</Label>
+                                        <Input 
+                                            value={editingPresetData.sourceQuery || ""} 
+                                            onChange={e => setEditingPresetData({ ...editingPresetData, sourceQuery: e.target.value })}
+                                            className="bg-slate-800 border-slate-700 text-xs font-mono" 
+                                            placeholder="e.g. top-imdb-250, collection:86311"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="font-semibold text-slate-200">Home Order Rank Slot</Label>
+                                        <Input 
+                                            type="number"
+                                            min={1}
+                                            max={99}
+                                            value={editingPresetData.defaultHomeOrder ?? 1} 
+                                            onChange={e => setEditingPresetData({ ...editingPresetData, defaultHomeOrder: parseInt(e.target.value, 10) || 1 })}
+                                            className="bg-slate-800 border-slate-700 text-xs font-mono" 
+                                            placeholder="1-99"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <Label className="font-semibold text-slate-200">Sort Prefix Override</Label>
+                                        <Input 
+                                            value={editingPresetData.sortPrefix || ""} 
+                                            onChange={e => setEditingPresetData({ ...editingPresetData, sortPrefix: e.target.value })}
+                                            className="bg-slate-800 border-slate-700 text-xs font-mono" 
+                                            placeholder="e.g. !01_, !02_"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label className="font-semibold text-slate-200">Custom Poster URL (Optional)</Label>
+                                    <Input 
+                                        value={editingPresetData.posterUrl || ""} 
+                                        onChange={e => setEditingPresetData({ ...editingPresetData, posterUrl: e.target.value })}
+                                        className="bg-slate-800 border-slate-700 text-xs" 
+                                        placeholder="https://image.tmdb.org/... or direct image link"
+                                    />
+                                </div>
+
+                                {/* Seasonal Rules */}
+                                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-0.5">
+                                            <Label className="font-semibold text-slate-200">Seasonal Schedule</Label>
+                                            <p className="text-[10px] text-slate-400">Automate promotion during specific times of the year</p>
+                                        </div>
+                                        <Switch 
+                                            checked={editingPresetData.isSeasonal}
+                                            onCheckedChange={checked => setEditingPresetData({ ...editingPresetData, isSeasonal: checked })}
+                                        />
+                                    </div>
+
+                                    {editingPresetData.isSeasonal && (
+                                        <div className="space-y-3 pt-2 border-t border-slate-800/80">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] text-slate-400">Start Date (MM / DD)</Label>
+                                                    <div className="flex items-center gap-1">
+                                                        <Input 
+                                                            type="number" min={1} max={12} 
+                                                            value={editingPresetData.scheduleStartMonth || 10} 
+                                                            onChange={e => setEditingPresetData({ ...editingPresetData, scheduleStartMonth: parseInt(e.target.value, 10) || 1 })}
+                                                            className="bg-slate-800 border-slate-700 text-xs" 
+                                                            placeholder="M"
+                                                        />
+                                                        <Input 
+                                                            type="number" min={1} max={31} 
+                                                            value={editingPresetData.scheduleStartDay || 1} 
+                                                            onChange={e => setEditingPresetData({ ...editingPresetData, scheduleStartDay: parseInt(e.target.value, 10) || 1 })}
+                                                            className="bg-slate-800 border-slate-700 text-xs" 
+                                                            placeholder="D"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] text-slate-400">End Date (MM / DD)</Label>
+                                                    <div className="flex items-center gap-1">
+                                                        <Input 
+                                                            type="number" min={1} max={12} 
+                                                            value={editingPresetData.scheduleEndMonth || 11} 
+                                                            onChange={e => setEditingPresetData({ ...editingPresetData, scheduleEndMonth: parseInt(e.target.value, 10) || 12 })}
+                                                            className="bg-slate-800 border-slate-700 text-xs" 
+                                                            placeholder="M"
+                                                        />
+                                                        <Input 
+                                                            type="number" min={1} max={31} 
+                                                            value={editingPresetData.scheduleEndDay || 5} 
+                                                            onChange={e => setEditingPresetData({ ...editingPresetData, scheduleEndDay: parseInt(e.target.value, 10) || 31 })}
+                                                            className="bg-slate-800 border-slate-700 text-xs" 
+                                                            placeholder="D"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] text-slate-400">Action Out of Season</Label>
+                                                <Select 
+                                                    value={editingPresetData.seasonalAction || "promote_hide"} 
+                                                    onValueChange={val => setEditingPresetData({ ...editingPresetData, seasonalAction: val })}
+                                                >
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="promote_hide">Hide from Plex Home & Recommended</SelectItem>
+                                                        <SelectItem value="demote_only">Demote from Home (Keep in Library)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <DialogFooter className="pt-2 border-t border-slate-800 flex items-center justify-between sm:justify-between w-full">
+                                <Button type="button" variant="outline" size="sm" onClick={() => setEditPresetModalOpen(false)}>Cancel</Button>
+                                <Button 
+                                    type="button"
+                                    size="sm" 
+                                    disabled={savingPresetEdit}
+                                    onClick={handleSaveEditedPreset} 
+                                    className="bg-purple-600 hover:bg-purple-500 text-white text-xs gap-1.5"
+                                >
+                                    {savingPresetEdit ? (
+                                        <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            <span>Saving & Syncing...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="h-3.5 w-3.5" />
+                                            <span>Save & Sync Collection</span>
+                                        </>
+                                    )}
+                                </Button>
                             </DialogFooter>
                         </div>
                     )}
