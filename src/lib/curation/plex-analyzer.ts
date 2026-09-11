@@ -1,3 +1,7 @@
+if (typeof process !== "undefined" && process.env) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 import { decryptData } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -307,6 +311,177 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
 }
 
 /**
+ * Expands a single URL or candidate list into deduplicated http/https endpoints.
+ */
+export function expandCandidateUrls(serverUrlOrCandidates: string | string[]): string[] {
+    const rawList = Array.isArray(serverUrlOrCandidates) ? serverUrlOrCandidates : [serverUrlOrCandidates];
+    const results: string[] = [];
+
+    const add = (u?: string) => {
+        if (!u) return;
+        const clean = u.replace(/\/+$/, "").trim();
+        if (!clean) return;
+        if (!results.includes(clean)) results.push(clean);
+        if (clean.startsWith("http://")) {
+            const httpsAlt = clean.replace("http://", "https://");
+            if (!results.includes(httpsAlt)) results.push(httpsAlt);
+        } else if (clean.startsWith("https://")) {
+            const httpAlt = clean.replace("https://", "http://");
+            if (!results.includes(httpAlt)) results.push(httpAlt);
+        }
+    };
+
+    for (const raw of rawList) {
+        add(raw);
+    }
+    return results;
+}
+
+function parsePlexXmlMetadata(xml: string): any[] {
+    const items: any[] = [];
+    const itemMatches = xml.matchAll(/<(Video|Directory)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/gi);
+    for (const match of itemMatches) {
+        const tag = match[1];
+        const attrs = match[2] || "";
+        const inner = match[3] || "";
+
+        const getAttr = (name: string) => {
+            const m = attrs.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"));
+            return m ? m[1] : undefined;
+        };
+
+        const ratingKey = getAttr("ratingKey") || getAttr("key")?.replace("/library/metadata/", "") || "";
+        if (!ratingKey) continue;
+
+        const guids: { id: string }[] = [];
+        const guidMatches = inner.matchAll(/<Guid\b([^>]*?)(?:\/>|>.*?<\/Guid>)/gi);
+        for (const gm of guidMatches) {
+            const gAttrs = gm[1] || "";
+            const gId = gAttrs.match(/\bid=["']([^"']*)["']/i)?.[1];
+            if (gId) guids.push({ id: gId });
+        }
+
+        const mediaList: any[] = [];
+        const mediaMatches = inner.matchAll(/<Media\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Media>)/gi);
+        for (const mm of mediaMatches) {
+            const mAttrs = mm[1] || "";
+            const mInner = mm[2] || "";
+            const getMAttr = (name: string) => {
+                const m = mAttrs.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"));
+                return m ? m[1] : undefined;
+            };
+
+            const parts: any[] = [];
+            const partMatches = mInner.matchAll(/<Part\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Part>)/gi);
+            for (const pm of partMatches) {
+                const pAttrs = pm[1] || "";
+                const pInner = pm[2] || "";
+                const getPAttr = (name: string) => {
+                    const m = pAttrs.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"));
+                    return m ? m[1] : undefined;
+                };
+
+                const streams: any[] = [];
+                const streamMatches = pInner.matchAll(/<Stream\b([^>]*?)(?:\/>|>.*?<\/Stream>)/gi);
+                for (const sm of streamMatches) {
+                    const sAttrs = sm[1] || "";
+                    const getSAttr = (name: string) => {
+                        const m = sAttrs.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"));
+                        return m ? m[1] : undefined;
+                    };
+                    streams.push({
+                        streamType: parseInt(getSAttr("streamType") || "0", 10),
+                        codec: getSAttr("codec"),
+                        title: getSAttr("title"),
+                        displayTitle: getSAttr("displayTitle"),
+                        extendedDisplayTitle: getSAttr("extendedDisplayTitle"),
+                        channels: getSAttr("channels"),
+                        audioChannelLayout: getSAttr("audioChannelLayout"),
+                        colorPrimaries: getSAttr("colorPrimaries"),
+                        colorSpace: getSAttr("colorSpace"),
+                        doviTitle: getSAttr("doviTitle"),
+                        doviProfile: getSAttr("doviProfile"),
+                        profile: getSAttr("profile")
+                    });
+                }
+
+                parts.push({
+                    id: getPAttr("id"),
+                    file: getPAttr("file"),
+                    size: getPAttr("size"),
+                    duration: getPAttr("duration"),
+                    Stream: streams
+                });
+            }
+
+            mediaList.push({
+                id: getMAttr("id"),
+                videoResolution: getMAttr("videoResolution"),
+                videoCodec: getMAttr("videoCodec"),
+                videoProfile: getMAttr("videoProfile"),
+                videoFrameRate: getMAttr("videoFrameRate"),
+                audioCodec: getMAttr("audioCodec"),
+                audioProfile: getMAttr("audioProfile"),
+                audioChannels: getMAttr("audioChannels"),
+                bitrate: getMAttr("bitrate") ? parseInt(getMAttr("bitrate")!, 10) : undefined,
+                width: getMAttr("width") ? parseInt(getMAttr("width")!, 10) : undefined,
+                height: getMAttr("height") ? parseInt(getMAttr("height")!, 10) : undefined,
+                container: getMAttr("container"),
+                Part: parts
+            });
+        }
+
+        items.push({
+            ratingKey,
+            key: getAttr("key") || `/library/metadata/${ratingKey}`,
+            title: getAttr("title") || "Untitled",
+            year: getAttr("year"),
+            type: getAttr("type") || (tag.toLowerCase() === "video" ? "movie" : "show"),
+            thumb: getAttr("thumb"),
+            art: getAttr("art"),
+            duration: getAttr("duration"),
+            summary: getAttr("summary"),
+            studio: getAttr("studio"),
+            contentRating: getAttr("contentRating"),
+            rating: getAttr("rating"),
+            audienceRating: getAttr("audienceRating"),
+            addedAt: getAttr("addedAt"),
+            lastViewedAt: getAttr("lastViewedAt"),
+            viewCount: getAttr("viewCount"),
+            guid: getAttr("guid"),
+            Guid: guids,
+            Media: mediaList
+        });
+    }
+    return items;
+}
+
+function parsePlexXmlCollections(xml: string): { ratingKey: string; title: string; summary?: string; thumb?: string; childCount: number }[] {
+    const items: { ratingKey: string; title: string; summary?: string; thumb?: string; childCount: number }[] = [];
+    const itemMatches = xml.matchAll(/<(Directory|Video)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/gi);
+    for (const match of itemMatches) {
+        const attrs = match[2] || "";
+        const getAttr = (name: string) => {
+            const m = attrs.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"));
+            return m ? m[1] : undefined;
+        };
+
+        const ratingKey = getAttr("ratingKey") || getAttr("key")?.replace("/library/metadata/", "") || "";
+        const title = getAttr("title") || "";
+        if (ratingKey && title) {
+            items.push({
+                ratingKey,
+                title,
+                summary: getAttr("summary"),
+                thumb: getAttr("thumb"),
+                childCount: parseInt(getAttr("childCount") || "0", 10)
+            });
+        }
+    }
+    return items;
+}
+
+/**
  * Fetches all media items from a Plex library section with stream metadata.
  */
 export async function getPlexLibraryMediaItems(
@@ -315,23 +490,20 @@ export async function getPlexLibraryMediaItems(
     sectionKey: string | number,
     limit = 500
 ): Promise<PlexMediaStreamInfo[]> {
-    const urlsToTry = Array.isArray(serverUrlOrCandidates) 
-        ? serverUrlOrCandidates 
-        : [serverUrlOrCandidates];
-
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let lastError: any = null;
 
-    for (const rawUrl of urlsToTry) {
-        if (!rawUrl) continue;
-        const cleanBase = rawUrl.replace(/\/+$/, "");
-        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
 
+        // 1. Try standard query with includeGuids=1
         try {
+            const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 25000);
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
             const res = await fetch(urlWithGuids, {
                 headers: {
-                    "Accept": "application/json",
+                    "Accept": "application/json, application/xml, text/xml, */*",
                     "X-Plex-Token": token,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
@@ -341,39 +513,65 @@ export async function getPlexLibraryMediaItems(
             clearTimeout(timeoutId);
 
             if (res.ok) {
-                const data = await res.json();
-                const metadata = data.MediaContainer?.Metadata || [];
-                const rawItems = Array.isArray(metadata) ? metadata : [metadata];
-                return rawItems.map(analyzeMediaStreamInfo);
+                const text = await res.text();
+                const trimmed = text.trim();
+                let metadata: any[] = [];
+                if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                    try {
+                        const data = JSON.parse(trimmed);
+                        const m = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || data.MediaContainer?.Video || [];
+                        metadata = Array.isArray(m) ? m : [m];
+                    } catch (e) {}
+                }
+                if (metadata.length === 0 && (trimmed.includes("<MediaContainer") || trimmed.includes("<Video") || trimmed.includes("<Directory"))) {
+                    metadata = parsePlexXmlMetadata(trimmed);
+                }
+                if (metadata.length > 0) {
+                    return metadata.map(analyzeMediaStreamInfo);
+                }
+            } else {
+                lastError = new Error(`HTTP ${res.status}`);
             }
-
-            lastError = new Error(`HTTP ${res.status}`);
         } catch (e: any) {
             lastError = e;
-            // Try quick fallback without includeGuids if timed out
-            try {
-                const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
-                const fbController = new AbortController();
-                const fbTimeoutId = setTimeout(() => fbController.abort(), 15000);
-                const fbRes = await fetch(fallbackUrl, {
-                    headers: {
-                        "Accept": "application/json",
-                        "X-Plex-Token": token,
-                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                    },
-                    signal: fbController.signal,
-                    cache: "no-store"
-                });
-                clearTimeout(fbTimeoutId);
-                if (fbRes.ok) {
-                    const fbData = await fbRes.json();
-                    const fbMetadata = fbData.MediaContainer?.Metadata || [];
-                    const fbRawItems = Array.isArray(fbMetadata) ? fbMetadata : [fbMetadata];
-                    return fbRawItems.map(analyzeMediaStreamInfo);
+        }
+
+        // 2. Try fast fallback without includeGuids=1
+        try {
+            const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+            const fbController = new AbortController();
+            const fbTimeoutId = setTimeout(() => fbController.abort(), 15000);
+            const fbRes = await fetch(fallbackUrl, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: fbController.signal,
+                cache: "no-store"
+            });
+            clearTimeout(fbTimeoutId);
+
+            if (fbRes.ok) {
+                const text = await fbRes.text();
+                const trimmed = text.trim();
+                let metadata: any[] = [];
+                if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                    try {
+                        const data = JSON.parse(trimmed);
+                        const m = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || data.MediaContainer?.Video || [];
+                        metadata = Array.isArray(m) ? m : [m];
+                    } catch (e) {}
                 }
-            } catch (fbErr: any) {
-                lastError = fbErr;
+                if (metadata.length === 0 && (trimmed.includes("<MediaContainer") || trimmed.includes("<Video") || trimmed.includes("<Directory"))) {
+                    metadata = parsePlexXmlMetadata(trimmed);
+                }
+                if (metadata.length > 0) {
+                    return metadata.map(analyzeMediaStreamInfo);
+                }
             }
+        } catch (fbErr: any) {
+            lastError = fbErr;
         }
     }
 
@@ -387,46 +585,68 @@ export async function getPlexLibraryMediaItems(
  * Fetches existing Plex collections for a library section.
  */
 export async function getPlexLibraryCollections(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     sectionKey: string | number
 ): Promise<{ ratingKey: string; title: string; summary?: string; thumb?: string; childCount: number }[]> {
-    const cleanBase = serverUrl.replace(/\/+$/, "");
-    const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/collections?X-Plex-Token=${encodeURIComponent(token)}`;
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
 
-    try {
-        const res = await fetch(url, {
-            headers: {
-                "Accept": "application/json",
-                "X-Plex-Token": token,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-            },
-            cache: "no-store"
-        });
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/collections?X-Plex-Token=${encodeURIComponent(token)}`;
 
-        if (!res.ok) return [];
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(url, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId);
 
-        const data = await res.json();
-        const metadata = data.MediaContainer?.Metadata || [];
-        const collections = Array.isArray(metadata) ? metadata : [metadata];
+            if (!res.ok) continue;
 
-        return collections.map((c: any) => ({
-            ratingKey: String(c.ratingKey),
-            title: c.title,
-            summary: c.summary,
-            thumb: c.thumb,
-            childCount: parseInt(c.childCount || "0", 10)
-        }));
-    } catch (e) {
-        return [];
+            const text = await res.text();
+            const trimmed = text.trim();
+
+            if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                try {
+                    const data = JSON.parse(trimmed);
+                    const metadata = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || [];
+                    const collections = Array.isArray(metadata) ? metadata : [metadata];
+                    if (collections.length > 0) {
+                        return collections.map((c: any) => ({
+                            ratingKey: String(c.ratingKey || c.key?.replace("/library/metadata/", "") || ""),
+                            title: c.title || "Untitled Collection",
+                            summary: c.summary,
+                            thumb: c.thumb,
+                            childCount: parseInt(c.childCount || "0", 10)
+                        })).filter(c => Boolean(c.ratingKey));
+                    }
+                } catch (e) {}
+            }
+
+            if (trimmed.includes("<MediaContainer") || trimmed.includes("<Directory") || trimmed.includes("<Video")) {
+                const parsed = parsePlexXmlCollections(trimmed);
+                if (parsed.length > 0) return parsed;
+            }
+        } catch (e) {
+            // Try next candidate
+        }
     }
+    return [];
 }
 
 /**
  * Creates or updates a Plex collection and populates it with item rating keys.
  */
 export async function syncPlexCollection(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     sectionKey: string | number,
     collectionTitle: string,
@@ -446,87 +666,124 @@ export async function syncPlexCollection(
         return { success: false, message: "Missing collection title or items." };
     }
 
-    const cleanBase = serverUrl.replace(/\/+$/, "");
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let collectionRatingKey: string | undefined;
 
     // 1. Check if collection already exists
-    const existingCollections = await getPlexLibraryCollections(serverUrl, token, sectionKey);
+    const existingCollections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
     const existing = existingCollections.find(c => c.title.toLowerCase() === collectionTitle.toLowerCase());
 
     if (existing) {
         collectionRatingKey = existing.ratingKey;
     } else {
-        // Create collection: Plex creates a collection by assigning a collection tag to the first item
+        // Create collection by tagging the first item
         const firstKey = itemRatingKeys[0];
-        const tagUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?type=1&id=${encodeURIComponent(firstKey)}&collection%5B0%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
-        
-        try {
-            await fetch(tagUrl, {
-                method: "PUT",
-                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-            });
-            // Re-fetch collections to get the rating key
-            const refreshed = await getPlexLibraryCollections(serverUrl, token, sectionKey);
-            const found = refreshed.find(c => c.title.toLowerCase() === collectionTitle.toLowerCase());
-            if (found) collectionRatingKey = found.ratingKey;
-        } catch (e: any) {
-            logger.addLog("WARN", "PLEX", `Failed to create initial collection tag "${collectionTitle}": ${e.message}`);
+        for (const cleanBase of urlsToTry) {
+            if (collectionRatingKey) break;
+            const tagUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?type=1&id=${encodeURIComponent(firstKey)}&collection%5B0%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
+            try {
+                const tagRes = await fetch(tagUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+                if (tagRes.ok) {
+                    const refreshed = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
+                    const found = refreshed.find(c => c.title.toLowerCase() === collectionTitle.toLowerCase());
+                    if (found) {
+                        collectionRatingKey = found.ratingKey;
+                        break;
+                    }
+                }
+            } catch (e: any) {
+                // Try next URL
+            }
         }
     }
 
     // 2. Add all items to the collection
     let addedCount = 0;
     for (const rKey of itemRatingKeys) {
-        try {
-            const addUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?collection%5B%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
-            const putRes = await fetch(addUrl, {
-                method: "PUT",
-                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-            });
-            if (putRes.ok) addedCount++;
-        } catch (e) {}
+        let added = false;
+        for (const cleanBase of urlsToTry) {
+            if (added) break;
+            try {
+                const addUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?collection%5B%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
+                const putRes = await fetch(addUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+                if (putRes.ok) {
+                    addedCount++;
+                    added = true;
+                }
+            } catch (e) {}
+        }
     }
 
-    // 3. Update collection summary, sort title, and Home Promotion if provided
+    // 3. Update collection summary, sort title, and Home Promotion if rating key resolved
     if (collectionRatingKey) {
-        try {
-            const params = new URLSearchParams();
-            params.set("type", "18"); // Collection metadata type
-            params.set("id", collectionRatingKey);
-            if (options?.summary) {
-                params.set("summary.value", options.summary);
-                params.set("summary.locked", "1");
-            }
-            if (options?.sortTitle) {
-                params.set("titleSort.value", options.sortTitle);
-                params.set("titleSort.locked", "1");
-            }
-            if (options?.promotedToHome !== undefined) {
-                params.set("promotedToHome.value", options.promotedToHome ? "1" : "0");
-                params.set("promotedToHome.locked", "1");
-            }
-            if (options?.promotedToRecommended !== undefined) {
-                params.set("promotedToRecommended.value", options.promotedToRecommended ? "1" : "0");
-                params.set("promotedToRecommended.locked", "1");
-            }
-            if (options?.promotedToSharedHome !== undefined) {
-                params.set("promotedToSharedHome.value", options.promotedToSharedHome ? "1" : "0");
-                params.set("promotedToSharedHome.locked", "1");
-            }
-            params.set("X-Plex-Token", token);
+        for (const cleanBase of urlsToTry) {
+            try {
+                const params = new URLSearchParams();
+                params.set("type", "18"); // Collection metadata type
+                params.set("id", collectionRatingKey);
+                if (options?.summary) {
+                    params.set("summary.value", options.summary);
+                    params.set("summary.locked", "1");
+                }
+                if (options?.sortTitle) {
+                    params.set("titleSort.value", options.sortTitle);
+                    params.set("titleSort.locked", "1");
+                }
+                if (options?.promotedToHome !== undefined) {
+                    params.set("promotedToHome.value", options.promotedToHome ? "1" : "0");
+                    params.set("promotedToHome.locked", "1");
+                }
+                if (options?.promotedToRecommended !== undefined) {
+                    params.set("promotedToRecommended.value", options.promotedToRecommended ? "1" : "0");
+                    params.set("promotedToRecommended.locked", "1");
+                }
+                if (options?.promotedToSharedHome !== undefined) {
+                    params.set("promotedToSharedHome.value", options.promotedToSharedHome ? "1" : "0");
+                    params.set("promotedToSharedHome.locked", "1");
+                }
+                params.set("X-Plex-Token", token);
 
-            await fetch(`${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}`, {
-                method: "PUT",
-                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-            });
-        } catch (e) {}
+                const res = await fetch(`${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}`, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+
+                // Also try metadata endpoint directly
+                await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}?${params.toString()}`, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                }).catch(() => {});
+
+                // Also update home promotion prefs
+                if (options?.promotedToHome !== undefined || options?.promotedToRecommended !== undefined || options?.promotedToSharedHome !== undefined) {
+                    const prefsParams = new URLSearchParams();
+                    if (options.promotedToHome !== undefined) prefsParams.set("promotedToHome", options.promotedToHome ? "1" : "0");
+                    if (options.promotedToRecommended !== undefined) prefsParams.set("promotedToRecommended", options.promotedToRecommended ? "1" : "0");
+                    if (options.promotedToSharedHome !== undefined) prefsParams.set("promotedToSharedHome", options.promotedToSharedHome ? "1" : "0");
+                    prefsParams.set("X-Plex-Token", token);
+
+                    await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}/prefs?${prefsParams.toString()}`, {
+                        method: "PUT",
+                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                    }).catch(() => {});
+                }
+
+                if (res.ok) break;
+            } catch (e) {}
+        }
     }
 
     // 4. Upload custom collection poster if provided
     if (collectionRatingKey && options?.posterBuffer) {
-        await uploadPlexItemPoster(serverUrl, token, collectionRatingKey, options.posterBuffer);
+        await uploadPlexItemPoster(urlsToTry, token, collectionRatingKey, options.posterBuffer);
     } else if (collectionRatingKey && options?.posterUrl) {
-        await uploadPlexItemPosterFromUrl(serverUrl, token, collectionRatingKey, options.posterUrl);
+        await uploadPlexItemPosterFromUrl(urlsToTry, token, collectionRatingKey, options.posterUrl);
     }
 
     logger.addLog("SUCCESS", "PLEX", `Synced collection "${collectionTitle}" (${addedCount}/${itemRatingKeys.length} items added) on section ${sectionKey}`);
@@ -541,7 +798,7 @@ export async function syncPlexCollection(
  * Updates a Plex collection's sort title and Home / Recommended / Shared Home visibility flags.
  */
 export async function updatePlexCollectionPromotionAndOrder(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     sectionKey: string | number,
     collectionRatingKey: string,
@@ -552,125 +809,142 @@ export async function updatePlexCollectionPromotionAndOrder(
         promotedToSharedHome?: boolean;
     }
 ): Promise<{ success: boolean; message?: string }> {
-    const cleanBase = serverUrl.replace(/\/+$/, "");
-    try {
-        const params = new URLSearchParams();
-        params.set("type", "18"); // Collection
-        params.set("id", collectionRatingKey);
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    let lastError: any = null;
 
-        if (options.sortTitle) {
-            params.set("titleSort.value", options.sortTitle);
-            params.set("titleSort.locked", "1");
-        }
-        if (options.promotedToHome !== undefined) {
-            params.set("promotedToHome.value", options.promotedToHome ? "1" : "0");
-            params.set("promotedToHome.locked", "1");
-        }
-        if (options.promotedToRecommended !== undefined) {
-            params.set("promotedToRecommended.value", options.promotedToRecommended ? "1" : "0");
-            params.set("promotedToRecommended.locked", "1");
-        }
-        if (options.promotedToSharedHome !== undefined) {
-            params.set("promotedToSharedHome.value", options.promotedToSharedHome ? "1" : "0");
-            params.set("promotedToSharedHome.locked", "1");
-        }
-        params.set("X-Plex-Token", token);
+    for (const cleanBase of urlsToTry) {
+        try {
+            const params = new URLSearchParams();
+            params.set("type", "18"); // Collection
+            params.set("id", collectionRatingKey);
 
-        const res = await fetch(`${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}`, {
-            method: "PUT",
-            headers: {
-                "X-Plex-Token": token,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            if (options.sortTitle) {
+                params.set("titleSort.value", options.sortTitle);
+                params.set("titleSort.locked", "1");
             }
-        });
+            if (options.promotedToHome !== undefined) {
+                params.set("promotedToHome.value", options.promotedToHome ? "1" : "0");
+                params.set("promotedToHome.locked", "1");
+            }
+            if (options.promotedToRecommended !== undefined) {
+                params.set("promotedToRecommended.value", options.promotedToRecommended ? "1" : "0");
+                params.set("promotedToRecommended.locked", "1");
+            }
+            if (options.promotedToSharedHome !== undefined) {
+                params.set("promotedToSharedHome.value", options.promotedToSharedHome ? "1" : "0");
+                params.set("promotedToSharedHome.locked", "1");
+            }
+            params.set("X-Plex-Token", token);
 
-        return { success: res.ok };
-    } catch (e: any) {
-        return { success: false, message: e.message };
+            const res = await fetch(`${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}`, {
+                method: "PUT",
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+
+            if (res.ok) return { success: true };
+        } catch (e: any) {
+            lastError = e;
+        }
     }
+
+    return { success: false, message: lastError?.message || "Failed to update collection promotion" };
 }
 
 /**
  * Uploads a poster image buffer directly to a Plex item (Movie, Show, or Collection).
  */
 export async function uploadPlexItemPoster(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     ratingKey: string,
     imageBuffer: Buffer,
     mimeType = "image/jpeg"
 ): Promise<boolean> {
-    const cleanBase = serverUrl.replace(/\/+$/, "");
-    const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}/posters?X-Plex-Token=${encodeURIComponent(token)}`;
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
 
-    try {
-        const res = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": mimeType,
-                "X-Plex-Token": token,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-            },
-            body: new Uint8Array(imageBuffer)
-        });
+    for (const cleanBase of urlsToTry) {
+        const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}/posters?X-Plex-Token=${encodeURIComponent(token)}`;
+        try {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": mimeType,
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                body: new Uint8Array(imageBuffer)
+            });
 
-        return res.ok;
-    } catch (e: any) {
-        logger.addLog("ERROR", "PLEX", `Failed to upload poster to item ${ratingKey}: ${e.message}`);
-        return false;
+            if (res.ok) return true;
+        } catch (e: any) {
+            // Try next candidate
+        }
     }
+
+    logger.addLog("WARN", "PLEX", `Failed to upload poster buffer to item ${ratingKey}`);
+    return false;
 }
 
 /**
  * Uploads a poster image from a URL to a Plex item.
  */
 export async function uploadPlexItemPosterFromUrl(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     ratingKey: string,
     imageUrl: string
 ): Promise<boolean> {
-    const cleanBase = serverUrl.replace(/\/+$/, "");
-    const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}/posters?url=${encodeURIComponent(imageUrl)}&X-Plex-Token=${encodeURIComponent(token)}`;
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
 
-    try {
-        const res = await fetch(url, {
-            method: "POST",
-            headers: {
-                "X-Plex-Token": token,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-            }
-        });
+    for (const cleanBase of urlsToTry) {
+        const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}/posters?url=${encodeURIComponent(imageUrl)}&X-Plex-Token=${encodeURIComponent(token)}`;
+        try {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
 
-        return res.ok;
-    } catch (e) {
-        return false;
+            if (res.ok) return true;
+        } catch (e) {
+            // Try next candidate
+        }
     }
+
+    return false;
 }
 
 /**
  * Deletes a collection from Plex.
  */
 export async function deletePlexCollection(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     collectionRatingKey: string
 ): Promise<boolean> {
-    const cleanBase = serverUrl.replace(/\/+$/, "");
-    const url = `${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
 
-    try {
-        const res = await fetch(url, {
-            method: "DELETE",
-            headers: {
-                "X-Plex-Token": token,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-            }
-        });
-        return res.ok;
-    } catch (e) {
-        return false;
+    for (const cleanBase of urlsToTry) {
+        const url = `${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+        try {
+            const res = await fetch(url, {
+                method: "DELETE",
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (res.ok) return true;
+        } catch (e) {
+            // Try next candidate
+        }
     }
+    return false;
 }
 
 /**

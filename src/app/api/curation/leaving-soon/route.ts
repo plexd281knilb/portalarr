@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
+import { resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { syncPlexCollection, getPlexLibraryMediaItems } from "@/lib/curation/plex-analyzer";
 import { backupAndApplyOverlay, restoreItemOriginalArtwork } from "@/lib/curation/overlay-engine";
 
@@ -82,14 +83,14 @@ export async function POST(req: NextRequest) {
 
         // If server credentials exist, update Plex collection and overlay
         if (serverId && ratingKey && sectionKey) {
-            const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-            const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-            const serverUrl = settings?.mainPlexUrl || "";
+            const resolved = await resolveWorkingPlexServerConnection(serverId);
+            if (resolved && resolved.serverUrl && resolved.token) {
+                const token = resolved.token;
+                const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
 
-            if (token && serverUrl) {
                 // Sync to "Leaving Soon" Plex collection
                 await syncPlexCollection(
-                    serverUrl,
+                    urlsToTry,
                     token,
                     sectionKey,
                     "⚠️ Leaving Soon",
@@ -102,12 +103,12 @@ export async function POST(req: NextRequest) {
 
                 // Apply overlay if requested
                 if (applyOverlay) {
-                    const items = await getPlexLibraryMediaItems(serverUrl, token, sectionKey, 100);
+                    const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 100);
                     const matchedItem = items.find(it => it.ratingKey === ratingKey);
                     if (matchedItem) {
                         const daysLeft = Math.max(1, Math.ceil((effectiveDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
                         await backupAndApplyOverlay(
-                            serverUrl,
+                            resolved.serverUrl,
                             token,
                             serverId,
                             matchedItem,

@@ -1,8 +1,12 @@
+if (typeof process !== "undefined" && process.env) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
 import { getPlexServers, getPlexCloudServersMap, resolveWorkingPlexServerConnection } from "@/lib/plex";
-import { getPlexLibraryMediaItems, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
+import { getPlexLibraryMediaItems, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 
 export type ParentalCategoryKey = "nudity" | "violence" | "profanity" | "alcohol" | "frightening";
 export type ParentalSeverity = "None" | "Mild" | "Moderate" | "Severe";
@@ -438,7 +442,7 @@ export async function resolveParentalAdvisory(
  * Apply formatted parental tags to a specific Plex media item.
  */
 export async function applyParentalTagsToPlexItem(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     sectionKey: string | number,
     item: {
@@ -449,7 +453,7 @@ export async function applyParentalTagsToPlexItem(
     advisory: ImdbParentalAdvisory,
     options: ParentalTaggingOptions
 ): Promise<{ success: boolean; appliedTags: string[]; error?: string }> {
-    const cleanBase = serverUrl.replace(/\/+$/, "");
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     const mediaType = item.type === "show" ? "show" : "movie";
     const typeId = mediaType === "show" ? 2 : 1;
 
@@ -476,74 +480,80 @@ export async function applyParentalTagsToPlexItem(
         return { success: true, appliedTags: tagsToApply };
     }
 
-    try {
-        // 2. Query current item metadata to preserve non-parental labels/genres
-        const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&X-Plex-Token=${encodeURIComponent(token)}`, {
-            headers: { "Accept": "application/json", "X-Plex-Token": token }
-        });
+    let lastError: any = null;
 
-        let existingLabels: string[] = [];
-        let existingGenres: string[] = [];
-
-        if (metaRes.ok) {
-            const metaData = await metaRes.json();
-            const meta = metaData.MediaContainer?.Metadata?.[0];
-            if (meta?.Label) {
-                existingLabels = meta.Label.map((l: any) => l.tag).filter((t: string) => !isParentalTag(t, prefix));
-            }
-            if (meta?.Genre) {
-                existingGenres = meta.Genre.map((g: any) => g.tag).filter((t: string) => !isParentalTag(t, prefix));
-            }
-        }
-
-        // 3. Formulate update parameters
-        const params = new URLSearchParams();
-        params.set("type", String(typeId));
-        params.set("id", String(item.ratingKey));
-
-        if (target === "labels" || target === "both") {
-            const mergedLabels = Array.from(new Set([...existingLabels, ...tagsToApply]));
-            mergedLabels.forEach((lbl, idx) => {
-                params.set(`label[${idx}].tag.tag`, lbl);
+    for (const cleanBase of urlsToTry) {
+        try {
+            // 2. Query current item metadata to preserve non-parental labels/genres
+            const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token }
             });
-            params.set("label.locked", "1");
-        }
 
-        if (target === "genres" || target === "both") {
-            const mergedGenres = Array.from(new Set([...existingGenres, ...tagsToApply]));
-            mergedGenres.forEach((g, idx) => {
-                params.set(`genre[${idx}].tag.tag`, g);
-            });
-            params.set("genre.locked", "1");
-        }
+            let existingLabels: string[] = [];
+            let existingGenres: string[] = [];
 
-        // 4. Send PUT request to Plex
-        const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
-        const res = await fetch(url, {
-            method: "PUT",
-            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-        });
+            if (metaRes.ok) {
+                const metaData = await metaRes.json();
+                const meta = metaData.MediaContainer?.Metadata?.[0];
+                if (meta?.Label) {
+                    existingLabels = meta.Label.map((l: any) => l.tag).filter((t: string) => !isParentalTag(t, prefix));
+                }
+                if (meta?.Genre) {
+                    existingGenres = meta.Genre.map((g: any) => g.tag).filter((t: string) => !isParentalTag(t, prefix));
+                }
+            }
 
-        if (!res.ok) {
-            // Fallback to /library/metadata/{ratingKey}
-            const fallbackUrl = `${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${params.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
-            await fetch(fallbackUrl, {
+            // 3. Formulate update parameters
+            const params = new URLSearchParams();
+            params.set("type", String(typeId));
+            params.set("id", String(item.ratingKey));
+
+            if (target === "labels" || target === "both") {
+                const mergedLabels = Array.from(new Set([...existingLabels, ...tagsToApply]));
+                mergedLabels.forEach((lbl, idx) => {
+                    params.set(`label[${idx}].tag.tag`, lbl);
+                });
+                params.set("label.locked", "1");
+            }
+
+            if (target === "genres" || target === "both") {
+                const mergedGenres = Array.from(new Set([...existingGenres, ...tagsToApply]));
+                mergedGenres.forEach((g, idx) => {
+                    params.set(`genre[${idx}].tag.tag`, g);
+                });
+                params.set("genre.locked", "1");
+            }
+
+            // 4. Send PUT request to Plex
+            const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
+            const res = await fetch(url, {
                 method: "PUT",
                 headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
             });
-        }
 
-        return { success: true, appliedTags: tagsToApply };
-    } catch (e: any) {
-        return { success: false, appliedTags: [], error: e.message };
+            if (!res.ok) {
+                // Fallback to /library/metadata/{ratingKey}
+                const fallbackUrl = `${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${params.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
+                await fetch(fallbackUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+            }
+
+            return { success: true, appliedTags: tagsToApply };
+        } catch (e: any) {
+            lastError = e;
+        }
     }
+
+    return { success: false, appliedTags: [], error: lastError?.message || "Failed to apply parental tags" };
 }
 
 /**
  * Strips all parental rating tags from a Plex media item.
  */
 export async function clearParentalTagsFromPlexItem(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     sectionKey: string | number,
     item: {
@@ -552,53 +562,62 @@ export async function clearParentalTagsFromPlexItem(
     },
     prefix = "IMDb"
 ): Promise<{ success: boolean; error?: string }> {
-    const cleanBase = serverUrl.replace(/\/+$/, "");
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     const mediaType = item.type === "show" ? "show" : "movie";
     const typeId = mediaType === "show" ? 2 : 1;
 
-    try {
-        const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&X-Plex-Token=${encodeURIComponent(token)}`, {
-            headers: { "Accept": "application/json", "X-Plex-Token": token }
-        });
+    let lastError: any = null;
 
-        if (!metaRes.ok) return { success: false, error: `HTTP ${metaRes.status}` };
-        const metaData = await metaRes.json();
-        const meta = metaData.MediaContainer?.Metadata?.[0];
+    for (const cleanBase of urlsToTry) {
+        try {
+            const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token }
+            });
 
-        const remainingLabels: string[] = (meta?.Label || [])
-            .map((l: any) => l.tag)
-            .filter((t: string) => !isParentalTag(t, prefix));
+            if (!metaRes.ok) {
+                lastError = new Error(`HTTP ${metaRes.status}`);
+                continue;
+            }
+            const metaData = await metaRes.json();
+            const meta = metaData.MediaContainer?.Metadata?.[0];
 
-        const remainingGenres: string[] = (meta?.Genre || [])
-            .map((g: any) => g.tag)
-            .filter((t: string) => !isParentalTag(t, prefix));
+            const remainingLabels: string[] = (meta?.Label || [])
+                .map((l: any) => l.tag)
+                .filter((t: string) => !isParentalTag(t, prefix));
 
-        const params = new URLSearchParams();
-        params.set("type", String(typeId));
-        params.set("id", String(item.ratingKey));
+            const remainingGenres: string[] = (meta?.Genre || [])
+                .map((g: any) => g.tag)
+                .filter((t: string) => !isParentalTag(t, prefix));
 
-        // Clear or reset labels
-        if (remainingLabels.length > 0) {
-            remainingLabels.forEach((lbl, idx) => params.set(`label[${idx}].tag.tag`, lbl));
-        } else {
-            params.set("label[0].tag.tag", ""); // Empty tag clears in Plex
+            const params = new URLSearchParams();
+            params.set("type", String(typeId));
+            params.set("id", String(item.ratingKey));
+
+            // Clear or reset labels
+            if (remainingLabels.length > 0) {
+                remainingLabels.forEach((lbl, idx) => params.set(`label[${idx}].tag.tag`, lbl));
+            } else {
+                params.set("label[0].tag.tag", ""); // Empty tag clears in Plex
+            }
+
+            // Clear or reset genres
+            if (remainingGenres.length > 0) {
+                remainingGenres.forEach((g, idx) => params.set(`genre[${idx}].tag.tag`, g));
+            }
+
+            const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
+            await fetch(url, {
+                method: "PUT",
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+            });
+
+            return { success: true };
+        } catch (e: any) {
+            lastError = e;
         }
-
-        // Clear or reset genres
-        if (remainingGenres.length > 0) {
-            remainingGenres.forEach((g, idx) => params.set(`genre[${idx}].tag.tag`, g));
-        }
-
-        const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
-        await fetch(url, {
-            method: "PUT",
-            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-        });
-
-        return { success: true };
-    } catch (e: any) {
-        return { success: false, error: e.message };
     }
+
+    return { success: false, error: lastError?.message || "Failed to clear parental tags" };
 }
 
 /**
@@ -684,7 +703,7 @@ export async function applyParentalTagsToLibrary(
                 continue;
             }
 
-            const res = await applyParentalTagsToPlexItem(serverUrl, serverToken, sectionKey, it, adv, options);
+            const res = await applyParentalTagsToPlexItem(urlsToTry, serverToken, sectionKey, it, adv, options);
             if (res.success && res.appliedTags.length > 0) {
                 taggedCount++;
                 for (const t of res.appliedTags) {
@@ -731,7 +750,7 @@ export async function clearParentalTagsFromLibrary(
     let clearedCount = 0;
 
     for (const it of items) {
-        const res = await clearParentalTagsFromPlexItem(serverUrl, serverToken, sectionKey, it, prefix);
+        const res = await clearParentalTagsFromPlexItem(urlsToTry, serverToken, sectionKey, it, prefix);
         if (res.success) clearedCount++;
     }
 

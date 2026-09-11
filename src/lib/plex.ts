@@ -2,6 +2,11 @@ import { decryptData } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
 import { logger, maskToken } from "@/lib/logger";
 
+// Allow connections to local Plex servers with self-signed / plex.direct SSL certificates
+if (typeof process !== "undefined" && process.env) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 export interface PlexFriendItem {
     id?: number | string;
     email: string;
@@ -1016,8 +1021,16 @@ export async function resolveWorkingPlexServerConnection(
     const addCandidate = (u?: string) => {
         if (!u) return;
         const clean = u.replace(/\/+$/, "");
-        if (clean && !candidateUrls.includes(clean)) {
+        if (!clean) return;
+        if (!candidateUrls.includes(clean)) {
             candidateUrls.push(clean);
+        }
+        if (clean.startsWith("http://")) {
+            const httpsAlt = clean.replace("http://", "https://");
+            if (!candidateUrls.includes(httpsAlt)) candidateUrls.push(httpsAlt);
+        } else if (clean.startsWith("https://")) {
+            const httpAlt = clean.replace("https://", "http://");
+            if (!candidateUrls.includes(httpAlt)) candidateUrls.push(httpAlt);
         }
     };
 
@@ -1025,6 +1038,7 @@ export async function resolveWorkingPlexServerConnection(
         for (const c of targetServer.connections) {
             if (c.address && c.port) {
                 addCandidate(`http://${c.address}:${c.port}`);
+                addCandidate(`https://${c.address}:${c.port}`);
             }
         }
     }
@@ -1042,6 +1056,7 @@ export async function resolveWorkingPlexServerConnection(
                 }
             }
             if (c.address && c.port) {
+                addCandidate(`http://${c.address}:${c.port}`);
                 addCandidate(`https://${c.address}:${c.port}`);
             }
         }
@@ -1060,7 +1075,7 @@ export async function resolveWorkingPlexServerConnection(
     for (const cand of candidateUrls) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2500);
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
             const res = await fetch(`${cand}/library/sections?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                 headers: {
                     Accept: "application/json, application/xml, text/xml, */*",
@@ -1085,7 +1100,7 @@ export async function resolveWorkingPlexServerConnection(
         for (const cand of candidateUrls) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
                 const res = await fetch(`${cand}/identity`, {
                     headers: {
                         Accept: "application/json, application/xml, text/xml, */*",

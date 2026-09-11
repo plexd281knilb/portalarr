@@ -1,5 +1,9 @@
 "use server";
 
+if (typeof process !== "undefined" && process.env) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
@@ -555,7 +559,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
 
         // 3. Sync to Plex with Sort Prefix and Home Promotion
         const syncResult = await syncPlexCollection(
-            serverUrl,
+            urlsToTry,
             token,
             collection.sectionKey || "",
             collection.title,
@@ -1028,7 +1032,8 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
                 try {
                     const resolved = await resolveWorkingPlexServerConnection(collection.serverId || undefined);
                     if (resolved && resolved.serverUrl && resolved.token) {
-                        await deletePlexCollection(resolved.serverUrl, resolved.token, collection.ratingKey);
+                        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                        await deletePlexCollection(urlsToTry, resolved.token, collection.ratingKey);
                     }
                 } catch (err: any) {
                     logger.addLog("WARN", "PLEX", `Could not delete collection "${collection.title}" from Plex: ${err.message}`);
