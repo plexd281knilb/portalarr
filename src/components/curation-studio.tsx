@@ -1380,49 +1380,39 @@ export default function CurationStudio() {
     };
 
     // Handle Toggle Server Target
-    const handleToggleServerTarget = (srvId: string, feature: "overlays" | "collections" | "pruning", checked: boolean) => {
-        setSettings((prev: any) => {
-            const currentOverlays = prev.enabledServersForOverlays ?? servers.map(s => s.serverId);
-            const currentCollections = prev.enabledServersForCollections ?? servers.map(s => s.serverId);
-            const currentPruning = prev.enabledServersForPruning ?? servers.map(s => s.serverId);
+    const handleToggleServerTarget = async (srvId: string, feature: "overlays" | "collections" | "pruning", checked: boolean) => {
+        const currentOverlays = settings.enabledServersForOverlays ?? servers.map(s => s.serverId);
+        const currentCollections = settings.enabledServersForCollections ?? servers.map(s => s.serverId);
+        const currentPruning = settings.enabledServersForPruning ?? servers.map(s => s.serverId);
 
-            let newOverlays = [...currentOverlays];
-            let newCollections = [...currentCollections];
-            let newPruning = [...currentPruning];
+        let newOverlays = [...currentOverlays];
+        let newCollections = [...currentCollections];
+        let newPruning = [...currentPruning];
 
-            if (feature === "overlays") {
-                newOverlays = checked ? Array.from(new Set([...newOverlays, srvId])) : newOverlays.filter(id => id !== srvId);
-            } else if (feature === "collections") {
-                newCollections = checked ? Array.from(new Set([...newCollections, srvId])) : newCollections.filter(id => id !== srvId);
-            } else if (feature === "pruning") {
-                newPruning = checked ? Array.from(new Set([...newPruning, srvId])) : newPruning.filter(id => id !== srvId);
-            }
+        if (feature === "overlays") {
+            newOverlays = checked ? Array.from(new Set([...newOverlays, srvId])) : newOverlays.filter(id => id !== srvId);
+        } else if (feature === "collections") {
+            newCollections = checked ? Array.from(new Set([...newCollections, srvId])) : newCollections.filter(id => id !== srvId);
+        } else if (feature === "pruning") {
+            newPruning = checked ? Array.from(new Set([...newPruning, srvId])) : newPruning.filter(id => id !== srvId);
+        }
 
-            return {
-                ...prev,
+        const updated = {
+            ...settings,
+            enabledServersForOverlays: newOverlays,
+            enabledServersForCollections: newCollections,
+            enabledServersForPruning: newPruning
+        };
+        setSettings(updated);
+
+        try {
+            await saveCurationSettingsAction({
                 enabledServersForOverlays: newOverlays,
                 enabledServersForCollections: newCollections,
                 enabledServersForPruning: newPruning
-            };
-        });
-    };
-
-    // Handle Save Server Targets Matrix
-    const handleSaveServerTargets = async () => {
-        setSavingServerTargets(true);
-        setServerTargetsSavedMsg(false);
-        try {
-            await saveCurationSettingsAction({
-                enabledServersForOverlays: settings.enabledServersForOverlays || [],
-                enabledServersForCollections: settings.enabledServersForCollections || [],
-                enabledServersForPruning: settings.enabledServersForPruning || []
             });
-            setServerTargetsSavedMsg(true);
-            setTimeout(() => setServerTargetsSavedMsg(false), 3000);
         } catch (e) {
             console.error("Failed saving server targets:", e);
-        } finally {
-            setSavingServerTargets(false);
         }
     };
 
@@ -2245,42 +2235,48 @@ export default function CurationStudio() {
                     </p>
                 </div>
 
-                {/* Server & Section Selector Bar */}
-                <div className="flex flex-wrap items-center gap-2 bg-slate-900/90 p-2 border border-slate-800 rounded-xl shadow-inner w-full sm:w-auto">
-                    <div className="flex items-center gap-1.5">
-                        <Tv className="h-4 w-4 text-purple-400 shrink-0 ml-1" />
-                        <Select value={selectedServerId} onValueChange={(val) => {
-                            setSelectedServerId(val);
-                            const srv = servers.find(s => s.serverId === val);
-                            if (srv?.sections?.length > 0) setSelectedSectionKey(String(srv.sections[0].key));
-                        }}>
-                            <SelectTrigger className="h-8 w-[140px] text-xs bg-slate-800/80 border-slate-700">
-                                <SelectValue placeholder="Select Server" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {servers.map(s => (
-                                    <SelectItem key={s.serverId} value={s.serverId} className="text-xs">
-                                        {s.serverName || "Plex Server"}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                {/* Interactive Preview & Library Scope Bar */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 bg-slate-900/90 p-2.5 px-3 border border-slate-800 rounded-2xl shadow-inner w-full sm:w-auto">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold pr-1 sm:border-r border-slate-800">
+                        <Eye className="h-3.5 w-3.5 text-purple-400" />
+                        <span className="text-slate-300">Preview & Manual Target:</span>
                     </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
+                            <Tv className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                            <Select value={selectedServerId} onValueChange={(val) => {
+                                setSelectedServerId(val);
+                                const srv = servers.find(s => s.serverId === val);
+                                if (srv?.sections?.length > 0) setSelectedSectionKey(String(srv.sections[0].key));
+                            }}>
+                                <SelectTrigger className="h-8 min-w-[135px] text-xs bg-slate-800/90 border-slate-700">
+                                    <SelectValue placeholder="Select Server" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {servers.map(s => (
+                                        <SelectItem key={s.serverId} value={s.serverId} className="text-xs">
+                                            {s.serverName || "Plex Server"}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                    <div className="flex items-center gap-1.5">
-                        <Film className="h-4 w-4 text-sky-400 shrink-0 ml-1" />
-                        <Select value={selectedSectionKey} onValueChange={setSelectedSectionKey}>
-                            <SelectTrigger className="h-8 w-[140px] text-xs bg-slate-800/80 border-slate-700">
-                                <SelectValue placeholder="Select Library" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {currentSections.map((sec: any) => (
-                                    <SelectItem key={sec.key} value={String(sec.key)} className="text-xs">
-                                        {sec.title}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
+                            <Film className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                            <Select value={selectedSectionKey} onValueChange={setSelectedSectionKey}>
+                                <SelectTrigger className="h-8 min-w-[135px] text-xs bg-slate-800/90 border-slate-700">
+                                    <SelectValue placeholder="Select Library" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {currentSections.map((sec: any) => (
+                                        <SelectItem key={sec.key} value={String(sec.key)} className="text-xs">
+                                            {sec.title}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2297,7 +2293,7 @@ export default function CurationStudio() {
                             </Badge>
                         </div>
                         <p className="text-[11px] text-slate-400">
-                            Automatically checks for newly added movies/shows on a timer schedule to apply posters/overlays, evaluates seasonal collection calendars, refreshes digital release stubs, and checks Leaving Soon disk space triggers.
+                            Automatically checks for newly added movies/shows on a timer schedule to apply posters/overlays, evaluates seasonal collection calendars, refreshes digital release stubs, and checks Leaving Soon disk space triggers on your enabled servers.
                         </p>
                         {settings.curationLastRunAt && (
                             <p className="text-[10px] text-slate-500 flex items-center gap-1">
@@ -2369,81 +2365,6 @@ export default function CurationStudio() {
                     </div>
                 )}
             </Card>
-
-            {/* Server Target Matrix & Vanilla Protection Guard */}
-            {servers.length > 0 && (
-                <Card className="bg-slate-900/60 border-slate-800 shadow-md">
-                    <CardContent className="p-4">
-                        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                            <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                    <Server className="h-4 w-4 text-purple-400" />
-                                    <span className="text-sm font-bold text-white">Active Plex Server Multi-Target Routing</span>
-                                    <Badge className="bg-purple-950/80 text-purple-300 border border-purple-800 text-[10px]">
-                                        {servers.length} Connected
-                                    </Badge>
-                                </div>
-                                <p className="text-xs text-slate-400">
-                                    Select which servers participate in automated Poster Overlays, Curated Collections, and Leaving Soon disk cleanup.
-                                </p>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3">
-                                {servers.map(srv => {
-                                    const overlayEnabled = settings.enabledServersForOverlays?.includes(srv.serverId) ?? true;
-                                    const collEnabled = settings.enabledServersForCollections?.includes(srv.serverId) ?? true;
-                                    const pruneEnabled = settings.enabledServersForPruning?.includes(srv.serverId) ?? true;
-
-                                    return (
-                                        <div key={srv.serverId} className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-800 px-3 py-2 rounded-xl text-xs">
-                                            <span className="font-semibold text-slate-200">{srv.serverName}</span>
-                                            <div className="flex items-center gap-2 border-l border-slate-800 pl-2.5">
-                                                <label className="flex items-center gap-1 cursor-pointer" title="Enable Poster Overlays">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={overlayEnabled}
-                                                        onChange={e => handleToggleServerTarget(srv.serverId, "overlays", e.target.checked)}
-                                                        className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3 w-3"
-                                                    />
-                                                    <span className="text-[10px] text-slate-400">Overlays</span>
-                                                </label>
-                                                <label className="flex items-center gap-1 cursor-pointer" title="Enable Curated Collections">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={collEnabled}
-                                                        onChange={e => handleToggleServerTarget(srv.serverId, "collections", e.target.checked)}
-                                                        className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3 w-3"
-                                                    />
-                                                    <span className="text-[10px] text-slate-400">Collections</span>
-                                                </label>
-                                                <label className="flex items-center gap-1 cursor-pointer" title="Enable Leaving Soon Pruning">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={pruneEnabled}
-                                                        onChange={e => handleToggleServerTarget(srv.serverId, "pruning", e.target.checked)}
-                                                        className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3 w-3"
-                                                    />
-                                                    <span className="text-[10px] text-slate-400">Pruning</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-
-                                <Button 
-                                    size="sm"
-                                    onClick={handleSaveServerTargets}
-                                    disabled={savingServerTargets}
-                                    className="h-8 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold px-3 shadow-md"
-                                >
-                                    {savingServerTargets ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
-                                    Save Targets
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
 
             {/* Studio Navigation Tabs */}
             <Tabs value={subTab} onValueChange={setSubTab} className="space-y-6">
@@ -2535,6 +2456,44 @@ export default function CurationStudio() {
                                 <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${seasonalSyncMsg.success ? 'bg-emerald-950/70 border border-emerald-800 text-emerald-300' : 'bg-rose-950/70 border border-rose-800 text-rose-300'}`}>
                                     {seasonalSyncMsg.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
                                     <span>{seasonalSyncMsg.text}</span>
+                                </div>
+                            )}
+
+                            {/* Multi-Server Collections Target Routing */}
+                            {servers.length > 1 && (
+                                <div className="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                                            <Server className="h-3.5 w-3.5" />
+                                            <span>Automated Collections Server Targets</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400">
+                                            Select which Plex servers receive automated collection syncing & home screen ordering during scheduled runs:
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {servers.map(srv => {
+                                            const isEnabled = (settings.enabledServersForCollections ?? servers.map(s => s.serverId)).includes(srv.serverId);
+                                            return (
+                                                <button
+                                                    key={srv.serverId}
+                                                    type="button"
+                                                    onClick={() => handleToggleServerTarget(srv.serverId, "collections", !isEnabled)}
+                                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                                        isEnabled 
+                                                            ? 'bg-amber-950/50 border-amber-500/50 text-amber-200 shadow-sm'
+                                                            : 'bg-slate-900/60 border-slate-800 text-slate-500 hover:text-slate-400'
+                                                    }`}
+                                                >
+                                                    <span className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-amber-400 shadow-sm shadow-amber-400/50' : 'bg-slate-600'}`} />
+                                                    <span>{srv.serverName}</span>
+                                                    <span className="text-[10px] opacity-75 font-normal">
+                                                        {isEnabled ? '✓ Sync Active' : '✕ Skipped'}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
 
@@ -2986,6 +2945,44 @@ export default function CurationStudio() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Multi-Server Automated Overlay Target Routing & Protection */}
+                    {servers.length > 1 && (
+                        <div className="p-3.5 bg-slate-900/80 border border-slate-800 rounded-2xl shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                            <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5 font-bold text-purple-300">
+                                    <Server className="h-3.5 w-3.5" />
+                                    <span>Automated Overlay Server Targets & Protection</span>
+                                </div>
+                                <p className="text-[11px] text-slate-400">
+                                    Toggle which servers receive automated poster overlays during scheduled syncs. Unchecked servers are protected and remain vanilla:
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {servers.map(srv => {
+                                    const isEnabled = (settings.enabledServersForOverlays ?? servers.map(s => s.serverId)).includes(srv.serverId);
+                                    return (
+                                        <button
+                                            key={srv.serverId}
+                                            type="button"
+                                            onClick={() => handleToggleServerTarget(srv.serverId, "overlays", !isEnabled)}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                                isEnabled 
+                                                    ? 'bg-purple-950/60 border-purple-500/50 text-purple-200 shadow-sm'
+                                                    : 'bg-slate-950/60 border-slate-800 text-slate-500 hover:text-slate-400'
+                                            }`}
+                                        >
+                                            <span className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-purple-400 shadow-sm shadow-purple-400/50' : 'bg-slate-600'}`} />
+                                            <span>{srv.serverName}</span>
+                                            <span className="text-[10px] opacity-75 font-normal">
+                                                {isEnabled ? '✓ Overlays Enabled' : '🛡️ Vanilla Protected'}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Interactive Poster Preview Simulator */}
@@ -5291,7 +5288,7 @@ export default function CurationStudio() {
                                                         <span>{srv.serverName || "Plex Server"}</span>
                                                     </Label>
                                                     {srv.serverId === selectedServerId && (
-                                                        <Badge className="text-[9px] bg-purple-600/80 px-1.5 py-0">Active</Badge>
+                                                        <Badge className="text-[9px] bg-purple-600/80 px-1.5 py-0">Studio Selected</Badge>
                                                     )}
                                                 </div>
                                                 <div className="space-y-1.5">
@@ -5486,6 +5483,44 @@ export default function CurationStudio() {
                                 </div>
                             )}
 
+                            {/* Multi-Server Pruning Target Routing */}
+                            {servers.length > 1 && (
+                                <div className="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1.5 font-bold text-rose-300">
+                                            <Server className="h-3.5 w-3.5" />
+                                            <span>Automated Pruning Server Targets</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400">
+                                            Select which Plex servers participate in automated capacity evaluation & Leaving Soon disk pruning:
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {servers.map(srv => {
+                                            const isEnabled = (settings.enabledServersForPruning ?? servers.map(s => s.serverId)).includes(srv.serverId);
+                                            return (
+                                                <button
+                                                    key={srv.serverId}
+                                                    type="button"
+                                                    onClick={() => handleToggleServerTarget(srv.serverId, "pruning", !isEnabled)}
+                                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                                        isEnabled 
+                                                            ? 'bg-rose-950/50 border-rose-500/50 text-rose-200 shadow-sm'
+                                                            : 'bg-slate-900/60 border-slate-800 text-slate-500 hover:text-slate-400'
+                                                    }`}
+                                                >
+                                                    <span className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-rose-400 shadow-sm shadow-rose-400/50' : 'bg-slate-600'}`} />
+                                                    <span>{srv.serverName}</span>
+                                                    <span className="text-[10px] opacity-75 font-normal">
+                                                        {isEnabled ? '✓ Pruning Enabled' : '🛡️ Protected'}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                 <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl flex items-center justify-between">
                                     <div className="space-y-0.5">
@@ -5565,7 +5600,7 @@ export default function CurationStudio() {
                                                         <span>{srv.serverName || "Plex Server"}</span>
                                                     </Label>
                                                     {srv.serverId === selectedServerId && (
-                                                        <Badge className="text-[9px] bg-purple-600/80 px-1.5 py-0">Active</Badge>
+                                                        <Badge className="text-[9px] bg-purple-600/80 px-1.5 py-0">Studio Selected</Badge>
                                                     )}
                                                 </div>
                                                 <div className="space-y-1.5">
