@@ -563,6 +563,32 @@ export default function CurationStudio() {
         }
     };
 
+    // Handle manual sync of an existing collection from Home Screen Hub Ordering table
+    const handleSyncSingleCollection = async (coll: any) => {
+        if (!coll?.id) return;
+        setSyncingCollId(coll.id);
+        setSyncMessage(null);
+        try {
+            const syncRes = await syncCollectionToPlexAction(coll.id);
+            setSyncMessage({
+                id: coll.id,
+                success: syncRes.success,
+                text: syncRes.message || (syncRes.success ? `Synced "${coll.title}" to Plex successfully!` : syncRes.error || `Failed syncing "${coll.title}".`)
+            });
+            if (syncRes.success) {
+                await loadCollections(selectedServerId, selectedSectionKey);
+            }
+        } catch (err: any) {
+            setSyncMessage({
+                id: coll.id,
+                success: false,
+                text: err.message || `Error syncing "${coll.title}".`
+            });
+        } finally {
+            setSyncingCollId(null);
+        }
+    };
+
     // Handle Inspect Blueprint
     const handleInspectPreset = async (preset: CollectionPreset) => {
         if (!selectedServerId || !selectedSectionKey) {
@@ -2870,20 +2896,54 @@ export default function CurationStudio() {
                                                     </div>
                                                 </div>
 
-                                                {/* Title & Category */}
-                                                <div className="sm:col-span-4 space-y-0.5">
+                                                {/* Title & Category with Manual Sync */}
+                                                <div className="sm:col-span-4 space-y-1">
                                                     <div className="flex items-center gap-2 flex-wrap">
                                                         <span className="font-bold text-white text-sm">{coll.title}</span>
                                                         <Badge variant="outline" className="text-[9px] uppercase px-1.5 py-0 border-slate-700 text-slate-300">
                                                             {coll.category}
                                                         </Badge>
                                                         {getSourceBadge(coll.sourceType, coll.title, coll.sourceQuery)}
+                                                        <Button 
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => handleSyncSingleCollection(coll)}
+                                                            disabled={syncingCollId === coll.id}
+                                                            className="h-5 px-2 py-0 text-[10px] font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-950/50 hover:text-amber-200 hover:border-amber-400 gap-1 rounded-md transition-all shadow-sm"
+                                                            title={`Manually sync "${coll.title}" to Plex`}
+                                                        >
+                                                            {syncingCollId === coll.id ? (
+                                                                <Loader2 className="h-2.5 w-2.5 animate-spin text-amber-300" />
+                                                            ) : (
+                                                                <RefreshCw className="h-2.5 w-2.5 text-amber-400" />
+                                                            )}
+                                                            <span>{syncingCollId === coll.id ? "Syncing..." : "Sync"}</span>
+                                                        </Button>
                                                     </div>
-                                                    <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                                                    <div className="text-[11px] text-slate-400 flex items-center gap-2 flex-wrap">
                                                         <span>{coll.itemCount || 0} items</span>
                                                         <span>•</span>
                                                         <span className="font-mono text-purple-400 text-[10px]">Prefix: {coll.sortPrefix || `!${String(idx).padStart(2, '0')}_`}</span>
+                                                        {coll.lastSyncedAt && (
+                                                            <>
+                                                                <span>•</span>
+                                                                <span className="text-[10px] text-emerald-400/90 flex items-center gap-1">
+                                                                    <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
+                                                                    Synced {new Date(coll.lastSyncedAt).toLocaleDateString()} {new Date(coll.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                </span>
+                                                            </>
+                                                        )}
                                                     </div>
+                                                    {syncMessage && syncMessage.id === coll.id && (
+                                                        <div className={`text-[10px] font-medium flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md border ${
+                                                            syncMessage.success 
+                                                                ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-300' 
+                                                                : 'bg-rose-950/60 border-rose-800/80 text-rose-300'
+                                                        }`}>
+                                                            {syncMessage.success ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <XCircle className="h-3 w-3 shrink-0" />}
+                                                            <span className="truncate">{syncMessage.text}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Seasonal Schedule Pill */}
