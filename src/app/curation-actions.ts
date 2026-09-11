@@ -337,10 +337,175 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
             }).catch(err => logger.addLog("WARN", "PLEX", `Failed deleting duplicate collections: ${err.message}`));
         }
 
+        // Auto-discover existing collections from Plex if serverId and sectionKey are provided
+        if (serverId && sectionKey) {
+            try {
+                const resolved = await resolveWorkingPlexServerConnection(serverId);
+                if (resolved && resolved.serverUrl && resolved.token) {
+                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    const plexCollections = await getPlexLibraryCollections(urlsToTry, resolved.token, sectionKey);
+
+                    if (plexCollections.length > 0) {
+                        let maxOrderIndex = dedupedCollections.reduce((max, c) => Math.max(max, c.orderIndex ?? 0), -1);
+                        let addedAny = false;
+
+                        for (const pColl of plexCollections) {
+                            const existing = dedupedCollections.find(
+                                c => (c.ratingKey && c.ratingKey === pColl.ratingKey) ||
+                                     c.title.trim().toLowerCase() === pColl.title.trim().toLowerCase()
+                            );
+
+                            if (!existing) {
+                                maxOrderIndex += 1;
+                                const prefix = (pColl.sortTitle && pColl.sortTitle.startsWith("!"))
+                                    ? pColl.sortTitle.slice(0, 5)
+                                    : `!${String(maxOrderIndex).padStart(2, '0')}_`;
+
+                                const created = await prisma.mediaCollection.create({
+                                    data: {
+                                        title: pColl.title,
+                                        summary: pColl.summary || "",
+                                        sortTitle: pColl.sortTitle || "",
+                                        category: pColl.smart ? "Plex Smart" : "Plex Library",
+                                        type: "movie",
+                                        serverId,
+                                        sectionKey: String(sectionKey),
+                                        sourceType: pColl.smart ? "plex_smart" : "plex_native",
+                                        sourceQuery: `plex_collection:${pColl.ratingKey}`,
+                                        ratingKey: pColl.ratingKey,
+                                        itemCount: pColl.childCount || 0,
+                                        posterUrl: pColl.thumb || "",
+                                        promotedToHome: pColl.promotedToHome ?? true,
+                                        promotedToRecommended: pColl.promotedToRecommended ?? true,
+                                        promotedToSharedHome: pColl.promotedToSharedHome ?? true,
+                                        orderIndex: maxOrderIndex,
+                                        sortPrefix: prefix,
+                                        lastSyncedAt: new Date()
+                                    }
+                                });
+                                dedupedCollections.push(created);
+                                addedAny = true;
+                            } else if (existing.itemCount !== pColl.childCount || (!existing.ratingKey && pColl.ratingKey)) {
+                                await prisma.mediaCollection.update({
+                                    where: { id: existing.id },
+                                    data: {
+                                        itemCount: pColl.childCount || 0,
+                                        ratingKey: pColl.ratingKey || existing.ratingKey,
+                                        lastSyncedAt: new Date()
+                                    }
+                                }).catch(() => {});
+                                existing.itemCount = pColl.childCount || 0;
+                                existing.ratingKey = pColl.ratingKey || existing.ratingKey;
+                            }
+                        }
+                    }
+                }
+            } catch (err: any) {
+                // Non-blocking auto-discovery
+            }
+        }
+
         // Re-sort dedupedCollections by orderIndex
         dedupedCollections.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
         return { success: true, collections: dedupedCollections, presets: COLLECTION_PRESETS };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Explicitly import / refresh all collections from a Plex library section into Portalarr
+ */
+export async function importPlexLibraryCollectionsAction(serverId?: string, sectionKey?: string) {
+    await verifyAdmin();
+    try {
+        if (!serverId || !sectionKey) {
+            return { success: false, error: "Please select a Plex server and library section first." };
+        }
+
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) {
+            return { success: false, error: "Plex server unreachable or token not configured." };
+        }
+
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        const plexCollections = await getPlexLibraryCollections(urlsToTry, resolved.token, sectionKey);
+
+        if (plexCollections.length === 0) {
+            return { success: true, count: 0, message: "No existing collections found in this Plex library section." };
+        }
+
+        // Fetch current DB collections for this server & section
+        const existingDbCollections = await prisma.mediaCollection.findMany({
+            where: { serverId, sectionKey: String(sectionKey) }
+        });
+
+        let maxOrderIndex = existingDbCollections.reduce((max, c) => Math.max(max, c.orderIndex ?? 0), -1);
+        let importedCount = 0;
+        let updatedCount = 0;
+
+        for (const pColl of plexCollections) {
+            const match = existingDbCollections.find(
+                c => (c.ratingKey && c.ratingKey === pColl.ratingKey) ||
+                     c.title.trim().toLowerCase() === pColl.title.trim().toLowerCase()
+            );
+
+            if (match) {
+                await prisma.mediaCollection.update({
+                    where: { id: match.id },
+                    data: {
+                        ratingKey: pColl.ratingKey,
+                        itemCount: pColl.childCount || 0,
+                        summary: match.summary || pColl.summary || undefined,
+                        posterUrl: match.posterUrl || pColl.thumb || undefined,
+                        promotedToHome: pColl.promotedToHome ?? match.promotedToHome,
+                        promotedToRecommended: pColl.promotedToRecommended ?? match.promotedToRecommended,
+                        promotedToSharedHome: pColl.promotedToSharedHome ?? match.promotedToSharedHome,
+                        lastSyncedAt: new Date()
+                    }
+                });
+                updatedCount++;
+            } else {
+                maxOrderIndex += 1;
+                const prefix = (pColl.sortTitle && pColl.sortTitle.startsWith("!"))
+                    ? pColl.sortTitle.slice(0, 5)
+                    : `!${String(maxOrderIndex).padStart(2, '0')}_`;
+
+                await prisma.mediaCollection.create({
+                    data: {
+                        title: pColl.title,
+                        summary: pColl.summary || "",
+                        sortTitle: pColl.sortTitle || "",
+                        category: pColl.smart ? "Plex Smart" : "Plex Library",
+                        type: "movie",
+                        serverId,
+                        sectionKey: String(sectionKey),
+                        sourceType: pColl.smart ? "plex_smart" : "plex_native",
+                        sourceQuery: `plex_collection:${pColl.ratingKey}`,
+                        ratingKey: pColl.ratingKey,
+                        itemCount: pColl.childCount || 0,
+                        posterUrl: pColl.thumb || "",
+                        promotedToHome: pColl.promotedToHome ?? true,
+                        promotedToRecommended: pColl.promotedToRecommended ?? true,
+                        promotedToSharedHome: pColl.promotedToSharedHome ?? true,
+                        orderIndex: maxOrderIndex,
+                        sortPrefix: prefix,
+                        lastSyncedAt: new Date()
+                    }
+                });
+                importedCount++;
+            }
+        }
+
+        logger.addLog("SUCCESS", "PLEX", `Discovered ${plexCollections.length} collections from Plex (${importedCount} new, ${updatedCount} refreshed) on section ${sectionKey}`);
+        return {
+            success: true,
+            importedCount,
+            updatedCount,
+            totalPlexCollections: plexCollections.length,
+            message: `Discovered and synced ${plexCollections.length} Plex collections (${importedCount} new imported, ${updatedCount} refreshed)!`
+        };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -455,9 +620,57 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
+        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+
+        // If this is an existing Plex-native collection or already has a ratingKey in PMS:
+        const isNativePlex = collection.sourceType === "plex_native" || 
+                             collection.sourceType === "plex_smart" || 
+                             collection.category === "Plex" || 
+                             collection.category === "Plex Library" || 
+                             collection.category === "Plex Smart" ||
+                             (collection.sourceType === "plex_query" && !collection.sourceQuery?.includes("hdr:") && !collection.sourceQuery?.includes("audio:") && !collection.sourceQuery?.includes("1980") && !collection.sourceQuery?.includes("1990") && !collection.sourceQuery?.includes("tag:"));
+
+        if (isNativePlex || collection.ratingKey) {
+            const existingCollections = await getPlexLibraryCollections(urlsToTry, token, collection.sectionKey || "");
+            const found = existingCollections.find(c => 
+                (collection.ratingKey && c.ratingKey === collection.ratingKey) || 
+                c.title.trim().toLowerCase() === collection.title.trim().toLowerCase()
+            );
+
+            if (found) {
+                const sortTitle = `${collection.sortPrefix || "!00_"}${collection.sortTitle || collection.title}`;
+                await updatePlexCollectionPromotionAndOrder(
+                    urlsToTry,
+                    token,
+                    collection.sectionKey || "",
+                    found.ratingKey,
+                    {
+                        sortTitle,
+                        promotedToHome: collection.promotedToHome ?? true,
+                        promotedToRecommended: collection.promotedToRecommended ?? true,
+                        promotedToSharedHome: collection.promotedToSharedHome ?? true
+                    }
+                );
+
+                await prisma.mediaCollection.update({
+                    where: { id: collection.id },
+                    data: {
+                        ratingKey: found.ratingKey,
+                        itemCount: found.childCount,
+                        lastSyncedAt: new Date()
+                    }
+                });
+
+                return {
+                    success: true,
+                    itemCount: found.childCount,
+                    collectionRatingKey: found.ratingKey,
+                    message: `Synced Plex collection "${collection.title}" (${found.childCount} items) to Plex with prefix ${collection.sortPrefix || "!00_"}!`
+                };
+            }
+        }
 
         // 1. Fetch library media items
-        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
         const libraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 1000);
 
         // 2. Resolve matching rating keys based on collection source type
@@ -759,6 +972,7 @@ export async function reorderPlexCollectionsAction(
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
 
+        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
         let updatedCount = 0;
 
         for (const item of orderedCollections) {
@@ -778,7 +992,7 @@ export async function reorderPlexCollectionsAction(
             if (serverUrl && updated.ratingKey) {
                 const effectiveSortTitle = `${prefix}${updated.sortTitle || updated.title}`;
                 await updatePlexCollectionPromotionAndOrder(
-                    serverUrl,
+                    urlsToTry,
                     token,
                     sectionKey,
                     updated.ratingKey,

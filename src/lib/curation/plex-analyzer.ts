@@ -456,8 +456,32 @@ function parsePlexXmlMetadata(xml: string): any[] {
     return items;
 }
 
-function parsePlexXmlCollections(xml: string): { ratingKey: string; title: string; summary?: string; thumb?: string; childCount: number }[] {
-    const items: { ratingKey: string; title: string; summary?: string; thumb?: string; childCount: number }[] = [];
+function parsePlexXmlCollections(xml: string): { 
+    ratingKey: string; 
+    title: string; 
+    summary?: string; 
+    thumb?: string; 
+    art?: string;
+    childCount: number; 
+    sortTitle?: string; 
+    smart?: boolean;
+    promotedToHome?: boolean;
+    promotedToRecommended?: boolean;
+    promotedToSharedHome?: boolean;
+}[] {
+    const items: { 
+        ratingKey: string; 
+        title: string; 
+        summary?: string; 
+        thumb?: string; 
+        art?: string;
+        childCount: number; 
+        sortTitle?: string; 
+        smart?: boolean;
+        promotedToHome?: boolean;
+        promotedToRecommended?: boolean;
+        promotedToSharedHome?: boolean;
+    }[] = [];
     const itemMatches = xml.matchAll(/<(Directory|Video)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/gi);
     for (const match of itemMatches) {
         const attrs = match[2] || "";
@@ -474,7 +498,13 @@ function parsePlexXmlCollections(xml: string): { ratingKey: string; title: strin
                 title,
                 summary: getAttr("summary"),
                 thumb: getAttr("thumb"),
-                childCount: parseInt(getAttr("childCount") || "0", 10)
+                art: getAttr("art"),
+                childCount: parseInt(getAttr("childCount") || "0", 10),
+                sortTitle: getAttr("titleSort"),
+                smart: getAttr("smart") === "1" || getAttr("subtype") === "smart",
+                promotedToHome: getAttr("promotedToHome") !== "0",
+                promotedToRecommended: getAttr("promotedToRecommended") !== "0",
+                promotedToSharedHome: getAttr("promotedToSharedHome") !== "0"
             });
         }
     }
@@ -588,7 +618,19 @@ export async function getPlexLibraryCollections(
     serverUrlOrCandidates: string | string[],
     token: string,
     sectionKey: string | number
-): Promise<{ ratingKey: string; title: string; summary?: string; thumb?: string; childCount: number }[]> {
+): Promise<{ 
+    ratingKey: string; 
+    title: string; 
+    summary?: string; 
+    thumb?: string; 
+    art?: string;
+    childCount: number;
+    sortTitle?: string;
+    smart?: boolean;
+    promotedToHome?: boolean;
+    promotedToRecommended?: boolean;
+    promotedToSharedHome?: boolean;
+}[]> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
 
     for (const cleanBase of urlsToTry) {
@@ -625,7 +667,13 @@ export async function getPlexLibraryCollections(
                             title: c.title || "Untitled Collection",
                             summary: c.summary,
                             thumb: c.thumb,
-                            childCount: parseInt(c.childCount || "0", 10)
+                            art: c.art,
+                            childCount: parseInt(c.childCount || "0", 10),
+                            sortTitle: c.titleSort,
+                            smart: Boolean(c.smart === "1" || c.smart === 1 || c.subtype === "smart"),
+                            promotedToHome: c.promotedToHome !== "0" && c.promotedToHome !== 0,
+                            promotedToRecommended: c.promotedToRecommended !== "0" && c.promotedToRecommended !== 0,
+                            promotedToSharedHome: c.promotedToSharedHome !== "0" && c.promotedToSharedHome !== 0
                         })).filter(c => Boolean(c.ratingKey));
                     }
                 } catch (e) {}

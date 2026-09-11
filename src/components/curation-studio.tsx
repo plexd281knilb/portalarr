@@ -6,6 +6,7 @@ import {
     saveCurationSettingsAction, 
     getPlexServersAndSectionsAction,
     getMediaCollectionsAction, 
+    importPlexLibraryCollectionsAction,
     saveMediaCollectionAction, 
     syncCollectionToPlexAction, 
     deleteMediaCollectionAction,
@@ -113,6 +114,8 @@ export default function CurationStudio() {
     const [seasonalSyncMsg, setSeasonalSyncMsg] = useState<{ success: boolean; text: string } | null>(null);
     const [seasonalModalOpen, setSeasonalModalOpen] = useState(false);
     const [editingColl, setEditingColl] = useState<any | null>(null);
+    const [importingPlexCollections, setImportingPlexCollections] = useState(false);
+    const [plexImportMsg, setPlexImportMsg] = useState<{ success: boolean; text: string } | null>(null);
 
     // Preset Blueprint Inspection & Edit States
     const [inspectModalOpen, setInspectModalOpen] = useState(false);
@@ -586,6 +589,38 @@ export default function CurationStudio() {
             });
         } finally {
             setSyncingCollId(null);
+        }
+    };
+
+    // Handle importing / refreshing existing collections from Plex PMS
+    const handleImportPlexCollections = async () => {
+        if (!selectedServerId || !selectedSectionKey) {
+            alert("Please select a Plex Server and Library Section above first.");
+            return;
+        }
+        setImportingPlexCollections(true);
+        setPlexImportMsg(null);
+        try {
+            const res = await importPlexLibraryCollectionsAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setPlexImportMsg({
+                    success: true,
+                    text: res.message || "Discovered and synced Plex collections successfully."
+                });
+                await loadCollections(selectedServerId, selectedSectionKey);
+            } else {
+                setPlexImportMsg({
+                    success: false,
+                    text: res.error || "Failed importing Plex collections."
+                });
+            }
+        } catch (err: any) {
+            setPlexImportMsg({
+                success: false,
+                text: err.message || "Error importing collections from Plex."
+            });
+        } finally {
+            setImportingPlexCollections(false);
         }
     };
 
@@ -2281,10 +2316,17 @@ export default function CurationStudio() {
                 </Badge>
             );
         }
-        if (s === "plex_query") {
+        if (s === "plex_smart") {
             return (
                 <Badge variant="secondary" className="text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 gap-1">
                     <span>⚡</span> Plex Smart
+                </Badge>
+            );
+        }
+        if (s === "plex_native" || s === "plex_query" || s.startsWith("plex")) {
+            return (
+                <Badge variant="secondary" className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 gap-1">
+                    <span>📺</span> Plex Library
                 </Badge>
             );
         }
@@ -2776,6 +2818,18 @@ export default function CurationStudio() {
                                 <div className="flex flex-wrap items-center gap-2">
                                     <Button 
                                         size="sm"
+                                        onClick={handleImportPlexCollections}
+                                        disabled={importingPlexCollections || !selectedServerId || !selectedSectionKey}
+                                        variant="outline"
+                                        className="border-sky-500/40 text-sky-300 hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5"
+                                        title="Scan Plex library to import and discover existing collections (e.g. Recently Added, Top Movies, Adventure, etc.)"
+                                    >
+                                        {importingPlexCollections ? <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-300" /> : <RefreshCw className="h-3.5 w-3.5 text-sky-400" />}
+                                        <span>Import / Refresh from Plex</span>
+                                    </Button>
+
+                                    <Button 
+                                        size="sm"
                                         onClick={handleSyncSeasonalSchedules}
                                         disabled={syncingSeasonal}
                                         variant="outline"
@@ -2799,6 +2853,13 @@ export default function CurationStudio() {
                         </CardHeader>
 
                         <CardContent className="p-4 space-y-4">
+                            {plexImportMsg && (
+                                <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${plexImportMsg.success ? 'bg-sky-950/70 border border-sky-800 text-sky-300' : 'bg-rose-950/70 border border-rose-800 text-rose-300'}`}>
+                                    {plexImportMsg.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+                                    <span>{plexImportMsg.text}</span>
+                                </div>
+                            )}
+
                             {orderSavedMsg && (
                                 <div className="p-2.5 bg-emerald-950/70 border border-emerald-800 text-emerald-300 rounded-xl text-xs flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
