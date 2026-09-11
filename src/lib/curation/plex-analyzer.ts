@@ -324,12 +324,12 @@ export async function getPlexLibraryMediaItems(
     for (const rawUrl of urlsToTry) {
         if (!rawUrl) continue;
         const cleanBase = rawUrl.replace(/\/+$/, "");
-        const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
 
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
-            const res = await fetch(url, {
+            const timeoutId = setTimeout(() => controller.abort(), 25000);
+            const res = await fetch(urlWithGuids, {
                 headers: {
                     "Accept": "application/json",
                     "X-Plex-Token": token,
@@ -340,19 +340,40 @@ export async function getPlexLibraryMediaItems(
             });
             clearTimeout(timeoutId);
 
-            if (!res.ok) {
-                lastError = new Error(`HTTP ${res.status}`);
-                continue;
+            if (res.ok) {
+                const data = await res.json();
+                const metadata = data.MediaContainer?.Metadata || [];
+                const rawItems = Array.isArray(metadata) ? metadata : [metadata];
+                return rawItems.map(analyzeMediaStreamInfo);
             }
 
-            const data = await res.json();
-            const metadata = data.MediaContainer?.Metadata || [];
-            const rawItems = Array.isArray(metadata) ? metadata : [metadata];
-
-            return rawItems.map(analyzeMediaStreamInfo);
+            lastError = new Error(`HTTP ${res.status}`);
         } catch (e: any) {
             lastError = e;
-            // Try next candidate URL
+            // Try quick fallback without includeGuids if timed out
+            try {
+                const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+                const fbController = new AbortController();
+                const fbTimeoutId = setTimeout(() => fbController.abort(), 15000);
+                const fbRes = await fetch(fallbackUrl, {
+                    headers: {
+                        "Accept": "application/json",
+                        "X-Plex-Token": token,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    },
+                    signal: fbController.signal,
+                    cache: "no-store"
+                });
+                clearTimeout(fbTimeoutId);
+                if (fbRes.ok) {
+                    const fbData = await fbRes.json();
+                    const fbMetadata = fbData.MediaContainer?.Metadata || [];
+                    const fbRawItems = Array.isArray(fbMetadata) ? fbMetadata : [fbMetadata];
+                    return fbRawItems.map(analyzeMediaStreamInfo);
+                }
+            } catch (fbErr: any) {
+                lastError = fbErr;
+            }
         }
     }
 
@@ -847,7 +868,7 @@ export async function searchPlexLibraryItems(
     for (const endpoint of endpointsToTry) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4500);
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
             const res = await fetch(endpoint, {
                 headers: {
                     Accept: "application/json",
@@ -938,7 +959,7 @@ export async function inspectPlexMediaItemFull(
 
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
         const res = await fetch(endpoint, {
             headers: {
                 Accept: "application/json",

@@ -799,8 +799,7 @@ export async function reorderPlexCollectionsAction(
     }
 }
 
-export async function syncSeasonalAndScheduledCollectionsAction(serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
+export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: string, sectionKey?: string) {
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
@@ -905,8 +904,12 @@ export async function syncSeasonalAndScheduledCollectionsAction(serverId?: strin
     }
 }
 
-export async function syncLeavingSoonCollectionHubAction(serverId?: string, sectionKey?: string) {
+export async function syncSeasonalAndScheduledCollectionsAction(serverId?: string, sectionKey?: string) {
     await verifyAdmin();
+    return await syncSeasonalAndScheduledCollectionsInternal(serverId, sectionKey);
+}
+
+export async function syncLeavingSoonCollectionHubInternal(serverId?: string, sectionKey?: string) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const resolved = await resolveWorkingPlexServerConnection(serverId);
@@ -993,6 +996,11 @@ export async function syncLeavingSoonCollectionHubAction(serverId?: string, sect
     } catch (e: any) {
         return { success: false, error: e.message };
     }
+}
+
+export async function syncLeavingSoonCollectionHubAction(serverId?: string, sectionKey?: string) {
+    await verifyAdmin();
+    return await syncLeavingSoonCollectionHubInternal(serverId, sectionKey);
 }
 
 export async function deleteMediaCollectionAction(collectionId: string, deleteFromPlex = true) {
@@ -1301,8 +1309,7 @@ export async function saveOverlayRuleAction(data: {
     }
 }
 
-export async function applyOverlaysToLibraryAction(serverId: string, sectionKey: string, ruleId?: string) {
-    await verifyAdmin();
+export async function applyOverlaysToLibraryInternal(serverId: string, sectionKey: string, ruleId?: string) {
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
@@ -1429,6 +1436,11 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
     } catch (e: any) {
         return { success: false, error: e.message };
     }
+}
+
+export async function applyOverlaysToLibraryAction(serverId: string, sectionKey: string, ruleId?: string) {
+    await verifyAdmin();
+    return await applyOverlaysToLibraryInternal(serverId, sectionKey, ruleId);
 }
 
 export async function revertLibraryOverlaysAction(serverId: string) {
@@ -2211,7 +2223,7 @@ export async function runFullCurationSyncInternal(): Promise<{
     overlaysAppliedCount: number;
     leavingSoonCount: number;
     parentalTaggedCount?: number;
-    timestamp: Date;
+    timestamp: string;
     details: string[];
 }> {
     const details: string[] = [];
@@ -2221,11 +2233,11 @@ export async function runFullCurationSyncInternal(): Promise<{
 
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings) return { success: false, seasonalCount: 0, overlaysAppliedCount: 0, leavingSoonCount: 0, timestamp: new Date(), details: ["No global settings"] };
+        if (!settings) return { success: false, seasonalCount: 0, overlaysAppliedCount: 0, leavingSoonCount: 0, timestamp: new Date().toISOString(), details: ["No global settings"] };
 
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         if (!token) {
-            return { success: false, seasonalCount: 0, overlaysAppliedCount: 0, leavingSoonCount: 0, timestamp: new Date(), details: ["No Plex token configured"] };
+            return { success: false, seasonalCount: 0, overlaysAppliedCount: 0, leavingSoonCount: 0, timestamp: new Date().toISOString(), details: ["No Plex token configured"] };
         }
 
         const servers = await getPlexServers(token);
@@ -2239,7 +2251,7 @@ export async function runFullCurationSyncInternal(): Promise<{
         // 1. Seasonal & Scheduled Collections Sync
         if (settings.curationSyncCollections !== false) {
             try {
-                const seasonalRes = await syncSeasonalAndScheduledCollectionsAction();
+                const seasonalRes = await syncSeasonalAndScheduledCollectionsInternal();
                 seasonalCount = seasonalRes.evaluatedCount || 0;
                 details.push(`Evaluated ${seasonalCount} seasonal collection schedules.`);
             } catch (sErr: any) {
@@ -2254,8 +2266,6 @@ export async function runFullCurationSyncInternal(): Promise<{
                     ? servers.filter(s => enabledServersForOverlays.includes(s.clientIdentifier))
                     : servers;
 
-                const customBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
-
                 for (const srv of overlayServers) {
                     const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
                     if (!resolved || !resolved.serverUrl) continue;
@@ -2265,7 +2275,7 @@ export async function runFullCurationSyncInternal(): Promise<{
 
                     for (const sec of srvSections) {
                         try {
-                            const res = await applyOverlaysToLibraryAction(srv.clientIdentifier, String(sec.key));
+                            const res = await applyOverlaysToLibraryInternal(srv.clientIdentifier, String(sec.key));
                             if (res.success && res.appliedCount) {
                                 overlaysAppliedCount += res.appliedCount;
                             }
@@ -2283,7 +2293,7 @@ export async function runFullCurationSyncInternal(): Promise<{
         // 3. Leaving Soon Hub Sync
         if (settings.curationSyncPruning !== false) {
             try {
-                const leaveRes = await syncLeavingSoonCollectionHubAction();
+                const leaveRes = await syncLeavingSoonCollectionHubInternal();
                 leavingSoonCount = leaveRes.leavingCount || 0;
                 details.push(`Leaving Soon hub synced: ${leavingSoonCount} items scheduled.`);
             } catch (lErr: any) {
@@ -2295,12 +2305,21 @@ export async function runFullCurationSyncInternal(): Promise<{
         let parentalTaggedCount = 0;
         if (settings.curationSyncParentalTags !== false && settings.parentalTaggingEnabled !== false) {
             try {
+                const tagOptions: ParentalTaggingOptions = {
+                    enabled: true,
+                    format: (settings?.parentalTagFormat as any) || "prefix_category_severity",
+                    prefix: settings?.parentalTagPrefix || "IMDb",
+                    target: (settings?.parentalTagTarget as any) || "labels",
+                    minSeverity: (settings?.parentalMinSeverity as any) || "Mild",
+                    categories: settings?.parentalCategories ? JSON.parse(settings.parentalCategories) : ["nudity", "violence", "profanity", "alcohol", "frightening"]
+                };
+
                 for (const srv of servers) {
                     const sectionsRes = await getPlexServerLibrarySections(token);
                     const srvSections = sectionsRes.find(s => s.serverId === srv.clientIdentifier)?.sections || [];
                     for (const sec of srvSections) {
                         try {
-                            const pRes = await applyParentalTagsToLibraryAction(srv.clientIdentifier, String(sec.key));
+                            const pRes = await applyParentalTagsToLibrary(srv.clientIdentifier, String(sec.key), tagOptions);
                             if (pRes.success && pRes.taggedCount) {
                                 parentalTaggedCount += pRes.taggedCount;
                             }
@@ -2342,7 +2361,7 @@ export async function runFullCurationSyncInternal(): Promise<{
             overlaysAppliedCount,
             leavingSoonCount,
             parentalTaggedCount,
-            timestamp: new Date(),
+            timestamp: new Date().toISOString(),
             details
         };
     } catch (e: any) {
@@ -2352,7 +2371,7 @@ export async function runFullCurationSyncInternal(): Promise<{
             seasonalCount,
             overlaysAppliedCount,
             leavingSoonCount,
-            timestamp: new Date(),
+            timestamp: new Date().toISOString(),
             details: [e.message]
         };
     }
@@ -2363,7 +2382,18 @@ export async function runFullCurationSyncInternal(): Promise<{
  */
 export async function runFullCurationSyncAction() {
     await verifyAdmin();
-    return await runFullCurationSyncInternal();
+    try {
+        return await runFullCurationSyncInternal();
+    } catch (e: any) {
+        return {
+            success: false,
+            seasonalCount: 0,
+            overlaysAppliedCount: 0,
+            leavingSoonCount: 0,
+            timestamp: new Date().toISOString(),
+            details: [e.message || "Full curation sync encountered an unexpected error."]
+        };
+    }
 }
 
 /**

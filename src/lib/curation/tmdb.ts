@@ -47,28 +47,34 @@ export async function getTmdbApiKey(): Promise<string> {
             return settings.tmdbApiKey.trim();
         }
     } catch (e) {}
-    return process.env.TMDB_API_KEY || DEFAULT_TMDB_API_KEY;
+    return process.env.TMDB_API_KEY || "";
 }
 
 async function tmdbFetch(endpoint: string, params: Record<string, string | number> = {}): Promise<any> {
     const apiKey = await getTmdbApiKey();
+    if (!apiKey || apiKey.trim().length < 8) return null;
+
     const query = new URLSearchParams({
-        api_key: apiKey,
+        api_key: apiKey.trim(),
         language: "en-US",
         ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
     });
 
     const url = `${TMDB_BASE_URL}${endpoint}?${query.toString()}`;
-    const res = await fetch(url, {
-        headers: { "Accept": "application/json" },
-        next: { revalidate: 3600 } // Cache for 1 hour
-    });
+    try {
+        const res = await fetch(url, {
+            headers: { "Accept": "application/json" },
+            next: { revalidate: 3600 } // Cache for 1 hour
+        });
 
-    if (!res.ok) {
-        throw new Error(`TMDb API error ${res.status}: ${res.statusText}`);
+        if (!res.ok) {
+            return null;
+        }
+
+        return await res.json();
+    } catch (e: any) {
+        return null;
     }
-
-    return res.json();
 }
 
 /**
@@ -166,12 +172,11 @@ function mapTmdbTv(t: any): TmdbMediaItem {
 export async function getTmdbTrending(mediaType: "movie" | "tv" | "all" = "all", timeWindow: "day" | "week" = "week"): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch(`/trending/${mediaType}/${timeWindow}`);
-        if (!data.results) return [];
+        if (!data?.results) return [];
         return data.results.map((item: any) => 
             item.media_type === "tv" ? mapTmdbTv(item) : mapTmdbMovie(item)
         );
-    } catch (e: any) {
-        console.error("[TMDB] getTrending error:", e.message);
+    } catch {
         return [];
     }
 }
@@ -182,9 +187,8 @@ export async function getTmdbTrending(mediaType: "movie" | "tv" | "all" = "all",
 export async function getTmdbPopularMovies(page = 1): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/movie/popular", { page });
-        return (data.results || []).map(mapTmdbMovie);
-    } catch (e: any) {
-        console.error("[TMDB] getPopularMovies error:", e.message);
+        return (data?.results || []).map(mapTmdbMovie);
+    } catch {
         return [];
     }
 }
@@ -195,9 +199,8 @@ export async function getTmdbPopularMovies(page = 1): Promise<TmdbMediaItem[]> {
 export async function getTmdbTopRatedMovies(page = 1): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/movie/top_rated", { page });
-        return (data.results || []).map(mapTmdbMovie);
-    } catch (e: any) {
-        console.error("[TMDB] getTopRatedMovies error:", e.message);
+        return (data?.results || []).map(mapTmdbMovie);
+    } catch {
         return [];
     }
 }
@@ -208,9 +211,8 @@ export async function getTmdbTopRatedMovies(page = 1): Promise<TmdbMediaItem[]> 
 export async function getTmdbNowPlayingMovies(): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/movie/now_playing", { region: "US" });
-        return (data.results || []).map(mapTmdbMovie);
-    } catch (e: any) {
-        console.error("[TMDB] getNowPlayingMovies error:", e.message);
+        return (data?.results || []).map(mapTmdbMovie);
+    } catch {
         return [];
     }
 }
@@ -221,9 +223,8 @@ export async function getTmdbNowPlayingMovies(): Promise<TmdbMediaItem[]> {
 export async function getTmdbUpcomingMovies(): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/movie/upcoming", { region: "US" });
-        return (data.results || []).map(mapTmdbMovie);
-    } catch (e: any) {
-        console.error("[TMDB] getUpcomingMovies error:", e.message);
+        return (data?.results || []).map(mapTmdbMovie);
+    } catch {
         return [];
     }
 }
@@ -245,8 +246,7 @@ export async function getTmdbCollection(collectionId: number): Promise<TmdbColle
                 (a.releaseDate || "").localeCompare(b.releaseDate || "")
             )
         };
-    } catch (e: any) {
-        console.error(`[TMDB] getCollection(${collectionId}) error:`, e.message);
+    } catch {
         return null;
     }
 }
@@ -261,9 +261,8 @@ export async function getTmdbStudioMovies(companyId: number, minVotes = 50): Pro
             sort_by: "popularity.desc",
             "vote_count.gte": minVotes
         });
-        return (data.results || []).map(mapTmdbMovie);
-    } catch (e: any) {
-        console.error(`[TMDB] getStudioMovies(${companyId}) error:`, e.message);
+        return (data?.results || []).map(mapTmdbMovie);
+    } catch {
         return [];
     }
 }
@@ -278,9 +277,8 @@ export async function getTmdbNetworkShows(networkId: number, minVotes = 20): Pro
             sort_by: "popularity.desc",
             "vote_count.gte": minVotes
         });
-        return (data.results || []).map(mapTmdbTv);
-    } catch (e: any) {
-        console.error(`[TMDB] getNetworkShows(${networkId}) error:`, e.message);
+        return (data?.results || []).map(mapTmdbTv);
+    } catch {
         return [];
     }
 }
@@ -295,8 +293,7 @@ export async function getTmdbMovieDetails(tmdbId: number): Promise<TmdbMediaItem
         });
         if (!data) return null;
         return mapTmdbMovie(data);
-    } catch (e: any) {
-        console.error(`[TMDB] getMovieDetails(${tmdbId}) error:`, e.message);
+    } catch {
         return null;
     }
 }
@@ -309,9 +306,8 @@ export async function searchTmdbMovie(title: string, year?: number): Promise<Tmd
         const params: Record<string, string | number> = { query: title };
         if (year) params.primary_release_year = year;
         const data = await tmdbFetch("/search/movie", params);
-        return (data.results || []).map(mapTmdbMovie);
-    } catch (e: any) {
-        console.error(`[TMDB] searchTmdbMovie("${title}") error:`, e.message);
+        return (data?.results || []).map(mapTmdbMovie);
+    } catch {
         return [];
     }
 }
@@ -324,9 +320,8 @@ export async function searchTmdbTv(title: string, year?: number): Promise<TmdbMe
         const params: Record<string, string | number> = { query: title };
         if (year) params.first_air_date_year = year;
         const data = await tmdbFetch("/search/tv", params);
-        return (data.results || []).map(mapTmdbTv);
-    } catch (e: any) {
-        console.error(`[TMDB] searchTmdbTv("${title}") error:`, e.message);
+        return (data?.results || []).map(mapTmdbTv);
+    } catch {
         return [];
     }
 }
