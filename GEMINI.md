@@ -142,6 +142,10 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Plex Transcode & Poster Aspect Ratios:** For movie and TV show cards, always use standard 2:3 vertical poster proportions (`aspect-[2/3]`). In `/api/media/image/route.ts`, pass `width=600&height=900` to Plex `/photo/:/transcode` endpoints rather than landscape dimensions (`600x400`) to prevent Plex from cropping portrait posters.
 - **Card Subtitle Typography:** `BookCard` and `AudiobookCard` titles must use `line-clamp-3 h-[60px] block` instead of `flex items-center` to avoid squished text on non-fiction books with extensive subtitles.
 - **Git Workflow Overrides:** Pushing to `stable` is strictly forbidden to protect production, *unless* the user explicitly commands it in the prompt, in which case the user's manual override takes precedence.
+- **Autonomous Agent Directives & Auto-Approve:**
+  - **Always Proceed:** Automatically execute all file edits, refactors, and code modifications immediately using write tools without asking for confirmation.
+  - **Direct Command Execution:** Run required terminal commands (builds, migrations, tests, git operations) directly and proactively.
+  - **Main Branch Pushes:** Always push updates directly to `main` unless `stable` is explicitly requested.
 
 
 ## Key Files
