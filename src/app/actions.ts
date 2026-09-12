@@ -3162,7 +3162,8 @@ export async function getPublicJoinConfig(refCode?: string) {
                 requireReferralForSignup: Boolean(settings?.requireReferralForSignup),
                 referrerName,
                 validReferral,
-                proratedBilling
+                proratedBilling,
+                smtpFrom: settings?.smtpFrom || settings?.smtpUser || ""
             }
         };
     } catch (e: any) {
@@ -7938,6 +7939,48 @@ export async function saveUserKindleSettings(formData: FormData) {
         }
     });
     revalidatePath("/library");
+}
+
+export async function updateCurrentUserKindleEmail(kindleEmail: string) {
+    const session: any = await verifyUser();
+    const userId = session.userId || session.id;
+    const username = session.username;
+
+    if (!userId && !username) {
+        return { error: "User session not found." };
+    }
+
+    try {
+        const cleanEmail = (kindleEmail || "").trim().toLowerCase();
+        if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+            return { error: "Please enter a valid email address (e.g. yourname@kindle.com)." };
+        }
+
+        if (userId) {
+            await prisma.user.update({
+                where: { id: userId },
+                data: { kindleEmail: cleanEmail }
+            });
+        } else if (username) {
+            await prisma.user.update({
+                where: { username },
+                data: { kindleEmail: cleanEmail }
+            });
+        }
+
+        revalidatePath("/settings/profile");
+        revalidatePath("/library");
+
+        return {
+            success: true,
+            kindleEmail: cleanEmail,
+            message: cleanEmail
+                ? "Your Send-to-Kindle email address has been updated successfully!"
+                : "Your Send-to-Kindle email address has been cleared."
+        };
+    } catch (e: any) {
+        return { error: e.message || "Failed to update Send-to-Kindle email address." };
+    }
 }
 
 export async function getAiAgentSettings() {

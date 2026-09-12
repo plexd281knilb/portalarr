@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
-import { getUserReferralInfo, getPublicJoinConfig } from "@/app/actions";
+import { getUserReferralInfo, getPublicJoinConfig, updateCurrentUserKindleEmail } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
     User, Mail, KeyRound, CheckCircle2, XCircle, Loader2, ShieldCheck, 
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
-    CreditCard, Calendar
+    CreditCard, Calendar, AlertCircle, Trash2
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
@@ -39,12 +39,21 @@ export default function UserProfilePage() {
     const [passErr, setPassErr] = useState("");
     const [passLoading, setPassLoading] = useState(false);
 
+    // Send-to-Kindle State
+    const [kindleEmail, setKindleEmail] = useState("");
+    const [kindleSaving, setKindleSaving] = useState(false);
+    const [kindleMsg, setKindleMsg] = useState("");
+    const [kindleErr, setKindleErr] = useState("");
+
     useEffect(() => {
         async function fetchProfile() {
             setLoading(true);
             try {
                 const u = await getCurrentUser();
                 setUser(u);
+                if (u?.kindleEmail) {
+                    setKindleEmail(u.kindleEmail);
+                }
                 const ref = await getUserReferralInfo();
                 if (ref?.success) {
                     setReferralInfo(ref);
@@ -61,6 +70,41 @@ export default function UserProfilePage() {
         }
         fetchProfile();
     }, []);
+
+    const handleUpdateKindleEmail = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        setKindleSaving(true);
+        setKindleMsg("");
+        setKindleErr("");
+
+        const res = await updateCurrentUserKindleEmail(kindleEmail);
+        setKindleSaving(false);
+
+        if (res?.error) {
+            setKindleErr(res.error);
+        } else if (res?.success) {
+            setKindleMsg(res.message || "Your Send-to-Kindle email address has been updated successfully!");
+            setUser((prev: any) => ({ ...prev, kindleEmail: res.kindleEmail }));
+            setKindleEmail(res.kindleEmail || "");
+        }
+    };
+
+    const handleClearKindleEmail = async () => {
+        setKindleSaving(true);
+        setKindleMsg("");
+        setKindleErr("");
+
+        const res = await updateCurrentUserKindleEmail("");
+        setKindleSaving(false);
+
+        if (res?.error) {
+            setKindleErr(res.error);
+        } else if (res?.success) {
+            setKindleMsg(res.message || "Your Send-to-Kindle email address has been cleared.");
+            setUser((prev: any) => ({ ...prev, kindleEmail: "" }));
+            setKindleEmail("");
+        }
+    };
 
     const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -106,6 +150,11 @@ export default function UserProfilePage() {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const inviteUrl = referralInfo?.referralCode ? `${origin}/join?ref=${referralInfo.referralCode}` : "";
 
+    const cleanKindleInput = kindleEmail.trim().toLowerCase();
+    const isKindleDomain = cleanKindleInput.endsWith("@kindle.com") || cleanKindleInput.endsWith("@free.kindle.com");
+    const hasAtSymbol = cleanKindleInput.includes("@");
+    const hasChangedKindle = (user?.kindleEmail || "").trim().toLowerCase() !== cleanKindleInput;
+
     return (
         <div className="space-y-6 max-w-4xl mx-auto p-4 sm:p-6 animate-in fade-in duration-500">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -114,7 +163,7 @@ export default function UserProfilePage() {
                         <User className="h-6 w-6 text-primary" /> Account Profile & Settings
                     </h1>
                     <p className="text-muted-foreground text-sm">
-                        Manage your account credentials, Send-to-Kindle settings, and invite friends with your personal link.
+                        Manage your account credentials, Send-to-Kindle delivery address, and invite friends with your personal link.
                     </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -331,6 +380,157 @@ export default function UserProfilePage() {
                 </CardContent>
             </Card>
 
+            {/* SEND-TO-KINDLE DELIVERY CARD */}
+            <Card className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <BookOpen className="h-5 w-5 text-amber-400" /> Send-to-Kindle Delivery
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Configure your Kindle email address to receive ebooks directly on your Amazon Kindle device or app.
+                            </CardDescription>
+                        </div>
+                        {user?.kindleEmail ? (
+                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Configured
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                                <AlertCircle className="h-3.5 w-3.5" /> Not Configured
+                            </Badge>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <form onSubmit={handleUpdateKindleEmail} className="space-y-4" autoComplete="off">
+                        {kindleMsg && (
+                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                <span>{kindleMsg}</span>
+                            </div>
+                        )}
+                        {kindleErr && (
+                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                <XCircle className="h-4 w-4 shrink-0" />
+                                <span>{kindleErr}</span>
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="kindleEmailInput" className="text-xs font-semibold text-foreground">
+                                    Send-to-Kindle Email Address
+                                </Label>
+                                {cleanKindleInput && (
+                                    isKindleDomain ? (
+                                        <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
+                                            <CheckCircle2 className="h-3 w-3" /> Kindle domain recognized
+                                        </span>
+                                    ) : hasAtSymbol ? (
+                                        <span className="text-[11px] text-amber-400 flex items-center gap-1 font-medium">
+                                            <AlertCircle className="h-3 w-3" /> Kindle addresses typically end with @kindle.com
+                                        </span>
+                                    ) : null
+                                )}
+                            </div>
+                            <div className="relative">
+                                <Input
+                                    id="kindleEmailInput"
+                                    type="email"
+                                    value={kindleEmail}
+                                    onChange={(e) => {
+                                        setKindleEmail(e.target.value);
+                                        if (kindleMsg) setKindleMsg("");
+                                        if (kindleErr) setKindleErr("");
+                                    }}
+                                    placeholder="e.g. yourusername@kindle.com"
+                                    className="bg-background/80 font-mono text-xs pr-10 border-border/60"
+                                    autoComplete="email"
+                                />
+                                <MailCheck className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                                Find your Kindle email on your device under <strong className="text-foreground">Settings &gt; Your Account &gt; Send-to-Kindle Email</strong>, or on Amazon under <strong className="text-foreground">Manage Your Content and Devices &gt; Preferences</strong>.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                            <Button
+                                type="submit"
+                                disabled={kindleSaving || (!hasChangedKindle && Boolean(user?.kindleEmail))}
+                                className="w-full sm:w-auto font-semibold gap-2 transition-all hover:ring-2 hover:ring-primary/50 text-xs h-9"
+                            >
+                                {kindleSaving ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                                    </>
+                                ) : (
+                                    <>
+                                        <BookOpen className="h-4 w-4" /> {user?.kindleEmail ? "Update Kindle Email" : "Save Kindle Email"}
+                                    </>
+                                )}
+                            </Button>
+                            {user?.kindleEmail && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={kindleSaving}
+                                    onClick={handleClearKindleEmail}
+                                    className="w-full sm:w-auto text-xs h-9 text-muted-foreground hover:text-red-400 hover:border-red-500/40 gap-1.5"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" /> Remove Address
+                                </Button>
+                            )}
+                        </div>
+                    </form>
+
+                    {/* AMAZON WHITELIST & SETUP INSTRUCTIONS */}
+                    <div className="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-2.5 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-foreground flex items-center gap-1.5 text-xs">
+                                <Sparkles className="h-3.5 w-3.5 text-purple-400" /> Amazon Approved Sender Whitelist
+                            </span>
+                            <a
+                                href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 underline underline-offset-2 shrink-0 font-medium"
+                            >
+                                Amazon Settings <ExternalLink className="h-3 w-3" />
+                            </a>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            Amazon requires that you authorize our outbound server email address in your Amazon account. Add the address below to your <strong className="text-foreground">Approved Personal Document E-mail List</strong>:
+                        </p>
+                        
+                        {paymentConfig?.smtpFrom ? (
+                            <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                                <div className="p-2 rounded-lg bg-background/80 border border-purple-500/30 font-mono text-xs text-foreground flex-1 w-full truncate">
+                                    {paymentConfig.smtpFrom}
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleCopy(paymentConfig.smtpFrom, "smtpFrom")}
+                                    className="w-full sm:w-auto font-sans text-xs gap-1.5 shrink-0 border-purple-500/30 hover:bg-purple-500/10"
+                                >
+                                    {copiedHandle === "smtpFrom" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-purple-400" />}
+                                    {copiedHandle === "smtpFrom" ? "Copied Sender!" : "Copy Sender Email"}
+                                </Button>
+                            </div>
+                        ) : (
+                            <p className="text-[11px] text-amber-400/90 italic">
+                                Note: Inbound server SMTP address will appear once configured by the administrator.
+                            </p>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+
             <div className="grid gap-6 md:grid-cols-2">
                 {/* ACCOUNT INFORMATION CARD */}
                 <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
@@ -361,9 +561,20 @@ export default function UserProfilePage() {
 
                         <div className="space-y-1 pt-2 border-t border-border/40">
                             <Label className="text-xs text-muted-foreground font-semibold">Send-to-Kindle Email</Label>
-                            <div className="text-sm font-medium flex items-center gap-2 text-foreground">
-                                <MailCheck className="h-4 w-4 text-primary" />
-                                <span>{user?.kindleEmail || "Not Configured (Set up under Book Library)"}</span>
+                            <div className="text-sm font-medium flex items-center justify-between gap-2 text-foreground">
+                                <div className="flex items-center gap-2 truncate">
+                                    <MailCheck className="h-4 w-4 text-primary shrink-0" />
+                                    <span className="truncate">{user?.kindleEmail || "Not Configured"}</span>
+                                </div>
+                                {user?.kindleEmail ? (
+                                    <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] shrink-0 font-medium">
+                                        Active
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border text-[10px] shrink-0">
+                                        Disabled
+                                    </Badge>
+                                )}
                             </div>
                         </div>
 
