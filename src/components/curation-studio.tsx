@@ -497,14 +497,14 @@ export default function CurationStudio() {
             }).catch(() => {});
         } else if ((subTab === "overlays" || subTab === "storage") && !vaultStats) {
             getArtBackupAndBadgeStatsAction().then(res => {
-                if (res && res.success && 'backupCount' in res) {
+                if (res && res.success) {
                     setVaultStats({
-                        backupCount: res.backupCount,
-                        backupBytes: res.backupBytes,
-                        badgeCount: res.badgeCount,
-                        badgeBytes: res.badgeBytes,
-                        backupDir: res.backupDir,
-                        badgeDir: res.badgeDir
+                        backupCount: res.backupCount ?? 0,
+                        backupBytes: res.backupBytes ?? 0,
+                        badgeCount: res.badgeCount ?? 0,
+                        badgeBytes: res.badgeBytes ?? 0,
+                        backupDir: res.backupDir || "",
+                        badgeDir: res.badgeDir || ""
                     });
                 }
             }).catch(() => {});
