@@ -312,13 +312,13 @@ export default function CurationStudio() {
     const [testKeyResults, setTestKeyResults] = useState<{ tmdb?: boolean; trakt?: boolean; mdblist?: boolean; errors: string[] } | null>(null);
 
     // Load initial data
+    // Load initial data
     const loadData = async () => {
         setLoading(true);
         try {
-            const [settRes, srvRes, collRes, ruleRes, leaveRes, prefRes, badgesRes, vaultRes] = await Promise.all([
+            const [settRes, srvRes, ruleRes, leaveRes, prefRes, badgesRes, vaultRes] = await Promise.all([
                 getCurationSettingsAction().catch(() => ({ success: false })),
                 getPlexServersAndSectionsAction().catch(() => ({ success: false })),
-                getMediaCollectionsAction().catch(() => ({ success: false, collections: [] })),
                 getOverlayRulesAction().catch(() => ({ success: false, rules: [], backupsCount: 0 })),
                 getLeavingSoonItemsAction().catch(() => ({ success: false, items: [] })),
                 getUserContentPreferencesAction().catch(() => ({ success: false })),
@@ -328,7 +328,6 @@ export default function CurationStudio() {
 
             const srvData = srvRes as any;
             const prefData = prefRes as any;
-            const collData = collRes as any;
             const ruleData = ruleRes as any;
             const leaveData = leaveRes as any;
             const badgeData = badgesRes as any;
@@ -371,10 +370,11 @@ export default function CurationStudio() {
                 
                 const effectiveSecKey = matchedSec ? String(matchedSec.key) : "";
                 setSelectedSectionKey(effectiveSecKey);
-            }
-            if (collData?.success) {
-                const sorted = [...(collData.collections || [])].sort((a, b) => (a.orderIndex ?? 99) - (b.orderIndex ?? 99));
-                setCollections(sorted);
+
+                // Strictly load collections for the effective server and section
+                await loadCollections(effectiveSrvId, effectiveSecKey);
+            } else {
+                setCollections([]);
             }
             if (ruleData?.success) {
                 setOverlayRules(ruleData.rules || []);
@@ -835,10 +835,14 @@ export default function CurationStudio() {
 
     // Collection Reordering (Move Up / Down)
     const handleMoveCollection = (index: number, direction: "up" | "down") => {
+        const currentList = collections.filter(
+            c => (!c.serverId || c.serverId === selectedServerId) &&
+                 (!c.sectionKey || String(c.sectionKey) === String(selectedSectionKey))
+        );
         const targetIndex = direction === "up" ? index - 1 : index + 1;
-        if (targetIndex < 0 || targetIndex >= collections.length) return;
+        if (targetIndex < 0 || targetIndex >= currentList.length) return;
 
-        const updated = [...collections];
+        const updated = [...currentList];
         const temp = updated[index];
         updated[index] = updated[targetIndex];
         updated[targetIndex] = temp;
@@ -849,7 +853,8 @@ export default function CurationStudio() {
             sortPrefix: `!${String(i).padStart(2, '0')}_`
         }));
 
-        setCollections(reindexed);
+        const otherCollections = collections.filter(c => !currentList.some(cur => cur.id === c.id));
+        setCollections([...reindexed, ...otherCollections]);
     };
 
     // Save Collections Order & Push to Plex
@@ -859,10 +864,15 @@ export default function CurationStudio() {
             return;
         }
 
+        const currentList = collections.filter(
+            c => (!c.serverId || c.serverId === selectedServerId) &&
+                 (!c.sectionKey || String(c.sectionKey) === String(selectedSectionKey))
+        );
+
         setSavingOrder(true);
         setOrderSavedMsg(null);
         try {
-            const payload = collections.map((c, i) => ({
+            const payload = currentList.map((c, i) => ({
                 id: c.id,
                 ratingKey: c.ratingKey,
                 orderIndex: i,
@@ -1773,6 +1783,10 @@ export default function CurationStudio() {
     // Current Server Selection
     const currentServer = servers.find(s => s.serverId === selectedServerId) || servers[0];
     const currentSections = currentServer?.sections || [];
+    const currentServerCollections = collections.filter(
+        c => (!c.serverId || c.serverId === selectedServerId) &&
+             (!c.sectionKey || String(c.sectionKey) === String(selectedSectionKey))
+    );
 
     // Helper: Check if seasonal collection is currently in season
     const isCurrentlyInSeason = (coll: any) => {
@@ -2941,9 +2955,9 @@ export default function CurationStudio() {
                                         Querying Plex collections, smart filters, and Home screen carousels
                                     </span>
                                 </div>
-                            ) : collections.length === 0 ? (
+                            ) : currentServerCollections.length === 0 ? (
                                 <div className="text-center py-10 text-slate-500 text-xs">
-                                    No active collections found. Sync presets below or create a custom collection to arrange on your Plex Home screen.
+                                    No active collections or hubs found for {currentServer?.serverName || "this server"}. Click &quot;Import / Refresh from Plex&quot; or sync presets below.
                                 </div>
                             ) : (
                                 <div className="space-y-2">
@@ -2955,7 +2969,7 @@ export default function CurationStudio() {
                                         <div className="col-span-2 text-right">Actions</div>
                                     </div>
 
-                                    {collections.map((coll, idx) => {
+                                    {currentServerCollections.map((coll, idx) => {
                                         const inSeason = isCurrentlyInSeason(coll);
 
                                         return (
@@ -2977,7 +2991,7 @@ export default function CurationStudio() {
                                                             <ChevronUp className="h-3.5 w-3.5" />
                                                         </button>
                                                         <button 
-                                                            disabled={idx === collections.length - 1} 
+                                                            disabled={idx === currentServerCollections.length - 1} 
                                                             onClick={() => handleMoveCollection(idx, "down")}
                                                             className="p-0.5 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
                                                         >
@@ -3089,9 +3103,7 @@ export default function CurationStudio() {
                                                             type="checkbox"
                                                             checked={coll.promotedToHome ?? true}
                                                             onChange={e => {
-                                                                const updated = [...collections];
-                                                                updated[idx].promotedToHome = e.target.checked;
-                                                                setCollections(updated);
+                                                                setCollections(prev => prev.map(c => c.id === coll.id ? { ...c, promotedToHome: e.target.checked } : c));
                                                             }}
                                                             className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3.5 w-3.5"
                                                         />
@@ -3103,9 +3115,7 @@ export default function CurationStudio() {
                                                             type="checkbox"
                                                             checked={coll.promotedToRecommended ?? true}
                                                             onChange={e => {
-                                                                const updated = [...collections];
-                                                                updated[idx].promotedToRecommended = e.target.checked;
-                                                                setCollections(updated);
+                                                                setCollections(prev => prev.map(c => c.id === coll.id ? { ...c, promotedToRecommended: e.target.checked } : c));
                                                             }}
                                                             className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3.5 w-3.5"
                                                         />
@@ -3117,9 +3127,7 @@ export default function CurationStudio() {
                                                             type="checkbox"
                                                             checked={coll.promotedToSharedHome ?? true}
                                                             onChange={e => {
-                                                                const updated = [...collections];
-                                                                updated[idx].promotedToSharedHome = e.target.checked;
-                                                                setCollections(updated);
+                                                                setCollections(prev => prev.map(c => c.id === coll.id ? { ...c, promotedToSharedHome: e.target.checked } : c));
                                                             }}
                                                             className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3.5 w-3.5"
                                                         />
