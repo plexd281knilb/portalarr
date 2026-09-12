@@ -511,7 +511,7 @@ function parsePlexXmlCollections(xml: string): {
     return items;
 }
 
-function parsePlexXmlHubs(xml: string): {
+function parsePlexXmlHubs(xml: string, targetSectionKey?: string): {
     ratingKey: string;
     title: string;
     summary?: string;
@@ -544,6 +544,7 @@ function parsePlexXmlHubs(xml: string): {
     const hubMatches = xml.matchAll(/<Hub\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Hub>)/gi);
     for (const match of hubMatches) {
         const attrs = match[1] || "";
+        const inner = match[2] || "";
         const getAttr = (name: string) => {
             const m = attrs.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"));
             return m ? m[1] : undefined;
@@ -551,14 +552,24 @@ function parsePlexXmlHubs(xml: string): {
 
         const title = getAttr("title") || "";
         const hubIdentifier = getAttr("hubIdentifier") || getAttr("key") || "";
+        const librarySectionID = getAttr("librarySectionID");
+
+        if (targetSectionKey && librarySectionID && String(librarySectionID) !== String(targetSectionKey)) {
+            continue;
+        }
+
+        const thumb = getAttr("thumb") || inner.match(/<(Video|Directory)\b[^>]*?\bthumb=["']([^"']*)["']/i)?.[1];
+        const art = getAttr("art") || inner.match(/<(Video|Directory)\b[^>]*?\bart=["']([^"']*)["']/i)?.[1];
+        const count = parseInt(getAttr("size") || getAttr("count") || "0", 10);
+
         if (title) {
             hubs.push({
                 ratingKey: `hub:${hubIdentifier || title.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
                 title,
                 summary: getAttr("summary") || `Plex Hub: ${title}`,
-                thumb: getAttr("thumb"),
-                art: getAttr("art"),
-                childCount: parseInt(getAttr("size") || getAttr("count") || "0", 10),
+                thumb,
+                art,
+                childCount: count,
                 sortTitle: getAttr("titleSort") || title,
                 smart: true,
                 isHub: true,
@@ -807,7 +818,7 @@ export async function getPlexLibraryCollections(
 
         // 3. Try /hubs/sections/{sectionKey} to discover Section Hubs & Recommended Carousels (Recently Added, Top Movies, Adventure, etc.)
         try {
-            const url3 = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}?X-Plex-Token=${encodeURIComponent(token)}`;
+            const url3 = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}?count=50&includeFeatured=1&includeStations=1&X-Plex-Token=${encodeURIComponent(token)}`;
             const controller3 = new AbortController();
             const timeoutId3 = setTimeout(() => controller3.abort(), 8000);
             const res3 = await fetch(url3, {
@@ -843,7 +854,7 @@ export async function getPlexLibraryCollections(
                                         summary: h.summary || `Plex Built-in Hub: ${hubTitle}`,
                                         thumb: h.thumb || h.Metadata?.[0]?.thumb || undefined,
                                         art: h.art,
-                                        childCount: parseInt(h.size || h.count || "0", 10),
+                                        childCount: parseInt(h.size || h.count || (h.Metadata ? h.Metadata.length : 0) || "0", 10),
                                         smart: true,
                                         isHub: true,
                                         hubIdentifier: h.hubIdentifier,
@@ -856,8 +867,152 @@ export async function getPlexLibraryCollections(
                         }
                     } catch (e) {}
                 } else if (trimmed3.includes("<MediaContainer") || trimmed3.includes("<Hub")) {
-                    const parsedHubs = parsePlexXmlHubs(trimmed3);
+                    const parsedHubs = parsePlexXmlHubs(trimmed3, String(sectionKey));
                     for (const ph of parsedHubs) {
+                        const alreadyExists = Array.from(discoveredMap.values()).some(
+                            x => x.title.toLowerCase() === ph.title.toLowerCase()
+                        );
+                        if (!alreadyExists && ph.ratingKey) {
+                            discoveredMap.set(ph.ratingKey, ph);
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
+        // 4. Try /hubs/promoted to discover Promoted Home Screen Hubs (Recently Added in Movies, Recently Added in TV, Continue Watching, etc.)
+        try {
+            const urlPromoted = `${cleanBase}/hubs/promoted?count=50&X-Plex-Token=${encodeURIComponent(token)}`;
+            const controller4 = new AbortController();
+            const timeoutId4 = setTimeout(() => controller4.abort(), 8000);
+            const res4 = await fetch(urlPromoted, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller4.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId4);
+
+            if (res4.ok) {
+                const text4 = await res4.text();
+                const trimmed4 = text4.trim();
+                if (trimmed4.startsWith("{") || trimmed4.startsWith("[")) {
+                    try {
+                        const data4 = JSON.parse(trimmed4);
+                        const hubs4 = data4.MediaContainer?.Hub || [];
+                        const hubList4 = Array.isArray(hubs4) ? hubs4 : [hubs4];
+                        for (const h of hubList4) {
+                            const hubSecId = String(h.librarySectionID || "");
+                            const hubKeyStr = String(h.key || "");
+                            const isMatch = !sectionKey || 
+                                            (hubSecId && hubSecId === String(sectionKey)) || 
+                                            hubKeyStr.includes(`/sections/${sectionKey}/`) || 
+                                            hubKeyStr.includes(`/sections/${sectionKey}?`);
+                            if (isMatch) {
+                                const hubTitle = h.title?.trim();
+                                if (hubTitle) {
+                                    const alreadyExists = Array.from(discoveredMap.values()).some(
+                                        x => x.title.toLowerCase() === hubTitle.toLowerCase()
+                                    );
+                                    if (!alreadyExists) {
+                                        const hubKey = `hub:${h.hubIdentifier || hubTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                                        discoveredMap.set(hubKey, {
+                                            ratingKey: hubKey,
+                                            title: hubTitle,
+                                            summary: h.summary || `Plex Built-in Hub: ${hubTitle}`,
+                                            thumb: h.thumb || h.Metadata?.[0]?.thumb || undefined,
+                                            art: h.art,
+                                            childCount: parseInt(h.size || h.count || (h.Metadata ? h.Metadata.length : 0) || "0", 10),
+                                            smart: true,
+                                            isHub: true,
+                                            hubIdentifier: h.hubIdentifier,
+                                            promotedToHome: h.promoted !== "0" && h.promoted !== 0,
+                                            promotedToRecommended: true,
+                                            promotedToSharedHome: true
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                } else if (trimmed4.includes("<MediaContainer") || trimmed4.includes("<Hub")) {
+                    const parsedHubs4 = parsePlexXmlHubs(trimmed4, String(sectionKey));
+                    for (const ph of parsedHubs4) {
+                        const alreadyExists = Array.from(discoveredMap.values()).some(
+                            x => x.title.toLowerCase() === ph.title.toLowerCase()
+                        );
+                        if (!alreadyExists && ph.ratingKey) {
+                            discoveredMap.set(ph.ratingKey, ph);
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
+        // 5. Try /hubs to discover all Home Screen Hubs (Continue Watching, Recently Added, etc.)
+        try {
+            const urlAllHubs = `${cleanBase}/hubs?count=50&X-Plex-Token=${encodeURIComponent(token)}`;
+            const controller5 = new AbortController();
+            const timeoutId5 = setTimeout(() => controller5.abort(), 8000);
+            const res5 = await fetch(urlAllHubs, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller5.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId5);
+
+            if (res5.ok) {
+                const text5 = await res5.text();
+                const trimmed5 = text5.trim();
+                if (trimmed5.startsWith("{") || trimmed5.startsWith("[")) {
+                    try {
+                        const data5 = JSON.parse(trimmed5);
+                        const hubs5 = data5.MediaContainer?.Hub || [];
+                        const hubList5 = Array.isArray(hubs5) ? hubs5 : [hubs5];
+                        for (const h of hubList5) {
+                            const hubSecId = String(h.librarySectionID || "");
+                            const hubKeyStr = String(h.key || "");
+                            const isMatch = !sectionKey || 
+                                            (hubSecId && hubSecId === String(sectionKey)) || 
+                                            hubKeyStr.includes(`/sections/${sectionKey}/`) || 
+                                            hubKeyStr.includes(`/sections/${sectionKey}?`);
+                            if (isMatch) {
+                                const hubTitle = h.title?.trim();
+                                if (hubTitle) {
+                                    const alreadyExists = Array.from(discoveredMap.values()).some(
+                                        x => x.title.toLowerCase() === hubTitle.toLowerCase()
+                                    );
+                                    if (!alreadyExists) {
+                                        const hubKey = `hub:${h.hubIdentifier || hubTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                                        discoveredMap.set(hubKey, {
+                                            ratingKey: hubKey,
+                                            title: hubTitle,
+                                            summary: h.summary || `Plex Built-in Hub: ${hubTitle}`,
+                                            thumb: h.thumb || h.Metadata?.[0]?.thumb || undefined,
+                                            art: h.art,
+                                            childCount: parseInt(h.size || h.count || (h.Metadata ? h.Metadata.length : 0) || "0", 10),
+                                            smart: true,
+                                            isHub: true,
+                                            hubIdentifier: h.hubIdentifier,
+                                            promotedToHome: h.promoted !== "0" && h.promoted !== 0,
+                                            promotedToRecommended: true,
+                                            promotedToSharedHome: true
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                } else if (trimmed5.includes("<MediaContainer") || trimmed5.includes("<Hub")) {
+                    const parsedHubs5 = parsePlexXmlHubs(trimmed5, String(sectionKey));
+                    for (const ph of parsedHubs5) {
                         const alreadyExists = Array.from(discoveredMap.values()).some(
                             x => x.title.toLowerCase() === ph.title.toLowerCase()
                         );
@@ -1042,7 +1197,10 @@ export async function updatePlexCollectionPromotionAndOrder(
         promotedToRecommended?: boolean;
         promotedToSharedHome?: boolean;
     }
-): Promise<{ success: boolean; message?: string }> {
+    if (collectionRatingKey.startsWith("hub:")) {
+        return { success: true, message: "Hub promotion setting recorded." };
+    }
+
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let lastError: any = null;
 

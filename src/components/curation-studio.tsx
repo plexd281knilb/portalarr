@@ -93,6 +93,7 @@ export default function CurationStudio() {
 
     // Collections & Ordering
     const [collections, setCollections] = useState<any[]>([]);
+    const [collectionsLoading, setCollectionsLoading] = useState(false);
     const [syncingCollId, setSyncingCollId] = useState<string | null>(null);
     const [syncMessage, setSyncMessage] = useState<{ id: string; success: boolean; text: string } | null>(null);
     const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -404,28 +405,37 @@ export default function CurationStudio() {
 
     // Dedicated Static Tab Selection Handlers with localStorage Persistence
     const handleSelectServer = (srvId: string) => {
+        if (srvId === selectedServerId) return;
         setSelectedServerId(srvId);
         if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_server", srvId);
         const srv = servers.find(s => s.serverId === srvId);
+        let nextSecKey = selectedSectionKey;
         if (srv?.sections && srv.sections.length > 0) {
             const hasExisting = srv.sections.some((sec: any) => String(sec.key) === selectedSectionKey);
             if (!hasExisting) {
-                const firstKey = String(srv.sections[0].key);
-                setSelectedSectionKey(firstKey);
-                if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_section", firstKey);
+                nextSecKey = String(srv.sections[0].key);
+                setSelectedSectionKey(nextSecKey);
+                if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_section", nextSecKey);
             }
         }
+        setCollectionsLoading(true);
+        loadCollections(srvId, nextSecKey);
     };
 
     const handleSelectSection = (secKey: string) => {
+        if (secKey === selectedSectionKey) return;
         setSelectedSectionKey(secKey);
         if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_section", secKey);
+        setCollectionsLoading(true);
+        loadCollections(selectedServerId, secKey);
     };
 
     const loadCollections = async (srvId?: string, secKey?: string) => {
+        const targetSrv = srvId || selectedServerId;
+        const targetSec = secKey || selectedSectionKey;
+        if (!targetSrv) return;
+        setCollectionsLoading(true);
         try {
-            const targetSrv = srvId || selectedServerId;
-            const targetSec = secKey || selectedSectionKey;
             const collRes = await getMediaCollectionsAction(targetSrv || undefined, targetSec || undefined);
             if (collRes?.success) {
                 const sorted = [...(collRes.collections || [])].sort((a, b) => (a.orderIndex ?? 99) - (b.orderIndex ?? 99));
@@ -433,6 +443,8 @@ export default function CurationStudio() {
             }
         } catch (e) {
             console.error("Failed loading collections:", e);
+        } finally {
+            setCollectionsLoading(false);
         }
     };
 
@@ -2826,7 +2838,7 @@ export default function CurationStudio() {
                                     <Button 
                                         size="sm"
                                         onClick={handleImportPlexCollections}
-                                        disabled={importingPlexCollections || !selectedServerId || !selectedSectionKey}
+                                        disabled={importingPlexCollections || collectionsLoading || !selectedServerId || !selectedSectionKey}
                                         variant="outline"
                                         className="border-sky-500/40 text-sky-300 hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5"
                                         title="Scan Plex library to import and discover existing collections (e.g. Recently Added, Top Movies, Adventure, etc.)"
@@ -2838,7 +2850,7 @@ export default function CurationStudio() {
                                     <Button 
                                         size="sm"
                                         onClick={handleSyncSeasonalSchedules}
-                                        disabled={syncingSeasonal}
+                                        disabled={syncingSeasonal || collectionsLoading}
                                         variant="outline"
                                         className="border-amber-500/40 text-amber-300 hover:bg-amber-950/40 text-xs h-8 px-3 gap-1.5"
                                     >
@@ -2849,7 +2861,7 @@ export default function CurationStudio() {
                                     <Button 
                                         size="sm"
                                         onClick={handleSaveCollectionsOrder}
-                                        disabled={savingOrder || collections.length === 0}
+                                        disabled={savingOrder || collectionsLoading || collections.length === 0}
                                         className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-amber-950/40"
                                     >
                                         {savingOrder ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
@@ -2919,7 +2931,17 @@ export default function CurationStudio() {
                                 </div>
                             )}
 
-                            {collections.length === 0 ? (
+                            {collectionsLoading ? (
+                                <div className="py-16 flex flex-col items-center justify-center gap-3 text-slate-400">
+                                    <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+                                    <span className="text-xs font-semibold text-slate-200">
+                                        Loading collections and hubs from {currentServer?.serverName || "Plex"}...
+                                    </span>
+                                    <span className="text-[11px] text-slate-500">
+                                        Querying Plex collections, smart filters, and Home screen carousels
+                                    </span>
+                                </div>
+                            ) : collections.length === 0 ? (
                                 <div className="text-center py-10 text-slate-500 text-xs">
                                     No active collections found. Sync presets below or create a custom collection to arrange on your Plex Home screen.
                                 </div>
