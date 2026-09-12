@@ -2945,8 +2945,8 @@ function BookLibraryPageContent() {
         </TabsList>
 
         <TabsContent value="libs" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-1 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6">
+            <div className="md:col-span-4 lg:col-span-3 space-y-4">
               <Card className="border-muted/60 bg-muted/10">
                 <CardHeader className="py-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -2994,7 +2994,7 @@ function BookLibraryPageContent() {
               </Card>
             </div>
 
-            <div className="lg:col-span-3 space-y-6">
+            <div className="md:col-span-8 lg:col-span-9 space-y-6">
               {selectedLibrary ? (
                 <>
                   <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
@@ -3455,8 +3455,8 @@ function BookLibraryPageContent() {
         </TabsContent>
 
         <TabsContent value="audiobooks" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-1 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6">
+            <div className="md:col-span-4 lg:col-span-3 space-y-4">
               <Card className="border-muted/60 bg-muted/10 overflow-hidden">
                 <CardHeader className="py-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -3521,7 +3521,7 @@ function BookLibraryPageContent() {
               </Card>
             </div>
 
-            <div className="lg:col-span-3 space-y-6">
+            <div className="md:col-span-8 lg:col-span-9 space-y-6">
               {selectedLibrary && selectedLibrary.mediaType === "audiobook" ? (
                 <>
                   <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">

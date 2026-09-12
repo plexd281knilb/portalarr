@@ -2798,29 +2798,29 @@ export default function CurationStudio() {
             {/* Studio Navigation Tabs */}
             <Tabs value={subTab} onValueChange={setSubTab} className="space-y-6">
                 <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full h-auto p-1.5 bg-slate-900/90 border border-slate-800 rounded-2xl gap-1.5 shadow-xl backdrop-blur-md">
-                    <TabsTrigger value="collections" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
+                    <TabsTrigger value="collections" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 min-w-0">
                         <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
-                        <span>Collections</span>
+                        <span className="truncate">Collections</span>
                     </TabsTrigger>
-                    <TabsTrigger value="overlays" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
+                    <TabsTrigger value="overlays" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 min-w-0">
                         <Layers className="h-4 w-4 text-sky-400 shrink-0" />
-                        <span>Overlays & Badges</span>
+                        <span className="truncate">Overlays & Badges</span>
                     </TabsTrigger>
-                    <TabsTrigger value="inspector" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
+                    <TabsTrigger value="inspector" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 min-w-0">
                         <Search className="h-4 w-4 text-cyan-400 shrink-0" />
-                        <span>Media Inspector</span>
+                        <span className="truncate">Media Inspector</span>
                     </TabsTrigger>
-                    <TabsTrigger value="releases" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
+                    <TabsTrigger value="releases" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 min-w-0">
                         <Calendar className="h-4 w-4 text-emerald-400 shrink-0" />
-                        <span>Digital Releases</span>
+                        <span className="truncate">Digital Releases</span>
                     </TabsTrigger>
-                    <TabsTrigger value="pruning" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
+                    <TabsTrigger value="pruning" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 min-w-0">
                         <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
-                        <span>Leaving Soon</span>
+                        <span className="truncate">Leaving Soon</span>
                     </TabsTrigger>
-                    <TabsTrigger value="preferences" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 whitespace-nowrap">
+                    <TabsTrigger value="preferences" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 min-w-0">
                         <Filter className="h-4 w-4 text-indigo-400 shrink-0" />
-                        <span>Content Filters</span>
+                        <span className="truncate">Content Filters</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -2961,7 +2961,7 @@ export default function CurationStudio() {
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    <div className="hidden sm:grid grid-cols-12 gap-2 text-[11px] font-bold text-slate-400 px-3 py-1.5 uppercase tracking-wider border-b border-slate-800">
+                                    <div className="hidden lg:grid grid-cols-12 gap-2 text-[11px] font-bold text-slate-400 px-3 py-1.5 uppercase tracking-wider border-b border-slate-800">
                                         <div className="col-span-1">Priority</div>
                                         <div className="col-span-4">Collection Title</div>
                                         <div className="col-span-2">Schedule / Season</div>
@@ -2975,202 +2975,206 @@ export default function CurationStudio() {
                                         return (
                                             <div 
                                                 key={coll.id} 
-                                                className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-2 items-center p-3 bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 rounded-xl transition-colors text-xs"
+                                                className="flex flex-col lg:grid lg:grid-cols-12 gap-3 lg:gap-2 items-start lg:items-center p-3 bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 rounded-xl transition-colors text-xs w-full"
                                             >
-                                                {/* Priority Reorder Controls */}
-                                                <div className="sm:col-span-1 flex items-center gap-1.5">
-                                                    <Badge className="bg-purple-900/60 text-purple-300 border-purple-700 font-mono font-bold text-[11px] px-2 py-0.5">
-                                                        #{idx}
-                                                    </Badge>
-                                                    <div className="flex flex-col">
-                                                        <button 
-                                                            disabled={idx === 0} 
-                                                            onClick={() => handleMoveCollection(idx, "up")}
-                                                            className="p-0.5 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
-                                                        >
-                                                            <ChevronUp className="h-3.5 w-3.5" />
-                                                        </button>
-                                                        <button 
-                                                            disabled={idx === currentServerCollections.length - 1} 
-                                                            onClick={() => handleMoveCollection(idx, "down")}
-                                                            className="p-0.5 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
-                                                        >
-                                                            <ChevronDown className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Title & Category with Manual Sync */}
-                                                <div className="sm:col-span-4 space-y-1">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="font-bold text-white text-sm">{coll.title}</span>
-                                                        <Badge variant="outline" className="text-[9px] uppercase px-1.5 py-0 border-slate-700 text-slate-300">
-                                                            {coll.category}
+                                                <div className="flex items-center justify-between w-full lg:w-auto lg:contents">
+                                                    {/* Priority Reorder Controls */}
+                                                    <div className="lg:col-span-1 flex items-center gap-1.5 shrink-0">
+                                                        <Badge className="bg-purple-900/60 text-purple-300 border-purple-700 font-mono font-bold text-[11px] px-2 py-0.5">
+                                                            #{idx}
                                                         </Badge>
-                                                        {getSourceBadge(coll.sourceType, coll.title, coll.sourceQuery)}
-                                                        <Button 
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => handleSyncSingleCollection(coll)}
-                                                            disabled={syncingCollId === coll.id}
-                                                            className="h-5 px-2 py-0 text-[10px] font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-950/50 hover:text-amber-200 hover:border-amber-400 gap-1 rounded-md transition-all shadow-sm"
-                                                            title={`Manually sync "${coll.title}" to Plex`}
-                                                        >
-                                                            {syncingCollId === coll.id ? (
-                                                                <Loader2 className="h-2.5 w-2.5 animate-spin text-amber-300" />
-                                                            ) : (
-                                                                <RefreshCw className="h-2.5 w-2.5 text-amber-400" />
-                                                            )}
-                                                            <span>{syncingCollId === coll.id ? "Syncing..." : "Sync"}</span>
-                                                        </Button>
+                                                        <div className="flex flex-row lg:flex-col items-center">
+                                                            <button 
+                                                                disabled={idx === 0} 
+                                                                onClick={() => handleMoveCollection(idx, "up")}
+                                                                className="p-1 lg:p-0.5 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                                                            >
+                                                                <ChevronUp className="h-3.5 w-3.5" />
+                                                            </button>
+                                                            <button 
+                                                                disabled={idx === currentServerCollections.length - 1} 
+                                                                onClick={() => handleMoveCollection(idx, "down")}
+                                                                className="p-1 lg:p-0.5 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                                                            >
+                                                                <ChevronDown className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-[11px] text-slate-400 flex items-center gap-2 flex-wrap">
-                                                        <span>{coll.itemCount || 0} items</span>
-                                                        <span>•</span>
-                                                        <span className="font-mono text-purple-400 text-[10px]">Prefix: {coll.sortPrefix || `!${String(idx).padStart(2, '0')}_`}</span>
-                                                        {coll.lastSyncedAt && (
-                                                            <>
-                                                                <span>•</span>
-                                                                <span className="text-[10px] text-emerald-400/90 flex items-center gap-1">
-                                                                    <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
-                                                                    Synced {new Date(coll.lastSyncedAt).toLocaleDateString()} {new Date(coll.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                </span>
-                                                            </>
+
+                                                    {/* Title & Category with Manual Sync */}
+                                                    <div className="lg:col-span-4 space-y-1 flex-1 min-w-0 px-2 lg:px-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="font-bold text-white text-sm truncate">{coll.title}</span>
+                                                            <Badge variant="outline" className="text-[9px] uppercase px-1.5 py-0 border-slate-700 text-slate-300 shrink-0">
+                                                                {coll.category}
+                                                            </Badge>
+                                                            {getSourceBadge(coll.sourceType, coll.title, coll.sourceQuery)}
+                                                            <Button 
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleSyncSingleCollection(coll)}
+                                                                disabled={syncingCollId === coll.id}
+                                                                className="h-5 px-2 py-0 text-[10px] font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-950/50 hover:text-amber-200 hover:border-amber-400 gap-1 rounded-md transition-all shadow-sm shrink-0"
+                                                                title={`Manually sync "${coll.title}" to Plex`}
+                                                            >
+                                                                {syncingCollId === coll.id ? (
+                                                                    <Loader2 className="h-2.5 w-2.5 animate-spin text-amber-300" />
+                                                                ) : (
+                                                                    <RefreshCw className="h-2.5 w-2.5 text-amber-400" />
+                                                                )}
+                                                                <span>{syncingCollId === coll.id ? "Syncing..." : "Sync"}</span>
+                                                            </Button>
+                                                        </div>
+                                                        <div className="text-[11px] text-slate-400 flex items-center gap-2 flex-wrap">
+                                                            <span>{coll.itemCount || 0} items</span>
+                                                            <span>•</span>
+                                                            <span className="font-mono text-purple-400 text-[10px]">Prefix: {coll.sortPrefix || `!${String(idx).padStart(2, '0')}_`}</span>
+                                                            {coll.lastSyncedAt && (
+                                                                <>
+                                                                    <span>•</span>
+                                                                    <span className="text-[10px] text-emerald-400/90 flex items-center gap-1">
+                                                                        <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
+                                                                        Synced {new Date(coll.lastSyncedAt).toLocaleDateString()} {new Date(coll.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        {syncMessage && syncMessage.id === coll.id && (
+                                                            <div className={`text-[10px] font-medium flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md border ${
+                                                                syncMessage.success 
+                                                                    ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-300' 
+                                                                    : 'bg-rose-950/60 border-rose-800/80 text-rose-300'
+                                                            }`}>
+                                                                {syncMessage.success ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <XCircle className="h-3 w-3 shrink-0" />}
+                                                                <span className="truncate">{syncMessage.text}</span>
+                                                            </div>
                                                         )}
                                                     </div>
-                                                    {syncMessage && syncMessage.id === coll.id && (
-                                                        <div className={`text-[10px] font-medium flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md border ${
-                                                            syncMessage.success 
-                                                                ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-300' 
-                                                                : 'bg-rose-950/60 border-rose-800/80 text-rose-300'
-                                                        }`}>
-                                                            {syncMessage.success ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <XCircle className="h-3 w-3 shrink-0" />}
-                                                            <span className="truncate">{syncMessage.text}</span>
-                                                        </div>
-                                                    )}
                                                 </div>
 
-                                                {/* Seasonal Schedule Pill */}
-                                                <div className="sm:col-span-2">
-                                                    {coll.isSeasonal ? (
-                                                        <div 
+                                                <div className="flex flex-wrap items-center justify-between gap-3 w-full lg:w-auto lg:contents pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800/60">
+                                                    {/* Seasonal Schedule Pill */}
+                                                    <div className="lg:col-span-2 shrink-0">
+                                                        {coll.isSeasonal ? (
+                                                            <div 
+                                                                onClick={() => {
+                                                                    setEditingColl(coll);
+                                                                    setSeasonalModalOpen(true);
+                                                                }}
+                                                                className="cursor-pointer group flex flex-col gap-0.5 p-1.5 bg-slate-900/80 rounded-lg border border-slate-800 hover:border-amber-500/50 transition-all"
+                                                            >
+                                                                <div className="flex items-center gap-1 text-[10px] font-bold">
+                                                                    {inSeason ? (
+                                                                        <span className="text-emerald-400 flex items-center gap-1">
+                                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Now
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-amber-400/80 flex items-center gap-1">
+                                                                            <Clock3 className="h-3 w-3" /> Scheduled
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-[10px] text-slate-400 group-hover:text-slate-200">
+                                                                    {coll.scheduleStartMonth}/{coll.scheduleStartDay} – {coll.scheduleEndMonth}/{coll.scheduleEndDay}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setEditingColl({
+                                                                        ...coll,
+                                                                        isSeasonal: true,
+                                                                        scheduleStartMonth: 10,
+                                                                        scheduleStartDay: 1,
+                                                                        scheduleEndMonth: 11,
+                                                                        scheduleEndDay: 5,
+                                                                        seasonalAction: "promote_hide"
+                                                                    });
+                                                                    setSeasonalModalOpen(true);
+                                                                }}
+                                                                className="text-[10px] text-slate-400 hover:text-amber-300 flex items-center gap-1 py-1 px-2 bg-slate-900/60 rounded border border-slate-800"
+                                                            >
+                                                                <CalendarClock className="h-3 w-3" /> Add Schedule
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Visibility Switches: Home, Rec, Shared */}
+                                                    <div className="lg:col-span-3 flex items-center justify-center gap-2.5 bg-slate-900/70 p-1.5 px-3 rounded-xl border border-slate-800/80 shrink-0">
+                                                        <label className="flex items-center gap-1 cursor-pointer" title="Promote to Home Screen">
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={coll.promotedToHome ?? true}
+                                                                onChange={e => {
+                                                                    setCollections(prev => prev.map(c => c.id === coll.id ? { ...c, promotedToHome: e.target.checked } : c));
+                                                                }}
+                                                                className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3.5 w-3.5"
+                                                            />
+                                                            <span className="text-[10px] font-semibold text-slate-300">Home</span>
+                                                        </label>
+
+                                                        <label className="flex items-center gap-1 cursor-pointer" title="Promote to Library Recommended">
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={coll.promotedToRecommended ?? true}
+                                                                onChange={e => {
+                                                                    setCollections(prev => prev.map(c => c.id === coll.id ? { ...c, promotedToRecommended: e.target.checked } : c));
+                                                                }}
+                                                                className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3.5 w-3.5"
+                                                            />
+                                                            <span className="text-[10px] font-semibold text-slate-300">Rec</span>
+                                                        </label>
+
+                                                        <label className="flex items-center gap-1 cursor-pointer" title="Promote to Shared Users Home">
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={coll.promotedToSharedHome ?? true}
+                                                                onChange={e => {
+                                                                    setCollections(prev => prev.map(c => c.id === coll.id ? { ...c, promotedToSharedHome: e.target.checked } : c));
+                                                                }}
+                                                                className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3.5 w-3.5"
+                                                            />
+                                                            <span className="text-[10px] font-semibold text-slate-300">Shared</span>
+                                                        </label>
+                                                    </div>
+
+                                                    {/* Action Buttons */}
+                                                    <div className="lg:col-span-2 flex items-center justify-end gap-1.5 shrink-0 ml-auto lg:ml-0">
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline"
                                                             onClick={() => {
                                                                 setEditingColl(coll);
                                                                 setSeasonalModalOpen(true);
                                                             }}
-                                                            className="cursor-pointer group flex flex-col gap-0.5 p-1.5 bg-slate-900/80 rounded-lg border border-slate-800 hover:border-amber-500/50 transition-all"
+                                                            className="h-7 px-2 text-[10px] border-slate-700 text-slate-300 hover:text-white"
                                                         >
-                                                            <div className="flex items-center gap-1 text-[10px] font-bold">
-                                                                {inSeason ? (
-                                                                    <span className="text-emerald-400 flex items-center gap-1">
-                                                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Now
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-amber-400/80 flex items-center gap-1">
-                                                                        <Clock3 className="h-3 w-3" /> Scheduled
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <span className="text-[10px] text-slate-400 group-hover:text-slate-200">
-                                                                {coll.scheduleStartMonth}/{coll.scheduleStartDay} – {coll.scheduleEndMonth}/{coll.scheduleEndDay}
-                                                            </span>
-                                                        </div>
-                                                    ) : (
-                                                        <button 
-                                                            onClick={() => {
-                                                                setEditingColl({
-                                                                    ...coll,
-                                                                    isSeasonal: true,
-                                                                    scheduleStartMonth: 10,
-                                                                    scheduleStartDay: 1,
-                                                                    scheduleEndMonth: 11,
-                                                                    scheduleEndDay: 5,
-                                                                    seasonalAction: "promote_hide"
-                                                                });
-                                                                setSeasonalModalOpen(true);
-                                                            }}
-                                                            className="text-[10px] text-slate-400 hover:text-amber-300 flex items-center gap-1 py-1 px-2 bg-slate-900/60 rounded border border-slate-800"
-                                                        >
-                                                            <CalendarClock className="h-3 w-3" /> Add Schedule
-                                                        </button>
-                                                    )}
-                                                </div>
+                                                            <Settings2 className="h-3.5 w-3.5" />
+                                                        </Button>
 
-                                                {/* Visibility Switches: Home, Rec, Shared */}
-                                                <div className="sm:col-span-3 flex items-center justify-center gap-3 bg-slate-900/70 p-1.5 rounded-xl border border-slate-800/80">
-                                                    <label className="flex items-center gap-1 cursor-pointer" title="Promote to Home Screen">
-                                                        <input 
-                                                            type="checkbox"
-                                                            checked={coll.promotedToHome ?? true}
-                                                            onChange={e => {
-                                                                setCollections(prev => prev.map(c => c.id === coll.id ? { ...c, promotedToHome: e.target.checked } : c));
-                                                            }}
-                                                            className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3.5 w-3.5"
-                                                        />
-                                                        <span className="text-[10px] font-semibold text-slate-300">Home</span>
-                                                    </label>
-
-                                                    <label className="flex items-center gap-1 cursor-pointer" title="Promote to Library Recommended">
-                                                        <input 
-                                                            type="checkbox"
-                                                            checked={coll.promotedToRecommended ?? true}
-                                                            onChange={e => {
-                                                                setCollections(prev => prev.map(c => c.id === coll.id ? { ...c, promotedToRecommended: e.target.checked } : c));
-                                                            }}
-                                                            className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3.5 w-3.5"
-                                                        />
-                                                        <span className="text-[10px] font-semibold text-slate-300">Rec</span>
-                                                    </label>
-
-                                                    <label className="flex items-center gap-1 cursor-pointer" title="Promote to Shared Users Home">
-                                                        <input 
-                                                            type="checkbox"
-                                                            checked={coll.promotedToSharedHome ?? true}
-                                                            onChange={e => {
-                                                                setCollections(prev => prev.map(c => c.id === coll.id ? { ...c, promotedToSharedHome: e.target.checked } : c));
-                                                            }}
-                                                            className="rounded border-slate-700 text-purple-600 focus:ring-0 h-3.5 w-3.5"
-                                                        />
-                                                        <span className="text-[10px] font-semibold text-slate-300">Shared</span>
-                                                    </label>
-                                                </div>
-
-                                                {/* Action Buttons */}
-                                                <div className="sm:col-span-2 flex items-center justify-end gap-1.5">
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            setEditingColl(coll);
-                                                            setSeasonalModalOpen(true);
-                                                        }}
-                                                        className="h-7 px-2 text-[10px] border-slate-700 text-slate-300 hover:text-white"
-                                                    >
-                                                        <Settings2 className="h-3.5 w-3.5" />
-                                                    </Button>
-
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="ghost"
-                                                        onClick={async () => {
-                                                            if (!confirm(`Delete collection "${coll.title}"?`)) return;
-                                                            // 1. Optimistically remove from state immediately
-                                                            setCollections(prev => prev.filter(c => c.id !== coll.id && c.title.trim().toLowerCase() !== coll.title.trim().toLowerCase()));
-                                                            try {
-                                                                const res = await deleteMediaCollectionAction(coll.id);
-                                                                if (!res.success) {
-                                                                    console.warn("Delete collection warning:", res.error);
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost"
+                                                            onClick={async () => {
+                                                                if (!confirm(`Delete collection "${coll.title}"?`)) return;
+                                                                // 1. Optimistically remove from state immediately
+                                                                setCollections(prev => prev.filter(c => c.id !== coll.id && c.title.trim().toLowerCase() !== coll.title.trim().toLowerCase()));
+                                                                try {
+                                                                    const res = await deleteMediaCollectionAction(coll.id);
+                                                                    if (!res.success) {
+                                                                        console.warn("Delete collection warning:", res.error);
+                                                                    }
+                                                                } catch (err: any) {
+                                                                    console.error("Failed deleting collection:", err);
                                                                 }
-                                                            } catch (err: any) {
-                                                                console.error("Failed deleting collection:", err);
-                                                            }
-                                                            // 2. Refresh server collections
-                                                            await loadCollections(selectedServerId, selectedSectionKey);
-                                                        }}
-                                                        className="h-7 px-2 text-[10px] text-rose-400 hover:bg-rose-950/40 hover:text-rose-300"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
+                                                                // 2. Refresh server collections
+                                                                await loadCollections(selectedServerId, selectedSectionKey);
+                                                            }}
+                                                            className="h-7 px-2 text-[10px] text-rose-400 hover:bg-rose-950/40 hover:text-rose-300"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );

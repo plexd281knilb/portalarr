@@ -66,18 +66,18 @@ export default async function UserLandingPage() {
           </div>
       )}
 
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500">
+      <main className="flex-1 p-3 sm:p-5 lg:p-8 max-w-7xl mx-auto w-full space-y-5 sm:space-y-6 lg:space-y-8 animate-in fade-in duration-500">
         
-        <section className="text-center space-y-3 py-6 sm:py-8">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
+        <section className="text-center space-y-2 sm:space-y-3 py-4 sm:py-6 lg:py-8">
+            <h1 className="text-2xl sm:text-3xl lg:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
                 System Dashboard
             </h1>
-            <p className="text-muted-foreground text-sm sm:text-base lg:text-lg max-w-2xl mx-auto">
+            <p className="text-muted-foreground text-xs sm:text-sm lg:text-base max-w-2xl mx-auto">
                 Real-time status, active downloads, content requests, and support.
             </p>
         </section>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             <SystemStatus />
             <Card className="h-full flex flex-col border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
                 <CardHeader>

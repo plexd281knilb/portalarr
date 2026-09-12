@@ -697,15 +697,15 @@ export default function AccessSettingsPage() {
 
             {/* TOP NAVIGATION TABS */}
             <Tabs defaultValue="users" value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-                <TabsList className="grid grid-cols-3 bg-[#121218] border border-border/50 p-1 rounded-xl h-11">
-                    <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                        <Users className="h-4 w-4" /> User Directory ({users.length})
+                <TabsList className="grid grid-cols-1 sm:grid-cols-3 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
+                    <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
+                        <Users className="h-4 w-4 shrink-0" /> <span className="truncate">User Directory ({users.length})</span>
                     </TabsTrigger>
-                    <TabsTrigger value="referrals" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                        <Trophy className="h-4 w-4 text-amber-400" /> Referrals & Leaderboard
+                    <TabsTrigger value="referrals" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
+                        <Trophy className="h-4 w-4 text-amber-400 shrink-0" /> <span className="truncate">Referrals & Leaderboard</span>
                     </TabsTrigger>
-                    <TabsTrigger value="onboarding" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                        <CreditCard className="h-4 w-4 text-emerald-400" /> Payment & Onboarding
+                    <TabsTrigger value="onboarding" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
+                        <CreditCard className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Payment & Onboarding</span>
                     </TabsTrigger>
                 </TabsList>
 

@@ -96,7 +96,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     <div className="flex h-[100dvh] overflow-hidden bg-background text-foreground">
       
       {/* Desktop Sidebar (Admins Only) */}
-      <div className="w-64 flex-none hidden md:block">
+      <div className="w-56 lg:w-64 flex-none hidden md:block">
         <Sidebar />
       </div>
       
@@ -110,7 +110,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         </div>
 
         {/* Scrollable Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-8">
           {children}
         </main>
       </div>

@@ -438,17 +438,17 @@ export default function RadarrPage() {
       </div>
 
       <Tabs defaultValue="search" className="w-full">
-        <TabsList className="grid grid-cols-3 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
-          <TabsTrigger value="search" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80">
+        <TabsList className="grid grid-cols-1 sm:grid-cols-3 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+          <TabsTrigger value="search" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 min-w-0">
             <Search className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-            <span>Search TMDB</span>
+            <span className="truncate">Search TMDB</span>
           </TabsTrigger>
-          <TabsTrigger value="library" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80">
-            <span>Library ({libraryLoading ? "..." : library.length})</span>
+          <TabsTrigger value="library" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 min-w-0">
+            <span className="truncate">Library ({libraryLoading ? "..." : library.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="queue" className="group py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80">
+          <TabsTrigger value="queue" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 min-w-0">
             <Download className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-            <span>Activity / Queue</span>
+            <span className="truncate">Activity / Queue</span>
           </TabsTrigger>
         </TabsList>
 

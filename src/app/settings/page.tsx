@@ -1000,49 +1000,49 @@ function SettingsPageContent() {
     }
 
     return (
-        <div className={`space-y-6 p-4 sm:p-8 max-w-6xl mx-auto transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
+        <div className={`space-y-6 p-3 sm:p-5 lg:p-8 max-w-6xl mx-auto transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
             <div>
-                <h2 className="text-3xl font-bold tracking-tight">System Settings</h2>
-                <p className="text-muted-foreground">Configure global platform settings, integrations, access control, and monitoring apps.</p>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">System Settings</h2>
+                <p className="text-xs sm:text-sm text-muted-foreground">Configure global platform settings, integrations, access control, and monitoring apps.</p>
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="flex flex-wrap items-center w-full max-w-5xl h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
-                    <TabsTrigger value="general" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full max-w-5xl h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+                    <TabsTrigger value="general" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80 min-w-0">
                         <Sliders className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>General & Setup</span>
+                        <span className="truncate">General & Setup</span>
                         {isGeneralTabDirty && (
-                            <span className="ml-1 flex h-2 w-2 relative">
+                            <span className="ml-1 flex h-2 w-2 relative shrink-0">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                             </span>
                         )}
                     </TabsTrigger>
-                    <TabsTrigger value="access" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="access" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 min-w-0">
                         <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Access Control</span>
+                        <span className="truncate">Access Control</span>
                     </TabsTrigger>
-                    <TabsTrigger value="emails" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="emails" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:bg-muted/80 min-w-0">
                         <Mail className="h-4 w-4 text-amber-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Broadcast & Emails</span>
+                        <span className="truncate">Broadcast & Emails</span>
                     </TabsTrigger>
-                    <TabsTrigger value="monitoring" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="monitoring" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80 min-w-0">
                         <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Monitoring & Apps</span>
+                        <span className="truncate">Monitoring & Apps</span>
                     </TabsTrigger>
-                    <TabsTrigger value="beta" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="beta" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80 min-w-0">
                         <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Beta & Announcements</span>
+                        <span className="truncate">Beta & Announcements</span>
                         {isBetaTabDirty && (
-                            <span className="ml-1 flex h-2 w-2 relative">
+                            <span className="ml-1 flex h-2 w-2 relative shrink-0">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                             </span>
                         )}
                     </TabsTrigger>
-                    <TabsTrigger value="logs" className="group py-2.5 px-3 flex-1 min-w-[130px] sm:min-w-[150px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="logs" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 min-w-0">
                         <Terminal className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Live System Logs</span>
+                        <span className="truncate">Live System Logs</span>
                     </TabsTrigger>
                 </TabsList>
                 
