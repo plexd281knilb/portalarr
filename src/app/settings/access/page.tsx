@@ -743,7 +743,7 @@ export default function AccessSettingsPage() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-6 md:grid-cols-2">
+                    <div className="grid gap-5 grid-cols-1 lg:grid-cols-2">
                         {/* CREATE USER FORM */}
                         <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
                             <CardHeader>
@@ -893,20 +893,20 @@ export default function AccessSettingsPage() {
                                 )}
                             </div>
 
-                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
                                 {/* SEARCH INPUT */}
-                                <div className="relative w-full sm:w-72">
+                                <div className="relative flex-1 min-w-[200px]">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input 
                                         placeholder="Search by username, email, referrer..." 
-                                        className="pl-9 text-xs h-9 bg-background/60"
+                                        className="pl-9 text-xs h-9 bg-background/60 w-full"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                     />
                                 </div>
 
                                 {/* STATUS FILTER BUTTONS */}
-                                <div className="flex flex-wrap gap-1.5 bg-muted/30 p-1 rounded-xl border border-muted/50 text-xs w-full sm:w-auto">
+                                <div className="flex flex-wrap gap-1 bg-muted/30 p-1 rounded-xl border border-muted/50 text-xs shrink-0">
                                     <Button 
                                         variant={filterStatus === "ALL" ? "secondary" : "ghost"} 
                                         size="sm" 
@@ -951,7 +951,7 @@ export default function AccessSettingsPage() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-3">
+                            <div className="space-y-3.5">
                                 {loading ? (
                                     <div className="text-sm text-muted-foreground flex items-center gap-2 p-6 justify-center">
                                         <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Loading user directory...
@@ -998,211 +998,230 @@ export default function AccessSettingsPage() {
                                         return (
                                             <div 
                                                 key={user.id} 
-                                                className={`flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-xl gap-4 transition-all duration-200 ${
+                                                className={`p-4 rounded-xl border transition-all duration-200 space-y-3 ${
                                                     isPending 
                                                         ? "bg-amber-500/10 border-amber-500/40 hover:border-amber-500/60" 
                                                         : isSuspended || isExpired || isRejected
                                                         ? "bg-red-500/5 border-red-500/30 hover:border-red-500/50"
-                                                        : "bg-[#101014]/90 border-border/40 hover:border-emerald-500/30 hover:ring-2 hover:ring-emerald-500/20"
+                                                        : "bg-[#101014]/90 border-border/50 hover:border-primary/40 hover:shadow-sm"
                                                 }`}
                                             >
-                                                <div className="flex items-start gap-3 flex-1 min-w-0">
-                                                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5 border border-primary/20">
-                                                        {user.role === "ADMIN" ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-muted-foreground" />}
+                                                {/* TOP ROW: USER INFO & BADGES */}
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                                                            {user.role === "ADMIN" ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-muted-foreground" />}
+                                                        </div>
+                                                        <div className="min-w-0 space-y-0.5">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="font-bold text-base text-foreground truncate">{user.username}</span>
+                                                                <Badge variant={user.role === "ADMIN" ? "default" : "secondary"} className="text-[10px] font-bold shrink-0">
+                                                                    {user.role || "USER"}
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
+                                                                <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+                                                                <span className="truncate">{user.email || "No Email Associated"}</span>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div className="space-y-1.5 flex-1 min-w-0">
-                                                        <div className="font-semibold text-sm flex flex-wrap items-center gap-2">
-                                                            <span className="truncate text-foreground font-bold">{user.username}</span>
-                                                            
-                                                            {/* STATUS BADGES */}
-                                                            {isPending && (
-                                                                <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/40 text-[10px] gap-1 font-bold">
-                                                                    <Clock className="h-3 w-3" /> Pending Approval
-                                                                </Badge>
-                                                            )}
-                                                            {isTrial && (
-                                                                <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500/40 text-[10px] gap-1 font-bold">
-                                                                    <Timer className="h-3 w-3" /> Trial ({daysLeft} days left)
-                                                                </Badge>
-                                                            )}
-                                                            {user.status === "APPROVED" && user.subscriptionEndsAt && (
-                                                                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-[10px] gap-1 font-semibold">
-                                                                    <CheckCircle2 className="h-3 w-3" /> Subscribed (Till {format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
-                                                                </Badge>
-                                                            )}
-                                                            {user.status === "APPROVED" && !user.subscriptionEndsAt && (
-                                                                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-[10px] gap-1 font-semibold">
-                                                                    <CheckCircle2 className="h-3 w-3" /> Permanent Access
-                                                                </Badge>
-                                                            )}
-                                                            {isSuspended && (
-                                                                <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/40 text-[10px] font-bold">
-                                                                    Suspended
-                                                                </Badge>
-                                                            )}
-                                                            {isExpired && (
-                                                                <Badge variant="outline" className="bg-orange-500/20 text-orange-400 border-orange-500/40 text-[10px] font-bold">
-                                                                    Expired
-                                                                </Badge>
-                                                            )}
-                                                            {isRejected && (
-                                                                <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/40 text-[10px] font-bold">
-                                                                    Rejected
-                                                                </Badge>
-                                                            )}
 
-                                                            {/* REFERRER ATTRIBUTION */}
-                                                            {user.referredBy?.username && (
-                                                                <Badge variant="outline" className="bg-purple-500/15 text-purple-400 border-purple-500/40 text-[10px] gap-1 font-medium">
-                                                                    <Gift className="h-3 w-3" /> Invited by @{user.referredBy.username}
-                                                                </Badge>
-                                                            )}
-
-                                                            {/* KINDLE BADGE */}
-                                                            {user.kindleEmail ? (
-                                                                <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/40 text-[10px] gap-1 font-semibold" title={user.kindleEmail}>
-                                                                    <Send className="h-3 w-3" /> Kindle
-                                                                </Badge>
-                                                            ) : null}
-                                                        </div>
-
-                                                        <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
-                                                            <span className="flex items-center gap-1">
-                                                                <Mail className="h-3 w-3 text-muted-foreground" /> {user.email || "No Email"}
-                                                            </span>
-                                                            <span>•</span>
-                                                            <span>Joined {format(new Date(user.createdAt), "MMM d, yyyy")}</span>
-                                                            {user.lastLogin && (
-                                                                <>
-                                                                    <span>•</span>
-                                                                    <span>Active {format(new Date(user.lastLogin), "MMM d, h:mm a")}</span>
-                                                                </>
-                                                            )}
-                                                        </div>
-
-                                                        {/* INLINE KINDLE EMAIL DISPLAY / EDIT */}
-                                                        <div className="pt-1 flex items-center gap-2 text-xs">
-                                                            {editingKindleUserId === user.id ? (
-                                                                <div className="flex items-center gap-2 w-full max-w-sm">
-                                                                    <Input 
-                                                                        className="h-7 text-xs bg-background/80" 
-                                                                        placeholder="e.g. user_123@kindle.com"
-                                                                        value={kindleEmailInput}
-                                                                        onChange={(e) => setKindleEmailInput(e.target.value)}
-                                                                    />
-                                                                    <Button size="sm" className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40" onClick={() => handleSaveKindleEmail(user.id)}>
-                                                                        Save
-                                                                    </Button>
-                                                                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingKindleUserId(null)}>
-                                                                        Cancel
-                                                                    </Button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-muted-foreground flex items-center gap-1.5 group/k">
-                                                                    <Send className="h-3 w-3 text-amber-500/80" />
-                                                                    <span>Send-to-Kindle: <strong className="text-foreground">{user.kindleEmail || "Not Configured"}</strong></span>
-                                                                    <Button 
-                                                                        variant="ghost" 
-                                                                        size="icon" 
-                                                                        className="h-5 w-5 text-muted-foreground hover:text-foreground opacity-60 group-hover/k:opacity-100 transition-all duration-200 hover:ring-1 hover:ring-primary/40"
-                                                                        onClick={() => {
-                                                                            setEditingKindleUserId(user.id);
-                                                                            setKindleEmailInput(user.kindleEmail || "");
-                                                                        }}
-                                                                        title="Edit Kindle Email"
-                                                                    >
-                                                                        <Edit2 className="h-3 w-3" />
-                                                                    </Button>
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                    {/* STATUS & ATTRIBUTION BADGES */}
+                                                    <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:self-center">
+                                                        {isPending && (
+                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs gap-1 font-bold">
+                                                                <Clock className="h-3 w-3" /> Pending Approval
+                                                            </Badge>
+                                                        )}
+                                                        {isTrial && (
+                                                            <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-xs gap-1 font-bold">
+                                                                <Timer className="h-3 w-3" /> Trial ({daysLeft}d left)
+                                                            </Badge>
+                                                        )}
+                                                        {user.status === "APPROVED" && user.subscriptionEndsAt && (
+                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
+                                                                <CheckCircle2 className="h-3 w-3" /> Subscribed ({format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
+                                                            </Badge>
+                                                        )}
+                                                        {user.status === "APPROVED" && !user.subscriptionEndsAt && (
+                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
+                                                                <CheckCircle2 className="h-3 w-3" /> Permanent Access
+                                                            </Badge>
+                                                        )}
+                                                        {isSuspended && (
+                                                            <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500/40 text-xs font-bold">
+                                                                Suspended
+                                                            </Badge>
+                                                        )}
+                                                        {isExpired && (
+                                                            <Badge variant="outline" className="bg-orange-500/20 text-orange-300 border-orange-500/40 text-xs font-bold">
+                                                                Expired
+                                                            </Badge>
+                                                        )}
+                                                        {isRejected && (
+                                                            <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500/40 text-xs font-bold">
+                                                                Rejected
+                                                            </Badge>
+                                                        )}
+                                                        {user.referredBy?.username && (
+                                                            <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs gap-1 font-medium">
+                                                                <Gift className="h-3 w-3" /> @{user.referredBy.username}
+                                                            </Badge>
+                                                        )}
                                                     </div>
                                                 </div>
 
-                                                {/* CONTROLS & ACTIONS */}
-                                                <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-center">
-                                                    {/* PLEX LIBRARIES BUTTON */}
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="outline" 
-                                                        className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95"
-                                                        onClick={() => handleOpenLibrariesModal(user)}
-                                                        title="Manage Shared Plex Libraries"
-                                                    >
-                                                        <Layers className="h-3.5 w-3.5 text-primary" />
-                                                        Libraries ({userLibraryCount > 0 ? `${userLibraryCount} shared` : "None"})
-                                                    </Button>
+                                                {/* MIDDLE ROW: METADATA GRID (KINDLE, LIBRARIES, DATES) */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs bg-background/50 p-2.5 rounded-lg border border-border/40">
+                                                    {/* SEND-TO-KINDLE */}
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <Send className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                                        {editingKindleUserId === user.id ? (
+                                                            <div className="flex items-center gap-1 flex-1 min-w-0">
+                                                                <Input 
+                                                                    className="h-6 text-xs bg-background/90 px-1.5 py-0 font-mono" 
+                                                                    placeholder="user@kindle.com"
+                                                                    value={kindleEmailInput}
+                                                                    onChange={(e) => setKindleEmailInput(e.target.value)}
+                                                                />
+                                                                <Button size="sm" className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 font-semibold" onClick={() => handleSaveKindleEmail(user.id)}>
+                                                                    Save
+                                                                </Button>
+                                                                <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] shrink-0" onClick={() => setEditingKindleUserId(null)}>
+                                                                    ✕
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1 truncate flex-1">
+                                                                <span className="text-muted-foreground shrink-0">Kindle:</span>
+                                                                <span className="font-mono text-foreground truncate font-medium">{user.kindleEmail || "Not set"}</span>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-5 w-5 text-muted-foreground hover:text-foreground shrink-0"
+                                                                    onClick={() => {
+                                                                        setEditingKindleUserId(user.id);
+                                                                        setKindleEmailInput(user.kindleEmail || "");
+                                                                    }}
+                                                                    title="Edit Kindle Email"
+                                                                >
+                                                                    <Edit2 className="h-3 w-3" />
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                    </div>
 
-                                                    {/* TRIAL / SUBSCRIPTION TIMER BUTTON */}
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="outline" 
-                                                        className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500 transition-all active:scale-95"
-                                                        onClick={() => {
-                                                            setSubModalUser(user);
-                                                            setShowCustomTrialScreen(false);
-                                                            setCustomTrialDaysInput(paymentSettings.defaultTrialDays || 7);
-                                                            setSubSuccessMsg("");
-                                                            setSubErrMsg("");
-                                                        }}
-                                                        title="Adjust Trial or Subscription Period"
-                                                    >
-                                                        <Timer className="h-3.5 w-3.5 text-blue-400" />
-                                                        Access & Timer
-                                                    </Button>
+                                                    {/* PLEX LIBRARIES */}
+                                                    <div className="flex items-center gap-1.5 truncate">
+                                                        <Layers className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                        <span className="text-muted-foreground">Libraries:</span>
+                                                        <span className="font-semibold text-foreground truncate">
+                                                            {userLibraryCount > 0 ? `${userLibraryCount} server libraries` : "None configured"}
+                                                        </span>
+                                                    </div>
 
-                                                    {/* ROLE SELECTOR */}
-                                                    <Select defaultValue={user.role} onValueChange={(val) => handleRoleChange(user.id, val)}>
-                                                        <SelectTrigger className="h-8 text-xs w-24 bg-background/80 border-border/60 font-semibold">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="ADMIN">Admin</SelectItem>
-                                                            <SelectItem value="SUPER_USER">Super User</SelectItem>
-                                                            <SelectItem value="USER">User</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
+                                                    {/* JOINED & ACTIVITY */}
+                                                    <div className="flex items-center gap-1.5 truncate sm:col-span-2 lg:col-span-1">
+                                                        <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                                        <span className="text-muted-foreground">Joined:</span>
+                                                        <span className="text-foreground">{format(new Date(user.createdAt), "MMM d, yyyy")}</span>
+                                                        {user.lastLogin && (
+                                                            <span className="text-muted-foreground text-[11px] truncate">
+                                                                (active {format(new Date(user.lastLogin), "MMM d")})
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
 
-                                                    {/* APPROVE / REJECT */}
-                                                    {isPending ? (
-                                                        <>
-                                                            <Button size="sm" variant="default" className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white gap-1 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
+                                                {/* BOTTOM ROW: ACTIONS TOOLBAR */}
+                                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/30">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {/* PLEX LIBRARIES BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-primary/40 hover:border-primary hover:bg-primary/10 transition-all active:scale-95"
+                                                            onClick={() => handleOpenLibrariesModal(user)}
+                                                            title="Manage Shared Plex Libraries"
+                                                        >
+                                                            <Layers className="h-3.5 w-3.5 text-primary" />
+                                                            Manage Libraries ({userLibraryCount})
+                                                        </Button>
+
+                                                        {/* TRIAL / SUBSCRIPTION TIMER BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500 transition-all active:scale-95"
+                                                            onClick={() => {
+                                                                setSubModalUser(user);
+                                                                setShowCustomTrialScreen(false);
+                                                                setCustomTrialDaysInput(paymentSettings.defaultTrialDays || 7);
+                                                                setSubSuccessMsg("");
+                                                                setSubErrMsg("");
+                                                            }}
+                                                            title="Adjust Trial or Subscription Period"
+                                                        >
+                                                            <Timer className="h-3.5 w-3.5 text-blue-400" />
+                                                            Access & Timer
+                                                        </Button>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2">
+                                                        {/* ROLE SELECTOR */}
+                                                        <Select defaultValue={user.role} onValueChange={(val) => handleRoleChange(user.id, val)}>
+                                                            <SelectTrigger className="h-8 text-xs w-28 bg-background/80 border-border/60 font-semibold">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="ADMIN">Admin</SelectItem>
+                                                                <SelectItem value="SUPER_USER">Super User</SelectItem>
+                                                                <SelectItem value="USER">User</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+
+                                                        {/* APPROVE / REJECT */}
+                                                        {isPending ? (
+                                                            <>
+                                                                <Button size="sm" variant="default" className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
+                                                                    <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                                                                </Button>
+                                                                <Button size="sm" variant="outline" className="h-8 px-2.5 text-red-400 border-red-800/40 hover:bg-red-950/40 gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-red-500/40 active:scale-95" onClick={() => handleReject(user.id)}>
+                                                                    <XCircle className="h-3.5 w-3.5" /> Reject
+                                                                </Button>
+                                                            </>
+                                                        ) : isRejected ? (
+                                                            <Button size="sm" variant="outline" className="h-8 px-2.5 text-emerald-400 border-emerald-800/40 hover:bg-emerald-950/40 gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
                                                                 <CheckCircle2 className="h-3.5 w-3.5" /> Approve
                                                             </Button>
-                                                            <Button size="sm" variant="outline" className="h-8 px-2.5 text-red-400 border-red-800/40 hover:bg-red-950/40 gap-1 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95" onClick={() => handleReject(user.id)}>
-                                                                <XCircle className="h-3.5 w-3.5" /> Reject
-                                                            </Button>
-                                                        </>
-                                                    ) : isRejected ? (
-                                                        <Button size="sm" variant="outline" className="h-8 px-2.5 text-emerald-400 border-emerald-800/40 hover:bg-emerald-950/40 gap-1 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
-                                                            <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                                                        ) : null}
+
+                                                        {/* ADMIN RESET PASSWORD BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className="h-8 px-2 text-xs text-amber-500 border-amber-500/40 hover:bg-amber-500/10 gap-1 font-semibold transition-all hover:ring-2 hover:ring-amber-500/40 active:scale-95"
+                                                            onClick={() => {
+                                                                setResetModalUserId(user.id);
+                                                                setAdminResetMsg("");
+                                                                setAdminResetErr("");
+                                                            }}
+                                                            title="Reset User Password"
+                                                        >
+                                                            <KeyRound className="h-3.5 w-3.5" />
                                                         </Button>
-                                                    ) : null}
 
-                                                    {/* ADMIN RESET PASSWORD BUTTON */}
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="outline" 
-                                                        className="h-8 px-2 text-xs text-amber-500 border-amber-500/30 hover:bg-amber-500/10 gap-1 font-semibold transition-all duration-200 hover:ring-2 hover:ring-amber-500/40 active:scale-95"
-                                                        onClick={() => {
-                                                            setResetModalUserId(user.id);
-                                                            setAdminResetMsg("");
-                                                            setAdminResetErr("");
-                                                        }}
-                                                        title="Reset User Password"
-                                                    >
-                                                        <KeyRound className="h-3.5 w-3.5" />
-                                                    </Button>
-
-                                                    <Button 
-                                                        size="icon" 
-                                                        variant="ghost" 
-                                                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-950/40 transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95" 
-                                                        onClick={() => handleDelete(user.id)} 
-                                                        title="Delete User"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                        {/* DELETE USER BUTTON */}
+                                                        <Button 
+                                                            size="icon" 
+                                                            variant="ghost" 
+                                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-950/40 transition-all hover:ring-2 hover:ring-red-500/40 active:scale-95" 
+                                                            onClick={() => handleDelete(user.id)} 
+                                                            title="Delete User"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );

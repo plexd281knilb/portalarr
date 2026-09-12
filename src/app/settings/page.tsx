@@ -1007,7 +1007,7 @@ function SettingsPageContent() {
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full max-w-5xl h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 w-full max-w-5xl h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
                     <TabsTrigger value="general" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80 min-w-0">
                         <Sliders className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">General & Setup</span>
@@ -1102,7 +1102,7 @@ function SettingsPageContent() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-6 md:grid-cols-2">
+                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                         {/* SMTP & EMAIL INTEGRATION */}
                         <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                             isSmtpDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
@@ -2195,7 +2195,7 @@ function SettingsPageContent() {
 
                 {/* --- TAB 4: MONITORING & APPS --- */}
                 <TabsContent value="monitoring" className="space-y-6">
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
                         {/* TAUTULLI INSTANCES */}
                         <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
@@ -2754,7 +2754,7 @@ function SettingsPageContent() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-6 md:grid-cols-2">
+                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                         {/* BETA DASHBOARD INTRO EDITOR */}
                         <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                             isBetaDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
