@@ -11,7 +11,7 @@ export interface EmailTemplateDefinition {
     id: string;
     name: string;
     description: string;
-    category: "AUTH" | "REQUESTS" | "SUPPORT" | "KINDLE";
+    category: "AUTH" | "REQUESTS" | "SUPPORT" | "KINDLE" | "TRIALS";
     defaultSubject: string;
     defaultBody: string;
     variables: TemplateVariableInfo[];
@@ -310,6 +310,159 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{email}", description: "User's personal email", sampleValue: "clara@example.com" },
             { key: "{kindleEmail}", description: "User's Kindle email", sampleValue: "clara_kindle@kindle.com" },
             { key: "{accessUrl}", description: "URL to Access Control page", sampleValue: "https://portal.example.com/settings/access" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "trial_welcome",
+        name: "Free Trial Welcome & Activation",
+        description: "Sent to users when their free trial account is created or approved, detailing trial duration, expiration date, and library access.",
+        category: "TRIALS",
+        defaultSubject: "🌟 Welcome to your {trialDays}-Day Free Trial on Portalarr!",
+        defaultBody: `<h2>Welcome to Your Free Trial! 🌟</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Your <strong>{trialDays}-Day Free Trial</strong> has been activated for Portalarr. You now have full access to our media collections, audiobooks, ebooks, and request features!</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #64748b;">Username:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{username}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Trial Duration:</td>
+            <td style="padding: 6px 0; color: #4f46e5; font-weight: bold;">{trialDays} Days</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Expiration Date:</td>
+            <td style="padding: 6px 0; color: #0f172a;">{expirationDate}</td>
+        </tr>
+    </table>
+</div>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Start Exploring Portalarr</a>
+</div>
+<p style="font-size: 13px; color: #64748b;">Need help or have questions during your trial? Submit a support ticket or request media directly from your dashboard.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of the trial user", sampleValue: "jordan_reader" },
+            { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
+            { key: "{trialDays}", description: "Number of trial days granted", sampleValue: "14" },
+            { key: "{expirationDate}", description: "Date when trial will expire", sampleValue: "October 15, 2026" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" },
+            { key: "{loginUrl}", description: "Direct login link", sampleValue: "https://portal.example.com/login" }
+        ]
+    },
+    {
+        id: "trial_expiring_soon",
+        name: "Trial Expiring Soon Reminder",
+        description: "Sent to trial users a few days before their trial expires reminding them to renew or upgrade their access.",
+        category: "TRIALS",
+        defaultSubject: "⏳ Your Portalarr Trial Ends Soon ({daysRemaining} days left)",
+        defaultBody: `<h2>Your Free Trial is Ending Soon ⏳</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>We hope you've been enjoying Portalarr! Just a quick heads up that your free trial access is scheduled to expire on <strong>{expirationDate}</strong> (in {daysRemaining} days).</p>
+
+<div style="background-color: #fefce8; border: 1px solid #fef08a; padding: 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 14px; color: #854d0e;">
+        To maintain uninterrupted access to your Plex media libraries, book collections, and request queue, please renew or upgrade your account.
+    </p>
+</div>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{renewUrl}" style="background-color: #d97706; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Renew or Upgrade Access</a>
+</div>
+<p style="font-size: 13px; color: #64748b;">If you have any questions or need an extension, feel free to reach out to the server admin.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
+            { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
+            { key: "{daysRemaining}", description: "Number of days remaining in trial", sampleValue: "3" },
+            { key: "{expirationDate}", description: "Date when trial expires", sampleValue: "October 15, 2026" },
+            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/settings" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "trial_expired",
+        name: "Trial Period Expired Notice",
+        description: "Sent to users when their trial period has concluded and their library access has paused.",
+        category: "TRIALS",
+        defaultSubject: "⚠️ Your Portalarr Trial Has Ended",
+        defaultBody: `<h2>Your Trial Period Has Ended ⚠️</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Your free trial access for Portalarr concluded on <strong>{expirationDate}</strong>. Your media and Plex library access has been temporarily paused.</p>
+
+<p>Your account, bookmarks, and request history remain saved. You can reactivate your account at any time by upgrading to full access.</p>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{renewUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Reactivate Account</a>
+</div>
+<p style="font-size: 13px; color: #64748b;">Thank you for trying Portalarr! If you have any feedback or questions, let us know.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
+            { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
+            { key: "{expirationDate}", description: "Date when trial concluded", sampleValue: "October 15, 2026" },
+            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/settings" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "subscription_activated",
+        name: "Subscription / VIP Pass Activated",
+        description: "Sent to users when their ongoing subscription, yearly pass, or VIP status is enabled.",
+        category: "TRIALS",
+        defaultSubject: "✨ Your Portalarr Full Access is Active!",
+        defaultBody: `<h2>Full Access Activated! ✨</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Great news! Your account has been upgraded to <strong>{planName}</strong>. You now have uninterrupted access to all libraries, players, and download services.</p>
+
+<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 18px; border-radius: 8px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #166534;">Plan / Pass:</td>
+            <td style="padding: 6px 0; color: #15803d; font-weight: 700;">{planName}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #166534;">Active Until:</td>
+            <td style="padding: 6px 0; color: #0f172a;">{validUntil}</td>
+        </tr>
+    </table>
+</div>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{appUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Media Hub</a>
+</div>`,
+        variables: [
+            { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
+            { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
+            { key: "{planName}", description: "Plan or membership name", sampleValue: "Annual Pass" },
+            { key: "{validUntil}", description: "Expiration or renewal date", sampleValue: "December 31, 2026" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "kindle_success",
+        name: "Send-to-Kindle Delivery Confirmation",
+        description: "Sent to user's personal email when an ebook is successfully dispatched to their Kindle device.",
+        category: "KINDLE",
+        defaultSubject: "📚 Ebook Delivered to Kindle: {title}",
+        defaultBody: `<h2>Ebook Sent to Kindle! 📚</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Your requested ebook <strong>{title}</strong> by <em>{author}</em> has been successfully sent to your Kindle address (<code>{kindleEmail}</code>).</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px;"><strong>Title:</strong> {title}</p>
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #475569;"><strong>Author:</strong> {author}</p>
+    <p style="margin: 0; font-size: 14px; color: #475569;"><strong>File Size:</strong> {fileSizeMb} MB</p>
+</div>
+
+<p style="font-size: 13px; color: #64748b;">It usually takes 1-5 minutes for Amazon Whispernet to sync the ebook to your Kindle device or Kindle app.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of recipient", sampleValue: "alex_reader" },
+            { key: "{title}", description: "Title of book sent", sampleValue: "The Way of Kings" },
+            { key: "{author}", description: "Author of book", sampleValue: "Brandon Sanderson" },
+            { key: "{kindleEmail}", description: "Kindle delivery email address", sampleValue: "alex@kindle.com" },
+            { key: "{fileSizeMb}", description: "File size in MB", sampleValue: "2.4" },
             { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
         ]
     }

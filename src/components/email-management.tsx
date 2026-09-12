@@ -53,7 +53,7 @@ interface EmailTemplate {
     id: string;
     name: string;
     description: string;
-    category: "auth" | "media" | "support" | "kindle";
+    category: "AUTH" | "REQUESTS" | "SUPPORT" | "KINDLE" | "TRIALS" | string;
     subject: string;
     body: string;
     defaultSubject: string;
@@ -351,6 +351,18 @@ export default function EmailManagement() {
         } finally {
             setBroadcasting(false);
         }
+    };
+
+    const isMatchingCategory = (tplCat: string, filterId: string) => {
+        if (filterId === "all") return true;
+        const cat = (tplCat || "").toUpperCase();
+        const filter = filterId.toUpperCase();
+        if (filter === "AUTH" && (cat === "AUTH" || cat === "ACCOUNTS")) return true;
+        if (filter === "TRIALS" && (cat === "TRIALS" || cat === "TRIAL" || cat === "BILLING")) return true;
+        if (filter === "REQUESTS" && (cat === "REQUESTS" || cat === "MEDIA")) return true;
+        if (filter === "KINDLE" && cat === "KINDLE") return true;
+        if (filter === "SUPPORT" && (cat === "SUPPORT" || cat === "TICKETS" || cat === "ALERTS")) return true;
+        return cat === filter;
     };
 
     // Template selection and editing
@@ -1049,9 +1061,10 @@ export default function EmailManagement() {
                                 {[
                                     { id: "all", label: "All" },
                                     { id: "auth", label: "Accounts" },
-                                    { id: "media", label: "Media" },
-                                    { id: "support", label: "Support" },
-                                    { id: "kindle", label: "Kindle" }
+                                    { id: "trials", label: "Trials & Billing" },
+                                    { id: "requests", label: "Media & Requests" },
+                                    { id: "kindle", label: "Kindle Delivery" },
+                                    { id: "support", label: "Support & Tickets" }
                                 ].map(cat => (
                                     <Button
                                         key={cat.id}
@@ -1059,7 +1072,15 @@ export default function EmailManagement() {
                                         size="sm"
                                         variant={templateCategoryFilter === cat.id ? "secondary" : "ghost"}
                                         className="h-6 text-[10px] px-2"
-                                        onClick={() => setTemplateCategoryFilter(cat.id)}
+                                        onClick={() => {
+                                            setTemplateCategoryFilter(cat.id);
+                                            if (cat.id !== "all") {
+                                                const matching = templates.filter(t => isMatchingCategory(t.category, cat.id));
+                                                if (matching.length > 0 && !matching.some(t => t.id === selectedTemplateId)) {
+                                                    handleSelectTemplate(matching[0].id);
+                                                }
+                                            }
+                                        }}
                                     >
                                         {cat.label}
                                     </Button>
@@ -1070,7 +1091,7 @@ export default function EmailManagement() {
                         <CardContent className="p-0 flex-1 overflow-y-auto max-h-[500px]">
                             <div className="divide-y divide-border/20">
                                 {templates
-                                    .filter(t => templateCategoryFilter === "all" || t.category === templateCategoryFilter)
+                                    .filter(t => isMatchingCategory(t.category, templateCategoryFilter))
                                     .map(tpl => {
                                         const isSelected = tpl.id === selectedTemplateId;
                                         return (
