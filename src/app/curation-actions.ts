@@ -11,7 +11,7 @@ import prisma from "@/lib/prisma";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getCurrentUser } from "@/app/auth-actions";
 import { logger } from "@/lib/logger";
-import { getPlexServerLibrarySections, getPlexServers, resolveWorkingPlexServerConnection } from "@/lib/plex";
+import { getPlexServerLibrarySections, getPlexServerSections, getPlexServerList, getPlexServers, resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { 
     getPlexLibraryMediaItems, 
     getPlexLibraryCollections, 
@@ -260,16 +260,30 @@ export async function saveCurationSettingsAction(data: {
     }
 }
 
-export async function getPlexServersAndSectionsAction() {
+export async function getPlexServersAndSectionsAction(targetServerId?: string) {
     await verifyAdmin();
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
     const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
     if (!token) return { success: false, error: "Plex token not configured." };
 
-    const serversWithSections = await getPlexServerLibrarySections(token);
+    const serversWithSections = await getPlexServerLibrarySections(token, settings?.mainPlexUrl || undefined, targetServerId);
     return {
         success: true,
         servers: serversWithSections
+    };
+}
+
+export async function getPlexServerSectionsAction(serverId: string) {
+    await verifyAdmin();
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+    if (!token) return { success: false, error: "Plex token not configured." };
+
+    const sections = await getPlexServerSections(token, serverId, settings?.mainPlexUrl || undefined);
+    return {
+        success: true,
+        serverId,
+        sections
     };
 }
 
@@ -279,7 +293,7 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
         const rawCollections = await prisma.mediaCollection.findMany({
             where: {
                 ...(serverId ? { serverId } : {}),
-                ...(sectionKey ? { sectionKey } : {})
+                ...(sectionKey ? { sectionKey: String(sectionKey) } : {})
             },
             orderBy: [
                 { orderIndex: "asc" },
@@ -304,11 +318,6 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
             if (group.length === 1) {
                 dedupedCollections.push(group[0]);
             } else {
-                // Group has duplicates!
-                // Prioritize keeping:
-                // 1. Record with ratingKey (synced to Plex)
-                // 2. Record with highest itemCount
-                // 3. Most recently updated / created
                 group.sort((a, b) => {
                     if (a.ratingKey && !b.ratingKey) return -1;
                     if (!a.ratingKey && b.ratingKey) return 1;
@@ -335,74 +344,6 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
                     id: { in: duplicateIdsToDelete }
                 }
             }).catch(err => logger.addLog("WARN", "PLEX", `Failed deleting duplicate collections: ${err.message}`));
-        }
-
-        // Auto-discover existing collections from Plex if serverId and sectionKey are provided
-        if (serverId && sectionKey) {
-            try {
-                const resolved = await resolveWorkingPlexServerConnection(serverId);
-                if (resolved && resolved.serverUrl && resolved.token) {
-                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                    const plexCollections = await getPlexLibraryCollections(urlsToTry, resolved.token, sectionKey);
-
-                    if (plexCollections.length > 0) {
-                        let maxOrderIndex = dedupedCollections.reduce((max, c) => Math.max(max, c.orderIndex ?? 0), -1);
-                        let addedAny = false;
-
-                        for (const pColl of plexCollections) {
-                            const existing = dedupedCollections.find(
-                                c => (c.ratingKey && c.ratingKey === pColl.ratingKey) ||
-                                     c.title.trim().toLowerCase() === pColl.title.trim().toLowerCase()
-                            );
-
-                            if (!existing) {
-                                maxOrderIndex += 1;
-                                const prefix = (pColl.sortTitle && pColl.sortTitle.startsWith("!"))
-                                    ? pColl.sortTitle.slice(0, 5)
-                                    : `!${String(maxOrderIndex).padStart(2, '0')}_`;
-
-                                const created = await prisma.mediaCollection.create({
-                                    data: {
-                                        title: pColl.title,
-                                        summary: pColl.summary || "",
-                                        sortTitle: pColl.sortTitle || "",
-                                        category: pColl.isHub ? "Plex Hub" : (pColl.smart ? "Plex Smart" : "Plex Library"),
-                                        type: "movie",
-                                        serverId,
-                                        sectionKey: String(sectionKey),
-                                        sourceType: pColl.isHub ? "plex_hub" : (pColl.smart ? "plex_smart" : "plex_native"),
-                                        sourceQuery: pColl.isHub ? `plex_hub:${pColl.ratingKey}` : `plex_collection:${pColl.ratingKey}`,
-                                        ratingKey: pColl.ratingKey,
-                                        itemCount: pColl.childCount || 0,
-                                        posterUrl: pColl.thumb || "",
-                                        promotedToHome: pColl.promotedToHome ?? true,
-                                        promotedToRecommended: pColl.promotedToRecommended ?? true,
-                                        promotedToSharedHome: pColl.promotedToSharedHome ?? true,
-                                        orderIndex: maxOrderIndex,
-                                        sortPrefix: prefix,
-                                        lastSyncedAt: new Date()
-                                    }
-                                });
-                                dedupedCollections.push(created);
-                                addedAny = true;
-                            } else if (existing.itemCount !== pColl.childCount || (!existing.ratingKey && pColl.ratingKey)) {
-                                await prisma.mediaCollection.update({
-                                    where: { id: existing.id },
-                                    data: {
-                                        itemCount: pColl.childCount || 0,
-                                        ratingKey: pColl.ratingKey || existing.ratingKey,
-                                        lastSyncedAt: new Date()
-                                    }
-                                }).catch(() => {});
-                                existing.itemCount = pColl.childCount || 0;
-                                existing.ratingKey = pColl.ratingKey || existing.ratingKey;
-                            }
-                        }
-                    }
-                }
-            } catch (err: any) {
-                // Non-blocking auto-discovery
-            }
         }
 
         // Re-sort dedupedCollections by orderIndex
@@ -2495,8 +2436,7 @@ export async function runFullCurationSyncInternal(): Promise<{
                     const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
                     if (!resolved || !resolved.serverUrl) continue;
 
-                    const sectionsRes = await getPlexServerLibrarySections(resolved.token);
-                    const srvSections = sectionsRes.find(s => s.serverId === srv.clientIdentifier)?.sections || [];
+                    const srvSections = await getPlexServerSections(resolved.token, srv.clientIdentifier, settings?.mainPlexUrl || undefined);
 
                     for (const sec of srvSections) {
                         try {
@@ -2540,8 +2480,7 @@ export async function runFullCurationSyncInternal(): Promise<{
                 };
 
                 for (const srv of servers) {
-                    const sectionsRes = await getPlexServerLibrarySections(token);
-                    const srvSections = sectionsRes.find(s => s.serverId === srv.clientIdentifier)?.sections || [];
+                    const srvSections = await getPlexServerSections(token, srv.clientIdentifier, settings?.mainPlexUrl || undefined);
                     for (const sec of srvSections) {
                         try {
                             const pRes = await applyParentalTagsToLibrary(srv.clientIdentifier, String(sec.key), tagOptions);

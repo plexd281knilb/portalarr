@@ -588,64 +588,44 @@ export async function getPlexCloudServersMap(
         }
     } catch (e) {}
 
-    // 3. For all owned servers, query canonical server XML https://plex.tv/api/servers/{machineId}
-    // This returns the exact cloud section IDs (e.g. 134414382) and local keys (e.g. 1) matching python-plexapi specification
+    // 3. For owned servers without sections, query canonical server XML concurrently
     try {
         const ownedServers = await getPlexServers(adminToken).catch(() => []);
-        for (const srv of ownedServers) {
-            const srvId = srv.clientIdentifier;
-            if (!srvId) continue;
-            // 3a. Canonical server XML
-            try {
-                const srvRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srvId)}?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
-                    headers: {
-                        "Accept": "application/xml, text/xml, */*",
-                        "X-Plex-Token": adminToken,
-                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                    },
-                    cache: "no-store"
-                });
-                if (srvRes.ok) {
-                    const srvXml = await srvRes.text();
-                    const secMatches = srvXml.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
-                    for (const sm of secMatches) {
-                        const scAttrs = sm[1] || "";
-                        const secId = parseInt(scAttrs.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1] || "0", 10);
-                        const secKey = scAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "";
-                        const secTitle = scAttrs.match(/\btitle=["']([^"']*)["']/i)?.[1] || "";
-                        const secType = scAttrs.match(/\btype=["']([^"']*)["']/i)?.[1] || "";
-                        if (secId > 0 || secKey) {
-                            recordSection(srvId, srv.name || "", secId, secKey, secTitle, secType);
+        const unrecordedServers = ownedServers.filter(s => s.clientIdentifier && (!cloudMap.has(s.clientIdentifier) || cloudMap.get(s.clientIdentifier)!.sections.length === 0));
+        
+        if (unrecordedServers.length > 0) {
+            await Promise.allSettled(unrecordedServers.map(async (srv) => {
+                const srvId = srv.clientIdentifier;
+                if (!srvId) return;
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2500);
+                    const srvRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srvId)}?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+                        headers: {
+                            "Accept": "application/xml, text/xml, */*",
+                            "X-Plex-Token": adminToken,
+                            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                        },
+                        signal: controller.signal,
+                        cache: "no-store"
+                    });
+                    clearTimeout(timeoutId);
+                    if (srvRes.ok) {
+                        const srvXml = await srvRes.text();
+                        const secMatches = srvXml.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
+                        for (const sm of secMatches) {
+                            const scAttrs = sm[1] || "";
+                            const secId = parseInt(scAttrs.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1] || "0", 10);
+                            const secKey = scAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "";
+                            const secTitle = scAttrs.match(/\btitle=["']([^"']*)["']/i)?.[1] || "";
+                            const secType = scAttrs.match(/\btype=["']([^"']*)["']/i)?.[1] || "";
+                            if (secId > 0 || secKey) {
+                                recordSection(srvId, srv.name || "", secId, secKey, secTitle, secType);
+                            }
                         }
                     }
-                }
-            } catch (srvErr) {}
-
-            // 3b. Shared servers XML fallback
-            try {
-                const shRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srvId)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
-                    headers: {
-                        "Accept": "application/xml, text/xml, */*",
-                        "X-Plex-Token": adminToken,
-                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                    },
-                    cache: "no-store"
-                });
-                if (shRes.ok) {
-                    const shXml = await shRes.text();
-                    const secMatches = shXml.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
-                    for (const sm of secMatches) {
-                        const scAttrs = sm[1] || "";
-                        const secId = parseInt(scAttrs.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1] || "0", 10);
-                        const secKey = scAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "";
-                        const secTitle = scAttrs.match(/\btitle=["']([^"']*)["']/i)?.[1] || "";
-                        const secType = scAttrs.match(/\btype=["']([^"']*)["']/i)?.[1] || "";
-                        if (secId > 0 || secKey) {
-                            recordSection(srvId, srv.name || "", secId, secKey, secTitle, secType);
-                        }
-                    }
-                }
-            } catch (shErr) {}
+                } catch (srvErr) {}
+            }));
         }
     } catch (e) {}
 
@@ -656,281 +636,187 @@ export async function getPlexCloudServersMap(
     return cloudMap;
 }
 
-export async function getPlexServerLibrarySections(adminToken: string, customPlexUrl?: string): Promise<PlexServerWithSections[]> {
+/**
+ * Fast discovery of available Plex servers without probing library sections.
+ * Completes in <300ms using cached Plex resource endpoints and DB settings.
+ */
+export async function getPlexServerList(
+    adminToken: string,
+    customPlexUrl?: string
+): Promise<{ serverId: string; serverName: string; serverUrl?: string }[]> {
     if (!adminToken) return [];
 
-    // 1. Cloud discovery from authoritative Plex Cloud map
-    const cloudServersMap = await getPlexCloudServersMap(adminToken);
+    // 1. Fast server discovery via /api/v2/resources (cached for 30s)
+    let servers = await getPlexServers(adminToken).catch(() => []);
+    const results: { serverId: string; serverName: string; serverUrl?: string }[] = [];
 
-    // 2. Fetch server resources from /api/v2/resources
-    let servers = await getPlexServers(adminToken);
-
-    // If getPlexServers returned 0, populate from cloudServersMap
-    if (servers.length === 0 && cloudServersMap.size > 0) {
-        for (const [mId, cSrv] of cloudServersMap.entries()) {
-            servers.push({
-                name: cSrv.serverName,
-                clientIdentifier: mId,
-                accessToken: adminToken,
-                connections: cSrv.directUrl ? [{ uri: cSrv.directUrl, local: true, relay: false, address: "", port: 32400 }] : []
+    for (const s of servers) {
+        if (s.clientIdentifier) {
+            results.push({
+                serverId: s.clientIdentifier,
+                serverName: s.name || "Plex Server",
+                serverUrl: s.connections[0]?.uri || ""
             });
         }
     }
 
-    // 3. Lookup configured mainPlexUrl or MediaApp URLs from DB
-    const dbPlexUrls: string[] = [];
-    if (customPlexUrl) {
-        dbPlexUrls.push(customPlexUrl);
-    }
+    // 2. DB fallback (mainPlexUrl and mediaApp)
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (settings?.mainPlexUrl) dbPlexUrls.push(settings.mainPlexUrl);
+        if (settings?.mainPlexUrl && results.length === 0) {
+            results.push({
+                serverId: "plex-main",
+                serverName: "Main Plex Server",
+                serverUrl: settings.mainPlexUrl
+            });
+        }
         const plexApps = await prisma.mediaApp.findMany({ where: { type: "plex" } });
-        for (const app of plexApps) {
-            if (app.url && !dbPlexUrls.includes(app.url)) dbPlexUrls.push(app.url);
+        for (let i = 0; i < plexApps.length; i++) {
+            const app = plexApps[i];
+            if (app.url && !results.some(r => r.serverUrl === app.url)) {
+                results.push({
+                    serverId: app.id || `plex-app-${i + 1}`,
+                    serverName: app.name || `Plex Server ${i + 1}`,
+                    serverUrl: app.url
+                });
+            }
         }
     } catch (dbErr) {}
 
-    // If still 0 servers discovered, synthesize from configured DB URLs
-    if (servers.length === 0 && dbPlexUrls.length > 0) {
-        for (let i = 0; i < dbPlexUrls.length; i++) {
-            servers.push({
-                name: i === 0 ? "Main Plex Server" : `Plex Server ${i + 1}`,
-                clientIdentifier: `plex-configured-${i + 1}`,
-                accessToken: adminToken,
-                connections: [{ uri: dbPlexUrls[i], local: true, relay: false, address: "", port: 32400 }]
-            });
-        }
-    }
-
-    const results: PlexServerWithSections[] = [];
-
-    await Promise.allSettled(servers.map(async (srv) => {
-        const token = srv.accessToken || adminToken;
-        let sectionsFound = false;
-
-        // Build candidate connection URLs for direct PMS access
-        const candidates: string[] = [];
-        // 1. Configured DB URLs (fast local LAN)
-        for (const u of dbPlexUrls) {
-            if (u && !candidates.includes(u)) candidates.push(u);
-        }
-        // 2. Direct LAN IP:port from connections (bypasses .plex.direct DNS rebinding!)
-        for (const conn of srv.connections) {
-            if (conn.address && conn.port) {
-                const httpUrl = `http://${conn.address}:${conn.port}`;
-                if (!candidates.includes(httpUrl)) candidates.push(httpUrl);
-            }
-        }
-        // 3. Cloud directUrl
-        const cloudSrv = cloudServersMap.get(srv.clientIdentifier) || 
-                         Array.from(cloudServersMap.values()).find(c => 
-                             c.serverId.toLowerCase() === srv.clientIdentifier.toLowerCase()
-                         );
-        if (cloudSrv?.directUrl && !candidates.includes(cloudSrv.directUrl)) {
-            candidates.push(cloudSrv.directUrl);
-        }
-        // 4. Other connection URIs (.plex.direct, https, relay)
-        for (const conn of srv.connections) {
-            if (conn.uri && !candidates.includes(conn.uri)) candidates.push(conn.uri);
-            if (conn.address && conn.port) {
-                const httpsUrl = `https://${conn.address}:${conn.port}`;
-                if (!candidates.includes(httpsUrl)) candidates.push(httpsUrl);
-            }
-        }
-
-        // Try direct PMS connections
-        for (const candUrl of candidates) {
-            try {
-                const cleanBase = candUrl.replace(/\/+$/, "");
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-                const res = await fetch(`${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`, {
-                    headers: {
-                        "Accept": "application/json, application/xml, text/xml, */*",
-                        "X-Plex-Token": token,
-                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                    },
-                    signal: controller.signal,
-                    cache: "no-store"
-                });
-                clearTimeout(timeoutId);
-
-                if (res.ok) {
-                    const contentType = res.headers.get("content-type") || "";
-                    let sections: PlexLibrarySection[] = [];
-                    let serverMachineId = srv.clientIdentifier;
-
-                    if (contentType.includes("json")) {
-                        const data = await res.json();
-                        if (data.MediaContainer?.machineIdentifier) {
-                            serverMachineId = data.MediaContainer.machineIdentifier;
-                        }
-                        const rawDirs = data.MediaContainer?.Directory || [];
-                        const dirs = Array.isArray(rawDirs) ? rawDirs : [rawDirs];
-                        const cloudSrv = cloudServersMap.get(serverMachineId) || 
-                                         cloudServersMap.get(srv.clientIdentifier) ||
-                                         Array.from(cloudServersMap.values()).find(c => 
-                                             c.serverId.toLowerCase() === serverMachineId.toLowerCase() ||
-                                             c.serverId.toLowerCase() === srv.clientIdentifier.toLowerCase()
-                                         );
-                        sections = dirs.map((d: any) => {
-                            const pmsKey = String(d.key);
-                            const title = d.title || "Untitled Library";
-                            const cloudSec = cloudSrv?.sections?.find(cs => 
-                                cs.key === pmsKey || 
-                                cs.title.toLowerCase() === title.toLowerCase() ||
-                                String(cs.id) === pmsKey
-                            );
-                            const finalId = (cloudSec && cloudSec.id > 1000000) ? cloudSec.id : (cloudSec?.id || parseInt(d.id || d.key, 10) || 0);
-                            return {
-                                id: finalId,
-                                key: pmsKey,
-                                title,
-                                type: d.type || "unknown",
-                                agent: d.agent,
-                                scanner: d.scanner,
-                                thumb: d.thumb
-                            };
-                        }).filter((s: PlexLibrarySection) => s.id > 0);
-                    } else {
-                        const xmlText = await res.text();
-                        const mIdMatch = xmlText.match(/\bmachineIdentifier=["']?([^"'\s>]+)["']?/i)?.[1];
-                        if (mIdMatch) serverMachineId = mIdMatch;
-                        const dirMatches = xmlText.matchAll(/<Directory\b([^>]*?)(?:\/>|>[\s\S]*?<\/Directory>)/gi);
-                        const cloudSrv = cloudServersMap.get(serverMachineId) || 
-                                         cloudServersMap.get(srv.clientIdentifier) ||
-                                         Array.from(cloudServersMap.values()).find(c => 
-                                             c.serverId.toLowerCase() === serverMachineId.toLowerCase() ||
-                                             c.serverId.toLowerCase() === srv.clientIdentifier.toLowerCase()
-                                         );
-                        for (const dm of dirMatches) {
-                            const dAttrs = dm[1] || "";
-                            const pmsKey = dAttrs.match(/\bkey="([^"]*)"/i)?.[1] || "";
-                            const title = dAttrs.match(/\btitle="([^"]*)"/i)?.[1] || "Untitled Library";
-                            const type = dAttrs.match(/\btype="([^"]*)"/i)?.[1] || "unknown";
-                            const cloudSec = cloudSrv?.sections?.find(cs => 
-                                cs.key === pmsKey || 
-                                cs.title.toLowerCase() === title.toLowerCase() ||
-                                String(cs.id) === pmsKey
-                            );
-                            const finalId = (cloudSec && cloudSec.id > 1000000) ? cloudSec.id : (cloudSec?.id || parseInt(pmsKey, 10) || 0);
-                            if (finalId > 0) {
-                                sections.push({
-                                    id: finalId,
-                                    key: pmsKey,
-                                    title,
-                                    type
-                                });
-                            }
-                        }
-                    }
-
-                    if (sections.length > 0) {
-                        results.push({
-                            serverId: serverMachineId,
-                            serverName: srv.name,
-                            serverUrl: cleanBase,
-                            sections
-                        });
-                        sectionsFound = true;
-                        logger.addLog("SUCCESS", "PLEX", `✅ Loaded ${sections.length} library sections directly from "${srv.name}" (${cleanBase})`, `Sections: ${sections.map(s => `"${s.title}" (ID: ${s.id}, Key: ${s.key})`).join(", ")}`);
-                        break;
-                    }
-                } else {
-                    const text = await res.text().catch(() => "");
-                    if (res.status === 401) {
-                        logger.addLog("ERROR", "PLEX", `❌ PMS 401 Unauthorized on ${cleanBase}: Not authorized. Make sure the server is signed in and claimed by the account for this token (${maskToken(token)}).`, `Response: ${text.slice(0, 300)}`);
-                    } else {
-                        logger.addLog("WARN", "PLEX", `PMS HTTP ${res.status} on ${cleanBase}/library/sections: ${text.slice(0, 200)}`);
-                    }
-                }
-            } catch (e: any) {
-                // Try next connection candidate
-            }
-        }
-
-        // Fallback 1: Use cloud library sections directly from https://plex.tv/api/servers!
-        if (!sectionsFound && cloudSrv && cloudSrv.sections.length > 0) {
-            logger.addLog("INFO", "PLEX", `Using Cloud library sections for "${srv.name}" (${cloudSrv.sections.length} sections found in cloud metadata)`);
-            results.push({
-                serverId: srv.clientIdentifier,
-                serverName: srv.name || cloudSrv.serverName,
-                serverUrl: cloudSrv.directUrl || srv.connections[0]?.uri || "",
-                sections: cloudSrv.sections
-            });
-            sectionsFound = true;
-        }
-
-        // Fallback 2: Query canonical plex.tv server XML, shared_servers/new XML, and shared_servers XML
-        if (!sectionsFound && srv.clientIdentifier) {
-            const urlsToTry = [
-                `https://plex.tv/api/servers/${encodeURIComponent(srv.clientIdentifier)}?X-Plex-Token=${encodeURIComponent(adminToken)}`,
-                `https://plex.tv/api/servers/${encodeURIComponent(srv.clientIdentifier)}/shared_servers/new?X-Plex-Token=${encodeURIComponent(adminToken)}`,
-                `https://plex.tv/api/servers/${encodeURIComponent(srv.clientIdentifier)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`
-            ];
-            for (const tvUrl of urlsToTry) {
-                if (sectionsFound) break;
-                try {
-                    const tvRes = await fetch(tvUrl, {
-                        headers: {
-                            "Accept": "application/xml, text/xml, */*",
-                            "X-Plex-Token": adminToken,
-                            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                        },
-                        cache: "no-store"
-                    });
-                    if (tvRes.ok) {
-                        const xml = await tvRes.text();
-                        const secMap = new Map<number, PlexLibrarySection>();
-                        const secMatches = xml.matchAll(/<Section\b([^>]*?)(?:\/>|>[\s\S]*?<\/Section>)/gi);
-                        for (const sm of secMatches) {
-                            const sAttrs = sm[1] || "";
-                            const secId = parseInt(sAttrs.match(/\bid=["']?([^"'\s>]+)["']?/i)?.[1] || sAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || "", 10);
-                            const secKey = sAttrs.match(/\bkey=["']?([^"'\s>]+)["']?/i)?.[1] || String(secId);
-                            const title = sAttrs.match(/\btitle=["']([^"']*)["']/i)?.[1] || `Section ${secId}`;
-                            const type = sAttrs.match(/\btype=["']([^"']*)["']/i)?.[1] || "movie";
-                            if (!isNaN(secId) && secId > 0 && !secMap.has(secId)) {
-                                secMap.set(secId, {
-                                    id: secId,
-                                    key: secKey,
-                                    title,
-                                    type
-                                });
-                            }
-                        }
-                        if (secMap.size > 0) {
-                            results.push({
-                                serverId: srv.clientIdentifier,
-                                serverName: srv.name,
-                                serverUrl: srv.connections[0]?.uri || "",
-                                sections: Array.from(secMap.values())
-                            });
-                            sectionsFound = true;
-                            break;
-                        }
-                    }
-                } catch (tvErr) {
-                    console.warn(`[PLEX-API] Fallback plex.tv section lookup failed for ${srv.clientIdentifier}:`, tvErr);
-                }
-            }
-        }
-    }));
-
-    // Ensure any cloud server that was not in getPlexServers is added if it has sections
-    for (const [mId, cSrv] of cloudServersMap.entries()) {
-        if (!results.some(r => r.serverId === mId) && cSrv.sections.length > 0) {
+    // 3. Fallback to Cloud Map if still 0
+    if (results.length === 0) {
+        const cloudMap = await getPlexCloudServersMap(adminToken).catch(() => new Map());
+        for (const [mId, cSrv] of cloudMap.entries()) {
             results.push({
                 serverId: mId,
                 serverName: cSrv.serverName,
-                serverUrl: cSrv.directUrl || "",
-                sections: cSrv.sections
+                serverUrl: cSrv.directUrl || ""
             });
         }
     }
 
     return results;
+}
+
+/**
+ * Resolves library sections for ONLY a single specific Plex server.
+ * Bypasses all other servers, preventing connection timeouts and slow page loads.
+ */
+export async function getPlexServerSections(
+    adminToken: string,
+    targetServerIdOrName: string,
+    customPlexUrl?: string
+): Promise<PlexLibrarySection[]> {
+    if (!adminToken || !targetServerIdOrName) return [];
+
+    const resolved = await resolveWorkingPlexServerConnection(targetServerIdOrName, adminToken, customPlexUrl);
+    if (!resolved || !resolved.serverUrl) {
+        // Fallback: Check cloud servers map for sections
+        const cloudMap = await getPlexCloudServersMap(adminToken).catch(() => new Map());
+        const cloudSrv = cloudMap.get(targetServerIdOrName) || 
+                         Array.from(cloudMap.values()).find(c => c.serverId.toLowerCase() === targetServerIdOrName.toLowerCase() || c.serverName.toLowerCase() === targetServerIdOrName.toLowerCase());
+        return cloudSrv?.sections || [];
+    }
+
+    const token = resolved.token || adminToken;
+    const candidates = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+
+    for (const candUrl of candidates) {
+        try {
+            const cleanBase = candUrl.replace(/\/+$/, "");
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+            const res = await fetch(`${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                const contentType = res.headers.get("content-type") || "";
+                let sections: PlexLibrarySection[] = [];
+
+                if (contentType.includes("json")) {
+                    const data = await res.json();
+                    const rawDirs = data.MediaContainer?.Directory || [];
+                    const dirs = Array.isArray(rawDirs) ? rawDirs : [rawDirs];
+                    sections = dirs.map((d: any) => ({
+                        id: parseInt(d.id || d.key, 10) || 0,
+                        key: String(d.key),
+                        title: d.title || "Untitled Library",
+                        type: d.type || "unknown",
+                        agent: d.agent,
+                        scanner: d.scanner,
+                        thumb: d.thumb
+                    })).filter((s: PlexLibrarySection) => s.id > 0);
+                } else {
+                    const xmlText = await res.text();
+                    const dirMatches = xmlText.matchAll(/<Directory\b([^>]*?)(?:\/>|>[\s\S]*?<\/Directory>)/gi);
+                    for (const dm of dirMatches) {
+                        const dAttrs = dm[1] || "";
+                        const pmsKey = dAttrs.match(/\bkey="([^"]*)"/i)?.[1] || "";
+                        const title = dAttrs.match(/\btitle="([^"]*)"/i)?.[1] || "Untitled Library";
+                        const type = dAttrs.match(/\btype="([^"]*)"/i)?.[1] || "unknown";
+                        const id = parseInt(dAttrs.match(/\bid="([^"]*)"/i)?.[1] || pmsKey, 10) || 0;
+                        if (id > 0) {
+                            sections.push({ id, key: pmsKey, title, type });
+                        }
+                    }
+                }
+
+                if (sections.length > 0) {
+                    return sections;
+                }
+            }
+        } catch (e) {
+            // Try next candidate
+        }
+    }
+
+    // Cloud fallback for this server if direct connection failed
+    const cloudMap = await getPlexCloudServersMap(adminToken).catch(() => new Map());
+    const cloudSrv = cloudMap.get(targetServerIdOrName) || 
+                     Array.from(cloudMap.values()).find(c => c.serverId.toLowerCase() === targetServerIdOrName.toLowerCase() || c.serverName.toLowerCase() === targetServerIdOrName.toLowerCase());
+    return cloudSrv?.sections || [];
+}
+
+export async function getPlexServerLibrarySections(
+    adminToken: string, 
+    customPlexUrl?: string,
+    targetServerId?: string
+): Promise<PlexServerWithSections[]> {
+    if (!adminToken) return [];
+
+    const serverList = await getPlexServerList(adminToken, customPlexUrl);
+    if (serverList.length === 0) return [];
+
+    // If targetServerId is specified, query sections ONLY for that one active server!
+    if (targetServerId) {
+        const sections = await getPlexServerSections(adminToken, targetServerId, customPlexUrl);
+        return serverList.map(srv => ({
+            serverId: srv.serverId,
+            serverName: srv.serverName,
+            serverUrl: srv.serverUrl || "",
+            sections: srv.serverId === targetServerId ? sections : []
+        }));
+    }
+
+    // If no targetServerId specified, resolve sections for the first server to keep it ultra-fast
+    const firstServerId = serverList[0].serverId;
+    const firstSections = await getPlexServerSections(adminToken, firstServerId, customPlexUrl);
+    
+    return serverList.map(srv => ({
+        serverId: srv.serverId,
+        serverName: srv.serverName,
+        serverUrl: srv.serverUrl || "",
+        sections: srv.serverId === firstServerId ? firstSections : []
+    }));
 }
 
 export interface ResolvedPlexConnection {
@@ -973,7 +859,6 @@ export async function resolveWorkingPlexServerConnection(
         }
     }
 
-    const cloudServersMap = await getPlexCloudServersMap(token).catch(() => new Map());
     const servers = await getPlexServers(token, forceRefresh).catch(() => []);
 
     // Also check media apps in DB
@@ -986,7 +871,7 @@ export async function resolveWorkingPlexServerConnection(
         }
     } catch (e) {}
 
-    // Locate target server
+    // Locate target server from resources
     let targetServer: PlexServerResource | undefined;
     if (serverIdOrName) {
         targetServer = servers.find(s => 
@@ -998,17 +883,21 @@ export async function resolveWorkingPlexServerConnection(
         targetServer = servers[0];
     }
 
-    // Cloud fallback
-    const targetCloud = serverIdOrName ? (
-        cloudServersMap.get(serverIdOrName) ||
-        Array.from(cloudServersMap.values()).find((c: any) => 
-            c.serverId?.toLowerCase() === serverIdOrName.toLowerCase() ||
-            c.serverName?.toLowerCase() === serverIdOrName.toLowerCase()
-        )
-    ) : Array.from(cloudServersMap.values())[0];
+    // Lazy cloud fallback only if target server not found in resources
+    let targetCloud: any = undefined;
+    if (!targetServer) {
+        const cloudServersMap = await getPlexCloudServersMap(token).catch(() => new Map());
+        targetCloud = serverIdOrName ? (
+            cloudServersMap.get(serverIdOrName) ||
+            Array.from(cloudServersMap.values()).find((c: any) => 
+                c.serverId?.toLowerCase() === serverIdOrName.toLowerCase() ||
+                c.serverName?.toLowerCase() === serverIdOrName.toLowerCase()
+            )
+        ) : Array.from(cloudServersMap.values())[0];
+    }
 
-    const serverId = targetServer?.clientIdentifier || (targetCloud as any)?.serverId || serverIdOrName || "plex-server";
-    const serverName = targetServer?.name || (targetCloud as any)?.serverName || "Plex Server";
+    const serverId = targetServer?.clientIdentifier || targetCloud?.serverId || serverIdOrName || "plex-server";
+    const serverName = targetServer?.name || targetCloud?.serverName || "Plex Server";
     const serverToken = targetServer?.accessToken || token;
 
     // Build candidates in optimal priority order:
@@ -1043,8 +932,8 @@ export async function resolveWorkingPlexServerConnection(
         }
     }
 
-    if ((targetCloud as any)?.directUrl) {
-        addCandidate((targetCloud as any).directUrl);
+    if (targetCloud?.directUrl) {
+        addCandidate(targetCloud.directUrl);
     }
 
     if (targetServer?.connections) {
@@ -1070,12 +959,12 @@ export async function resolveWorkingPlexServerConnection(
         addCandidate("http://localhost:32400");
     }
 
-    // Probe candidates to find the verified working connection
+    // Probe candidates with fast 2.0s timeout to find the verified working connection
     let workingUrl = "";
     for (const cand of candidateUrls) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
             const res = await fetch(`${cand}/library/sections?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                 headers: {
                     Accept: "application/json, application/xml, text/xml, */*",
@@ -1100,8 +989,8 @@ export async function resolveWorkingPlexServerConnection(
         for (const cand of candidateUrls) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000);
-                const res = await fetch(`${cand}/identity`, {
+                const timeoutId = setTimeout(() => controller.abort(), 1500);
+                const res = await fetch(`${cand}/identity?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                     headers: {
                         Accept: "application/json, application/xml, text/xml, */*",
                         "X-Plex-Token": serverToken,
@@ -1119,23 +1008,16 @@ export async function resolveWorkingPlexServerConnection(
         }
     }
 
-    // Final fallback: use top candidate
-    if (!workingUrl && candidateUrls.length > 0) {
-        workingUrl = candidateUrls[0];
-    }
-
+    const finalUrl = workingUrl || candidateUrls[0] || "";
     const result: ResolvedPlexConnection = {
         serverId,
         serverName,
-        serverUrl: workingUrl,
+        serverUrl: finalUrl,
         token: serverToken,
         allCandidateUrls: candidateUrls
     };
 
-    if (workingUrl) {
-        resolvedServerCache.set(cacheKey, { timestamp: Date.now(), data: result });
-    }
-
+    resolvedServerCache.set(cacheKey, { timestamp: Date.now(), data: result });
     return result;
 }
 

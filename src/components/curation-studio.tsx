@@ -5,6 +5,7 @@ import {
     getCurationSettingsAction, 
     saveCurationSettingsAction, 
     getPlexServersAndSectionsAction,
+    getPlexServerSectionsAction,
     getMediaCollectionsAction, 
     importPlexLibraryCollectionsAction,
     saveMediaCollectionAction, 
@@ -90,6 +91,7 @@ export default function CurationStudio() {
     const [servers, setServers] = useState<any[]>([]);
     const [selectedServerId, setSelectedServerId] = useState<string>("");
     const [selectedSectionKey, setSelectedSectionKey] = useState<string>("");
+    const [serverSectionsLoading, setServerSectionsLoading] = useState(false);
 
     // Collections & Ordering
     const [collections, setCollections] = useState<any[]>([]);
@@ -316,22 +318,19 @@ export default function CurationStudio() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [settRes, srvRes, ruleRes, leaveRes, prefRes, badgesRes, vaultRes] = await Promise.all([
+            const savedSrvId = typeof window !== "undefined" ? localStorage.getItem("portalarr_curation_server") || undefined : undefined;
+            const savedSecKey = typeof window !== "undefined" ? localStorage.getItem("portalarr_curation_section") || undefined : undefined;
+
+            const [settRes, srvRes, ruleRes, prefRes] = await Promise.all([
                 getCurationSettingsAction().catch(() => ({ success: false })),
-                getPlexServersAndSectionsAction().catch(() => ({ success: false })),
+                getPlexServersAndSectionsAction(savedSrvId).catch(() => ({ success: false })),
                 getOverlayRulesAction().catch(() => ({ success: false, rules: [], backupsCount: 0 })),
-                getLeavingSoonItemsAction().catch(() => ({ success: false, items: [] })),
-                getUserContentPreferencesAction().catch(() => ({ success: false })),
-                getCustomBadgesAction().catch(() => ({ success: false, badges: [] })),
-                getArtBackupAndBadgeStatsAction().catch(() => ({ success: false }))
+                getUserContentPreferencesAction().catch(() => ({ success: false }))
             ]);
 
             const srvData = srvRes as any;
             const prefData = prefRes as any;
             const ruleData = ruleRes as any;
-            const leaveData = leaveRes as any;
-            const badgeData = badgesRes as any;
-            const vaultData = vaultRes as any;
 
             if ((settRes as any).success) {
                 setSettings(settRes);
@@ -348,15 +347,9 @@ export default function CurationStudio() {
                 if ((settRes as any).parentalMinSeverity) setParentalMinSeverity((settRes as any).parentalMinSeverity);
                 if ((settRes as any).parentalCategories) setParentalCategories((settRes as any).parentalCategories);
             }
-            if (vaultData?.success) {
-                setVaultStats(vaultData);
-            }
             if (srvData?.success && Array.isArray(srvData.servers) && srvData.servers.length > 0) {
                 setServers(srvData.servers);
                 
-                const savedSrvId = typeof window !== "undefined" ? localStorage.getItem("portalarr_curation_server") : null;
-                const savedSecKey = typeof window !== "undefined" ? localStorage.getItem("portalarr_curation_section") : null;
-
                 const matchedServer = (savedSrvId && srvData.servers.find((s: any) => s.serverId === savedSrvId)) ||
                                       (selectedServerId && srvData.servers.find((s: any) => s.serverId === selectedServerId)) ||
                                       srvData.servers[0];
@@ -371,7 +364,7 @@ export default function CurationStudio() {
                 const effectiveSecKey = matchedSec ? String(matchedSec.key) : "";
                 setSelectedSectionKey(effectiveSecKey);
 
-                // Strictly load collections for the effective server and section
+                // Strictly load collections for the effective server and section from local DB
                 await loadCollections(effectiveSrvId, effectiveSecKey);
             } else {
                 setCollections([]);
@@ -380,10 +373,6 @@ export default function CurationStudio() {
                 setOverlayRules(ruleData.rules || []);
                 setBackupsCount(ruleData.backupsCount || 0);
             }
-            if (badgeData?.success) {
-                setCustomBadges(badgeData.badges || []);
-            }
-            if (leaveData?.success) setLeavingSoonItems(leaveData.items || []);
             if (prefData?.success && prefData.preference) {
                 const p = prefData.preference;
                 setUserPrefs({
@@ -404,20 +393,38 @@ export default function CurationStudio() {
     };
 
     // Dedicated Static Tab Selection Handlers with localStorage Persistence
-    const handleSelectServer = (srvId: string) => {
+    const handleSelectServer = async (srvId: string) => {
         if (srvId === selectedServerId) return;
         setSelectedServerId(srvId);
         if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_server", srvId);
-        const srv = servers.find(s => s.serverId === srvId);
-        let nextSecKey = selectedSectionKey;
-        if (srv?.sections && srv.sections.length > 0) {
-            const hasExisting = srv.sections.some((sec: any) => String(sec.key) === selectedSectionKey);
-            if (!hasExisting) {
-                nextSecKey = String(srv.sections[0].key);
-                setSelectedSectionKey(nextSecKey);
-                if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_section", nextSecKey);
+        
+        let srv = servers.find(s => s.serverId === srvId);
+        let srvSections = srv?.sections || [];
+
+        // If this server does not have sections loaded yet, fetch only for this server!
+        if (srvSections.length === 0) {
+            setServerSectionsLoading(true);
+            try {
+                const secRes = await getPlexServerSectionsAction(srvId);
+                if (secRes?.success && Array.isArray(secRes.sections)) {
+                    srvSections = secRes.sections;
+                    setServers(prev => prev.map(s => s.serverId === srvId ? { ...s, sections: secRes.sections } : s));
+                }
+            } catch (e) {
+                console.error("Failed loading server sections:", e);
+            } finally {
+                setServerSectionsLoading(false);
             }
         }
+
+        let nextSecKey = "";
+        if (srvSections.length > 0) {
+            const hasExisting = srvSections.some((sec: any) => String(sec.key) === selectedSectionKey);
+            nextSecKey = hasExisting ? selectedSectionKey : String(srvSections[0].key);
+        }
+        setSelectedSectionKey(nextSecKey);
+        if (typeof window !== "undefined") localStorage.setItem("portalarr_curation_section", nextSecKey);
+
         setCollectionsLoading(true);
         loadCollections(srvId, nextSecKey);
     };
@@ -480,6 +487,18 @@ export default function CurationStudio() {
     useEffect(() => {
         if (subTab === "releases") {
             loadReleases();
+        } else if (subTab === "badges" && customBadges.length === 0) {
+            getCustomBadgesAction().then(res => {
+                if (res?.success && res.badges) setCustomBadges(res.badges);
+            }).catch(() => {});
+        } else if (subTab === "pruning" && leavingSoonItems.length === 0) {
+            getLeavingSoonItemsAction().then(res => {
+                if (res?.success && res.items) setLeavingSoonItems(res.items);
+            }).catch(() => {});
+        } else if ((subTab === "overlays" || subTab === "storage") && !vaultStats) {
+            getArtBackupAndBadgeStatsAction().then(res => {
+                if (res?.success) setVaultStats(res);
+            }).catch(() => {});
         }
     }, [subTab]);
 
@@ -2670,9 +2689,17 @@ export default function CurationStudio() {
                             <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
                                 <Film className="h-4 w-4 text-sky-400" />
                                 <span>Library Section:</span>
+                                {serverSectionsLoading && (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+                                )}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                                {currentSections.length === 0 ? (
+                                {serverSectionsLoading ? (
+                                    <div className="flex items-center gap-2 text-xs text-slate-400 py-1">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                                        <span>Querying library sections for {currentServer?.serverName}...</span>
+                                    </div>
+                                ) : currentSections.length === 0 ? (
                                     <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {
