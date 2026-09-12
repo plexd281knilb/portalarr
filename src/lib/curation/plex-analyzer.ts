@@ -1197,6 +1197,7 @@ export async function updatePlexCollectionPromotionAndOrder(
         promotedToRecommended?: boolean;
         promotedToSharedHome?: boolean;
     }
+): Promise<{ success: boolean; message?: string }> {
     if (collectionRatingKey.startsWith("hub:")) {
         return { success: true, message: "Hub promotion setting recorded." };
     }
