@@ -359,8 +359,9 @@ export function expandCandidateUrls(serverUrlOrCandidates: string | string[]): s
             if (!directLanList.includes(directHttps)) directLanList.push(directHttps);
         }
 
-        const isLan = clean.includes("127.0.0.1") || clean.includes("localhost") || clean.includes("192.168.") || clean.includes("10.") || clean.includes("172.");
-        const targetList = isLan ? directLanList : otherList;
+        const isPlexDirect = clean.includes(".plex.direct");
+        const isLan = clean.includes("127.0.0.1") || clean.includes("localhost") || clean.includes("192.168.") || clean.includes("10.") || clean.includes("172.") || clean.includes("host.docker.internal") || clean.includes("plex");
+        const targetList = (isPlexDirect || isLan) ? directLanList : otherList;
 
         if (!targetList.includes(clean)) targetList.push(clean);
 
@@ -377,7 +378,7 @@ export function expandCandidateUrls(serverUrlOrCandidates: string | string[]): s
         add(raw);
     }
 
-    // Direct LAN IPs first, followed by remaining hostnames / domain endpoints
+    // Direct LAN IPs and .plex.direct endpoints first, followed by remaining hostnames / domain endpoints
     return Array.from(new Set([...directLanList, ...otherList]));
 }
 

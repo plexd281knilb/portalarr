@@ -1,3 +1,4 @@
+import dns from "dns";
 import { decryptData } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
 import { logger, maskToken } from "@/lib/logger";
@@ -6,6 +7,44 @@ import { logger, maskToken } from "@/lib/logger";
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
+
+// In-memory DNS resolver for *.plex.direct domains to bypass router DNS Rebinding Protection
+let isDnsPatched = false;
+export function patchPlexDirectDns() {
+    if (isDnsPatched) return;
+    if (typeof process === "undefined" || !dns || !dns.lookup) return;
+
+    try {
+        const originalLookup = dns.lookup.bind(dns);
+
+        // @ts-ignore
+        dns.lookup = function (hostname: string, options: any, callback: any) {
+            let cb = callback;
+            let opt = options;
+            if (typeof opt === "function") {
+                cb = opt;
+                opt = {};
+            }
+
+            if (typeof hostname === "string") {
+                const match = hostname.match(/^(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.[a-zA-Z0-9-]+\.plex\.direct$/i);
+                if (match) {
+                    const ip = `${match[1]}.${match[2]}.${match[3]}.${match[4]}`;
+                    if (opt && opt.all) {
+                        return typeof cb === "function" ? cb(null, [{ address: ip, family: 4 }]) : undefined;
+                    }
+                    return typeof cb === "function" ? cb(null, ip, 4) : undefined;
+                }
+            }
+
+            return originalLookup(hostname, opt, cb);
+        };
+
+        isDnsPatched = true;
+    } catch (e) {}
+}
+
+patchPlexDirectDns();
 
 export interface PlexFriendItem {
     id?: number | string;
@@ -901,19 +940,39 @@ export async function resolveWorkingPlexServerConnection(
     const serverToken = targetServer?.accessToken || token;
 
     // Build candidates in optimal priority order:
-    // 1. Direct LAN IP:port from target server (http://<ip>:<port>) -> bypasses .plex.direct DNS rebinding & cert issues!
-    // 2. Cloud directUrl for target server
-    // 3. Target server connection URIs (local connections first) and http alternatives for https://*.plex.direct
-    // 4. Configured DB URLs (fallback for main server)
+    // 1. Configured DB URLs (user's explicitly defined Plex URL in Settings or MediaApp)
+    // 2. Target server connection URIs (https://*.plex.direct and http alternatives) - in-memory DNS resolves these directly to IP with valid TLS!
+    // 3. Direct LAN IP:port from target server (http://<ip>:<port> and https://<ip>:<port>)
+    // 4. Cloud directUrl for target server
+    // 5. Standard local container/host defaults (localhost, 127.0.0.1, host.docker.internal, plex)
+    const priorityUrls: string[] = [];
     const directLanUrls: string[] = [];
     const otherUrls: string[] = [];
 
-    const addCandidate = (u?: string) => {
+    const addCandidate = (u?: string, isPriority = false) => {
         if (!u) return;
         const clean = u.replace(/\/+$/, "").trim();
         if (!clean) return;
 
-        // Decode *.plex.direct to direct LAN IP:port (e.g. 192-168-1-50.xxx.plex.direct:32400 -> http://192.168.1.50:32400)
+        const isPlexDirect = clean.includes(".plex.direct");
+        const isLan = clean.includes("127.0.0.1") || clean.includes("localhost") || clean.includes("192.168.") || clean.includes("10.") || clean.includes("172.") || clean.includes("host.docker.internal") || clean.includes("plex");
+
+        const targetList = isPriority ? priorityUrls : (isPlexDirect || isLan ? directLanUrls : otherUrls);
+
+        if (!targetList.includes(clean)) {
+            targetList.push(clean);
+        }
+
+        // Also add the http/https alternative
+        if (clean.startsWith("http://")) {
+            const httpsAlt = clean.replace("http://", "https://");
+            if (!targetList.includes(httpsAlt)) targetList.push(httpsAlt);
+        } else if (clean.startsWith("https://")) {
+            const httpAlt = clean.replace("https://", "http://");
+            if (!targetList.includes(httpAlt)) targetList.push(httpAlt);
+        }
+
+        // Decode *.plex.direct to direct LAN IP:port as well
         const plexDirectMatch = clean.match(/^(?:https?:\/\/)?(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.[a-zA-Z0-9-]+\.plex\.direct(?::(\d+))?/i);
         if (plexDirectMatch) {
             const ip = `${plexDirectMatch[1]}.${plexDirectMatch[2]}.${plexDirectMatch[3]}.${plexDirectMatch[4]}`;
@@ -923,24 +982,15 @@ export async function resolveWorkingPlexServerConnection(
             if (!directLanUrls.includes(directHttp)) directLanUrls.push(directHttp);
             if (!directLanUrls.includes(directHttps)) directLanUrls.push(directHttps);
         }
-
-        const isLan = clean.includes("127.0.0.1") || clean.includes("localhost") || clean.includes("192.168.") || clean.includes("10.") || clean.includes("172.");
-        const targetList = isLan ? directLanUrls : otherUrls;
-
-        if (!targetList.includes(clean)) {
-            targetList.push(clean);
-        }
-        if (clean.startsWith("http://")) {
-            const httpsAlt = clean.replace("http://", "https://");
-            if (!targetList.includes(httpsAlt)) targetList.push(httpsAlt);
-        } else if (clean.startsWith("https://")) {
-            const httpAlt = clean.replace("https://", "http://");
-            if (!targetList.includes(httpAlt)) targetList.push(httpAlt);
-        }
     };
 
+    // 1. User configured DB URLs first
+    for (const u of dbPlexUrls) addCandidate(u, true);
+
+    // 2. Server connection URIs (including .plex.direct)
     if (targetServer?.connections) {
         for (const c of targetServer.connections) {
+            if (c.uri) addCandidate(c.uri);
             if (c.address && c.port) {
                 addCandidate(`http://${c.address}:${c.port}`);
                 addCandidate(`https://${c.address}:${c.port}`);
@@ -948,39 +998,27 @@ export async function resolveWorkingPlexServerConnection(
         }
     }
 
+    // 3. Cloud directUrl
     if (targetCloud?.directUrl) {
         addCandidate(targetCloud.directUrl);
     }
 
-    if (targetServer?.connections) {
-        for (const c of targetServer.connections) {
-            if (c.uri) {
-                addCandidate(c.uri);
-            }
-            if (c.address && c.port) {
-                addCandidate(`http://${c.address}:${c.port}`);
-                addCandidate(`https://${c.address}:${c.port}`);
-            }
-        }
-    }
+    // 4. Fallback local / Docker container hosts
+    addCandidate("http://127.0.0.1:32400");
+    addCandidate("http://localhost:32400");
+    addCandidate("http://host.docker.internal:32400");
+    addCandidate("http://plex:32400");
 
-    for (const u of dbPlexUrls) addCandidate(u);
+    const candidateUrls = Array.from(new Set([...priorityUrls, ...directLanUrls, ...otherUrls]));
 
-    // Combine prioritizing direct LAN connections first
-    const candidateUrls = Array.from(new Set([...directLanUrls, ...otherUrls]));
-
-    // Default fallback if no candidates found
-    if (candidateUrls.length === 0) {
-        candidateUrls.push("http://127.0.0.1:32400");
-        candidateUrls.push("http://localhost:32400");
-    }
-
-    // Probe candidates with 4.0s timeout to find the verified working connection
+    // Probe candidates with 3.5s timeout to find the verified working connection
+    const probeFailures: string[] = [];
     let workingUrl = "";
+
     for (const cand of candidateUrls) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const timeoutId = setTimeout(() => controller.abort(), 3500);
             const res = await fetch(`${cand}/library/sections?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                 headers: {
                     Accept: "application/json, application/xml, text/xml, */*",
@@ -994,9 +1032,12 @@ export async function resolveWorkingPlexServerConnection(
             if (res.ok) {
                 workingUrl = cand;
                 break;
+            } else {
+                probeFailures.push(`${cand} (HTTP ${res.status})`);
             }
-        } catch (e) {
-            // Try next candidate
+        } catch (e: any) {
+            const code = e?.cause?.code || e?.cause?.message || e?.name || e?.message || "error";
+            probeFailures.push(`${cand} (${code})`);
         }
     }
 
@@ -1005,7 +1046,7 @@ export async function resolveWorkingPlexServerConnection(
         for (const cand of candidateUrls) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2500);
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
                 const res = await fetch(`${cand}/identity?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                     headers: {
                         Accept: "application/json, application/xml, text/xml, */*",
@@ -1029,7 +1070,7 @@ export async function resolveWorkingPlexServerConnection(
     if (workingUrl) {
         logger.addLog("INFO", "PLEX", `Resolved verified working connection for Plex server "${serverName}" (${serverId}): ${workingUrl}`);
     } else {
-        logger.addLog("WARN", "PLEX", `Could not verify connection to Plex server "${serverName}" across ${candidateUrls.length} candidate URLs (${candidateUrls.join(", ")}). Falling back to ${finalUrl}`);
+        logger.addLog("WARN", "PLEX", `Could not verify connection to Plex server "${serverName}" across ${candidateUrls.length} candidate URLs: ${probeFailures.join("; ")}. Falling back to ${finalUrl}`);
     }
 
     const result: ResolvedPlexConnection = {
