@@ -311,30 +311,74 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
 }
 
 /**
- * Expands a single URL or candidate list into deduplicated http/https endpoints.
+ * Formats detailed error diagnostics for logs and troubleshooting.
+ */
+export function formatPlexErrorDetails(err: any, url?: string, res?: Response): string {
+    const parts: string[] = [];
+    if (res) {
+        parts.push(`HTTP ${res.status}${res.statusText ? ` (${res.statusText})` : ""}`);
+    }
+    if (err?.message) {
+        parts.push(err.message);
+    }
+    if (err?.cause) {
+        const causeMsg = (err.cause as any)?.message;
+        const causeCode = (err.cause as any)?.code;
+        if (causeMsg && causeMsg !== err.message) parts.push(`Cause: ${causeMsg}`);
+        if (causeCode) parts.push(`Code: ${causeCode}`);
+    }
+    if (url) {
+        const safeUrl = url.replace(/(X-Plex-Token=)[^&]+/gi, "$1[REDACTED]");
+        parts.push(`Target: ${safeUrl}`);
+    }
+    return parts.join(" | ") || String(err);
+}
+
+/**
+ * Expands a single URL or candidate list into deduplicated http/https endpoints,
+ * decoding *.plex.direct domains into direct LAN IP connections to bypass DNS rebinding issues.
  */
 export function expandCandidateUrls(serverUrlOrCandidates: string | string[]): string[] {
     const rawList = Array.isArray(serverUrlOrCandidates) ? serverUrlOrCandidates : [serverUrlOrCandidates];
-    const results: string[] = [];
+    const directLanList: string[] = [];
+    const otherList: string[] = [];
 
     const add = (u?: string) => {
         if (!u) return;
         const clean = u.replace(/\/+$/, "").trim();
         if (!clean) return;
-        if (!results.includes(clean)) results.push(clean);
+
+        // Decode *.plex.direct to direct LAN IP:port (e.g. 192-168-1-50.xxx.plex.direct:32400 -> http://192.168.1.50:32400)
+        const plexDirectMatch = clean.match(/^(?:https?:\/\/)?(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.[a-zA-Z0-9-]+\.plex\.direct(?::(\d+))?/i);
+        if (plexDirectMatch) {
+            const ip = `${plexDirectMatch[1]}.${plexDirectMatch[2]}.${plexDirectMatch[3]}.${plexDirectMatch[4]}`;
+            const port = plexDirectMatch[5] || "32400";
+            const directHttp = `http://${ip}:${port}`;
+            const directHttps = `https://${ip}:${port}`;
+            if (!directLanList.includes(directHttp)) directLanList.push(directHttp);
+            if (!directLanList.includes(directHttps)) directLanList.push(directHttps);
+        }
+
+        const isLan = clean.includes("127.0.0.1") || clean.includes("localhost") || clean.includes("192.168.") || clean.includes("10.") || clean.includes("172.");
+        const targetList = isLan ? directLanList : otherList;
+
+        if (!targetList.includes(clean)) targetList.push(clean);
+
         if (clean.startsWith("http://")) {
             const httpsAlt = clean.replace("http://", "https://");
-            if (!results.includes(httpsAlt)) results.push(httpsAlt);
+            if (!targetList.includes(httpsAlt)) targetList.push(httpsAlt);
         } else if (clean.startsWith("https://")) {
             const httpAlt = clean.replace("https://", "http://");
-            if (!results.includes(httpAlt)) results.push(httpAlt);
+            if (!targetList.includes(httpAlt)) targetList.push(httpAlt);
         }
     };
 
     for (const raw of rawList) {
         add(raw);
     }
-    return results;
+
+    // Direct LAN IPs first, followed by remaining hostnames / domain endpoints
+    return Array.from(new Set([...directLanList, ...otherList]));
 }
 
 function parsePlexXmlMetadata(xml: string): any[] {
@@ -594,13 +638,15 @@ export async function getPlexLibraryMediaItems(
 ): Promise<PlexMediaStreamInfo[]> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let lastError: any = null;
+    let lastUrlAttempted = "";
 
     for (const cleanBase of urlsToTry) {
         if (!cleanBase) continue;
 
         // 1. Try standard query with includeGuids=1
+        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+        lastUrlAttempted = urlWithGuids;
         try {
-            const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 20000);
             const res = await fetch(urlWithGuids, {
@@ -632,15 +678,16 @@ export async function getPlexLibraryMediaItems(
                     return metadata.map(analyzeMediaStreamInfo);
                 }
             } else {
-                lastError = new Error(`HTTP ${res.status}`);
+                lastError = new Error(`HTTP ${res.status} (${res.statusText || "Error"})`);
             }
         } catch (e: any) {
             lastError = e;
         }
 
         // 2. Try fast fallback without includeGuids=1
+        const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+        lastUrlAttempted = fallbackUrl;
         try {
-            const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
             const fbController = new AbortController();
             const fbTimeoutId = setTimeout(() => fbController.abort(), 15000);
             const fbRes = await fetch(fallbackUrl, {
@@ -671,6 +718,8 @@ export async function getPlexLibraryMediaItems(
                 if (metadata.length > 0) {
                     return metadata.map(analyzeMediaStreamInfo);
                 }
+            } else {
+                lastError = new Error(`HTTP ${fbRes.status} (${fbRes.statusText || "Error"})`);
             }
         } catch (fbErr: any) {
             lastError = fbErr;
@@ -678,7 +727,7 @@ export async function getPlexLibraryMediaItems(
     }
 
     if (lastError) {
-        logger.addLog("WARN", "PLEX", `Query library section ${sectionKey} items failed: ${lastError.message}`);
+        logger.addLog("WARN", "PLEX", `Query library section ${sectionKey} items failed across ${urlsToTry.length} candidate URLs: ${formatPlexErrorDetails(lastError, lastUrlAttempted)}`);
     }
     return [];
 }
@@ -707,6 +756,7 @@ export async function getPlexLibraryCollections(
 }[]> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     const discoveredMap = new Map<string, any>();
+    let lastErrorMsg = "";
 
     for (const cleanBase of urlsToTry) {
         if (!cleanBase) continue;
@@ -715,7 +765,7 @@ export async function getPlexLibraryCollections(
         try {
             const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/collections?X-Plex-Token=${encodeURIComponent(token)}`;
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const timeoutId = setTimeout(() => controller.abort(), 12000);
             const res = await fetch(url, {
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
@@ -761,14 +811,18 @@ export async function getPlexLibraryCollections(
                         if (p.ratingKey && !discoveredMap.has(p.ratingKey)) discoveredMap.set(p.ratingKey, p);
                     }
                 }
+            } else {
+                lastErrorMsg = formatPlexErrorDetails(new Error(`HTTP ${res.status}`), url, res);
             }
-        } catch (e) {}
+        } catch (e: any) {
+            lastErrorMsg = formatPlexErrorDetails(e, `${cleanBase}/library/sections/${sectionKey}/collections`);
+        }
 
         // 2. Try /library/sections/{sectionKey}/all?type=18 (Type 18 collections in PMS)
         try {
             const url2 = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?type=18&X-Plex-Token=${encodeURIComponent(token)}`;
             const controller2 = new AbortController();
-            const timeoutId2 = setTimeout(() => controller2.abort(), 8000);
+            const timeoutId2 = setTimeout(() => controller2.abort(), 12000);
             const res2 = await fetch(url2, {
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
@@ -813,14 +867,82 @@ export async function getPlexLibraryCollections(
                         if (p.ratingKey && !discoveredMap.has(p.ratingKey)) discoveredMap.set(p.ratingKey, p);
                     }
                 }
+            } else {
+                lastErrorMsg = formatPlexErrorDetails(new Error(`HTTP ${res2.status}`), url2, res2);
             }
-        } catch (e) {}
+        } catch (e: any) {
+            lastErrorMsg = formatPlexErrorDetails(e, `${cleanBase}/library/sections/${sectionKey}/all?type=18`);
+        }
 
-        // 3. Try /hubs/sections/{sectionKey} to discover Section Hubs & Recommended Carousels (Recently Added, Top Movies, Adventure, etc.)
+        // 3. Try /library/sections/{sectionKey}/hubs (Section hubs endpoint in modern PMS)
+        try {
+            const urlHubs1 = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/hubs?count=50&includeFeatured=1&includeStations=1&X-Plex-Token=${encodeURIComponent(token)}`;
+            const controllerH1 = new AbortController();
+            const timeoutIdH1 = setTimeout(() => controllerH1.abort(), 12000);
+            const resH1 = await fetch(urlHubs1, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controllerH1.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutIdH1);
+
+            if (resH1.ok) {
+                const textH1 = await resH1.text();
+                const trimmedH1 = textH1.trim();
+                if (trimmedH1.startsWith("{") || trimmedH1.startsWith("[")) {
+                    try {
+                        const dataH1 = JSON.parse(trimmedH1);
+                        const hubs = dataH1.MediaContainer?.Hub || [];
+                        const hubList = Array.isArray(hubs) ? hubs : [hubs];
+                        for (const h of hubList) {
+                            const hubTitle = h.title?.trim();
+                            if (hubTitle) {
+                                const alreadyExists = Array.from(discoveredMap.values()).some(
+                                    x => x.title.toLowerCase() === hubTitle.toLowerCase()
+                                );
+                                if (!alreadyExists) {
+                                    const hubKey = `hub:${h.hubIdentifier || hubTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                                    discoveredMap.set(hubKey, {
+                                        ratingKey: hubKey,
+                                        title: hubTitle,
+                                        summary: h.summary || `Plex Built-in Hub: ${hubTitle}`,
+                                        thumb: h.thumb || h.Metadata?.[0]?.thumb || undefined,
+                                        art: h.art,
+                                        childCount: parseInt(h.size || h.count || (h.Metadata ? h.Metadata.length : 0) || "0", 10),
+                                        smart: true,
+                                        isHub: true,
+                                        hubIdentifier: h.hubIdentifier,
+                                        promotedToHome: h.promoted !== "0" && h.promoted !== 0,
+                                        promotedToRecommended: true,
+                                        promotedToSharedHome: true
+                                    });
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                } else if (trimmedH1.includes("<MediaContainer") || trimmedH1.includes("<Hub")) {
+                    const parsedHubs = parsePlexXmlHubs(trimmedH1, String(sectionKey));
+                    for (const ph of parsedHubs) {
+                        const alreadyExists = Array.from(discoveredMap.values()).some(
+                            x => x.title.toLowerCase() === ph.title.toLowerCase()
+                        );
+                        if (!alreadyExists && ph.ratingKey) {
+                            discoveredMap.set(ph.ratingKey, ph);
+                        }
+                    }
+                }
+            }
+        } catch (e: any) {}
+
+        // 4. Try /hubs/sections/{sectionKey} to discover Section Hubs & Recommended Carousels (Recently Added, Top Movies, Adventure, etc.)
         try {
             const url3 = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}?count=50&includeFeatured=1&includeStations=1&X-Plex-Token=${encodeURIComponent(token)}`;
             const controller3 = new AbortController();
-            const timeoutId3 = setTimeout(() => controller3.abort(), 8000);
+            const timeoutId3 = setTimeout(() => controller3.abort(), 12000);
             const res3 = await fetch(url3, {
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
@@ -878,13 +1000,13 @@ export async function getPlexLibraryCollections(
                     }
                 }
             }
-        } catch (e) {}
+        } catch (e: any) {}
 
-        // 4. Try /hubs/promoted to discover Promoted Home Screen Hubs (Recently Added in Movies, Recently Added in TV, Continue Watching, etc.)
+        // 5. Try /hubs/promoted to discover Promoted Home Screen Hubs
         try {
             const urlPromoted = `${cleanBase}/hubs/promoted?count=50&X-Plex-Token=${encodeURIComponent(token)}`;
             const controller4 = new AbortController();
-            const timeoutId4 = setTimeout(() => controller4.abort(), 8000);
+            const timeoutId4 = setTimeout(() => controller4.abort(), 12000);
             const res4 = await fetch(urlPromoted, {
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
@@ -950,13 +1072,13 @@ export async function getPlexLibraryCollections(
                     }
                 }
             }
-        } catch (e) {}
+        } catch (e: any) {}
 
-        // 5. Try /hubs to discover all Home Screen Hubs (Continue Watching, Recently Added, etc.)
+        // 6. Try /hubs to discover all Home Screen Hubs (Continue Watching, Recently Added, etc.)
         try {
             const urlAllHubs = `${cleanBase}/hubs?count=50&X-Plex-Token=${encodeURIComponent(token)}`;
             const controller5 = new AbortController();
-            const timeoutId5 = setTimeout(() => controller5.abort(), 8000);
+            const timeoutId5 = setTimeout(() => controller5.abort(), 12000);
             const res5 = await fetch(urlAllHubs, {
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
@@ -1022,12 +1144,18 @@ export async function getPlexLibraryCollections(
                     }
                 }
             }
-        } catch (e) {}
+        } catch (e: any) {}
 
         if (discoveredMap.size > 0) {
+            logger.addLog("INFO", "PLEX", `Discovered ${discoveredMap.size} hubs & collections for section ${sectionKey} via "${cleanBase}"`);
             return Array.from(discoveredMap.values());
         }
     }
+
+    if (discoveredMap.size === 0 && lastErrorMsg) {
+        logger.addLog("WARN", "PLEX", `No collections or hubs returned for section ${sectionKey} across ${urlsToTry.length} URLs (${urlsToTry.join(", ")}): ${lastErrorMsg}`);
+    }
+
     return Array.from(discoveredMap.values());
 }
 

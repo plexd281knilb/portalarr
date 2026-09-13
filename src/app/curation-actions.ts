@@ -367,13 +367,17 @@ export async function importPlexLibraryCollectionsAction(serverId?: string, sect
 
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) {
+            logger.addLog("WARN", "PLEX", `Could not resolve connection for Plex server "${serverId}". Check server URL and token.`);
             return { success: false, error: "Plex server unreachable or token not configured." };
         }
 
         const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        logger.addLog("INFO", "PLEX", `Importing collections/hubs for section ${sectionKey} on server "${resolved.serverName}" (trying: ${urlsToTry.join(", ")})`);
+
         const plexCollections = await getPlexLibraryCollections(urlsToTry, resolved.token, sectionKey);
 
         if (plexCollections.length === 0) {
+            logger.addLog("WARN", "PLEX", `No collections or hubs returned by Plex server "${resolved.serverName}" for section ${sectionKey}. Verified URLs tried: ${urlsToTry.join(", ")}`);
             return { success: true, count: 0, message: "No existing collections or hubs found in this Plex library section." };
         }
 
@@ -439,15 +443,16 @@ export async function importPlexLibraryCollectionsAction(serverId?: string, sect
             }
         }
 
-        logger.addLog("SUCCESS", "PLEX", `Discovered ${plexCollections.length} collections from Plex (${importedCount} new, ${updatedCount} refreshed) on section ${sectionKey}`);
+        logger.addLog("SUCCESS", "PLEX", `Discovered ${plexCollections.length} collections/hubs from Plex "${resolved.serverName}" (${importedCount} new, ${updatedCount} refreshed) on section ${sectionKey}`);
         return {
             success: true,
             importedCount,
             updatedCount,
             totalPlexCollections: plexCollections.length,
-            message: `Discovered and synced ${plexCollections.length} Plex collections (${importedCount} new imported, ${updatedCount} refreshed)!`
+            message: `Discovered and synced ${plexCollections.length} Plex collections & hubs (${importedCount} new imported, ${updatedCount} refreshed)!`
         };
     } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Import collections failed for section ${sectionKey}: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
@@ -558,10 +563,15 @@ export async function syncCollectionToPlexAction(collectionId: string) {
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const resolved = await resolveWorkingPlexServerConnection(collection.serverId || undefined);
-        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
+        if (!resolved || !resolved.serverUrl) {
+            logger.addLog("WARN", "PLEX", `Could not resolve connection for Plex server "${collection.serverId}". Check server URL and token.`);
+            return { success: false, error: "Plex server unreachable or token not configured." };
+        }
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+
+        logger.addLog("INFO", "PLEX", `Syncing collection/hub "${collection.title}" (section: ${collection.sectionKey}, server: "${resolved.serverName}"). Trying endpoints: ${urlsToTry.join(", ")}`);
 
         // If this is an existing Plex-native collection, hub, or already has a ratingKey in PMS:
         const isNativePlex = collection.sourceType === "plex_native" || 
@@ -569,7 +579,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                              collection.sourceType === "plex_hub" || 
                              collection.category === "Plex" || 
                              collection.category === "Plex Library" || 
-                             collection.category === "Plex Smart" ||
+                             collection.category === "Plex Smart" || 
                              collection.category === "Plex Hub" ||
                              collection.ratingKey?.startsWith("hub:") ||
                              (collection.sourceType === "plex_query" && !collection.sourceQuery?.includes("hdr:") && !collection.sourceQuery?.includes("audio:") && !collection.sourceQuery?.includes("1980") && !collection.sourceQuery?.includes("1990") && !collection.sourceQuery?.includes("tag:"));
@@ -608,6 +618,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 });
 
                 const label = found.isHub ? "Hub" : "collection";
+                logger.addLog("SUCCESS", "PLEX", `Synced Plex ${label} "${collection.title}" (${found.childCount} items) on server "${resolved.serverName}" with sort prefix "${collection.sortPrefix || "!00_"}"`);
                 return {
                     success: true,
                     itemCount: found.childCount,
@@ -711,6 +722,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         }
 
         if (matchingRatingKeys.length === 0) {
+            logger.addLog("WARN", "PLEX", `No matching media found in section ${collection.sectionKey} for collection "${collection.title}" (${libraryItems.length} items evaluated, query: ${collection.sourceQuery || "none"}).`);
             return {
                 success: false,
                 message: `No matching library media found for collection criteria (${libraryItems.length} items evaluated).`
@@ -744,6 +756,8 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             }
         });
 
+        logger.addLog("SUCCESS", "PLEX", `Successfully synced collection "${collection.title}" (${matchingRatingKeys.length} items) to Plex server "${resolved.serverName}"`);
+
         return {
             success: true,
             itemCount: matchingRatingKeys.length,
@@ -751,6 +765,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             message: `Synced "${collection.title}" with ${matchingRatingKeys.length} items to Plex!`
         };
     } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Sync collection "${collectionId}" failed: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
