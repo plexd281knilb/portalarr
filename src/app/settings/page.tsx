@@ -267,8 +267,7 @@ function SettingsPageContent() {
     ) : false;
 
     const isPlexDirty = initialDataRef.current ? (
-        mainPlexTokenInput !== initialDataRef.current.mainPlexToken ||
-        mainPlexUrlInput !== initialDataRef.current.mainPlexUrl
+        mainPlexTokenInput !== initialDataRef.current.mainPlexToken
     ) : false;
 
     const isAutomationDirty = initialDataRef.current ? (
@@ -1428,22 +1427,16 @@ function SettingsPageContent() {
                                                     Token Inactive
                                                 </Badge>
                                             )}
-                                            {systemSettings?.mainPlexUrl && (
-                                                <Badge variant="outline" className="bg-sky-500/10 text-sky-400 border-sky-500/30 text-[10px]">
-                                                    Custom URL Set
-                                                </Badge>
-                                            )}
                                         </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent>
                                     <form 
-                                        key={`plex-form-${systemSettings?.mainPlexToken ? "linked" : "empty"}-${systemSettings?.mainPlexUrl || ""}`} 
+                                        key={`plex-form-${systemSettings?.mainPlexToken ? "linked" : "empty"}`} 
                                         onSubmit={async (e) => {
                                             e.preventDefault();
                                             const formData = new FormData();
                                             formData.append("mainPlexToken", mainPlexTokenInput);
-                                            formData.append("mainPlexUrl", mainPlexUrlInput);
                                             const res = await savePlexSettingsAction(formData);
                                             if (res.success) {
                                                 setSavePlexMsg(res.message || "Plex settings saved successfully!");
@@ -1536,36 +1529,11 @@ function SettingsPageContent() {
                                             </p>
                                         </div>
 
-                                        {/* PLEX SERVER URL OVERRIDE */}
-                                        <div className="space-y-1.5 pt-3 border-t border-muted/30">
-                                            <div className="flex items-center justify-between">
-                                                <Label htmlFor="mainPlexUrl" className="text-xs font-semibold">Custom Plex Server URL / IP (Optional)</Label>
-                                                {systemSettings?.mainPlexUrl && (
-                                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                                                        <CheckCircle2 className="h-3 w-3" /> Configured
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <Input 
-                                                id="mainPlexUrl" 
-                                                name="mainPlexUrl" 
-                                                type="text" 
-                                                value={mainPlexUrlInput} 
-                                                onChange={(e) => setMainPlexUrlInput(e.target.value)} 
-                                                placeholder="http://192.168.1.50:32400 or http://localhost:32400" 
-                                                className="text-xs font-mono"
-                                                autoComplete="off"
-                                            />
-                                            <p className="text-[10px] text-muted-foreground">
-                                                Direct connection URL override for Docker or custom network environments (e.g. <code>http://192.168.1.100:32400</code>, <code>http://host.docker.internal:32400</code>, or <code>http://plex:32400</code>). If left empty, Portalarr uses auto-discovered Plex.tv addresses.
-                                            </p>
-                                        </div>
-
                                         {/* PLEX ACTION BUTTONS */}
                                         <div className="flex flex-wrap gap-2 pt-2">
                                             <Button type="submit" className="flex-1 font-bold bg-amber-600 hover:bg-amber-500 text-white hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all shadow-md">
                                                 <Tv className="h-4 w-4 mr-2"/> 
-                                                Save Plex Settings
+                                                Save Plex Token
                                             </Button>
 
                                             <Button 
@@ -1580,18 +1548,18 @@ function SettingsPageContent() {
                                                 Sync Friends Now
                                             </Button>
                                             
-                                            {(systemSettings?.mainPlexToken || systemSettings?.mainPlexUrl) && (
+                                            {systemSettings?.mainPlexToken && (
                                                 <Button 
                                                     type="button" 
                                                     variant="destructive" 
                                                     className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
                                                     onClick={async () => {
-                                                        if(confirm("Are you sure you want to wipe Plex token and server URL?")) {
+                                                        if(confirm("Are you sure you want to wipe Plex token?")) {
                                                             await clearPlexSettings();
                                                             loadAllData();
                                                         }
                                                     }}
-                                                    title="Clear Plex Credentials"
+                                                    title="Clear Plex Token"
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
