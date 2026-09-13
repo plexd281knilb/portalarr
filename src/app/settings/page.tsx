@@ -4,7 +4,8 @@ import { useState, useEffect, useTransition, Suspense, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
-    getSettings, saveSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
+    getSettings, saveSettings, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
+    getPlexServersAction, addPlexServerAction, updatePlexServerAction, removePlexServerAction, setDefaultPlexServerAction, testPlexServerConfigAction, testPlexServerConnectionAction,
     getEmailNotificationSettings, saveEmailNotificationSettingsAction,
     getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance,
     getGlancesInstances, addGlancesInstance, removeGlancesInstance, updateGlancesInstance,
@@ -32,7 +33,7 @@ import {
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
     Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
-    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star
 } from "lucide-react";
 import { 
     Dialog, 
@@ -154,6 +155,20 @@ function SettingsPageContent() {
     const [testingAppForm, setTestingAppForm] = useState(false);
     const [appFormTestResult, setAppFormTestResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
 
+    // Plex Server States
+    const [plexServers, setPlexServers] = useState<any[]>([]);
+    const [editingPlexServer, setEditingPlexServer] = useState<any>(null);
+    const [testingPlexServerId, setTestingPlexServerId] = useState<string | null>(null);
+    const [plexServerTestResults, setPlexServerTestResults] = useState<{ [id: string]: { success?: boolean, msg?: string, err?: string } }>({});
+    const [testingPlexServerForm, setTestingPlexServerForm] = useState(false);
+    const [plexServerFormTestResult, setPlexServerFormTestResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
+    const [showPlexServerFormToken, setShowPlexServerFormToken] = useState(false);
+    const [plexServerActionMsg, setPlexServerActionMsg] = useState("");
+    const [plexServerFormName, setPlexServerFormName] = useState("");
+    const [plexServerFormUrl, setPlexServerFormUrl] = useState("");
+    const [plexServerFormToken, setPlexServerFormToken] = useState("");
+    const [plexServerFormIsDefault, setPlexServerFormIsDefault] = useState(false);
+
     // Curation & Metadata API Key States
     const [tmdbKey, setTmdbKey] = useState("");
     const [traktKey, setTraktKey] = useState("");
@@ -199,6 +214,13 @@ function SettingsPageContent() {
     const [testAiResult, setTestAiResult] = useState<any>(null);
     const [testAiErr, setTestAiErr] = useState("");
     const [saveAiMsg, setSaveAiMsg] = useState("");
+    const [saveSmtpMsg, setSaveSmtpMsg] = useState("");
+    const [savePlexMsg, setSavePlexMsg] = useState("");
+    const [saveAutomationMsg, setSaveAutomationMsg] = useState("");
+    const [saveGoogleBooksMsg, setSaveGoogleBooksMsg] = useState("");
+    const [syncingPlexFriends, setSyncingPlexFriends] = useState(false);
+    const [syncPlexFriendsMsg, setSyncPlexFriendsMsg] = useState("");
+    const [syncPlexFriendsErr, setSyncPlexFriendsErr] = useState("");
 
     // Baseline snapshot for tracking unsaved changes
     const initialDataRef = useRef<{
@@ -241,7 +263,10 @@ function SettingsPageContent() {
         String(smtpPortInput) !== String(initialDataRef.current.smtpPort) ||
         smtpUserInput !== initialDataRef.current.smtpUser ||
         smtpPassInput !== initialDataRef.current.smtpPass ||
-        smtpFromInput !== initialDataRef.current.smtpFrom ||
+        smtpFromInput !== initialDataRef.current.smtpFrom
+    ) : false;
+
+    const isPlexDirty = initialDataRef.current ? (
         mainPlexTokenInput !== initialDataRef.current.mainPlexToken ||
         mainPlexUrlInput !== initialDataRef.current.mainPlexUrl
     ) : false;
@@ -278,7 +303,8 @@ function SettingsPageContent() {
 
     const unsavedSections: string[] = [];
     if (isAlertBannerDirty) unsavedSections.push("System Alert Banner");
-    if (isSmtpDirty) unsavedSections.push("Global SMTP & Plex Token");
+    if (isSmtpDirty) unsavedSections.push("Global SMTP Settings");
+    if (isPlexDirty) unsavedSections.push("Plex Server & Admin Token");
     if (isAutomationDirty) unsavedSections.push("Automation & Directory Paths");
     if (isGoogleBooksDirty) unsavedSections.push("Google Books API Key");
     if (isCurationDirty) unsavedSections.push("Curation & Discovery API Keys");
@@ -287,7 +313,7 @@ function SettingsPageContent() {
     if (isBetaDirty) unsavedSections.push("Beta Dashboard Intro");
 
     const hasUnsavedChanges = unsavedSections.length > 0;
-    const isGeneralTabDirty = isAlertBannerDirty || isSmtpDirty || isAutomationDirty || isGoogleBooksDirty || isCurationDirty || isAiDirty;
+    const isGeneralTabDirty = isAlertBannerDirty || isSmtpDirty || isPlexDirty || isAutomationDirty || isGoogleBooksDirty || isCurationDirty || isAiDirty;
     const isBetaTabDirty = isRoadmapDirty || isBetaDirty;
 
     // Browser-level reload/close protection
@@ -439,6 +465,38 @@ function SettingsPageContent() {
         }
     };
 
+    const handleTestPlexServer = async (id: string) => {
+        setTestingPlexServerId(id);
+        const res: any = await testPlexServerConnectionAction(id);
+        setTestingPlexServerId(null);
+        setPlexServerTestResults(prev => ({
+            ...prev,
+            [id]: res.success ? { success: true, msg: res.message } : { success: false, err: res.error }
+        }));
+    };
+
+    const handleTestPlexServerForm = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        const form = e.currentTarget.closest('form');
+        if (!form) return;
+        const url = (form.elements.namedItem("url") as HTMLInputElement)?.value || plexServerFormUrl;
+        const token = (form.elements.namedItem("token") as HTMLInputElement)?.value || plexServerFormToken;
+        if (!url) {
+            setPlexServerFormTestResult({ success: false, err: "Please enter a server URL to test." });
+            return;
+        }
+        setTestingPlexServerForm(true);
+        setPlexServerFormTestResult(null);
+        try {
+            const res = await testPlexServerConfigAction(url, token || undefined);
+            setPlexServerFormTestResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
+        } catch (err: any) {
+            setPlexServerFormTestResult({ success: false, err: err.message || "Failed to test connection" });
+        } finally {
+            setTestingPlexServerForm(false);
+        }
+    };
+
     const handleValidatePath = async (pathStr: string) => {
         setValidatingPath(true);
         setPathResult(null);
@@ -574,6 +632,28 @@ function SettingsPageContent() {
         }
     };
 
+    const handleSyncPlexFriends = async () => {
+        setSyncingPlexFriends(true);
+        setSyncPlexFriendsMsg("");
+        setSyncPlexFriendsErr("");
+        try {
+            const res: any = await syncPlexFriendsAction();
+            if (res.success) {
+                setSyncPlexFriendsMsg(res.message || `Plex friends synced successfully!`);
+                setTimeout(() => setSyncPlexFriendsMsg(""), 5000);
+                loadAllData();
+            } else {
+                setSyncPlexFriendsErr(res.error || "Failed to sync Plex friends.");
+                setTimeout(() => setSyncPlexFriendsErr(""), 6000);
+            }
+        } catch (e: any) {
+            setSyncPlexFriendsErr(e.message || "Failed to sync Plex friends.");
+            setTimeout(() => setSyncPlexFriendsErr(""), 6000);
+        } finally {
+            setSyncingPlexFriends(false);
+        }
+    };
+
     // Email Notification Controls State
     const [emailSettings, setEmailSettings] = useState({
         emailNotificationsEnabled: true,
@@ -677,7 +757,7 @@ function SettingsPageContent() {
         }, 2500);
 
         try {
-            const [u, s, t, g, m, bt, bc, rt, ab, ai] = await Promise.all([
+            const [u, s, t, g, m, bt, bc, rt, ab, ai, ps] = await Promise.all([
                 getAppUsers().catch(err => { console.error("getAppUsers error:", err); return []; }),
                 getSettings().catch(err => { console.error("getSettings error:", err); return {}; }),
                 getTautulliInstances().catch(err => { console.error("getTautulliInstances error:", err); return []; }),
@@ -687,10 +767,12 @@ function SettingsPageContent() {
                 getBetaCards().catch(() => []),
                 getRoadmapText().catch(() => ""),
                 getAlertBanner().catch(() => ({ enabled: false, text: "" })),
-                getAiAgentSettings().catch(() => null)
+                getAiAgentSettings().catch(() => null),
+                getPlexServersAction().catch(err => { console.error("getPlexServersAction error:", err); return []; })
             ]);
             setUsers(u || []);
             setSystemSettings(s || {});
+            setPlexServers(ps || []);
             
             const bannerTextVal = ab?.text || "";
             const bannerEnabledVal = ab?.enabled || false;
@@ -833,15 +915,25 @@ function SettingsPageContent() {
                 formData.append("smtpUser", smtpUserInput);
                 formData.append("smtpPass", smtpPassInput);
                 formData.append("smtpFrom", smtpFromInput);
-                formData.append("mainPlexToken", mainPlexTokenInput);
-                formData.append("mainPlexUrl", mainPlexUrlInput);
                 promises.push(saveSettings(formData));
             }
 
-            if (isAutomationDirty || isGoogleBooksDirty) {
+            if (isPlexDirty) {
+                const formData = new FormData();
+                formData.append("mainPlexToken", mainPlexTokenInput);
+                formData.append("mainPlexUrl", mainPlexUrlInput);
+                promises.push(savePlexSettingsAction(formData));
+            }
+
+            if (isAutomationDirty) {
                 const formData = new FormData();
                 formData.append("autoSyncInterval", String(autoSyncIntervalInput));
                 formData.append("downloadsPath", inputDownloadsPath);
+                promises.push(saveJobSettings(formData));
+            }
+
+            if (isGoogleBooksDirty) {
+                const formData = new FormData();
                 formData.append("googleBooksApiKey", googleBooksKey);
                 promises.push(saveJobSettings(formData));
             }
@@ -901,6 +993,7 @@ function SettingsPageContent() {
         setSmtpPassInput(init.smtpPass);
         setSmtpFromInput(init.smtpFrom);
         setMainPlexTokenInput(init.mainPlexToken);
+        setMainPlexUrlInput(init.mainPlexUrl);
         setAutoSyncIntervalInput(init.autoSyncInterval);
         setInputDownloadsPath(init.downloadsPath);
         setGoogleBooksKey(init.googleBooksKey);
@@ -1110,105 +1203,296 @@ function SettingsPageContent() {
                     </Card>
 
                     <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-                        {/* SMTP & EMAIL INTEGRATION */}
-                        <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
-                            isSmtpDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
-                        }`}>
-                            <CardHeader>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Mail className="h-5 w-5 text-primary" /> Global SMTP & Kindle Sender
-                                        </CardTitle>
-                                        <CardDescription>Configure outbound SMTP server for Send-to-Kindle delivery & admin notifications.</CardDescription>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                        {isSmtpDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                                ● Unsaved Changes
-                                            </Badge>
-                                        )}
-                                        {systemSettings?.smtpHost ? (
-                                            <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
-                                                <CheckCircle2 className="h-3 w-3" /> SMTP Configured
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
-                                                SMTP Inactive
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <form 
-                                    key={`smtp-form-${systemSettings?.smtpHost || "new"}-${systemSettings?.smtpUser || ""}`} 
-                                    onSubmit={(e) => handleForm(e, saveSettings)} 
-                                    className="space-y-4"
-                                    autoComplete="off"
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                >
-                                    {testEmailMsg && (
-                                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
-                                            <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                            <span>{testEmailMsg}</span>
+                        <div className="space-y-6">
+                            {/* SMTP & EMAIL INTEGRATION */}
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isSmtpDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <Mail className="h-5 w-5 text-primary" /> Global SMTP & Kindle Sender
+                                            </CardTitle>
+                                            <CardDescription>Configure outbound SMTP server for Send-to-Kindle delivery & admin notifications.</CardDescription>
                                         </div>
-                                    )}
-                                    {testEmailErr && (
-                                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
-                                            <XCircle className="h-4 w-4 shrink-0" />
-                                            <span>{testEmailErr}</span>
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {isSmtpDirty && (
+                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                    ● Unsaved Changes
+                                                </Badge>
+                                            )}
+                                            {systemSettings?.smtpHost ? (
+                                                <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                                    <CheckCircle2 className="h-3 w-3" /> SMTP Configured
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
+                                                    SMTP Inactive
+                                                </Badge>
+                                            )}
                                         </div>
-                                    )}
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        key={`smtp-form-${systemSettings?.smtpHost || "new"}-${systemSettings?.smtpUser || ""}`} 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData();
+                                            formData.append("smtpHost", smtpHostInput);
+                                            formData.append("smtpPort", String(smtpPortInput));
+                                            formData.append("smtpUser", smtpUserInput);
+                                            formData.append("smtpPass", smtpPassInput);
+                                            formData.append("smtpFrom", smtpFromInput);
+                                            const res = await saveSettings(formData);
+                                            if (res.success) {
+                                                setSaveSmtpMsg("SMTP settings saved successfully!");
+                                                setTimeout(() => setSaveSmtpMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }} 
+                                        className="space-y-4"
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    >
+                                        {saveSmtpMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveSmtpMsg}</span>
+                                            </div>
+                                        )}
+                                        {testEmailMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{testEmailMsg}</span>
+                                            </div>
+                                        )}
+                                        {testEmailErr && (
+                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <XCircle className="h-4 w-4 shrink-0" />
+                                                <span>{testEmailErr}</span>
+                                            </div>
+                                        )}
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label>SMTP Host</Label>
-                                            <Input 
-                                                name="smtpHost" 
-                                                value={smtpHostInput} 
-                                                onChange={(e) => setSmtpHostInput(e.target.value)} 
-                                                placeholder="smtp.gmail.com" 
-                                                autoComplete="off" 
-                                                data-1p-ignore="true" 
-                                                data-lpignore="true"
-                                            />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>SMTP Host</Label>
+                                                <Input 
+                                                    name="smtpHost" 
+                                                    value={smtpHostInput} 
+                                                    onChange={(e) => setSmtpHostInput(e.target.value)} 
+                                                    placeholder="smtp.gmail.com" 
+                                                    autoComplete="off" 
+                                                    data-1p-ignore="true" 
+                                                    data-lpignore="true"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Port</Label>
+                                                <Input 
+                                                    name="smtpPort" 
+                                                    value={smtpPortInput} 
+                                                    onChange={(e) => setSmtpPortInput(e.target.value)} 
+                                                    placeholder="587" 
+                                                    autoComplete="off" 
+                                                    data-1p-ignore="true" 
+                                                    data-lpignore="true"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>User / Email</Label>
+                                                <Input 
+                                                    name="smtpUser" 
+                                                    value={smtpUserInput} 
+                                                    onChange={(e) => setSmtpUserInput(e.target.value)} 
+                                                    placeholder="user@gmail.com" 
+                                                    autoComplete="off" 
+                                                    data-1p-ignore="true" 
+                                                    data-lpignore="true"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Password</Label>
+                                                <div className="relative">
+                                                    <Input 
+                                                        name="smtpPass" 
+                                                        type={showSmtpKey ? "text" : "password"} 
+                                                        value={smtpPassInput} 
+                                                        onChange={(e) => setSmtpPassInput(e.target.value)} 
+                                                        className="pr-8"
+                                                        autoComplete="new-password"
+                                                        data-1p-ignore="true"
+                                                        data-lpignore="true"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowSmtpKey(!showSmtpKey)}
+                                                    >
+                                                        {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground leading-tight">
+                                                    For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
+                                                </p>
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label>Port</Label>
+                                            <Label>Sender Email Address (From)</Label>
                                             <Input 
-                                                name="smtpPort" 
-                                                value={smtpPortInput} 
-                                                onChange={(e) => setSmtpPortInput(e.target.value)} 
-                                                placeholder="587" 
+                                                name="smtpFrom" 
+                                                value={smtpFromInput} 
+                                                onChange={(e) => setSmtpFromInput(e.target.value)} 
+                                                placeholder="portalarr@domain.com" 
                                                 autoComplete="off" 
                                                 data-1p-ignore="true" 
                                                 data-lpignore="true"
                                             />
+                                            <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
+                                                <div className="font-semibold text-foreground flex items-center gap-1">
+                                                    <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
+                                                </div>
+                                                <div>Add this Sender Email to your users' <strong>Amazon Approved Personal Document E-mail List</strong> under Amazon → Manage Your Content and Devices → Preferences.</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
+                                                <Mail className="h-4 w-4 mr-2"/> 
+                                                Save SMTP Settings
+                                            </Button>
+
+                                            <Button 
+                                                type="button" 
+                                                variant="outline"
+                                                className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all"
+                                                onClick={handleTestSmtp}
+                                                disabled={testEmailLoading || !systemSettings?.smtpHost}
+                                                title="Send a test email to your SMTP account"
+                                            >
+                                                {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
+                                                Test Connection
+                                            </Button>
+                                            
+                                            {systemSettings?.smtpHost && (
+                                                <Button 
+                                                    type="button" 
+                                                    variant="destructive" 
+                                                    className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
+                                                    onClick={async () => {
+                                                        if(confirm("Are you sure you want to wipe SMTP settings?")) {
+                                                            await clearSmtpSettings();
+                                                            loadAllData();
+                                                        }
+                                                    }}
+                                                    title="Clear Credentials"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                            {/* PLEX SERVER & ADMIN TOKEN INTEGRATION */}
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isPlexDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <Tv className="h-5 w-5 text-amber-500" /> Plex Media Server & Admin Connection
+                                            </CardTitle>
+                                            <CardDescription>Link server owner credentials to auto-sync user libraries, friend shares, and direct connection URLs.</CardDescription>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {isPlexDirty && (
+                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                    ● Unsaved Changes
+                                                </Badge>
+                                            )}
+                                            {systemSettings?.mainPlexToken ? (
+                                                <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                                    <CheckCircle2 className="h-3 w-3" /> Token Linked
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
+                                                    Token Inactive
+                                                </Badge>
+                                            )}
+                                            {systemSettings?.mainPlexUrl && (
+                                                <Badge variant="outline" className="bg-sky-500/10 text-sky-400 border-sky-500/30 text-[10px]">
+                                                    Custom URL Set
+                                                </Badge>
+                                            )}
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        key={`plex-form-${systemSettings?.mainPlexToken ? "linked" : "empty"}-${systemSettings?.mainPlexUrl || ""}`} 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData();
+                                            formData.append("mainPlexToken", mainPlexTokenInput);
+                                            formData.append("mainPlexUrl", mainPlexUrlInput);
+                                            const res = await savePlexSettingsAction(formData);
+                                            if (res.success) {
+                                                setSavePlexMsg(res.message || "Plex settings saved successfully!");
+                                                setTimeout(() => setSavePlexMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }} 
+                                        className="space-y-4"
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    >
+                                        {savePlexMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{savePlexMsg}</span>
+                                            </div>
+                                        )}
+                                        {syncPlexFriendsMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{syncPlexFriendsMsg}</span>
+                                            </div>
+                                        )}
+                                        {syncPlexFriendsErr && (
+                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <XCircle className="h-4 w-4 shrink-0" />
+                                                <span>{syncPlexFriendsErr}</span>
+                                            </div>
+                                        )}
+
+                                        {/* PLEX TOKEN FIELD */}
                                         <div className="space-y-2">
-                                            <Label>User / Email</Label>
-                                            <Input 
-                                                name="smtpUser" 
-                                                value={smtpUserInput} 
-                                                onChange={(e) => setSmtpUserInput(e.target.value)} 
-                                                placeholder="user@gmail.com" 
-                                                autoComplete="off" 
-                                                data-1p-ignore="true" 
-                                                data-lpignore="true"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Password</Label>
+                                            <div className="flex items-center justify-between">
+                                                <Label htmlFor="mainPlexToken" className="text-xs font-semibold">Admin Plex Token (Auto-Syncs Friends List)</Label>
+                                                {systemSettings?.mainPlexToken && (
+                                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                        <CheckCircle2 className="h-3 w-3" /> Encrypted & Saved
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <Input 
-                                                    name="smtpPass" 
-                                                    type={showSmtpKey ? "text" : "password"} 
-                                                    value={smtpPassInput} 
-                                                    onChange={(e) => setSmtpPassInput(e.target.value)} 
+                                                    id="mainPlexToken" 
+                                                    name="mainPlexToken" 
+                                                    type={showPlexKey ? "text" : "password"} 
+                                                    value={mainPlexTokenInput} 
+                                                    onChange={(e) => setMainPlexTokenInput(e.target.value)} 
+                                                    placeholder="xxxxxxxxxxxxxxxxxxxx" 
                                                     className="pr-8"
                                                     autoComplete="new-password"
                                                     data-1p-ignore="true"
@@ -1219,94 +1503,38 @@ function SettingsPageContent() {
                                                     variant="ghost"
                                                     size="icon"
                                                     className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                    onClick={() => setShowSmtpKey(!showSmtpKey)}
+                                                    onClick={() => setShowPlexKey(!showPlexKey)}
                                                 >
-                                                    {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    {showPlexKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                 </Button>
                                             </div>
-                                            <p className="text-[10px] text-muted-foreground leading-tight">
-                                                For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
+                                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleAutoLinkPlexToken}
+                                                    disabled={isLinkingPlex}
+                                                    className="text-xs gap-1.5 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 hover:border-amber-500 font-semibold transition-all duration-200"
+                                                >
+                                                    {isLinkingPlex ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Tv className="h-3.5 w-3.5" />}
+                                                    {isLinkingPlex ? "Connecting to Plex..." : "Sign in with Plex to Auto-Link Token"}
+                                                </Button>
+                                                {plexLinkMsg && (
+                                                    <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                                        <CheckCircle2 className="h-3.5 w-3.5" /> {plexLinkMsg}
+                                                    </span>
+                                                )}
+                                                {plexLinkErr && (
+                                                    <span className="text-xs text-destructive font-medium flex items-center gap-1">
+                                                        <XCircle className="h-3.5 w-3.5" /> {plexLinkErr}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground mt-1">
+                                                Click the button above to sign in with Plex and automatically link your server owner token, or paste your <code>X-Plex-Token</code> manually. <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" className="text-primary hover:underline">Read the official guide</a>.
                                             </p>
                                         </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Sender Email Address (From)</Label>
-                                        <Input 
-                                            name="smtpFrom" 
-                                            value={smtpFromInput} 
-                                            onChange={(e) => setSmtpFromInput(e.target.value)} 
-                                            placeholder="portalarr@domain.com" 
-                                            autoComplete="off" 
-                                            data-1p-ignore="true" 
-                                            data-lpignore="true"
-                                        />
-                                        <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
-                                            <div className="font-semibold text-foreground flex items-center gap-1">
-                                                <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
-                                            </div>
-                                            <div>Add this Sender Email to your users' <strong>Amazon Approved Personal Document E-mail List</strong> under Amazon → Manage Your Content and Devices → Preferences.</div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* PLEX TOKEN SECTION */}
-                                    <div className="space-y-2 border-t border-muted/40 pt-4 mt-4">
-                                        <div className="flex items-center justify-between">
-                                            <Label htmlFor="mainPlexToken" className="text-xs font-semibold">Admin Plex Token (Auto-Syncs Friends List)</Label>
-                                            {systemSettings?.mainPlexToken && (
-                                                <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                                                    <CheckCircle2 className="h-3 w-3" /> Encrypted & Saved
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="relative">
-                                            <Input 
-                                                id="mainPlexToken" 
-                                                name="mainPlexToken" 
-                                                type={showPlexKey ? "text" : "password"} 
-                                                value={mainPlexTokenInput} 
-                                                onChange={(e) => setMainPlexTokenInput(e.target.value)} 
-                                                placeholder="xxxxxxxxxxxxxxxxxxxx" 
-                                                className="pr-8"
-                                                autoComplete="new-password"
-                                                data-1p-ignore="true"
-                                                data-lpignore="true"
-                                            />
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                onClick={() => setShowPlexKey(!showPlexKey)}
-                                            >
-                                                {showPlexKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                            </Button>
-                                        </div>
-                                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleAutoLinkPlexToken}
-                                                disabled={isLinkingPlex}
-                                                className="text-xs gap-1.5 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 hover:border-amber-500 font-semibold transition-all duration-200"
-                                            >
-                                                {isLinkingPlex ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Tv className="h-3.5 w-3.5" />}
-                                                {isLinkingPlex ? "Connecting to Plex..." : "Sign in with Plex to Auto-Link Token"}
-                                            </Button>
-                                            {plexLinkMsg && (
-                                                <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-                                                    <CheckCircle2 className="h-3.5 w-3.5" /> {plexLinkMsg}
-                                                </span>
-                                            )}
-                                            {plexLinkErr && (
-                                                <span className="text-xs text-destructive font-medium flex items-center gap-1">
-                                                    <XCircle className="h-3.5 w-3.5" /> {plexLinkErr}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-[10px] text-muted-foreground mt-1">
-                                            Click the button above to sign in with Plex and automatically link your server owner token, or paste your <code>X-Plex-Token</code> manually. <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" className="text-primary hover:underline">Read the official guide</a>.
-                                        </p>
 
                                         {/* PLEX SERVER URL OVERRIDE */}
                                         <div className="space-y-1.5 pt-3 border-t border-muted/30">
@@ -1332,46 +1560,375 @@ function SettingsPageContent() {
                                                 Direct connection URL override for Docker or custom network environments (e.g. <code>http://192.168.1.100:32400</code>, <code>http://host.docker.internal:32400</code>, or <code>http://plex:32400</code>). If left empty, Portalarr uses auto-discovered Plex.tv addresses.
                                             </p>
                                         </div>
-                                    </div>
 
-                                    <div className="flex flex-wrap gap-2 pt-2">
-                                        <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
-                                            <Send className="h-4 w-4 mr-2"/> 
-                                            Save SMTP Settings
-                                        </Button>
+                                        {/* PLEX ACTION BUTTONS */}
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            <Button type="submit" className="flex-1 font-bold bg-amber-600 hover:bg-amber-500 text-white hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all shadow-md">
+                                                <Tv className="h-4 w-4 mr-2"/> 
+                                                Save Plex Settings
+                                            </Button>
 
-                                        <Button 
-                                            type="button" 
-                                            variant="outline"
-                                            className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all"
-                                            onClick={handleTestSmtp}
-                                            disabled={testEmailLoading || !systemSettings?.smtpHost}
-                                            title="Send a test email to your SMTP account"
-                                        >
-                                            {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
-                                            Test Connection
-                                        </Button>
-                                        
-                                        {(systemSettings?.smtpHost || systemSettings?.mainPlexToken) && (
                                             <Button 
                                                 type="button" 
-                                                variant="destructive" 
-                                                className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
-                                                onClick={async () => {
-                                                    if(confirm("Are you sure you want to wipe SMTP settings?")) {
-                                                        await clearSmtpSettings();
-                                                        loadAllData();
-                                                    }
-                                                }}
-                                                title="Clear Credentials"
+                                                variant="outline"
+                                                className="text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-semibold hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                onClick={handleSyncPlexFriends}
+                                                disabled={syncingPlexFriends || !systemSettings?.mainPlexToken}
+                                                title="Sync friend list and access shares from Plex.tv"
                                             >
-                                                <Trash2 className="h-4 w-4" />
+                                                {syncingPlexFriends ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                                                Sync Friends Now
                                             </Button>
-                                        )}
+                                            
+                                            {(systemSettings?.mainPlexToken || systemSettings?.mainPlexUrl) && (
+                                                <Button 
+                                                    type="button" 
+                                                    variant="destructive" 
+                                                    className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
+                                                    onClick={async () => {
+                                                        if(confirm("Are you sure you want to wipe Plex token and server URL?")) {
+                                                            await clearPlexSettings();
+                                                            loadAllData();
+                                                        }
+                                                    }}
+                                                    title="Clear Plex Credentials"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                            {/* MULTI-PLEX SERVERS MANAGEMENT */}
+                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2 text-amber-400">
+                                                <Tv className="h-5 w-5 text-amber-500" /> {editingPlexServer ? `Edit Plex Server: ${editingPlexServer.name}` : "Plex Media Servers"}
+                                            </CardTitle>
+                                            <CardDescription>
+                                                {editingPlexServer ? "Update server connection URL or token." : "Configure multiple direct Plex servers. Test connection latency and select your default server."}
+                                            </CardDescription>
+                                        </div>
+                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
+                                            {plexServers.length} {plexServers.length === 1 ? "Server" : "Servers"} Configured
+                                        </Badge>
                                     </div>
-                                </form>
-                            </CardContent>
-                        </Card>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {plexServerActionMsg && (
+                                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                            <span>{plexServerActionMsg}</span>
+                                        </div>
+                                    )}
+
+                                    {/* LIST OF CONFIGURED SERVERS */}
+                                    {!editingPlexServer && (
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                            {plexServers.length === 0 ? (
+                                                <div className="text-xs text-muted-foreground p-3 rounded-lg border border-dashed border-muted/50 text-center italic">
+                                                    No manual Plex servers configured yet. Add your first server below!
+                                                </div>
+                                            ) : (
+                                                plexServers.map((server) => (
+                                                    <div key={server.id} className="space-y-2 border border-border/40 p-3 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                                        <div className="flex justify-between items-start gap-2">
+                                                            <div className="truncate space-y-0.5">
+                                                                <div className="font-bold flex items-center gap-2">
+                                                                    <span className="truncate">{server.name}</span>
+                                                                    {server.isDefault && (
+                                                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[9px] gap-1 px-1.5 py-0">
+                                                                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" /> Default
+                                                                        </Badge>
+                                                                    )}
+                                                                    {server.token ? (
+                                                                        <Badge variant="outline" className="bg-purple-500/10 text-purple-300 border-purple-500/30 text-[9px] px-1.5 py-0">
+                                                                            Custom Token
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[9px] px-1.5 py-0">
+                                                                            Admin Token
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-xs font-mono text-muted-foreground truncate flex items-center gap-1.5">
+                                                                    <code>{server.url}</code>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex gap-1 shrink-0 items-center">
+                                                                <Button 
+                                                                    type="button"
+                                                                    size="sm" 
+                                                                    variant="outline" 
+                                                                    className="h-7 text-[11px] px-2.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-semibold gap-1 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                                    disabled={testingPlexServerId === server.id}
+                                                                    onClick={() => handleTestPlexServer(server.id)}
+                                                                    title="Test connection to this Plex server"
+                                                                >
+                                                                    {testingPlexServerId === server.id ? <Loader2 className="h-3 w-3 animate-spin text-amber-400" /> : <Zap className="h-3 w-3 text-amber-400" />}
+                                                                    Test
+                                                                </Button>
+
+                                                                {!server.isDefault && (
+                                                                    <Button 
+                                                                        type="button"
+                                                                        size="icon" 
+                                                                        variant="ghost" 
+                                                                        className="h-7 w-7 text-muted-foreground hover:text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                                        onClick={async () => {
+                                                                            await setDefaultPlexServerAction(server.id);
+                                                                            setPlexServerActionMsg(`"${server.name}" set as default Plex server.`);
+                                                                            setTimeout(() => setPlexServerActionMsg(""), 3000);
+                                                                            loadAllData();
+                                                                        }}
+                                                                        title="Set as Default Plex Server"
+                                                                    >
+                                                                        <Star className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                )}
+
+                                                                <Button 
+                                                                    type="button"
+                                                                    size="icon" 
+                                                                    variant="ghost" 
+                                                                    className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all"
+                                                                    onClick={() => {
+                                                                        setEditingPlexServer(server);
+                                                                        setPlexServerFormName(server.name);
+                                                                        setPlexServerFormUrl(server.url);
+                                                                        setPlexServerFormToken(server.token || "");
+                                                                        setPlexServerFormIsDefault(server.isDefault);
+                                                                        setPlexServerFormTestResult(null);
+                                                                    }}
+                                                                    title="Edit Server"
+                                                                >
+                                                                    <Pencil className="h-3.5 w-3.5" />
+                                                                </Button>
+
+                                                                <Button 
+                                                                    type="button"
+                                                                    size="icon" 
+                                                                    variant="ghost" 
+                                                                    className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all"
+                                                                    onClick={async () => {
+                                                                        if (confirm(`Remove Plex server "${server.name}"?`)) {
+                                                                            await removePlexServerAction(server.id);
+                                                                            setPlexServerActionMsg(`Plex server "${server.name}" removed.`);
+                                                                            setTimeout(() => setPlexServerActionMsg(""), 3000);
+                                                                            loadAllData();
+                                                                        }
+                                                                    }}
+                                                                    title="Remove Server"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Live Test Diagnostic Result */}
+                                                        {plexServerTestResults[server.id] && (
+                                                            <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${
+                                                                plexServerTestResults[server.id].success 
+                                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
+                                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                                            }`}>
+                                                                {plexServerTestResults[server.id].success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                                                <span className="leading-tight">{plexServerTestResults[server.id].msg || plexServerTestResults[server.id].err}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* ADD / EDIT SERVER FORM */}
+                                    <form 
+                                        id="plex-server-form"
+                                        key={editingPlexServer ? `edit-plex-srv-${editingPlexServer.id}` : "new-plex-srv"}
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData(e.currentTarget);
+                                            if (editingPlexServer) {
+                                                formData.append("id", editingPlexServer.id);
+                                            }
+                                            const res = editingPlexServer 
+                                                ? await updatePlexServerAction(formData)
+                                                : await addPlexServerAction(formData);
+
+                                            if (res.success) {
+                                                setPlexServerActionMsg(res.message || "Plex server saved successfully!");
+                                                setTimeout(() => setPlexServerActionMsg(""), 4000);
+                                                setEditingPlexServer(null);
+                                                setPlexServerFormName("");
+                                                setPlexServerFormUrl("");
+                                                setPlexServerFormToken("");
+                                                setPlexServerFormIsDefault(false);
+                                                setPlexServerFormTestResult(null);
+                                                loadAllData();
+                                            } else {
+                                                alert(res.error || "Failed to save Plex server.");
+                                            }
+                                        }}
+                                        className={`space-y-3 ${!editingPlexServer && "border-t border-muted/30 pt-4 mt-2"}`}
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    >
+                                        <div className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">
+                                            {editingPlexServer ? `Edit Server Details` : `Add New Server`}
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-semibold">Server Display Name</Label>
+                                            <Input 
+                                                name="name" 
+                                                placeholder="e.g. Local PMS, 4K Server, Remote Plex" 
+                                                required 
+                                                value={plexServerFormName}
+                                                onChange={(e) => setPlexServerFormName(e.target.value)}
+                                                className="text-xs" 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <Label className="text-xs font-semibold">Server Connection URL</Label>
+                                                <div className="flex gap-1">
+                                                    {["http://192.168.1.50:32400", "http://localhost:32400", "http://plex:32400"].map((preset) => (
+                                                        <Button
+                                                            key={preset}
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-5 px-1.5 text-[9px] font-mono text-muted-foreground hover:text-amber-400"
+                                                            onClick={() => setPlexServerFormUrl(preset)}
+                                                        >
+                                                            {preset.replace("http://", "")}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <Input 
+                                                name="url" 
+                                                placeholder="http://192.168.1.50:32400 or http://172.22.0.87:32400" 
+                                                required 
+                                                value={plexServerFormUrl}
+                                                onChange={(e) => setPlexServerFormUrl(e.target.value)}
+                                                className="text-xs font-mono" 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <Label className="text-xs font-semibold">Server-Specific Plex Token (Optional)</Label>
+                                            <div className="relative">
+                                                <Input 
+                                                    name="token" 
+                                                    type={showPlexServerFormToken ? "text" : "password"} 
+                                                    placeholder="Leave blank to use Admin Plex Token" 
+                                                    value={plexServerFormToken}
+                                                    onChange={(e) => setPlexServerFormToken(e.target.value)}
+                                                    className="text-xs font-mono pr-8" 
+                                                    autoComplete="new-password"
+                                                    data-1p-ignore="true"
+                                                    data-lpignore="true"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setShowPlexServerFormToken(!showPlexServerFormToken)}
+                                                >
+                                                    {showPlexServerFormToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                If this server uses a different Plex account or token, paste its <code>X-Plex-Token</code> here. Otherwise, Portalarr will use your Global Admin Plex Token.
+                                            </p>
+                                        </div>
+
+                                        <div className="flex items-center space-x-2 pt-1">
+                                            <input 
+                                                type="checkbox" 
+                                                id="plex-server-default" 
+                                                name="isDefault" 
+                                                checked={plexServerFormIsDefault}
+                                                onChange={(e) => setPlexServerFormIsDefault(e.target.checked)}
+                                                className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400" 
+                                            />
+                                            <Label htmlFor="plex-server-default" className="text-xs font-medium cursor-pointer">
+                                                Set as Default Plex Server for library scans & curation
+                                            </Label>
+                                        </div>
+
+                                        {/* Test Connection Banner */}
+                                        {plexServerFormTestResult && (
+                                            <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-2 ${
+                                                plexServerFormTestResult.success 
+                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
+                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                            }`}>
+                                                {plexServerFormTestResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+                                                <span className="leading-tight">{plexServerFormTestResult.msg || plexServerFormTestResult.err}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Form Buttons */}
+                                        <div className="flex gap-2 pt-2">
+                                            <Button 
+                                                type="button" 
+                                                size="sm" 
+                                                variant="outline" 
+                                                className="text-xs font-semibold gap-1.5 border-amber-500/40 hover:border-amber-500 hover:bg-amber-500/10 text-amber-400 active:scale-95 transition-all"
+                                                disabled={testingPlexServerForm || !plexServerFormUrl}
+                                                onClick={handleTestPlexServerForm}
+                                            >
+                                                {testingPlexServerForm ? <Loader2 className="h-3 w-3 animate-spin text-amber-400" /> : <Zap className="h-3 w-3 text-amber-400" />}
+                                                Test Connection
+                                            </Button>
+
+                                            <Button 
+                                                type="submit" 
+                                                size="sm" 
+                                                className="flex-1 font-bold bg-amber-600 hover:bg-amber-500 text-white hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all shadow-md"
+                                            >
+                                                {editingPlexServer ? "Save Server Changes" : "Add Plex Server"}
+                                            </Button>
+
+                                            {editingPlexServer && (
+                                                <Button 
+                                                    type="button" 
+                                                    size="sm" 
+                                                    variant="outline" 
+                                                    className="hover:ring-1 hover:ring-border active:scale-95 transition-all text-xs" 
+                                                    onClick={() => { 
+                                                        setEditingPlexServer(null); 
+                                                        setPlexServerFormName("");
+                                                        setPlexServerFormUrl("");
+                                                        setPlexServerFormToken("");
+                                                        setPlexServerFormIsDefault(false);
+                                                        setPlexServerFormTestResult(null); 
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </form>
+                                </CardContent>
+                            </Card>
+                        </div>
 
                         {/* AUTOMATION & DOWNLOAD DIRECTORY VALIDATOR */}
                         <div className="space-y-6">
@@ -1394,7 +1951,25 @@ function SettingsPageContent() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                    <form onSubmit={(e) => handleForm(e, saveJobSettings)} className="space-y-4">
+                                    <form 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData(e.currentTarget);
+                                            const res = await saveJobSettings(formData);
+                                            if (res.success) {
+                                                setSaveAutomationMsg("Automation settings saved successfully!");
+                                                setTimeout(() => setSaveAutomationMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }} 
+                                        className="space-y-4"
+                                    >
+                                        {saveAutomationMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveAutomationMsg}</span>
+                                            </div>
+                                        )}
                                         <div className="space-y-2">
                                             <Label>Library Auto-Scan Interval (Minutes)</Label>
                                             <Input 
@@ -1564,15 +2139,23 @@ function SettingsPageContent() {
                                             e.preventDefault();
                                             const formData = new FormData(e.currentTarget);
                                             const res = await saveJobSettings(formData);
-                                            setSaveAiMsg("Google Books settings saved successfully!");
-                                            setTimeout(() => setSaveAiMsg(""), 4000);
-                                            loadAllData();
+                                            if (res.success) {
+                                                setSaveGoogleBooksMsg("Google Books settings saved successfully!");
+                                                setTimeout(() => setSaveGoogleBooksMsg(""), 4000);
+                                                loadAllData();
+                                            }
                                         }} 
                                         className="space-y-4"
                                         autoComplete="off"
                                         data-1p-ignore="true"
                                         data-lpignore="true"
                                     >
+                                        {saveGoogleBooksMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveGoogleBooksMsg}</span>
+                                            </div>
+                                        )}
                                         <div className="space-y-2">
                                             <div className="flex justify-between items-center">
                                                 <Label>API Key</Label>
@@ -1610,7 +2193,7 @@ function SettingsPageContent() {
                                                 Leaving this blank will fall back to the `GOOGLE_BOOKS_API_KEY` environment variable, or anonymous IP rate limits.
                                             </p>
                                         </div>
-                                        <Button type="submit" size="sm" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Settings</Button>
+                                        <Button type="submit" size="sm" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Google Books Settings</Button>
                                     </form>
                                 </CardContent>
                             </Card>

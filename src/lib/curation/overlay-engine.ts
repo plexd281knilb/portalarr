@@ -46,7 +46,7 @@ export interface OverlayOptions {
     ribbonPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
     ribbonTheme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange";
     ribbonText?: string;
-    ribbonType?: "auto_quality" | "auto_edition" | "leaving_soon" | "custom";
+    ribbonType?: "auto_quality" | "auto_edition" | "leaving_soon" | "custom" | "imdb_top_250" | "imdb_top_250_tv" | "certified_fresh" | "rt_fresh" | "oscar_winner" | "academy_award" | "emmy_winner" | "golden_globe" | "critics_choice" | "bafta_winner" | "cannes_winner" | "metacritic_must_see";
     theme?: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson";
     ratingsSource?: {
         imdb?: number;
@@ -65,6 +65,7 @@ export interface OverlayOptions {
         height?: number;
         opacity?: number;
     }>;
+    layerPriorityOrder?: string[];
 }
 
 const BACKUP_DIR = path.join(process.cwd(), "data", "art_backups");
@@ -681,11 +682,50 @@ export async function applyOverlaysToPoster(
     // 3. Diagonal Corner Ribbon
     if (options.showRibbon || options.ribbonText) {
         let rText = options.ribbonText;
+        let rTheme = options.ribbonTheme || "purple";
+
         if (!rText) {
-            if (options.ribbonType === "auto_edition" && mediaInfo.detectedBadges.edition) {
+            if (options.ribbonType === "imdb_top_250") {
+                rText = "IMDb TOP 250";
+                if (!options.ribbonTheme) rTheme = "gold";
+            } else if (options.ribbonType === "imdb_top_250_tv") {
+                rText = "IMDb TOP TV";
+                if (!options.ribbonTheme) rTheme = "gold";
+            } else if (options.ribbonType === "certified_fresh") {
+                rText = "CERTIFIED FRESH";
+                if (!options.ribbonTheme) rTheme = "crimson";
+            } else if (options.ribbonType === "rt_fresh") {
+                rText = "RT FRESH";
+                if (!options.ribbonTheme) rTheme = "crimson";
+            } else if (options.ribbonType === "oscar_winner") {
+                rText = "OSCAR WINNER";
+                if (!options.ribbonTheme) rTheme = "gold";
+            } else if (options.ribbonType === "academy_award") {
+                rText = "BEST PICTURE";
+                if (!options.ribbonTheme) rTheme = "gold";
+            } else if (options.ribbonType === "emmy_winner") {
+                rText = "EMMY WINNER";
+                if (!options.ribbonTheme) rTheme = "purple";
+            } else if (options.ribbonType === "golden_globe") {
+                rText = "GOLDEN GLOBE";
+                if (!options.ribbonTheme) rTheme = "gold";
+            } else if (options.ribbonType === "critics_choice") {
+                rText = "CRITICS' CHOICE";
+                if (!options.ribbonTheme) rTheme = "cyan";
+            } else if (options.ribbonType === "bafta_winner") {
+                rText = "BAFTA WINNER";
+                if (!options.ribbonTheme) rTheme = "gold";
+            } else if (options.ribbonType === "cannes_winner") {
+                rText = "PALME D'OR";
+                if (!options.ribbonTheme) rTheme = "gold";
+            } else if (options.ribbonType === "metacritic_must_see") {
+                rText = "MUST-SEE";
+                if (!options.ribbonTheme) rTheme = "emerald";
+            } else if (options.ribbonType === "auto_edition" && mediaInfo.detectedBadges.edition) {
                 rText = mediaInfo.detectedBadges.edition;
             } else if (options.ribbonType === "leaving_soon" || mediaInfo.isLeavingSoon) {
                 rText = options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays}D` : "LEAVING SOON";
+                if (!options.ribbonTheme) rTheme = "crimson";
             } else if (mediaInfo.detectedBadges.resolution === "4K") {
                 rText = "4K UHD";
             } else if (mediaInfo.detectedBadges.hdr) {
@@ -696,7 +736,6 @@ export async function applyOverlaysToPoster(
         }
 
         const rPos = options.ribbonPosition || "top-right";
-        const rTheme = options.ribbonTheme || "purple";
         const cornerRibbonSvg = generateCornerRibbonSvg(rText, rPos, rTheme);
         const ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(340, 340).toBuffer();
 
@@ -886,7 +925,7 @@ export async function applyOverlaysToPoster(
     const contentRatingPos = options.contentRatingPosition || options.ratingPosition || "bottom-left";
     const ratingsPos = options.ratingsPosition || options.ratingPosition || "bottom-left";
 
-    const buckets: Record<string, Array<{ buf: Buffer; w: number; h: number }>> = {
+    const buckets: Record<string, Array<{ buf: Buffer; w: number; h: number; layerKey: string }>> = {
         "top-right": [],
         "top-left": [],
         "bottom-right": [],
@@ -943,22 +982,44 @@ export async function applyOverlaysToPoster(
                 const fName = (cb.name || "").toLowerCase();
                 const combinedCheck = `${cat} ${rule} ${fName}`;
 
-                if (cat === "resolution" || /4k|1080|720|sd|uhd|fhd|480|576/i.test(combinedCheck)) hasCustomResolution = true;
-                if (cat === "hdr" || /dv|hdr|dolby.*vision|plus/i.test(combinedCheck)) hasCustomHdr = true;
-                if (cat === "codec" || /hevc|av1|prores|avc/i.test(combinedCheck)) hasCustomCodec = true;
-                if (cat === "audio" || /atmos|truehd|dts|flac|aac|eac3|ac3/i.test(combinedCheck)) hasCustomAudio = true;
-                if (cat === "edition" || /imax|criterion|director|extended/i.test(combinedCheck)) hasCustomEdition = true;
-                if (cat === "studio") hasCustomStudio = true;
-                if (cat === "ratings") hasCustomContentRating = true;
+                let detectedLayerKey = "custom";
+                if (cat === "resolution" || /4k|1080|720|sd|uhd|fhd|480|576/i.test(combinedCheck)) {
+                    hasCustomResolution = true;
+                    detectedLayerKey = "resolution";
+                }
+                if (cat === "hdr" || /dv|hdr|dolby.*vision|plus/i.test(combinedCheck)) {
+                    hasCustomHdr = true;
+                    detectedLayerKey = "hdr";
+                }
+                if (cat === "codec" || /hevc|av1|prores|avc/i.test(combinedCheck)) {
+                    hasCustomCodec = true;
+                    detectedLayerKey = "codec";
+                }
+                if (cat === "audio" || /atmos|truehd|dts|flac|aac|eac3|ac3/i.test(combinedCheck)) {
+                    hasCustomAudio = true;
+                    detectedLayerKey = "audio";
+                }
+                if (cat === "edition" || /imax|criterion|director|extended/i.test(combinedCheck)) {
+                    hasCustomEdition = true;
+                    detectedLayerKey = "edition";
+                }
+                if (cat === "studio") {
+                    hasCustomStudio = true;
+                    detectedLayerKey = "studio";
+                }
+                if (cat === "ratings") {
+                    hasCustomContentRating = true;
+                    detectedLayerKey = "contentRating";
+                }
 
-                buckets[cbPos]?.push({ buf: cbBuffer, w: cbWidth, h: cbHeight });
+                buckets[cbPos]?.push({ buf: cbBuffer, w: cbWidth, h: cbHeight, layerKey: detectedLayerKey });
             } catch (err) {
                 logger.addLog("WARN", "CURATION", `Failed to load custom badge ${cb.name}: ${err}`);
             }
         }
     }
 
-    const pushSvgToBucket = async (pos: string, svg: string) => {
+    const pushSvgToBucket = async (pos: string, svg: string, layerKey: string) => {
         if (!buckets[pos]) return;
         let buf = Buffer.from(svg);
         const meta = await sharp(buf).metadata();
@@ -979,42 +1040,56 @@ export async function applyOverlaysToPoster(
         buckets[pos].push({
             buf,
             w,
-            h
+            h,
+            layerKey
         });
     };
 
     if (options.showResolution !== false && mediaInfo.detectedBadges.resolution && !hasCustomResolution) {
-        await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme));
+        await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme), "resolution");
     }
     if (options.showHdr !== false && mediaInfo.detectedBadges.hdr && !hasCustomHdr) {
-        await pushSvgToBucket(hdrPos, generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme));
+        await pushSvgToBucket(hdrPos, generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme), "hdr");
     }
     if (options.showCodec && mediaInfo.detectedBadges.codec && !hasCustomCodec) {
-        await pushSvgToBucket(codecPos, generateCodecBadgeSvg(mediaInfo.detectedBadges.codec));
+        await pushSvgToBucket(codecPos, generateCodecBadgeSvg(mediaInfo.detectedBadges.codec), "codec");
     }
     if (options.showAudio !== false && mediaInfo.detectedBadges.audio && !hasCustomAudio) {
-        await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio));
+        await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio), "audio");
     }
     if (options.showAudioChannels && mediaInfo.detectedBadges.audioChannels) {
-        await pushSvgToBucket(channelsPos, generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels));
+        await pushSvgToBucket(channelsPos, generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels), "channels");
     }
     if (options.showEdition && mediaInfo.detectedBadges.edition && !hasCustomEdition) {
-        await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition));
+        await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition), "edition");
     }
     if (options.showStudio && mediaInfo.detectedBadges.studio && !hasCustomStudio) {
-        await pushSvgToBucket(studioPos, generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio));
+        await pushSvgToBucket(studioPos, generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio), "studio");
     }
     if (options.showContentRating && mediaInfo.detectedBadges.contentRating && !hasCustomContentRating) {
-        await pushSvgToBucket(contentRatingPos, generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating));
+        await pushSvgToBucket(contentRatingPos, generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating), "contentRating");
     }
     if (options.showRatings && options.ratingsSource) {
         const rSvg = generateRatingsBadgeSvg(options.ratingsSource);
-        if (rSvg) await pushSvgToBucket(ratingsPos, rSvg);
+        if (rSvg) await pushSvgToBucket(ratingsPos, rSvg, "ratings");
     }
+
+    // Default layer priority order fallback
+    const defaultPriority = ["ribbon", "resolution", "hdr", "codec", "audio", "channels", "edition", "studio", "ratings", "contentRating"];
+    const priorityOrder = (options.layerPriorityOrder && options.layerPriorityOrder.length > 0)
+        ? options.layerPriorityOrder
+        : defaultPriority;
 
     // Render Each Bucket onto Poster Overlays
     for (const [posKey, items] of Object.entries(buckets)) {
         if (!items || items.length === 0) continue;
+
+        // Sort items in this bucket according to user-configured layer priority
+        items.sort((a, b) => {
+            const idxA = priorityOrder.indexOf(a.layerKey);
+            const idxB = priorityOrder.indexOf(b.layerKey);
+            return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+        });
 
         const isBTop = posKey.startsWith("top");
         const isBRight = posKey.endsWith("right");

@@ -1429,6 +1429,7 @@ export async function saveOverlayRuleAction(data: {
     showLeavingSoon?: boolean;
     badgeScale?: number;
     customBadgeIds?: string[];
+    layerPriorityOrder?: string[] | string;
     enabled?: boolean;
 }) {
     await verifyAdmin();
@@ -1469,6 +1470,7 @@ export async function saveOverlayRuleAction(data: {
             showLeavingSoon: data.showLeavingSoon ?? true,
             badgeScale: data.badgeScale ?? 1.0,
             customBadgeIds: data.customBadgeIds ? JSON.stringify(data.customBadgeIds) : null,
+            layerPriorityOrder: data.layerPriorityOrder ? (typeof data.layerPriorityOrder === "string" ? data.layerPriorityOrder : JSON.stringify(data.layerPriorityOrder)) : null,
             enabled: data.enabled ?? true
         };
 
@@ -2288,6 +2290,7 @@ export async function applyOverlayToSingleItemAction(
         showLeavingSoon?: boolean;
         badgeScale?: number;
         customBadgeIds?: string[];
+        layerPriorityOrder?: string[];
     }
 ) {
     await verifyAdmin();
@@ -2349,6 +2352,7 @@ export async function applyOverlayToSingleItemAction(
                 showContentRating: options?.showContentRating ?? false,
                 showRatings: options?.showRatings ?? false,
                 showLeavingSoon: options?.showLeavingSoon ?? false,
+                layerPriorityOrder: options?.layerPriorityOrder,
                 customBadges: activeBadges.map(cb => ({
                     id: cb.id,
                     name: cb.name,
@@ -3129,6 +3133,49 @@ export async function importGitHubBadgesAction(badges: Array<{
         return { success: false, error: e.message || "Failed importing badges." };
     }
 }
+
+/**
+ * Server action to download and install all preset Kometa overlay packs in bulk with 1-click.
+ */
+export async function downloadAllKometaPacksAction() {
+    await verifyAdmin();
+    try {
+        let totalImported = 0;
+        const results: string[] = [];
+
+        for (const pack of PRESET_BADGE_PACKS) {
+            try {
+                const scanRes = await fetchGitHubBadgeRepoAction(pack.repoUrl);
+                if (scanRes.success && scanRes.badges && scanRes.badges.length > 0) {
+                    const importRes = await importGitHubBadgesAction(scanRes.badges);
+                    if (importRes.success && importRes.importedCount) {
+                        totalImported += importRes.importedCount;
+                        results.push(`${pack.title}: +${importRes.importedCount} badges`);
+                    }
+                }
+            } catch (pErr: any) {
+                console.warn(`[KOMETA-BULK-DOWNLOAD] Error importing pack ${pack.id}:`, pErr.message);
+            }
+        }
+
+        const allCustomBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
+
+        logger.addLog("SUCCESS", "CURATION", `Bulk downloaded ${totalImported} Kometa overlays.`);
+
+        return {
+            success: true,
+            totalImported,
+            totalBadges: allCustomBadges.length,
+            results,
+            message: totalImported > 0 
+                ? `Successfully downloaded and installed ${totalImported} Kometa badges and overlays!`
+                : `All Kometa overlay badge sets are already up-to-date in your vault (${allCustomBadges.length} total badges).`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed bulk downloading Kometa badges." };
+    }
+}
+
 
 
 

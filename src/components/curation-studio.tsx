@@ -49,7 +49,8 @@ import {
     fetchGitHubBadgeRepoAction,
     importGitHubBadgesAction,
     getPresetBadgePacksAction,
-    previewCollectionMatchingAction
+    previewCollectionMatchingAction,
+    downloadAllKometaPacksAction
 } from "@/app/curation-actions";
 import { 
     COLLECTION_PRESETS, 
@@ -78,7 +79,7 @@ import {
     Upload, Image as ImageIcon, MoveUp, MoveDown, CalendarClock,
     Palette, ChevronUp, ChevronDown, Tag, Compass, Home, Clock3,
     Search, FileText, Info, Play, CheckCheck, Globe, Download, DownloadCloud, Package, Maximize2,
-    RotateCcw, Edit2, Bookmark
+    RotateCcw, Edit2, Bookmark, ArrowLeft, X
 } from "lucide-react";
 
 export default function CurationStudio() {
@@ -198,18 +199,113 @@ export default function CurationStudio() {
     const [simShowRibbon, setSimShowRibbon] = useState(false);
     const [simRibbonPosition, setSimRibbonPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left">("top-right");
     const [simRibbonTheme, setSimRibbonTheme] = useState<"purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange">("purple");
-    const [simRibbonType, setSimRibbonType] = useState<"auto_quality" | "auto_edition" | "leaving_soon" | "custom">("auto_quality");
+    const [simRibbonType, setSimRibbonType] = useState<
+        | "auto_quality"
+        | "auto_edition"
+        | "leaving_soon"
+        | "custom"
+        | "imdb_top_250"
+        | "imdb_top_250_tv"
+        | "certified_fresh"
+        | "rt_fresh"
+        | "oscar_winner"
+        | "academy_award"
+        | "emmy_winner"
+        | "golden_globe"
+        | "critics_choice"
+        | "bafta_winner"
+        | "cannes_winner"
+        | "metacritic_must_see"
+    >("auto_quality");
     const [simRibbonText, setSimRibbonText] = useState("");
     const [simCustomBadgeId, setSimCustomBadgeId] = useState<string>("none");
 
-    const getEffectiveRibbonText = () => {
-        if (simRibbonType === "custom") return (simRibbonText.trim() || "FEATURED").toUpperCase();
+    const getEffectiveRibbonText = (item?: any) => {
+        if (simRibbonText && simRibbonText.trim()) return simRibbonText.trim().toUpperCase();
+        if (simRibbonType === "imdb_top_250") return "IMDb TOP 250";
+        if (simRibbonType === "imdb_top_250_tv") return "IMDb TOP TV";
+        if (simRibbonType === "certified_fresh") return "CERTIFIED FRESH";
+        if (simRibbonType === "rt_fresh") return "RT FRESH";
+        if (simRibbonType === "oscar_winner") return "OSCAR WINNER";
+        if (simRibbonType === "academy_award") return "BEST PICTURE";
+        if (simRibbonType === "emmy_winner") return "EMMY WINNER";
+        if (simRibbonType === "golden_globe") return "GOLDEN GLOBE";
+        if (simRibbonType === "critics_choice") return "CRITICS' CHOICE";
+        if (simRibbonType === "bafta_winner") return "BAFTA WINNER";
+        if (simRibbonType === "cannes_winner") return "PALME D'OR";
+        if (simRibbonType === "metacritic_must_see") return "MUST-SEE";
         if (simRibbonType === "leaving_soon") return "LEAVING SOON";
-        if (simRibbonType === "auto_edition") return "SPECIAL EDITION";
-        // auto_quality
-        if (simShowHdr) return "DOLBY VISION";
-        if (simShowResolution) return "4K ULTRA HD";
-        return "4K ULTRA HD";
+        if (simRibbonType === "auto_edition") {
+            if (item?.detectedBadges?.edition) return item.detectedBadges.edition.toUpperCase();
+            return "IMAX ENHANCED";
+        }
+        if (simRibbonType === "auto_quality") {
+            if (item?.detectedBadges?.resolution === "4K" || (!item && simShowResolution)) return "4K UHD";
+            if (item?.detectedBadges?.hdr || (!item && simShowHdr)) return (item?.detectedBadges?.hdr || "DOLBY VISION").toUpperCase();
+            return "4K UHD";
+        }
+        return (simRibbonText.trim() || "FEATURED").toUpperCase();
+    };
+
+    // Layer Priority Order Configuration
+    const DEFAULT_LAYER_PRIORITY_ORDER = [
+        "ribbon",
+        "resolution",
+        "hdr",
+        "codec",
+        "audio",
+        "channels",
+        "edition",
+        "studio",
+        "ratings",
+        "contentRating"
+    ];
+    const [layerPriorityOrder, setLayerPriorityOrder] = useState<string[]>(DEFAULT_LAYER_PRIORITY_ORDER);
+    const [bulkDownloading, setBulkDownloading] = useState(false);
+    const [bulkDownloadMsg, setBulkDownloadMsg] = useState<{ success: boolean; text: string } | null>(null);
+
+    // Reorder layer priority up or down
+    const handleMoveLayerPriority = (layerKey: string, direction: "up" | "down") => {
+        setLayerPriorityOrder(prev => {
+            const index = prev.indexOf(layerKey);
+            if (index === -1) return prev;
+            const targetIndex = direction === "up" ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+            const copy = [...prev];
+            const temp = copy[index];
+            copy[index] = copy[targetIndex];
+            copy[targetIndex] = temp;
+            return copy;
+        });
+    };
+
+    // 1-Click Bulk Download All Preset Kometa Packs
+    const handleBulkDownloadKometa = async () => {
+        setBulkDownloading(true);
+        setBulkDownloadMsg(null);
+        try {
+            const res = await downloadAllKometaPacksAction();
+            if (res.success) {
+                setBulkDownloadMsg({
+                    success: true,
+                    text: res.message || `Successfully downloaded ${res.totalImported} Kometa overlays!`
+                });
+                const badgeRes = await getCustomBadgesAction();
+                if (badgeRes?.success && badgeRes.badges) {
+                    setCustomBadges(badgeRes.badges);
+                }
+                setTimeout(() => setBulkDownloadMsg(null), 6000);
+            } else {
+                setBulkDownloadMsg({
+                    success: false,
+                    text: res.error || "Failed downloading Kometa overlay packs."
+                });
+            }
+        } catch (e: any) {
+            setBulkDownloadMsg({ success: false, text: e.message || "Failed downloading Kometa overlay packs." });
+        } finally {
+            setBulkDownloading(false);
+        }
     };
 
     // Upcoming Releases Calendar & Coming Soon Shares
@@ -321,16 +417,22 @@ export default function CurationStudio() {
             const savedSrvId = typeof window !== "undefined" ? localStorage.getItem("portalarr_curation_server") || undefined : undefined;
             const savedSecKey = typeof window !== "undefined" ? localStorage.getItem("portalarr_curation_section") || undefined : undefined;
 
-            const [settRes, srvRes, ruleRes, prefRes] = await Promise.all([
+            const [settRes, srvRes, ruleRes, prefRes, badgeRes] = await Promise.all([
                 getCurationSettingsAction().catch(() => ({ success: false })),
                 getPlexServersAndSectionsAction(savedSrvId).catch(() => ({ success: false })),
                 getOverlayRulesAction().catch(() => ({ success: false, rules: [], backupsCount: 0 })),
-                getUserContentPreferencesAction().catch(() => ({ success: false }))
+                getUserContentPreferencesAction().catch(() => ({ success: false })),
+                getCustomBadgesAction().catch(() => ({ success: false, badges: [] }))
             ]);
 
             const srvData = srvRes as any;
             const prefData = prefRes as any;
             const ruleData = ruleRes as any;
+            const badgeData = badgeRes as any;
+
+            if (badgeData?.success && Array.isArray(badgeData.badges)) {
+                setCustomBadges(badgeData.badges);
+            }
 
             if ((settRes as any).success) {
                 setSettings(settRes);
@@ -542,6 +644,15 @@ export default function CurationStudio() {
             if (rule.ribbonTheme) setSimRibbonTheme(rule.ribbonTheme);
             if (rule.ribbonType) setSimRibbonType(rule.ribbonType);
             if (rule.ribbonText) setSimRibbonText(rule.ribbonText);
+            if (rule.layerPriorityOrder) {
+                try {
+                    const parsed = typeof rule.layerPriorityOrder === "string" ? JSON.parse(rule.layerPriorityOrder) : rule.layerPriorityOrder;
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        const merged = [...parsed, ...DEFAULT_LAYER_PRIORITY_ORDER.filter(k => !parsed.includes(k))];
+                        setLayerPriorityOrder(merged);
+                    }
+                } catch (e) {}
+            }
         }
     }, [selectedServerId, selectedSectionKey, overlayRules]);
 
@@ -1251,6 +1362,7 @@ export default function CurationStudio() {
                 showRatings: simRatings,
                 showLeavingSoon: simLeavingSoon,
                 customBadgeIds: enabledBadgeIds,
+                layerPriorityOrder: layerPriorityOrder,
                 enabled: true
             });
 
@@ -1566,7 +1678,8 @@ export default function CurationStudio() {
                     showContentRating: simShowRating,
                     showRatings: simRatings,
                     showLeavingSoon: simLeavingSoon,
-                    customBadgeIds: enabledBadgeIds
+                    customBadgeIds: enabledBadgeIds,
+                    layerPriorityOrder: layerPriorityOrder
                 }
             );
             setSingleItemMsg({ success: res.success, text: res.message || "Overlay applied!" });
@@ -2033,7 +2146,7 @@ export default function CurationStudio() {
 
     // Helper to render badges into assigned positions in the simulator
     const renderBadgesForPosition = (pos: string) => {
-        const badges: React.ReactNode[] = [];
+        const candidates: Array<{ key: string; node: React.ReactNode; layerKey: string }> = [];
         const simDetected = {
             resolution: simShowResolution ? "4K" : undefined,
             hdr: simShowHdr ? "DV" : undefined,
@@ -2059,152 +2172,205 @@ export default function CurationStudio() {
             const cbPos = cb.position || "top-right";
             if (cbPos === pos) {
                 const overriddenCat = getCustomBadgeOverriddenCategory(cb);
-                if (overriddenCat.includes("Resolution")) hasCustomRes = true;
-                if (overriddenCat.includes("Dynamic Range")) hasCustomHdr = true;
-                if (overriddenCat.includes("Video Codec")) hasCustomCodec = true;
-                if (overriddenCat.includes("Audio Format")) hasCustomAudio = true;
-                if (overriddenCat.includes("Edition")) hasCustomEdition = true;
-                if (overriddenCat.includes("Studio")) hasCustomStudio = true;
-                if (overriddenCat.includes("Age Rating")) hasCustomRating = true;
+                let lKey = "custom";
+                if (overriddenCat.includes("Resolution")) { hasCustomRes = true; lKey = "resolution"; }
+                if (overriddenCat.includes("Dynamic Range")) { hasCustomHdr = true; lKey = "hdr"; }
+                if (overriddenCat.includes("Video Codec")) { hasCustomCodec = true; lKey = "codec"; }
+                if (overriddenCat.includes("Audio Format")) { hasCustomAudio = true; lKey = "audio"; }
+                if (overriddenCat.includes("Edition")) { hasCustomEdition = true; lKey = "edition"; }
+                if (overriddenCat.includes("Studio")) { hasCustomStudio = true; lKey = "studio"; }
+                if (overriddenCat.includes("Age Rating")) { hasCustomRating = true; lKey = "contentRating"; }
+                if (overriddenCat.includes("Corner Ribbon")) { lKey = "ribbon"; }
 
-                badges.push(
-                    <div key={`custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
-                        <img 
-                            src={`/api/curation/badges/${cb.id}`} 
-                            alt={cb.name}
-                            style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
-                            className="object-contain drop-shadow"
-                        />
-                    </div>
-                );
+                candidates.push({
+                    key: `custom-${cb.id}`,
+                    layerKey: lKey,
+                    node: (
+                        <div key={`custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
+                            <img 
+                                src={`/api/curation/badges/${cb.id}`} 
+                                alt={cb.name}
+                                style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
+                                className="object-contain drop-shadow"
+                            />
+                        </div>
+                    )
+                });
             }
         }
 
         // 2. Built-in Fallbacks (Priority 2) - only added if not overridden by a custom badge
         // Resolution (4K UHD)
         if (simResolutionPosition === pos && simShowResolution && !hasCustomRes) {
-            badges.push(
-                <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
-                    simTheme === "gold" 
-                        ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
-                        : 'bg-slate-950/90 text-white border-amber-400/80'
-                }`}>
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    <span>4K</span>
-                    <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>
-                </div>
-            );
+            candidates.push({
+                key: "res",
+                layerKey: "resolution",
+                node: (
+                    <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
+                        simTheme === "gold" 
+                            ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
+                            : 'bg-slate-950/90 text-white border-amber-400/80'
+                    }`}>
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        <span>4K</span>
+                        <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>
+                    </div>
+                )
+            });
         }
 
         // HDR / Dolby Vision
         if (simHdrPosition === pos && simShowHdr && !hasCustomHdr) {
-            badges.push(
-                <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
-                    <span>DOLBY VISION</span>
-                </div>
-            );
+            candidates.push({
+                key: "hdr",
+                layerKey: "hdr",
+                node: (
+                    <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
+                        <span>DOLBY VISION</span>
+                    </div>
+                )
+            });
         }
 
         // Video Codec (HEVC)
         if (simCodecPosition === pos && simShowCodec && !hasCustomCodec) {
-            badges.push(
-                <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    HEVC • 10b
-                </div>
-            );
+            candidates.push({
+                key: "codec",
+                layerKey: "codec",
+                node: (
+                    <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        HEVC • 10b
+                    </div>
+                )
+            });
         }
 
         // Audio format (Dolby Atmos)
         if (simAudioPosition === pos && simShowAudio && !hasCustomAudio) {
-            badges.push(
-                <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    DOLBY ATMOS
-                </div>
-            );
+            candidates.push({
+                key: "audio",
+                layerKey: "audio",
+                node: (
+                    <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        DOLBY ATMOS
+                    </div>
+                )
+            });
         }
 
         // Audio Surround Channels (7.1)
         if (simChannelsPosition === pos && simShowChannels) {
-            badges.push(
-                <div key="channels" className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    7.1 SURROUND
-                </div>
-            );
+            candidates.push({
+                key: "channels",
+                layerKey: "channels",
+                node: (
+                    <div key="channels" className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        7.1 SURROUND
+                    </div>
+                )
+            });
         }
 
         // Edition Cuts (IMAX Enhanced)
         if (simEditionPosition === pos && simShowEdition && !hasCustomEdition) {
-            badges.push(
-                <div key="edition" className="relative px-2 py-0.5 rounded-md border border-sky-400 bg-slate-950/95 text-sky-300 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    IMAX ENHANCED
-                </div>
-            );
+            candidates.push({
+                key: "edition",
+                layerKey: "edition",
+                node: (
+                    <div key="edition" className="relative px-2 py-0.5 rounded-md border border-sky-400 bg-slate-950/95 text-sky-300 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        IMAX ENHANCED
+                    </div>
+                )
+            });
         }
 
         // Studio / Network Logos (HBO Max)
         if (simStudioPosition === pos && simShowStudio && !hasCustomStudio) {
-            badges.push(
-                <div key="studio" className="relative px-2 py-0.5 rounded-md border border-purple-500 text-purple-300 bg-slate-950/95 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    HBO MAX
-                </div>
-            );
+            candidates.push({
+                key: "studio",
+                layerKey: "studio",
+                node: (
+                    <div key="studio" className="relative px-2 py-0.5 rounded-md border border-purple-500 text-purple-300 bg-slate-950/95 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        HBO MAX
+                    </div>
+                )
+            });
         }
 
         // Content Rating (PG-13)
         if (simRatingPosition === pos && simShowRating && !hasCustomRating) {
-            badges.push(
-                <div key="rating" className="relative px-1.5 py-0.5 rounded border border-amber-500 text-amber-300 bg-slate-950/90 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-0.5 right-0.5 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    PG-13
-                </div>
-            );
+            candidates.push({
+                key: "rating",
+                layerKey: "contentRating",
+                node: (
+                    <div key="rating" className="relative px-1.5 py-0.5 rounded border border-amber-500 text-amber-300 bg-slate-950/90 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-0.5 right-0.5 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        PG-13
+                    </div>
+                )
+            });
         }
 
         // Community Ratings (IMDb, Rotten Tomatoes, Metacritic)
         if (simRatingsPosition === pos && simRatings) {
-            badges.push(
-                <div key="ratings" className="relative flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-950/95 border border-white/20 shadow-lg text-[10px] overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    <div className="bg-yellow-400 text-black font-black px-1 rounded text-[8.5px] leading-tight">IMDb</div>
-                    <span className="font-bold text-white text-[10px]">8.6</span>
-                    <span className="text-[10px]">🍅</span>
-                    <span className="font-bold text-white text-[10px]">94%</span>
-                    <span className="text-[10px]">🍿</span>
-                    <span className="font-bold text-white text-[10px]">92%</span>
-                </div>
-            );
+            candidates.push({
+                key: "ratings",
+                layerKey: "ratings",
+                node: (
+                    <div key="ratings" className="relative flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-950/95 border border-white/20 shadow-lg text-[10px] overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        <div className="bg-yellow-400 text-black font-black px-1 rounded text-[8.5px] leading-tight">IMDb</div>
+                        <span className="font-bold text-white text-[10px]">8.6</span>
+                        <span className="text-[10px]">🍅</span>
+                        <span className="font-bold text-white text-[10px]">94%</span>
+                        <span className="text-[10px]">🍿</span>
+                        <span className="font-bold text-white text-[10px]">92%</span>
+                    </div>
+                )
+            });
         }
 
         // Explicitly Selected Custom Badge
         if (simCustomBadgeId !== "none") {
             const cb = customBadges.find(b => b.id === simCustomBadgeId);
             if (cb && (cb.position || "top-right") === pos && !activeMatchedCustom.some(m => m.id === cb.id)) {
-                badges.push(
-                    <div key={`sim-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg" style={{ opacity: cb.opacity ?? 1.0 }}>
-                        <img 
-                            src={`/api/curation/badges/${cb.id}`} 
-                            alt={cb.name}
-                            style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
-                            className="object-contain drop-shadow"
-                        />
-                    </div>
-                );
+                candidates.push({
+                    key: `sim-custom-${cb.id}`,
+                    layerKey: "custom",
+                    node: (
+                        <div key={`sim-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg" style={{ opacity: cb.opacity ?? 1.0 }}>
+                            <img 
+                                src={`/api/curation/badges/${cb.id}`} 
+                                alt={cb.name}
+                                style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
+                                className="object-contain drop-shadow"
+                            />
+                        </div>
+                    )
+                });
             }
         }
 
-        return badges;
+        // Sort candidates in this position according to user-configured layer priority
+        const sorted = candidates.sort((a, b) => {
+            const idxA = layerPriorityOrder.indexOf(a.layerKey);
+            const idxB = layerPriorityOrder.indexOf(b.layerKey);
+            return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+        });
+
+        return sorted.map(c => c.node);
     };
 
     // Helper for inspector simulated item badges
     const renderInspectedBadgesForPosition = (item: any, pos: string) => {
-        const badges: React.ReactNode[] = [];
+        const candidates: Array<{ key: string; node: React.ReactNode; layerKey: string }> = [];
         const detected = item?.detectedBadges || {};
 
         let hasCustomRes = false;
@@ -2221,114 +2387,159 @@ export default function CurationStudio() {
             const cbPos = cb.position || "top-right";
             if (cbPos === pos) {
                 const overriddenCat = getCustomBadgeOverriddenCategory(cb);
-                if (overriddenCat.includes("Resolution")) hasCustomRes = true;
-                if (overriddenCat.includes("Dynamic Range")) hasCustomHdr = true;
-                if (overriddenCat.includes("Video Codec")) hasCustomCodec = true;
-                if (overriddenCat.includes("Audio Format")) hasCustomAudio = true;
-                if (overriddenCat.includes("Edition")) hasCustomEdition = true;
-                if (overriddenCat.includes("Studio")) hasCustomStudio = true;
-                if (overriddenCat.includes("Age Rating")) hasCustomRating = true;
+                let lKey = "custom";
+                if (overriddenCat.includes("Resolution")) { hasCustomRes = true; lKey = "resolution"; }
+                if (overriddenCat.includes("Dynamic Range")) { hasCustomHdr = true; lKey = "hdr"; }
+                if (overriddenCat.includes("Video Codec")) { hasCustomCodec = true; lKey = "codec"; }
+                if (overriddenCat.includes("Audio Format")) { hasCustomAudio = true; lKey = "audio"; }
+                if (overriddenCat.includes("Edition")) { hasCustomEdition = true; lKey = "edition"; }
+                if (overriddenCat.includes("Studio")) { hasCustomStudio = true; lKey = "studio"; }
+                if (overriddenCat.includes("Age Rating")) { hasCustomRating = true; lKey = "contentRating"; }
+                if (overriddenCat.includes("Corner Ribbon")) { lKey = "ribbon"; }
 
-                badges.push(
-                    <div key={`inspect-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
-                        <img 
-                            src={`/api/curation/badges/${cb.id}`} 
-                            alt={cb.name}
-                            style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
-                            className="object-contain drop-shadow"
-                        />
-                    </div>
-                );
+                candidates.push({
+                    key: `inspect-custom-${cb.id}`,
+                    layerKey: lKey,
+                    node: (
+                        <div key={`inspect-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
+                            <img 
+                                src={`/api/curation/badges/${cb.id}`} 
+                                alt={cb.name}
+                                style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
+                                className="object-contain drop-shadow"
+                            />
+                        </div>
+                    )
+                });
             }
         }
 
         // 2. Built-in Fallbacks (Priority 2)
         if (detected.resolution && simShowResolution && simResolutionPosition === pos && !hasCustomRes) {
-            badges.push(
-                <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
-                    simTheme === "gold" 
-                        ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
-                        : 'bg-slate-950/90 text-white border-amber-400/80'
-                }`}>
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    <span>{detected.resolution}</span>
-                    {detected.resolution === "4K" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>}
-                    {detected.resolution === "1080p" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-sky-300">FHD</span>}
-                </div>
-            );
+            candidates.push({
+                key: "res",
+                layerKey: "resolution",
+                node: (
+                    <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
+                        simTheme === "gold" 
+                            ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
+                            : 'bg-slate-950/90 text-white border-amber-400/80'
+                    }`}>
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        <span>{detected.resolution}</span>
+                        {detected.resolution === "4K" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>}
+                        {detected.resolution === "1080p" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-sky-300">FHD</span>}
+                    </div>
+                )
+            });
         }
 
         if (detected.hdr && simShowHdr && simHdrPosition === pos && !hasCustomHdr) {
-            badges.push(
-                <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {detected.hdr === "DV" ? (
-                        <>
-                            <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
-                            <span>DOLBY VISION</span>
-                        </>
-                    ) : (
-                        <span>{detected.hdr}</span>
-                    )}
-                </div>
-            );
+            candidates.push({
+                key: "hdr",
+                layerKey: "hdr",
+                node: (
+                    <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        {detected.hdr === "DV" ? (
+                            <>
+                                <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
+                                <span>DOLBY VISION</span>
+                            </>
+                        ) : (
+                            <span>{detected.hdr}</span>
+                        )}
+                    </div>
+                )
+            });
         }
 
         if (detected.codec && simShowCodec && simCodecPosition === pos && !hasCustomCodec) {
-            badges.push(
-                <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {detected.codec}
-                </div>
-            );
+            candidates.push({
+                key: "codec",
+                layerKey: "codec",
+                node: (
+                    <div key="codec" className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        {detected.codec}
+                    </div>
+                )
+            });
         }
 
         if (detected.audio && simShowAudio && simAudioPosition === pos && !hasCustomAudio) {
-            badges.push(
-                <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {detected.audio === "ATMOS" ? "DOLBY ATMOS" : detected.audio}
-                </div>
-            );
+            candidates.push({
+                key: "audio",
+                layerKey: "audio",
+                node: (
+                    <div key="audio" className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        {detected.audio === "ATMOS" ? "DOLBY ATMOS" : detected.audio}
+                    </div>
+                )
+            });
         }
 
         if (detected.audioChannels && simShowChannels && simChannelsPosition === pos) {
-            badges.push(
-                <div key="channels" className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {detected.audioChannels} SURROUND
-                </div>
-            );
+            candidates.push({
+                key: "channels",
+                layerKey: "channels",
+                node: (
+                    <div key="channels" className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        {detected.audioChannels} SURROUND
+                    </div>
+                )
+            });
         }
 
         if (detected.edition && simShowEdition && simEditionPosition === pos && !hasCustomEdition) {
-            badges.push(
-                <div key="edition" className="relative px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {detected.edition}
-                </div>
-            );
+            candidates.push({
+                key: "edition",
+                layerKey: "edition",
+                node: (
+                    <div key="edition" className="relative px-2 py-0.5 rounded-md border border-amber-400/80 bg-slate-950/95 text-amber-300 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        {detected.edition}
+                    </div>
+                )
+            });
         }
 
         if (detected.studio && simShowStudio && simStudioPosition === pos && !hasCustomStudio) {
-            badges.push(
-                <div key="studio" className="relative px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {detected.studio}
-                </div>
-            );
+            candidates.push({
+                key: "studio",
+                layerKey: "studio",
+                node: (
+                    <div key="studio" className="relative px-2 py-0.5 rounded-md border border-indigo-400/80 bg-slate-950/95 text-indigo-200 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        {detected.studio}
+                    </div>
+                )
+            });
         }
 
         if (detected.contentRating && simShowRating && simRatingPosition === pos && !hasCustomRating) {
-            badges.push(
-                <div key="rating" className="relative px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                    {detected.contentRating}
-                </div>
-            );
+            candidates.push({
+                key: "rating",
+                layerKey: "contentRating",
+                node: (
+                    <div key="rating" className="relative px-1.5 py-0.5 rounded border border-slate-400 bg-slate-950/90 text-slate-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
+                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                        {detected.contentRating}
+                    </div>
+                )
+            });
         }
 
-        return badges;
+        // Sort candidates in this position according to user-configured layer priority
+        const sorted = candidates.sort((a, b) => {
+            const idxA = layerPriorityOrder.indexOf(a.layerKey);
+            const idxB = layerPriorityOrder.indexOf(b.layerKey);
+            return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+        });
+
+        return sorted.map(c => c.node);
     };
 
     // Helper for rendering clean source provider badges (TMDb, IMDb, Trakt, Plex Smart)
@@ -3820,519 +4031,419 @@ export default function CurationStudio() {
                                         </div>
                                     </div>
 
-                                    {/* Badge Layers & Independent Positions Matrix */}
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 font-medium">
-                                            <span>Layer & Priority</span>
-                                            <span className="hidden sm:inline">Active</span>
-                                            <span>Poster Position</span>
+                                    {/* Badge Layers & Stacking Priority Manager */}
+                                    <div className="space-y-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1 pb-2 border-b border-slate-800/80">
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <Layers className="h-4 w-4 text-purple-400" />
+                                                    <span className="font-bold text-white text-xs">Layer Stacking Priority &amp; Placements</span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-400">
+                                                    Position layers independently. Top-ranked (#1) layers render foremost when sharing corners.
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={bulkDownloading}
+                                                    onClick={handleBulkDownloadKometa}
+                                                    className="bg-purple-950/60 hover:bg-purple-900/80 border-purple-500/40 text-purple-200 text-[11px] h-7 px-2.5 gap-1.5 shadow-sm font-semibold"
+                                                    title="Download all Kometa overlay badge packs directly in 1-click"
+                                                >
+                                                    {bulkDownloading ? (
+                                                        <>
+                                                            <Loader2 className="h-3 w-3 animate-spin text-purple-300" />
+                                                            <span>Downloading Badges...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <DownloadCloud className="h-3.5 w-3.5 text-purple-400" />
+                                                            <span>⚡ Download Kometa Badges</span>
+                                                        </>
+                                                    )}
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => setLayerPriorityOrder(DEFAULT_LAYER_PRIORITY_ORDER)}
+                                                    className="text-slate-400 hover:text-white text-[11px] h-7 px-2"
+                                                    title="Reset priority order to defaults"
+                                                >
+                                                    <RotateCcw className="h-3 w-3 mr-1" /> Reset
+                                                </Button>
+                                            </div>
                                         </div>
 
-                                        {/* Resolution / 4K UHD */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
+                                        {bulkDownloadMsg && (
+                                            <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 animate-in fade-in-50 duration-200 ${
+                                                bulkDownloadMsg.success 
+                                                    ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" 
+                                                    : "bg-rose-950/80 border-rose-800 text-rose-300"
+                                            }`}>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Resolution (4K UHD / 1080p FHD)</span>
+                                                    {bulkDownloadMsg.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : <XCircle className="h-4 w-4 shrink-0 text-rose-400" />}
+                                                    <span>{bulkDownloadMsg.text}</span>
                                                 </div>
-                                                {(() => {
-                                                    const matches = getMatchingActiveCustomBadgesForCategory("resolution");
-                                                    if (matches.length > 0) {
-                                                        return (
-                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
-                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
-                                                                <span>⚡ Priority 1 ({matches.length})</span>
-                                                            </Badge>
-                                                        );
-                                                    }
+                                                <button type="button" onClick={() => setBulkDownloadMsg(null)} className="opacity-70 hover:opacity-100 text-slate-300">
+                                                    <X className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Layer Priority List */}
+                                        <div className="space-y-2">
+                                            {layerPriorityOrder.map((layerKey, idx) => {
+                                                const isFirst = idx === 0;
+                                                const isLast = idx === layerPriorityOrder.length - 1;
+
+                                                if (layerKey === "ribbon") {
                                                     return (
-                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
-                                                            ✓ Priority 2 SVG
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </div>
-                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
-                                                <Switch 
-                                                    checked={simShowResolution}
-                                                    onCheckedChange={setSimShowResolution}
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-3">
-                                                <Select value={simResolutionPosition} onValueChange={(val: any) => setSimResolutionPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
+                                                        <div key="layer-ribbon" className="p-3 bg-gradient-to-r from-purple-950/30 via-slate-950/60 to-slate-950/70 rounded-xl border border-purple-800/40 space-y-2.5 transition-all">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    <div className="flex items-center gap-0.5 shrink-0">
+                                                                        <Badge className={`${isFirst ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300 border-slate-700'} text-[9px] font-mono px-1.5 py-0`}>
+                                                                            #{idx + 1}
+                                                                        </Badge>
+                                                                        <div className="flex flex-col">
+                                                                            <button
+                                                                                type="button"
+                                                                                disabled={isFirst}
+                                                                                onClick={() => handleMoveLayerPriority("ribbon", "up")}
+                                                                                className="p-0.5 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400"
+                                                                                title="Move layer up in stacking priority"
+                                                                            >
+                                                                                <ChevronUp className="h-3 w-3" />
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                disabled={isLast}
+                                                                                onClick={() => handleMoveLayerPriority("ribbon", "down")}
+                                                                                className="p-0.5 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400"
+                                                                                title="Move layer down in stacking priority"
+                                                                            >
+                                                                                <ChevronDown className="h-3 w-3" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                                        <Sparkles className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                                                        <span className="font-bold text-white text-xs truncate">Corner Ribbon Overlays</span>
+                                                                    </div>
+                                                                    <Badge variant="outline" className="text-[9px] border-purple-500/40 text-purple-300 bg-purple-950/40 px-1.5 py-0 shrink-0 hidden sm:inline-flex">
+                                                                        Top 250 / Awards / Fresh
+                                                                    </Badge>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 shrink-0">
+                                                                    <Switch 
+                                                                        checked={simShowRibbon}
+                                                                        onCheckedChange={setSimShowRibbon}
+                                                                    />
+                                                                </div>
+                                                            </div>
 
-                                        {/* HDR / Dolby Vision */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-purple-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Dynamic Range (DV / HDR10+)</span>
-                                                </div>
-                                                {(() => {
-                                                    const matches = getMatchingActiveCustomBadgesForCategory("hdr");
-                                                    if (matches.length > 0) {
-                                                        return (
-                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
-                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
-                                                                <span>⚡ Priority 1 ({matches.length})</span>
-                                                            </Badge>
-                                                        );
+                                                            {simShowRibbon && (
+                                                                <div className="space-y-2.5 pt-1 border-t border-purple-900/30 animate-in fade-in-50 duration-200">
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                                        <div className="space-y-1">
+                                                                            <Label className="text-[10px] text-slate-400">Ribbon Content / Preset</Label>
+                                                                            <Select 
+                                                                                value={simRibbonType} 
+                                                                                onValueChange={(val: any) => {
+                                                                                    setSimRibbonType(val);
+                                                                                    if (val === "imdb_top_250" || val === "imdb_top_250_tv" || val === "oscar_winner" || val === "academy_award" || val === "golden_globe" || val === "bafta_winner" || val === "cannes_winner") {
+                                                                                        setSimRibbonTheme("gold");
+                                                                                    } else if (val === "certified_fresh" || val === "rt_fresh" || val === "leaving_soon") {
+                                                                                        setSimRibbonTheme("crimson");
+                                                                                    } else if (val === "emmy_winner") {
+                                                                                        setSimRibbonTheme("purple");
+                                                                                    } else if (val === "critics_choice") {
+                                                                                        setSimRibbonTheme("cyan");
+                                                                                    } else if (val === "metacritic_must_see") {
+                                                                                        setSimRibbonTheme("emerald");
+                                                                                    }
+                                                                                }}
+                                                                            >
+                                                                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7.5">
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent className="max-h-72">
+                                                                                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">🌟 Kometa Top Ranked &amp; Awards</div>
+                                                                                    <SelectItem value="imdb_top_250">⭐ IMDb Top 250 Movies</SelectItem>
+                                                                                    <SelectItem value="imdb_top_250_tv">📺 IMDb Top 250 TV</SelectItem>
+                                                                                    <SelectItem value="certified_fresh">🍅 RT Certified Fresh</SelectItem>
+                                                                                    <SelectItem value="rt_fresh">🍅 RT Fresh</SelectItem>
+                                                                                    <SelectItem value="oscar_winner">🏆 Oscar Winner</SelectItem>
+                                                                                    <SelectItem value="academy_award">🏆 Best Picture Winner</SelectItem>
+                                                                                    <SelectItem value="emmy_winner">🎖️ Emmy Award Winner</SelectItem>
+                                                                                    <SelectItem value="golden_globe">🌐 Golden Globe Winner</SelectItem>
+                                                                                    <SelectItem value="critics_choice">🎬 Critics&apos; Choice Award</SelectItem>
+                                                                                    <SelectItem value="bafta_winner">🇬🇧 BAFTA Winner</SelectItem>
+                                                                                    <SelectItem value="cannes_winner">🌴 Cannes Palme d&apos;Or</SelectItem>
+                                                                                    <SelectItem value="metacritic_must_see">💎 Metacritic Must-See</SelectItem>
+
+                                                                                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-700/60 mt-1 pt-1">⚡ Auto Dynamic Metadata</div>
+                                                                                    <SelectItem value="auto_quality">Auto Quality (4K / DV / HDR)</SelectItem>
+                                                                                    <SelectItem value="auto_edition">Auto Edition (IMAX / Remux / Cut)</SelectItem>
+                                                                                    <SelectItem value="leaving_soon">Leaving Soon Countdown</SelectItem>
+
+                                                                                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-700/60 mt-1 pt-1">✍️ Custom Banner</div>
+                                                                                    <SelectItem value="custom">Custom Text Banner</SelectItem>
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        </div>
+
+                                                                        <div className="space-y-1">
+                                                                            <Label className="text-[10px] text-slate-400">Corner Placement</Label>
+                                                                            <Select value={simRibbonPosition} onValueChange={(val: any) => setSimRibbonPosition(val)}>
+                                                                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7.5">
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    <SelectItem value="top-right">Top-Right Corner</SelectItem>
+                                                                                    <SelectItem value="top-left">Top-Left Corner</SelectItem>
+                                                                                    <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
+                                                                                    <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        </div>
+
+                                                                        <div className="space-y-1">
+                                                                            <Label className="text-[10px] text-slate-400">Color Theme</Label>
+                                                                            <Select value={simRibbonTheme} onValueChange={(val: any) => setSimRibbonTheme(val)}>
+                                                                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7.5">
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    <SelectItem value="purple">💜 Royal Purple</SelectItem>
+                                                                                    <SelectItem value="emerald">💚 Emerald Green</SelectItem>
+                                                                                    <SelectItem value="crimson">❤️ Crimson Red</SelectItem>
+                                                                                    <SelectItem value="gold">💛 Amber Gold</SelectItem>
+                                                                                    <SelectItem value="cyan">🩵 Electric Cyan</SelectItem>
+                                                                                    <SelectItem value="pink">💖 Neon Pink</SelectItem>
+                                                                                    <SelectItem value="glass">🖤 Dark Glass</SelectItem>
+                                                                                    <SelectItem value="orange">🧡 Warning Orange</SelectItem>
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {simRibbonType === "custom" && (
+                                                                        <div className="space-y-1 pt-1">
+                                                                            <Label className="text-[10px] text-slate-400">Custom Ribbon Text</Label>
+                                                                            <Input 
+                                                                                value={simRibbonText}
+                                                                                onChange={e => setSimRibbonText(e.target.value)}
+                                                                                placeholder="e.g. EXCLUSIVE REMUX, DIRECTOR'S CUT, STAFF PICK..."
+                                                                                className="bg-slate-800 border-slate-700 text-xs h-8"
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                }
+
+                                                // Other standard badge layers
+                                                const layerConfig: Record<string, {
+                                                    title: string;
+                                                    desc: string;
+                                                    icon: React.ReactNode;
+                                                    category: string;
+                                                    checked: boolean;
+                                                    onCheckedChange: (val: boolean) => void;
+                                                    position: string;
+                                                    onPositionChange: (val: any) => void;
+                                                }> = {
+                                                    resolution: {
+                                                        title: "Resolution (4K UHD / 1080p FHD)",
+                                                        desc: "4K UHD, 1080p, 720p, 480p SD badges",
+                                                        icon: <Monitor className="h-3.5 w-3.5 text-amber-400" />,
+                                                        category: "resolution",
+                                                        checked: simShowResolution,
+                                                        onCheckedChange: setSimShowResolution,
+                                                        position: simResolutionPosition,
+                                                        onPositionChange: setSimResolutionPosition
+                                                    },
+                                                    hdr: {
+                                                        title: "Dynamic Range (Dolby Vision / HDR10+)",
+                                                        desc: "DV, HDR10+, HDR, HLG dynamic badges",
+                                                        icon: <Flame className="h-3.5 w-3.5 text-purple-400" />,
+                                                        category: "hdr",
+                                                        checked: simShowHdr,
+                                                        onCheckedChange: setSimShowHdr,
+                                                        position: simHdrPosition,
+                                                        onPositionChange: setSimHdrPosition
+                                                    },
+                                                    codec: {
+                                                        title: "Video Codec (HEVC / AV1 / AVC)",
+                                                        desc: "HEVC, AV1, H.264, VP9 stream codecs",
+                                                        icon: <Disc className="h-3.5 w-3.5 text-indigo-400" />,
+                                                        category: "codec",
+                                                        checked: simShowCodec,
+                                                        onCheckedChange: setSimShowCodec,
+                                                        position: simCodecPosition,
+                                                        onPositionChange: setSimCodecPosition
+                                                    },
+                                                    audio: {
+                                                        title: "Audio Format (Dolby Atmos / TrueHD / DTS:X)",
+                                                        desc: "Atmos, TrueHD, DTS:X, DTS-HD MA, EAC3",
+                                                        icon: <Volume2 className="h-3.5 w-3.5 text-sky-400" />,
+                                                        category: "audio",
+                                                        checked: simShowAudio,
+                                                        onCheckedChange: setSimShowAudio,
+                                                        position: simAudioPosition,
+                                                        onPositionChange: setSimAudioPosition
+                                                    },
+                                                    channels: {
+                                                        title: "Audio Channels (7.1 Surround / 5.1)",
+                                                        desc: "7.1, 5.1 Surround, 2.0 Stereo channel counts",
+                                                        icon: <Radio className="h-3.5 w-3.5 text-cyan-400" />,
+                                                        category: "channels",
+                                                        checked: simShowChannels,
+                                                        onCheckedChange: setSimShowChannels,
+                                                        position: simChannelsPosition,
+                                                        onPositionChange: setSimChannelsPosition
+                                                    },
+                                                    edition: {
+                                                        title: "Edition / Cut (IMAX / Remux / Criterion)",
+                                                        desc: "IMAX Enhanced, Remux, Criterion, Extended",
+                                                        icon: <Trophy className="h-3.5 w-3.5 text-emerald-400" />,
+                                                        category: "edition",
+                                                        checked: simShowEdition,
+                                                        onCheckedChange: setSimShowEdition,
+                                                        position: simEditionPosition,
+                                                        onPositionChange: setSimEditionPosition
+                                                    },
+                                                    studio: {
+                                                        title: "Studio / Network (HBO / Netflix / Disney+)",
+                                                        desc: "HBO, Netflix, Disney+, Apple TV+, Prime Video",
+                                                        icon: <Film className="h-3.5 w-3.5 text-pink-400" />,
+                                                        category: "studio",
+                                                        checked: simShowStudio,
+                                                        onCheckedChange: setSimShowStudio,
+                                                        position: simStudioPosition,
+                                                        onPositionChange: setSimStudioPosition
+                                                    },
+                                                    ratings: {
+                                                        title: "Community Ratings (IMDb / RT / Metacritic)",
+                                                        desc: "IMDb score, Rotten Tomatoes tomato meter",
+                                                        icon: <Star className="h-3.5 w-3.5 text-yellow-400" />,
+                                                        category: "ratings",
+                                                        checked: simRatings,
+                                                        onCheckedChange: setSimRatings,
+                                                        position: simRatingsPosition,
+                                                        onPositionChange: setSimRatingsPosition
+                                                    },
+                                                    contentRating: {
+                                                        title: "Age / Content Rating (PG-13 / R / TV-MA)",
+                                                        desc: "MPAA & TV content advisories & certificates",
+                                                        icon: <Shield className="h-3.5 w-3.5 text-rose-400" />,
+                                                        category: "ratings",
+                                                        checked: simShowRating,
+                                                        onCheckedChange: setSimShowRating,
+                                                        position: simRatingPosition,
+                                                        onPositionChange: setSimRatingPosition
                                                     }
-                                                    return (
-                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
-                                                            ✓ Priority 2 SVG
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </div>
-                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
-                                                <Switch 
-                                                    checked={simShowHdr}
-                                                    onCheckedChange={setSimShowHdr}
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-3">
-                                                <Select value={simHdrPosition} onValueChange={(val: any) => setSimHdrPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
+                                                };
 
-                                        {/* Video Codec */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Video Codec (HEVC / AV1 / AVC)</span>
-                                                </div>
-                                                {(() => {
-                                                    const matches = getMatchingActiveCustomBadgesForCategory("codec");
-                                                    if (matches.length > 0) {
-                                                        return (
-                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
-                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
-                                                                <span>⚡ Priority 1 ({matches.length})</span>
-                                                            </Badge>
-                                                        );
-                                                    }
-                                                    return (
-                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
-                                                            ✓ Priority 2 SVG
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </div>
-                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
-                                                <Switch 
-                                                    checked={simShowCodec}
-                                                    onCheckedChange={setSimShowCodec}
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-3">
-                                                <Select value={simCodecPosition} onValueChange={(val: any) => setSimCodecPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
+                                                const cfg = layerConfig[layerKey];
+                                                if (!cfg) return null;
 
-                                        {/* Audio Codec */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-sky-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Audio Format (Dolby Atmos / TrueHD / DTS)</span>
-                                                </div>
-                                                {(() => {
-                                                    const matches = getMatchingActiveCustomBadgesForCategory("audio");
-                                                    if (matches.length > 0) {
-                                                        return (
-                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
-                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
-                                                                <span>⚡ Priority 1 ({matches.length})</span>
-                                                            </Badge>
-                                                        );
-                                                    }
-                                                    return (
-                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
-                                                            ✓ Priority 2 SVG
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </div>
-                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
-                                                <Switch 
-                                                    checked={simShowAudio}
-                                                    onCheckedChange={setSimShowAudio}
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-3">
-                                                <Select value={simAudioPosition} onValueChange={(val: any) => setSimAudioPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
+                                                const matches = getMatchingActiveCustomBadgesForCategory(cfg.category);
 
-                                        {/* Audio Channels */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Audio Channels (7.1 / 5.1 Surround)</span>
-                                                </div>
-                                                {(() => {
-                                                    const matches = getMatchingActiveCustomBadgesForCategory("channels");
-                                                    if (matches.length > 0) {
-                                                        return (
-                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
-                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
-                                                                <span>⚡ Priority 1 ({matches.length})</span>
-                                                            </Badge>
-                                                        );
-                                                    }
-                                                    return (
-                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
-                                                            ✓ Priority 2 SVG
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </div>
-                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
-                                                <Switch 
-                                                    checked={simShowChannels}
-                                                    onCheckedChange={setSimShowChannels}
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-3">
-                                                <Select value={simChannelsPosition} onValueChange={(val: any) => setSimChannelsPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
+                                                return (
+                                                    <div key={`layer-${layerKey}`} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center transition-all hover:border-slate-700/80">
+                                                        <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
+                                                            <div className="flex items-center gap-1">
+                                                                <Badge className={`${isFirst ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300 border-slate-700'} text-[9px] font-mono px-1.5 py-0`}>
+                                                                    #{idx + 1}
+                                                                </Badge>
+                                                                <div className="flex flex-col">
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={isFirst}
+                                                                        onClick={() => handleMoveLayerPriority(layerKey, "up")}
+                                                                        className="p-0.5 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400"
+                                                                        title="Move layer up in stacking priority"
+                                                                    >
+                                                                        <ChevronUp className="h-3 w-3" />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={isLast}
+                                                                        onClick={() => handleMoveLayerPriority(layerKey, "down")}
+                                                                        className="p-0.5 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400"
+                                                                        title="Move layer down in stacking priority"
+                                                                    >
+                                                                        <ChevronDown className="h-3 w-3" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
 
-                                        {/* Edition / Cut */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Edition / Cut (IMAX / Remux / Criterion)</span>
-                                                </div>
-                                                {(() => {
-                                                    const matches = getMatchingActiveCustomBadgesForCategory("edition");
-                                                    if (matches.length > 0) {
-                                                        return (
-                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
-                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
-                                                                <span>⚡ Priority 1 ({matches.length})</span>
-                                                            </Badge>
-                                                        );
-                                                    }
-                                                    return (
-                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
-                                                            ✓ Priority 2 SVG
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </div>
-                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
-                                                <Switch 
-                                                    checked={simShowEdition}
-                                                    onCheckedChange={setSimShowEdition}
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-3">
-                                                <Select value={simEditionPosition} onValueChange={(val: any) => setSimEditionPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                {cfg.icon}
+                                                                <span className="font-semibold text-white text-[11px] truncate">{cfg.title}</span>
+                                                            </div>
 
-                                        {/* Studio / Network */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-pink-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Studio / Network (HBO / Netflix / Disney+)</span>
-                                                </div>
-                                                {(() => {
-                                                    const matches = getMatchingActiveCustomBadgesForCategory("studio");
-                                                    if (matches.length > 0) {
-                                                        return (
-                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
-                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
-                                                                <span>⚡ Priority 1 ({matches.length})</span>
-                                                            </Badge>
-                                                        );
-                                                    }
-                                                    return (
-                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
-                                                            ✓ Priority 2 SVG
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </div>
-                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
-                                                <Switch 
-                                                    checked={simShowStudio}
-                                                    onCheckedChange={setSimShowStudio}
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-3">
-                                                <Select value={simStudioPosition} onValueChange={(val: any) => setSimStudioPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
+                                                            {matches.length > 0 ? (
+                                                                <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1 shrink-0" title={matches.map(m => m.name).join(", ")}>
+                                                                    <Zap className="h-2.5 w-2.5 text-amber-400" />
+                                                                    <span>⚡ Priority 1 ({matches.length})</span>
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0 shrink-0">
+                                                                    ✓ Priority 2 SVG
+                                                                </Badge>
+                                                            )}
+                                                        </div>
 
-                                        {/* Content Rating */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">Age Rating (PG-13 / R / TV-MA)</span>
-                                                </div>
-                                                {(() => {
-                                                    const matches = getMatchingActiveCustomBadgesForCategory("ratings");
-                                                    if (matches.length > 0) {
-                                                        return (
-                                                            <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[9px] px-1.5 py-0 gap-1" title={matches.map(m => m.name).join(", ")}>
-                                                                <Zap className="h-2.5 w-2.5 text-amber-400" />
-                                                                <span>⚡ Priority 1 ({matches.length})</span>
-                                                            </Badge>
-                                                        );
-                                                    }
-                                                    return (
-                                                        <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
-                                                            ✓ Priority 2 SVG
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </div>
-                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
-                                                <Switch 
-                                                    checked={simShowRating}
-                                                    onCheckedChange={setSimShowRating}
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-3">
-                                                <Select value={simRatingPosition} onValueChange={(val: any) => setSimRatingPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
+                                                        <div className="sm:col-span-2 flex justify-start sm:justify-center">
+                                                            <Switch 
+                                                                checked={cfg.checked}
+                                                                onCheckedChange={cfg.onCheckedChange}
+                                                            />
+                                                        </div>
 
-                                        {/* Community Ratings Bar */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 items-center">
-                                            <div className="sm:col-span-7 flex items-center justify-between sm:justify-start gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
-                                                    <span className="font-semibold text-white text-[11px]">IMDb / RT Community Ratings</span>
-                                                </div>
-                                                <Badge variant="outline" className="border-slate-800 text-slate-400 text-[9px] px-1.5 py-0">
-                                                    IMDb 8.6 • 🍅 94%
-                                                </Badge>
-                                            </div>
-                                            <div className="sm:col-span-2 flex justify-start sm:justify-center">
-                                                <Switch 
-                                                    checked={simRatings}
-                                                    onCheckedChange={setSimRatings}
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-3">
-                                                <Select value={simRatingsPosition} onValueChange={(val: any) => setSimRatingsPosition(val)}>
-                                                    <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
+                                                        <div className="sm:col-span-3">
+                                                            <Select value={cfg.position} onValueChange={cfg.onPositionChange}>
+                                                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-7">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
 
                                         {/* Leaving Soon Header Banner */}
                                         <div className="p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/80 flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
-                                                <span className="font-semibold text-white text-[11px]">Leaving Soon Top Banner</span>
+                                                <div>
+                                                    <span className="font-semibold text-white text-[11px]">Leaving Soon Top Banner</span>
+                                                    <p className="text-[10px] text-slate-400">Full-width top countdown ribbon for expiring media</p>
+                                                </div>
                                             </div>
                                             <Switch 
                                                 checked={simLeavingSoon}
                                                 onCheckedChange={setSimLeavingSoon}
                                             />
                                         </div>
-                                    </div>
-
-                                    {/* Corner Ribbon Overlays Configuration */}
-                                    <div className="p-3.5 bg-gradient-to-r from-purple-950/40 via-slate-950/60 to-slate-950/70 rounded-xl border border-purple-800/40 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Sparkles className="h-4 w-4 text-purple-400" />
-                                                <span className="font-bold text-white text-xs">Corner Ribbon Overlays</span>
-                                            </div>
-                                            <Switch 
-                                                checked={simShowRibbon}
-                                                onCheckedChange={setSimShowRibbon}
-                                            />
-                                        </div>
-                                        <p className="text-[11px] text-slate-400">
-                                            Diagonal corner ribbons with high-gloss gradients, drop shadows, and automatic or custom text.
-                                        </p>
-
-                                        {simShowRibbon && (
-                                            <div className="space-y-3 pt-1 animate-in fade-in-50 duration-200">
-                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                                    <div className="space-y-1">
-                                                        <Label className="text-[11px] text-slate-300">Ribbon Content</Label>
-                                                        <Select value={simRibbonType} onValueChange={(val: any) => setSimRibbonType(val)}>
-                                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="auto_quality">Auto Quality (4K / DV)</SelectItem>
-                                                                <SelectItem value="auto_edition">Auto Edition (IMAX / Cut)</SelectItem>
-                                                                <SelectItem value="leaving_soon">Leaving Soon</SelectItem>
-                                                                <SelectItem value="custom">Custom Text Banner</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-
-                                                    <div className="space-y-1">
-                                                        <Label className="text-[11px] text-slate-300">Corner Placement</Label>
-                                                        <Select value={simRibbonPosition} onValueChange={(val: any) => setSimRibbonPosition(val)}>
-                                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="top-right">Top-Right Corner</SelectItem>
-                                                                <SelectItem value="top-left">Top-Left Corner</SelectItem>
-                                                                <SelectItem value="bottom-right">Bottom-Right Corner</SelectItem>
-                                                                <SelectItem value="bottom-left">Bottom-Left Corner</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-
-                                                    <div className="space-y-1">
-                                                        <Label className="text-[11px] text-slate-300">Color Gradient</Label>
-                                                        <Select value={simRibbonTheme} onValueChange={(val: any) => setSimRibbonTheme(val)}>
-                                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="purple">💜 Royal Purple</SelectItem>
-                                                                <SelectItem value="emerald">💚 Emerald Green</SelectItem>
-                                                                <SelectItem value="crimson">❤️ Crimson Red</SelectItem>
-                                                                <SelectItem value="gold">💛 Amber Gold</SelectItem>
-                                                                <SelectItem value="cyan">🩵 Electric Cyan</SelectItem>
-                                                                <SelectItem value="pink">💖 Neon Pink</SelectItem>
-                                                                <SelectItem value="glass">🖤 Dark Glass</SelectItem>
-                                                                <SelectItem value="orange">🧡 Warning Orange</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                </div>
-
-                                                {simRibbonType === "custom" && (
-                                                    <div className="space-y-1">
-                                                        <Label className="text-[11px] text-slate-300">Custom Ribbon Text</Label>
-                                                        <Input 
-                                                            value={simRibbonText}
-                                                            onChange={e => setSimRibbonText(e.target.value)}
-                                                            placeholder="e.g. EXCLUSIVE REMUX, DIRECTOR'S CUT, STAFF PICK..."
-                                                            className="bg-slate-800 border-slate-700 text-xs h-8"
-                                                        />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
                                 </CardContent>
                                 <CardFooter className="p-4 pt-0 flex flex-col gap-2">
@@ -5120,7 +5231,11 @@ export default function CurationStudio() {
                                             >
                                                 <div className="w-10 h-14 bg-slate-950 rounded overflow-hidden shrink-0 border border-slate-700">
                                                     {it.thumb ? (
-                                                        <img src={`/api/media/image?url=${encodeURIComponent(it.thumb)}`} alt={it.title} className="w-full h-full object-cover" />
+                                                        <img 
+                                                            src={`/api/media/image?serverId=${encodeURIComponent(selectedServerId)}&thumb=${encodeURIComponent(it.thumb)}&title=${encodeURIComponent(it.title || "")}&year=${encodeURIComponent(it.year || "")}&type=${encodeURIComponent(it.type || "movie")}`} 
+                                                            alt={it.title} 
+                                                            className="w-full h-full object-cover" 
+                                                        />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-slate-600"><Film className="h-4 w-4" /></div>
                                                     )}
@@ -5153,6 +5268,38 @@ export default function CurationStudio() {
                             {/* Deep Inspection Panel & Live Single Item Overlay Preview */}
                             {inspectingItem && (
                                 <div className="space-y-6 pt-2">
+                                    {/* Navigation / Back Bar for Inspected Item */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-slate-950/90 border border-slate-800 rounded-xl shadow-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Button 
+                                                variant="outline" 
+                                                onClick={() => { setInspectingItem(null); setInspectedAdvisory(null); }}
+                                                className="bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border-slate-700 hover:border-cyan-500 font-bold text-xs h-8 px-3 gap-2 shadow-sm transition-all"
+                                            >
+                                                <ArrowLeft className="h-4 w-4 text-cyan-400" />
+                                                <span>Back to Media Search</span>
+                                            </Button>
+                                            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 truncate">
+                                                <span>Plex</span>
+                                                <span>/</span>
+                                                <span className="text-purple-400 font-semibold">{inspectingItem.serverName || currentServer?.serverName || "Server"}</span>
+                                                <span>/</span>
+                                                <span className="text-white font-bold truncate max-w-xs">{inspectingItem.item.title} {inspectingItem.item.year ? `(${inspectingItem.item.year})` : ""}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => { setInspectingItem(null); setInspectedAdvisory(null); setInspectorSearchQuery(""); }}
+                                                className="text-slate-400 hover:text-rose-300 text-xs h-8 px-2.5 gap-1.5"
+                                            >
+                                                <X className="h-3.5 w-3.5" />
+                                                <span>Clear Inspection</span>
+                                            </Button>
+                                        </div>
+                                    </div>
+
                                     {/* Action message pill */}
                                     {singleItemMsg && (
                                         <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${singleItemMsg.success ? 'bg-emerald-950/70 border border-emerald-800 text-emerald-300' : 'bg-rose-950/70 border border-rose-800 text-rose-300'}`}>
@@ -5176,7 +5323,7 @@ export default function CurationStudio() {
                                                 {/* Poster Image */}
                                                 {inspectingItem.item.thumb ? (
                                                     <img 
-                                                        src={`/api/media/image?url=${encodeURIComponent(inspectingItem.item.thumb)}`} 
+                                                        src={`/api/media/image?serverId=${encodeURIComponent(selectedServerId)}&thumb=${encodeURIComponent(inspectingItem.item.thumb)}&title=${encodeURIComponent(inspectingItem.item.title || "")}&year=${encodeURIComponent(inspectingItem.item.year || "")}&type=${encodeURIComponent(inspectingItem.item.type || "movie")}`} 
                                                         alt={inspectingItem.item.title} 
                                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                                     />
@@ -5220,7 +5367,7 @@ export default function CurationStudio() {
                                                                     <g transform="translate(50, 50) rotate(45) translate(-50, -50)">
                                                                         <rect x="-30" y="38" width="160" height="24" fill={`url(#inspect-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
                                                                         <text x="50" y="53" fill="#ffffff" fontSize="8" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
-                                                                            {getEffectiveRibbonText()}
+                                                                            {getEffectiveRibbonText(inspectingItem.item)}
                                                                         </text>
                                                                     </g>
                                                                 )}
@@ -5228,7 +5375,7 @@ export default function CurationStudio() {
                                                                     <g transform="translate(50, 50) rotate(-45) translate(-50, -50)">
                                                                         <rect x="-30" y="38" width="160" height="24" fill={`url(#inspect-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
                                                                         <text x="50" y="53" fill="#ffffff" fontSize="8" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
-                                                                            {getEffectiveRibbonText()}
+                                                                            {getEffectiveRibbonText(inspectingItem.item)}
                                                                         </text>
                                                                     </g>
                                                                 )}
@@ -5236,7 +5383,7 @@ export default function CurationStudio() {
                                                                     <g transform="translate(50, 50) rotate(-45) translate(-50, -50)">
                                                                         <rect x="-30" y="38" width="160" height="24" fill={`url(#inspect-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
                                                                         <text x="50" y="53" fill="#ffffff" fontSize="8" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
-                                                                            {getEffectiveRibbonText()}
+                                                                            {getEffectiveRibbonText(inspectingItem.item)}
                                                                         </text>
                                                                     </g>
                                                                 )}
@@ -5244,7 +5391,7 @@ export default function CurationStudio() {
                                                                     <g transform="translate(50, 50) rotate(45) translate(-50, -50)">
                                                                         <rect x="-30" y="38" width="160" height="24" fill={`url(#inspect-ribbon-grad-${simRibbonTheme})`} stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
                                                                         <text x="50" y="53" fill="#ffffff" fontSize="8" fontWeight="900" textAnchor="middle" letterSpacing="0.8" fontFamily="sans-serif">
-                                                                            {getEffectiveRibbonText()}
+                                                                            {getEffectiveRibbonText(inspectingItem.item)}
                                                                         </text>
                                                                     </g>
                                                                 )}
@@ -7224,7 +7371,7 @@ export default function CurationStudio() {
                                                     <div className="aspect-[2/3] w-full bg-slate-900 relative overflow-hidden flex items-center justify-center">
                                                         {item.thumb ? (
                                                             <img 
-                                                                src={`/api/media/image?serverId=${selectedServerId}&thumb=${encodeURIComponent(item.thumb)}`} 
+                                                                src={`/api/media/image?serverId=${encodeURIComponent(selectedServerId)}&thumb=${encodeURIComponent(item.thumb)}&title=${encodeURIComponent(item.title || "")}&year=${encodeURIComponent(item.year || "")}&type=movie`} 
                                                                 alt={item.title} 
                                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
                                                                 loading="lazy" 

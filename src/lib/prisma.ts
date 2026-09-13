@@ -522,6 +522,18 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             `);
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "PlexServer" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "url" TEXT NOT NULL,
+                    "token" TEXT,
+                    "clientIdentifier" TEXT,
+                    "isDefault" BOOLEAN NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Auxiliary tables check error:", e.message || e);
         }
@@ -880,6 +892,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "showStudio" BOOLEAN NOT NULL DEFAULT 0,
                     "showContentRating" BOOLEAN NOT NULL DEFAULT 0,
                     "customBadgeIds" TEXT,
+                    "layerPriorityOrder" TEXT,
                     "enabled" BOOLEAN NOT NULL DEFAULT 1,
                     "itemCount" INTEGER NOT NULL DEFAULT 0,
                     "lastAppliedAt" DATETIME,
@@ -914,7 +927,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                     ["showStudio", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showStudio" BOOLEAN NOT NULL DEFAULT 0;`],
                     ["showContentRating", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showContentRating" BOOLEAN NOT NULL DEFAULT 0;`],
                     ["badgeScale", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "badgeScale" REAL DEFAULT 1.0;`],
-                    ["customBadgeIds", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "customBadgeIds" TEXT;`]
+                    ["customBadgeIds", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "customBadgeIds" TEXT;`],
+                    ["layerPriorityOrder", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "layerPriorityOrder" TEXT;`]
                 ];
                 for (const [colName, ddl] of overlayAddCols) {
                     if (!overlayCols.includes(colName)) {

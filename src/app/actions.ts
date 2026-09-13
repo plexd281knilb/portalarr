@@ -628,28 +628,49 @@ export async function getSettings() {
 export async function saveSettings(formData: FormData) {
   await verifyAdmin();
   await ensureSchemaColumns();
-  const smtpHost = formData.get("smtpHost") as string;
-  const smtpPort = formData.get("smtpPort") as string;
-  const smtpUser = formData.get("smtpUser") as string;
-  const rawSmtpPass = formData.get("smtpPass") as string;
-  const rawPlexToken = formData.get("mainPlexToken") as string;
-  const rawPlexUrl = formData.get("mainPlexUrl") as string;
-  const smtpFrom = formData.get("smtpFrom") as string || "";
-  const tmdbApiKey = formData.get("tmdbApiKey") as string;
-  const traktClientId = formData.get("traktClientId") as string;
-  const mdblistApiKey = formData.get("mdblistApiKey") as string;
+  const updateData: any = {};
 
-  const encryptedSmtpPass = encryptData(rawSmtpPass);
-  const encryptedPlexToken = encryptData(rawPlexToken);
-
-  const updateData: any = { 
-      smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass: encryptedSmtpPass, 
-      smtpFrom, mainPlexToken: encryptedPlexToken 
-  };
-  if (rawPlexUrl !== null && rawPlexUrl !== undefined) updateData.mainPlexUrl = rawPlexUrl.trim();
-  if (tmdbApiKey !== null && tmdbApiKey !== undefined) updateData.tmdbApiKey = tmdbApiKey;
-  if (traktClientId !== null && traktClientId !== undefined) updateData.traktClientId = traktClientId;
-  if (mdblistApiKey !== null && mdblistApiKey !== undefined) updateData.mdblistApiKey = mdblistApiKey;
+  if (formData.has("smtpHost")) {
+    updateData.smtpHost = formData.get("smtpHost") as string || "";
+  }
+  if (formData.has("smtpPort")) {
+    const rawPort = formData.get("smtpPort");
+    const p = Number(rawPort);
+    updateData.smtpPort = isNaN(p) ? 587 : p;
+  }
+  if (formData.has("smtpUser")) {
+    updateData.smtpUser = formData.get("smtpUser") as string || "";
+  }
+  if (formData.has("smtpPass")) {
+    const rawPass = formData.get("smtpPass") as string;
+    if (rawPass !== null) {
+      updateData.smtpPass = rawPass ? encryptData(rawPass) : "";
+    }
+  }
+  if (formData.has("smtpFrom")) {
+    updateData.smtpFrom = formData.get("smtpFrom") as string || "";
+  }
+  if (formData.has("mainPlexToken")) {
+    const rawToken = formData.get("mainPlexToken") as string;
+    if (rawToken !== null) {
+      updateData.mainPlexToken = rawToken ? encryptData(rawToken) : "";
+    }
+  }
+  if (formData.has("mainPlexUrl")) {
+    const rawUrl = formData.get("mainPlexUrl") as string;
+    if (rawUrl !== null) {
+      updateData.mainPlexUrl = rawUrl.trim();
+    }
+  }
+  if (formData.has("tmdbApiKey")) {
+    updateData.tmdbApiKey = formData.get("tmdbApiKey") as string;
+  }
+  if (formData.has("traktClientId")) {
+    updateData.traktClientId = formData.get("traktClientId") as string;
+  }
+  if (formData.has("mdblistApiKey")) {
+    updateData.mdblistApiKey = formData.get("mdblistApiKey") as string;
+  }
 
   await prisma.settings.upsert({
     where: { id: "global" },
@@ -659,6 +680,318 @@ export async function saveSettings(formData: FormData) {
     },
   });
   revalidatePath("/settings");
+  return { success: true, message: "Settings saved successfully!" };
+}
+
+export async function savePlexSettingsAction(formData: FormData) {
+  await verifyAdmin();
+  await ensureSchemaColumns();
+  const rawPlexToken = formData.get("mainPlexToken") as string;
+  const rawPlexUrl = formData.get("mainPlexUrl") as string;
+
+  const updateData: any = {};
+  if (rawPlexToken !== null && rawPlexToken !== undefined) {
+    updateData.mainPlexToken = rawPlexToken.trim() ? encryptData(rawPlexToken.trim()) : "";
+  }
+  if (rawPlexUrl !== null && rawPlexUrl !== undefined) {
+    updateData.mainPlexUrl = rawPlexUrl.trim();
+  }
+
+  await prisma.settings.upsert({
+    where: { id: "global" },
+    update: updateData,
+    create: { id: "global", ...updateData },
+  });
+  revalidatePath("/settings");
+  return { success: true, message: "Plex settings saved successfully!" };
+}
+
+export async function clearPlexSettings() {
+  await verifyAdmin();
+  await prisma.settings.update({
+    where: { id: "global" },
+    data: { mainPlexToken: "", mainPlexUrl: "" },
+  });
+  revalidatePath("/settings");
+  return { success: true, message: "Plex credentials cleared." };
+}
+
+export async function getPlexServersAction() {
+    try {
+        await verifyAdmin();
+        const servers = await prisma.plexServer.findMany({
+            orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }]
+        });
+        return servers.map(s => ({
+            ...s,
+            token: s.token ? decryptData(s.token) : ""
+        }));
+    } catch (e: any) {
+        console.error("[GET-PLEX-SERVERS-ACTION-ERROR]:", e);
+        return [];
+    }
+}
+
+export async function testPlexServerConfigAction(rawUrl: string, rawToken?: string) {
+    await verifyAdmin();
+    if (!rawUrl || !rawUrl.trim()) {
+        return { success: false, error: "Server URL is required to test connection." };
+    }
+
+    let clean = cleanUrl(rawUrl.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
+    }
+    clean = clean.replace(/\/+$/, "");
+
+    let token = (rawToken || "").trim();
+    if (!token) {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (settings?.mainPlexToken) {
+            token = decryptData(settings.mainPlexToken);
+        }
+    }
+
+    if (!token) {
+        return { 
+            success: false, 
+            error: "Plex token is required. Enter a token or link your Admin Plex Token above." 
+        };
+    }
+
+    const startTime = Date.now();
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+        const testUrl = `${clean}/identity?X-Plex-Token=${encodeURIComponent(token)}`;
+        const res = await fetch(testUrl, {
+            headers: {
+                "Accept": "application/json",
+                "X-Plex-Token": token,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            },
+            signal: controller.signal,
+            cache: "no-store"
+        });
+        clearTimeout(timeoutId);
+
+        const latency = Date.now() - startTime;
+
+        if (res.status === 401 || res.status === 403) {
+            return {
+                success: false,
+                error: `Authentication failed (HTTP ${res.status}). The provided Plex Token is invalid or does not have access to this server.`
+            };
+        }
+
+        if (!res.ok) {
+            return {
+                success: false,
+                error: `Server responded with HTTP ${res.status}: ${res.statusText || "Error"}`
+            };
+        }
+
+        let serverName = "Plex Media Server";
+        let version = "Unknown";
+        let machineIdentifier = "";
+        let sectionCount = 0;
+
+        try {
+            const rootController = new AbortController();
+            const rootTimeout = setTimeout(() => rootController.abort(), 5000);
+            const rootRes = await fetch(`${clean}/?X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token },
+                signal: rootController.signal,
+                cache: "no-store"
+            });
+            clearTimeout(rootTimeout);
+            if (rootRes.ok) {
+                const rootData = await rootRes.json().catch(() => null);
+                if (rootData?.MediaContainer) {
+                    serverName = rootData.MediaContainer.friendlyName || rootData.MediaContainer.myPlexUsername || serverName;
+                    version = rootData.MediaContainer.version || version;
+                    machineIdentifier = rootData.MediaContainer.machineIdentifier || machineIdentifier;
+                }
+            }
+        } catch (e) {}
+
+        try {
+            const secController = new AbortController();
+            const secTimeout = setTimeout(() => secController.abort(), 5000);
+            const secRes = await fetch(`${clean}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token },
+                signal: secController.signal,
+                cache: "no-store"
+            });
+            clearTimeout(secTimeout);
+            if (secRes.ok) {
+                const secData = await secRes.json().catch(() => null);
+                const dirs = secData?.MediaContainer?.Directory;
+                if (Array.isArray(dirs)) {
+                    sectionCount = dirs.length;
+                }
+            }
+        } catch (e) {}
+
+        const successMsg = `Connected to "${serverName}"! (Plex v${version}, ${sectionCount} ${sectionCount === 1 ? 'library' : 'libraries'}, ${latency}ms)`;
+        logger.addLog("SUCCESS", "PLEX", successMsg, `URL: ${clean} | Machine: ${machineIdentifier}`);
+
+        return {
+            success: true,
+            message: successMsg,
+            serverName,
+            version,
+            machineIdentifier,
+            sectionCount,
+            latency
+        };
+    } catch (e: any) {
+        const errMsg = e.name === "AbortError"
+            ? "Connection timed out after 7s. Please verify the IP address, port (32400), and firewall settings."
+            : (e.message || "Failed to connect to Plex server");
+        logger.addLog("ERROR", "PLEX", `Manual Plex server test failed: ${errMsg}`, `URL: ${clean}`);
+        return { success: false, error: errMsg };
+    }
+}
+
+export async function testPlexServerConnectionAction(id: string) {
+    await verifyAdmin();
+    const server = await prisma.plexServer.findUnique({ where: { id } });
+    if (!server) return { success: false, error: "Plex server not found." };
+
+    const token = server.token ? decryptData(server.token) : undefined;
+    return await testPlexServerConfigAction(server.url, token);
+}
+
+export async function addPlexServerAction(formData: FormData) {
+    await verifyAdmin();
+    const name = (formData.get("name") as string || "Plex Server").trim();
+    let url = (formData.get("url") as string || "").trim();
+    const rawToken = (formData.get("token") as string || "").trim();
+    let clientIdentifier = (formData.get("clientIdentifier") as string || "").trim();
+    const isDefault = formData.get("isDefault") === "true" || formData.get("isDefault") === "on";
+
+    if (!url) return { success: false, error: "Server URL is required." };
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = `http://${url}`;
+    }
+    url = url.replace(/\/+$/, "");
+
+    if (!clientIdentifier) {
+        try {
+            const testRes = await testPlexServerConfigAction(url, rawToken);
+            if (testRes.success && testRes.machineIdentifier) {
+                clientIdentifier = testRes.machineIdentifier;
+            }
+        } catch (e) {}
+    }
+
+    const count = await prisma.plexServer.count();
+    const shouldBeDefault = isDefault || count === 0;
+
+    if (shouldBeDefault && count > 0) {
+        await prisma.plexServer.updateMany({ data: { isDefault: false } });
+    }
+
+    const created = await prisma.plexServer.create({
+        data: {
+            name,
+            url,
+            token: rawToken ? encryptData(rawToken) : null,
+            clientIdentifier: clientIdentifier || null,
+            isDefault: shouldBeDefault
+        }
+    });
+
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${url})`);
+    return { success: true, message: `Plex server "${name}" added successfully!`, server: created };
+}
+
+export async function updatePlexServerAction(formData: FormData) {
+    await verifyAdmin();
+    const id = formData.get("id") as string;
+    if (!id) return { success: false, error: "Plex server ID is missing." };
+
+    const name = (formData.get("name") as string || "Plex Server").trim();
+    let url = (formData.get("url") as string || "").trim();
+    const rawToken = formData.get("token") as string;
+    let clientIdentifier = (formData.get("clientIdentifier") as string || "").trim();
+    const isDefault = formData.get("isDefault") === "true" || formData.get("isDefault") === "on";
+
+    if (!url) return { success: false, error: "Server URL is required." };
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = `http://${url}`;
+    }
+    url = url.replace(/\/+$/, "");
+
+    const existing = await prisma.plexServer.findUnique({ where: { id } });
+    if (!existing) return { success: false, error: "Server not found." };
+
+    if (isDefault) {
+        await prisma.plexServer.updateMany({
+            where: { id: { not: id } },
+            data: { isDefault: false }
+        });
+    }
+
+    const updateData: any = {
+        name,
+        url,
+        isDefault
+    };
+
+    if (clientIdentifier) {
+        updateData.clientIdentifier = clientIdentifier;
+    }
+
+    if (rawToken !== null && rawToken !== undefined) {
+        const trimmed = rawToken.trim();
+        updateData.token = trimmed ? encryptData(trimmed) : null;
+    }
+
+    await prisma.plexServer.update({
+        where: { id },
+        data: updateData
+    });
+
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    logger.addLog("SUCCESS", "PLEX", `Updated Plex server: "${name}" (${url})`);
+    return { success: true, message: `Plex server "${name}" updated successfully!` };
+}
+
+export async function removePlexServerAction(id: string) {
+    await verifyAdmin();
+    const server = await prisma.plexServer.findUnique({ where: { id } });
+    await prisma.plexServer.delete({ where: { id } });
+    
+    const remaining = await prisma.plexServer.findFirst({ orderBy: { createdAt: 'asc' } });
+    if (remaining && server?.isDefault) {
+        await prisma.plexServer.update({
+            where: { id: remaining.id },
+            data: { isDefault: true }
+        });
+    }
+
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    logger.addLog("INFO", "PLEX", `Removed Plex server: "${server?.name || id}"`);
+    return { success: true, message: "Plex server removed." };
+}
+
+export async function setDefaultPlexServerAction(id: string) {
+    await verifyAdmin();
+    await prisma.plexServer.updateMany({ data: { isDefault: false } });
+    await prisma.plexServer.update({
+        where: { id },
+        data: { isDefault: true }
+    });
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    return { success: true, message: "Default Plex server updated." };
 }
 
 export async function getEmailNotificationSettings() {
@@ -1097,19 +1430,38 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
 
 export async function saveJobSettings(formData: FormData) {
   await verifyAdmin();
-  const autoSyncInterval = Number(formData.get("autoSyncInterval"));
-  const downloadsPath = formData.get("downloadsPath") as string || "/downloads";
-  const googleBooksApiKey = (formData.get("googleBooksApiKey") as string) || null;
+  const updateData: any = {};
   
-  const updateData: any = { autoSyncInterval, downloadsPath };
-  if (googleBooksApiKey !== null) updateData.googleBooksApiKey = googleBooksApiKey;
+  if (formData.has("autoSyncInterval")) {
+    const rawVal = formData.get("autoSyncInterval");
+    if (rawVal !== null && rawVal !== "") {
+      const num = Number(rawVal);
+      if (!isNaN(num)) updateData.autoSyncInterval = num;
+    }
+  }
+  
+  if (formData.has("downloadsPath")) {
+    const p = formData.get("downloadsPath") as string;
+    if (p !== null) updateData.downloadsPath = p;
+  }
+  
+  if (formData.has("googleBooksApiKey")) {
+    const gb = formData.get("googleBooksApiKey") as string;
+    if (gb !== null) updateData.googleBooksApiKey = gb;
+  }
 
   await prisma.settings.upsert({
     where: { id: "global" },
     update: updateData,
-    create: { id: "global", autoSyncInterval, downloadsPath, googleBooksApiKey: googleBooksApiKey || "" },
+    create: { 
+      id: "global", 
+      autoSyncInterval: updateData.autoSyncInterval ?? 5, 
+      downloadsPath: updateData.downloadsPath ?? "/downloads", 
+      googleBooksApiKey: updateData.googleBooksApiKey ?? "" 
+    },
   });
   revalidatePath("/settings");
+  return { success: true, message: "Settings saved successfully!" };
 }
 
 export async function clearSmtpSettings() {

@@ -252,6 +252,54 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
         return servers;
     };
 
+    // 0. Load manual Plex servers configured in database
+    const manualServers: PlexServerResource[] = [];
+    try {
+        const dbPlex = await prisma.plexServer.findMany({ orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }] });
+        for (const s of dbPlex) {
+            const sToken = s.token ? decryptData(s.token) : adminToken;
+            const parsedUrl = s.url.trim().replace(/\/+$/, "");
+            const host = parsedUrl.replace(/^https?:\/\//, "").split(":")[0];
+            const port = parseInt(parsedUrl.split(":")[2] || "32400", 10) || 32400;
+            manualServers.push({
+                name: s.name || "Plex Server",
+                clientIdentifier: s.clientIdentifier || s.id,
+                accessToken: sToken || adminToken,
+                connections: [{
+                    uri: parsedUrl,
+                    local: true,
+                    relay: false,
+                    address: host,
+                    port
+                }]
+            });
+        }
+    } catch (e) {}
+
+    const mergeWithManualServers = (discovered: PlexServerResource[]): PlexServerResource[] => {
+        const merged: PlexServerResource[] = [...discovered];
+        for (const man of manualServers) {
+            const matchIndex = merged.findIndex(s => 
+                (s.clientIdentifier && s.clientIdentifier.toLowerCase() === man.clientIdentifier.toLowerCase()) ||
+                s.name.toLowerCase() === man.name.toLowerCase()
+            );
+            if (matchIndex >= 0) {
+                const existingConns = merged[matchIndex].connections;
+                for (const mc of man.connections) {
+                    if (!existingConns.some(c => c.uri.replace(/\/+$/, "") === mc.uri.replace(/\/+$/, ""))) {
+                        existingConns.unshift(mc);
+                    }
+                }
+                if (man.accessToken && man.accessToken !== adminToken) {
+                    merged[matchIndex].accessToken = man.accessToken;
+                }
+            } else {
+                merged.push(man);
+            }
+        }
+        return merged;
+    };
+
     // 1. Try modern resources endpoint with includeHttps=1 (omit includeRelay=1 to avoid relay hang)
     try {
         const controller = new AbortController();
@@ -269,7 +317,8 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
         if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
-                const srvs = parseResources(data);
+                let srvs = parseResources(data);
+                srvs = mergeWithManualServers(srvs);
                 if (srvs.length > 0) {
                     cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
                     return srvs;
@@ -295,7 +344,8 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
         if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
-                const srvs = parseResources(data);
+                let srvs = parseResources(data);
+                srvs = mergeWithManualServers(srvs);
                 if (srvs.length > 0) {
                     cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
                     return srvs;
@@ -341,14 +391,21 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
                     });
                 }
             }
-            if (servers.length > 0) {
-                cachedServers = { token: adminToken, timestamp: Date.now(), data: servers };
-                return servers;
+            const merged = mergeWithManualServers(servers);
+            if (merged.length > 0) {
+                cachedServers = { token: adminToken, timestamp: Date.now(), data: merged };
+                return merged;
             }
         }
     } catch (e) {}
 
-    // 4. Fallback: Lookup configured DB URLs from Settings / MediaApp
+    // 4. Return manual servers directly if cloud discovery failed
+    if (manualServers.length > 0) {
+        cachedServers = { token: adminToken, timestamp: Date.now(), data: manualServers };
+        return manualServers;
+    }
+
+    // 5. Fallback: Lookup configured DB URLs from Settings / MediaApp
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const plexApps = await prisma.mediaApp.findMany({ where: { type: "plex" } });
@@ -900,9 +957,22 @@ export async function resolveWorkingPlexServerConnection(
 
     const servers = await getPlexServers(token, forceRefresh).catch(() => []);
 
-    // Also check media apps in DB
+    // Also check manual Plex servers and media apps in DB
     const dbPlexUrls: string[] = [];
     if (mainPlexUrl) dbPlexUrls.push(mainPlexUrl);
+    try {
+        const manualPlex = await prisma.plexServer.findMany();
+        for (const s of manualPlex) {
+            if (s.url && !dbPlexUrls.includes(s.url)) dbPlexUrls.push(s.url);
+            if (serverIdOrName && (
+                s.id === serverIdOrName || 
+                s.name.toLowerCase() === serverIdOrName.toLowerCase() || 
+                (s.clientIdentifier && s.clientIdentifier.toLowerCase() === serverIdOrName.toLowerCase())
+            )) {
+                if (s.token) token = decryptData(s.token);
+            }
+        }
+    } catch (e) {}
     try {
         const plexApps = await prisma.mediaApp.findMany({ where: { type: "plex" } });
         for (const app of plexApps) {
