@@ -173,6 +173,7 @@ function SettingsPageContent() {
     const [smtpPassInput, setSmtpPassInput] = useState("");
     const [smtpFromInput, setSmtpFromInput] = useState("");
     const [mainPlexTokenInput, setMainPlexTokenInput] = useState("");
+    const [mainPlexUrlInput, setMainPlexUrlInput] = useState("");
     const [autoSyncIntervalInput, setAutoSyncIntervalInput] = useState<number | string>(5);
     const [inputDownloadsPath, setInputDownloadsPath] = useState("/downloads");
     const [validatingPath, setValidatingPath] = useState(false);
@@ -209,6 +210,7 @@ function SettingsPageContent() {
         smtpPass: string;
         smtpFrom: string;
         mainPlexToken: string;
+        mainPlexUrl: string;
         autoSyncInterval: number | string;
         downloadsPath: string;
         googleBooksKey: string;
@@ -240,7 +242,8 @@ function SettingsPageContent() {
         smtpUserInput !== initialDataRef.current.smtpUser ||
         smtpPassInput !== initialDataRef.current.smtpPass ||
         smtpFromInput !== initialDataRef.current.smtpFrom ||
-        mainPlexTokenInput !== initialDataRef.current.mainPlexToken
+        mainPlexTokenInput !== initialDataRef.current.mainPlexToken ||
+        mainPlexUrlInput !== initialDataRef.current.mainPlexUrl
     ) : false;
 
     const isAutomationDirty = initialDataRef.current ? (
@@ -701,6 +704,7 @@ function SettingsPageContent() {
             const smtpPassVal = s?.smtpPass || "";
             const smtpFromVal = s?.smtpFrom || "";
             const mainPlexTokenVal = s?.mainPlexToken || "";
+            const mainPlexUrlVal = s?.mainPlexUrl || "";
             const autoSyncIntervalVal = s?.autoSyncInterval ?? 5;
             const downloadsPathVal = s?.downloadsPath || "/downloads";
             const googleBooksKeyVal = s?.googleBooksApiKey || "";
@@ -714,6 +718,7 @@ function SettingsPageContent() {
             setSmtpPassInput(smtpPassVal);
             setSmtpFromInput(smtpFromVal);
             setMainPlexTokenInput(mainPlexTokenVal);
+            setMainPlexUrlInput(mainPlexUrlVal);
             setAutoSyncIntervalInput(autoSyncIntervalVal);
             setInputDownloadsPath(downloadsPathVal);
             setGoogleBooksKey(googleBooksKeyVal);
@@ -769,6 +774,7 @@ function SettingsPageContent() {
                 smtpPass: smtpPassVal,
                 smtpFrom: smtpFromVal,
                 mainPlexToken: mainPlexTokenVal,
+                mainPlexUrl: mainPlexUrlVal,
                 autoSyncInterval: autoSyncIntervalVal,
                 downloadsPath: downloadsPathVal,
                 googleBooksKey: googleBooksKeyVal,
@@ -828,6 +834,7 @@ function SettingsPageContent() {
                 formData.append("smtpPass", smtpPassInput);
                 formData.append("smtpFrom", smtpFromInput);
                 formData.append("mainPlexToken", mainPlexTokenInput);
+                formData.append("mainPlexUrl", mainPlexUrlInput);
                 promises.push(saveSettings(formData));
             }
 
@@ -1300,6 +1307,31 @@ function SettingsPageContent() {
                                         <p className="text-[10px] text-muted-foreground mt-1">
                                             Click the button above to sign in with Plex and automatically link your server owner token, or paste your <code>X-Plex-Token</code> manually. <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" className="text-primary hover:underline">Read the official guide</a>.
                                         </p>
+
+                                        {/* PLEX SERVER URL OVERRIDE */}
+                                        <div className="space-y-1.5 pt-3 border-t border-muted/30">
+                                            <div className="flex items-center justify-between">
+                                                <Label htmlFor="mainPlexUrl" className="text-xs font-semibold">Custom Plex Server URL / IP (Optional)</Label>
+                                                {systemSettings?.mainPlexUrl && (
+                                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                        <CheckCircle2 className="h-3 w-3" /> Configured
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <Input 
+                                                id="mainPlexUrl" 
+                                                name="mainPlexUrl" 
+                                                type="text" 
+                                                value={mainPlexUrlInput} 
+                                                onChange={(e) => setMainPlexUrlInput(e.target.value)} 
+                                                placeholder="http://192.168.1.50:32400 or http://localhost:32400" 
+                                                className="text-xs font-mono"
+                                                autoComplete="off"
+                                            />
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Direct connection URL override for Docker or custom network environments (e.g. <code>http://192.168.1.100:32400</code>, <code>http://host.docker.internal:32400</code>, or <code>http://plex:32400</code>). If left empty, Portalarr uses auto-discovered Plex.tv addresses.
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <div className="flex flex-wrap gap-2 pt-2">

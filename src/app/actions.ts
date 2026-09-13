@@ -633,6 +633,7 @@ export async function saveSettings(formData: FormData) {
   const smtpUser = formData.get("smtpUser") as string;
   const rawSmtpPass = formData.get("smtpPass") as string;
   const rawPlexToken = formData.get("mainPlexToken") as string;
+  const rawPlexUrl = formData.get("mainPlexUrl") as string;
   const smtpFrom = formData.get("smtpFrom") as string || "";
   const tmdbApiKey = formData.get("tmdbApiKey") as string;
   const traktClientId = formData.get("traktClientId") as string;
@@ -645,6 +646,7 @@ export async function saveSettings(formData: FormData) {
       smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass: encryptedSmtpPass, 
       smtpFrom, mainPlexToken: encryptedPlexToken 
   };
+  if (rawPlexUrl !== null && rawPlexUrl !== undefined) updateData.mainPlexUrl = rawPlexUrl.trim();
   if (tmdbApiKey !== null && tmdbApiKey !== undefined) updateData.tmdbApiKey = tmdbApiKey;
   if (traktClientId !== null && traktClientId !== undefined) updateData.traktClientId = traktClientId;
   if (mdblistApiKey !== null && mdblistApiKey !== undefined) updateData.mdblistApiKey = mdblistApiKey;

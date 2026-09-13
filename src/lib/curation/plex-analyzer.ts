@@ -649,7 +649,7 @@ export async function getPlexLibraryMediaItems(
         lastUrlAttempted = urlWithGuids;
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 20000);
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
             const res = await fetch(urlWithGuids, {
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
@@ -690,7 +690,7 @@ export async function getPlexLibraryMediaItems(
         lastUrlAttempted = fallbackUrl;
         try {
             const fbController = new AbortController();
-            const fbTimeoutId = setTimeout(() => fbController.abort(), 15000);
+            const fbTimeoutId = setTimeout(() => fbController.abort(), 3500);
             const fbRes = await fetch(fallbackUrl, {
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
