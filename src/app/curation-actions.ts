@@ -7,7 +7,7 @@ if (typeof process !== "undefined" && process.env) {
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
-import prisma from "@/lib/prisma";
+import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getCurrentUser } from "@/app/auth-actions";
 import { logger } from "@/lib/logger";
@@ -93,6 +93,7 @@ async function verifyAdmin() {
 
 export async function getCurationSettingsAction() {
     await verifyAdmin();
+    await ensureSchemaColumns();
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
     return {
         success: true,
@@ -273,6 +274,7 @@ export async function saveCurationSettingsAction(data: {
 
 export async function getPlexServersAndSectionsAction(targetServerId?: string) {
     await verifyAdmin();
+    await ensureSchemaColumns();
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
     const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
     if (!token) return { success: false, error: "Plex token not configured." };
@@ -286,6 +288,7 @@ export async function getPlexServersAndSectionsAction(targetServerId?: string) {
 
 export async function getPlexServerSectionsAction(serverId: string) {
     await verifyAdmin();
+    await ensureSchemaColumns();
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
     const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
     if (!token) return { success: false, error: "Plex token not configured." };
@@ -300,6 +303,7 @@ export async function getPlexServerSectionsAction(serverId: string) {
 
 export async function getMediaCollectionsAction(serverId?: string, sectionKey?: string) {
     await verifyAdmin();
+    await ensureSchemaColumns();
     try {
         const rawCollections = await prisma.mediaCollection.findMany({
             where: {
@@ -499,6 +503,7 @@ export async function saveMediaCollectionAction(data: {
     seasonalAction?: string | null;
 }) {
     await verifyAdmin();
+    await ensureSchemaColumns();
     try {
         const dataPayload = {
             title: data.title,
@@ -1063,6 +1068,7 @@ export async function toggleCollectionVisibilityAction(
     value: boolean | string
 ) {
     await verifyAdmin();
+    await ensureSchemaColumns();
     try {
         const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
         if (!collection) return { success: false, error: "Collection not found." };
@@ -1129,6 +1135,7 @@ export async function updateCollectionPlacementAction(data: {
     seasonalAction?: string | null;
 }) {
     await verifyAdmin();
+    await ensureSchemaColumns();
     try {
         const collection = await prisma.mediaCollection.findUnique({ where: { id: data.id } });
         if (!collection) return { success: false, error: "Collection not found." };
@@ -1485,12 +1492,541 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
     }
 }
 
+// Default Built-in High-DPI SVGs for Custom Badge Vault
+const DEFAULT_BUILTIN_BADGE_DEFINITIONS: Array<{
+    id: string;
+    name: string;
+    category: "resolution" | "hdr" | "codec" | "audio" | "edition" | "ratings" | "ribbon" | "studio" | "custom";
+    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
+    matchRule: string;
+    width: number;
+    height: number;
+    svgContent: string;
+}> = [
+    // 1. Resolution
+    {
+        id: "builtin_badge_4k_uhd",
+        name: "4K UHD",
+        category: "resolution",
+        position: "top-right",
+        matchRule: "4k",
+        width: 140,
+        height: 46,
+        svgContent: `<svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g4k" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fef08a"/><stop offset="50%" stop-color="#eab308"/><stop offset="100%" stop-color="#ca8a04"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="136" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#g4k)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="48" y="29" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="18.5" fill="#facc15" text-anchor="middle">4K</text><text x="94" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="rgba(255,255,255,0.75)" text-anchor="middle" letter-spacing="1.5">UHD</text></svg>`
+    },
+    {
+        id: "builtin_badge_1080p_fhd",
+        name: "1080p FHD",
+        category: "resolution",
+        position: "top-right",
+        matchRule: "1080p",
+        width: 140,
+        height: 46,
+        svgContent: `<svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g1080" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0284c7"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="136" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#g1080)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="48" y="29" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="17" fill="#38bdf8" text-anchor="middle">1080p</text><text x="98" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="rgba(255,255,255,0.75)" text-anchor="middle" letter-spacing="1.5">FHD</text></svg>`
+    },
+    {
+        id: "builtin_badge_720p_hd",
+        name: "720p HD",
+        category: "resolution",
+        position: "top-right",
+        matchRule: "720p",
+        width: 130,
+        height: 46,
+        svgContent: `<svg width="130" height="46" viewBox="0 0 130 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g720" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#94a3b8"/><stop offset="100%" stop-color="#64748b"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="126" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#g720)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="122" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="45" y="29" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="17" fill="#cbd5e1" text-anchor="middle">720p</text><text x="90" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="rgba(255,255,255,0.7)" text-anchor="middle" letter-spacing="1.5">HD</text></svg>`
+    },
+    {
+        id: "builtin_badge_sd_480p",
+        name: "SD / 480p",
+        category: "resolution",
+        position: "top-right",
+        matchRule: "480p",
+        width: 115,
+        height: 46,
+        svgContent: `<svg width="115" height="46" viewBox="0 0 115 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="111" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#64748b" stroke-width="1.5" filter="url(#sh)"/><line x1="8" y1="5" x2="107" y2="5" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" stroke-linecap="round"/><text x="57" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#94a3b8" text-anchor="middle" letter-spacing="1.2">SD • 480p</text></svg>`
+    },
+
+    // 2. HDR & Dynamic Range
+    {
+        id: "builtin_badge_dolby_vision",
+        name: "Dolby Vision",
+        category: "hdr",
+        position: "top-right",
+        matchRule: "dv",
+        width: 160,
+        height: 46,
+        svgContent: `<svg width="160" height="46" viewBox="0 0 160 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gdv" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24"/><stop offset="40%" stop-color="#c084fc"/><stop offset="100%" stop-color="#818cf8"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="156" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gdv)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="152" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><g transform="translate(14, 15)"><rect x="0" y="0" width="3.5" height="16" rx="1" fill="#c084fc"/><path d="M 4 0 A 8 8 0 0 1 4 16 Z" fill="#c084fc"/><path d="M 16 0 A 8 8 0 0 0 16 16 Z" fill="#818cf8"/><rect x="17" y="0" width="3.5" height="16" rx="1" fill="#818cf8"/></g><text x="96" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="#f8fafc" text-anchor="middle" letter-spacing="1.5">DOLBY VISION</text></svg>`
+    },
+    {
+        id: "builtin_badge_hdr10_plus",
+        name: "HDR10+",
+        category: "hdr",
+        position: "top-right",
+        matchRule: "hdr10+",
+        width: 145,
+        height: 46,
+        svgContent: `<svg width="145" height="46" viewBox="0 0 145 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gplus" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24"/><stop offset="50%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="141" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gplus)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="137" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="72" y="29" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="15" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">HDR10+</text></svg>`
+    },
+    {
+        id: "builtin_badge_hdr10",
+        name: "HDR10",
+        category: "hdr",
+        position: "top-right",
+        matchRule: "hdr10",
+        width: 135,
+        height: 46,
+        svgContent: `<svg width="135" height="46" viewBox="0 0 135 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ghdr" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#facc15"/><stop offset="100%" stop-color="#38bdf8"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="131" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#ghdr)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="127" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="67" y="29" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="15" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">HDR10</text></svg>`
+    },
+
+    // 3. Compounds (Dovetailed Resolution + HDR)
+    {
+        id: "builtin_badge_4k_dolby_vision",
+        name: "4K UHD • Dolby Vision",
+        category: "resolution",
+        position: "top-right",
+        matchRule: "4k + dv",
+        width: 245,
+        height: 46,
+        svgContent: `<svg width="245" height="46" viewBox="0 0 245 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g4kdv" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24"/><stop offset="40%" stop-color="#c084fc"/><stop offset="100%" stop-color="#818cf8"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.85"/></filter></defs><rect x="2" y="2" width="241" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#g4kdv)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="237" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="36" y="29" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="18.5" fill="#facc15" text-anchor="middle">4K</text><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.6)" text-anchor="middle" letter-spacing="1.5">UHD</text><line x1="90" y1="10" x2="90" y2="36" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/><circle cx="90" cy="23" r="2.5" fill="rgba(255,255,255,0.4)"/><g transform="translate(104, 15)"><rect x="0" y="0" width="4" height="16" rx="1.2" fill="#c084fc"/><path d="M 5 0 A 8 8 0 0 1 5 16 Z" fill="#c084fc"/><path d="M 18 0 A 8 8 0 0 0 18 16 Z" fill="#818cf8"/><rect x="19" y="0" width="4" height="16" rx="1.2" fill="#818cf8"/></g><text x="180" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12.5" fill="#f8fafc" text-anchor="middle" letter-spacing="1.5">DOLBY VISION</text></svg>`
+    },
+    {
+        id: "builtin_badge_4k_hdr10_plus",
+        name: "4K UHD • HDR10+",
+        category: "resolution",
+        position: "top-right",
+        matchRule: "4k + hdr10+",
+        width: 230,
+        height: 46,
+        svgContent: `<svg width="230" height="46" viewBox="0 0 230 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g4kplus" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24"/><stop offset="50%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.85"/></filter></defs><rect x="2" y="2" width="226" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#g4kplus)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="222" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="36" y="29" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="18.5" fill="#facc15" text-anchor="middle">4K</text><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.6)" text-anchor="middle" letter-spacing="1.5">UHD</text><line x1="90" y1="10" x2="90" y2="36" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/><circle cx="90" cy="23" r="2.5" fill="rgba(255,255,255,0.4)"/><text x="160" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="14" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">HDR10+</text></svg>`
+    },
+    {
+        id: "builtin_badge_4k_hdr",
+        name: "4K UHD • HDR",
+        category: "resolution",
+        position: "top-right",
+        matchRule: "4k + hdr",
+        width: 210,
+        height: 46,
+        svgContent: `<svg width="210" height="46" viewBox="0 0 210 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g4khdr" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#facc15"/><stop offset="100%" stop-color="#38bdf8"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.85"/></filter></defs><rect x="2" y="2" width="206" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#g4khdr)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="202" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="36" y="29" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="18.5" fill="#facc15" text-anchor="middle">4K</text><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.6)" text-anchor="middle" letter-spacing="1.5">UHD</text><line x1="90" y1="10" x2="90" y2="36" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/><circle cx="90" cy="23" r="2.5" fill="rgba(255,255,255,0.4)"/><text x="150" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="14.5" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">HDR</text></svg>`
+    },
+
+    // 4. Audio Codecs & Surround
+    {
+        id: "builtin_badge_dolby_atmos",
+        name: "Dolby Atmos",
+        category: "audio",
+        position: "top-left",
+        matchRule: "atmos",
+        width: 160,
+        height: 46,
+        svgContent: `<svg width="160" height="46" viewBox="0 0 160 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gatmos" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#818cf8"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="156" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gatmos)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="152" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><g transform="translate(14, 15)"><rect x="0" y="0" width="3.5" height="16" rx="1" fill="#38bdf8"/><path d="M 4 0 A 8 8 0 0 1 4 16 Z" fill="#38bdf8"/><path d="M 16 0 A 8 8 0 0 0 16 16 Z" fill="#818cf8"/><rect x="17" y="0" width="3.5" height="16" rx="1" fill="#818cf8"/></g><text x="96" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12.5" fill="#e0e7ff" text-anchor="middle" letter-spacing="1.8">ATMOS</text></svg>`
+    },
+    {
+        id: "builtin_badge_dolby_truehd",
+        name: "Dolby TrueHD",
+        category: "audio",
+        position: "top-left",
+        matchRule: "truehd",
+        width: 155,
+        height: 46,
+        svgContent: `<svg width="155" height="46" viewBox="0 0 155 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gthd" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#6366f1"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="151" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gthd)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="147" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="77" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12.5" fill="#e0e7ff" text-anchor="middle" letter-spacing="1.5">DOLBY TRUEHD</text></svg>`
+    },
+    {
+        id: "builtin_badge_dts_x",
+        name: "DTS:X",
+        category: "audio",
+        position: "top-left",
+        matchRule: "dts:x",
+        width: 135,
+        height: 46,
+        svgContent: `<svg width="135" height="46" viewBox="0 0 135 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gdtsx" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fb923c"/><stop offset="100%" stop-color="#ea580c"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="131" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gdtsx)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="127" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="67" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="14" fill="#fed7aa" text-anchor="middle" letter-spacing="1.8">DTS:X</text></svg>`
+    },
+    {
+        id: "builtin_badge_dts_hd_ma",
+        name: "DTS-HD Master Audio",
+        category: "audio",
+        position: "top-left",
+        matchRule: "dts-hd",
+        width: 165,
+        height: 46,
+        svgContent: `<svg width="165" height="46" viewBox="0 0 165 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gdtshd" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f97316"/><stop offset="100%" stop-color="#c2410c"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="161" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gdtshd)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="157" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="82" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="#ffedd5" text-anchor="middle" letter-spacing="1.5">DTS-HD MA</text></svg>`
+    },
+    {
+        id: "builtin_badge_flac_lossless",
+        name: "FLAC Lossless",
+        category: "audio",
+        position: "top-left",
+        matchRule: "flac",
+        width: 140,
+        height: 46,
+        svgContent: `<svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gflac" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#059669"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="136" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gflac)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12.5" fill="#a7f3d0" text-anchor="middle" letter-spacing="1.5">FLAC LOSSLESS</text></svg>`
+    },
+    {
+        id: "builtin_badge_7_1_surround",
+        name: "7.1 Surround",
+        category: "audio",
+        position: "top-left",
+        matchRule: "7.1",
+        width: 110,
+        height: 46,
+        svgContent: `<svg width="110" height="46" viewBox="0 0 110 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="106" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#38bdf8" stroke-width="1.5" filter="url(#sh)"/><line x1="8" y1="5" x2="102" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="55" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#bae6fd" text-anchor="middle" letter-spacing="1.5">7.1 CH</text></svg>`
+    },
+    {
+        id: "builtin_badge_5_1_surround",
+        name: "5.1 Surround",
+        category: "audio",
+        position: "top-left",
+        matchRule: "5.1",
+        width: 110,
+        height: 46,
+        svgContent: `<svg width="110" height="46" viewBox="0 0 110 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="106" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#38bdf8" stroke-width="1.5" filter="url(#sh)"/><line x1="8" y1="5" x2="102" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="55" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#bae6fd" text-anchor="middle" letter-spacing="1.5">5.1 CH</text></svg>`
+    },
+
+    // 5. Video Codecs
+    {
+        id: "builtin_badge_hevc",
+        name: "HEVC / H.265",
+        category: "codec",
+        position: "top-right",
+        matchRule: "hevc",
+        width: 140,
+        height: 46,
+        svgContent: `<svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ghevc" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#6366f1"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="136" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#ghevc)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#c7d2fe" text-anchor="middle" letter-spacing="1.5">HEVC • 10b</text></svg>`
+    },
+    {
+        id: "builtin_badge_av1",
+        name: "AV1 Next-Gen",
+        category: "codec",
+        position: "top-right",
+        matchRule: "av1",
+        width: 130,
+        height: 46,
+        svgContent: `<svg width="130" height="46" viewBox="0 0 130 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gav1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#059669"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="126" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gav1)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="122" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="65" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#a7f3d0" text-anchor="middle" letter-spacing="1.8">AV1 CODEC</text></svg>`
+    },
+    {
+        id: "builtin_badge_avc_h264",
+        name: "AVC / H.264",
+        category: "codec",
+        position: "top-right",
+        matchRule: "avc",
+        width: 140,
+        height: 46,
+        svgContent: `<svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="136" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#64748b" stroke-width="1.5" filter="url(#sh)"/><line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" stroke-linecap="round"/><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#cbd5e1" text-anchor="middle" letter-spacing="1.5">AVC • H.264</text></svg>`
+    },
+
+    // 6. Editions & Cuts
+    {
+        id: "builtin_badge_imax_enhanced",
+        name: "IMAX Enhanced",
+        category: "edition",
+        position: "bottom-right",
+        matchRule: "imax",
+        width: 165,
+        height: 46,
+        svgContent: `<svg width="165" height="46" viewBox="0 0 165 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gimax" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0284c7"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="161" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gimax)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="157" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="82" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12.5" fill="#fdf4ff" text-anchor="middle" letter-spacing="1.5">IMAX ENHANCED</text></svg>`
+    },
+    {
+        id: "builtin_badge_criterion",
+        name: "The Criterion Collection",
+        category: "edition",
+        position: "bottom-right",
+        matchRule: "criterion",
+        width: 175,
+        height: 46,
+        svgContent: `<svg width="175" height="46" viewBox="0 0 175 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gcrit" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fef08a"/><stop offset="50%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#d97706"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="171" height="42" rx="8" fill="rgba(20, 15, 5, 0.95)" stroke="url(#gcrit)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="167" y2="5" stroke="rgba(254,240,138,0.5)" stroke-width="1.2" stroke-linecap="round"/><text x="87" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12.5" fill="#facc15" text-anchor="middle" letter-spacing="1.8">CRITERION</text></svg>`
+    },
+    {
+        id: "builtin_badge_remux",
+        name: "Remux Lossless",
+        category: "edition",
+        position: "bottom-right",
+        matchRule: "remux",
+        width: 160,
+        height: 46,
+        svgContent: `<svg width="160" height="46" viewBox="0 0 160 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gremux" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#059669"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="156" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gremux)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="152" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="80" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="#d1fae5" text-anchor="middle" letter-spacing="1.5">REMUX • LOSSLESS</text></svg>`
+    },
+    {
+        id: "builtin_badge_directors_cut",
+        name: "Director's Cut",
+        category: "edition",
+        position: "bottom-right",
+        matchRule: "directors_cut",
+        width: 165,
+        height: 46,
+        svgContent: `<svg width="165" height="46" viewBox="0 0 165 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gdc" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f472b6"/><stop offset="100%" stop-color="#db2777"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="161" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gdc)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="157" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="82" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="#fdf2f8" text-anchor="middle" letter-spacing="1.5">DIRECTOR'S CUT</text></svg>`
+    },
+
+    // 7. Studios & Networks
+    {
+        id: "builtin_badge_netflix",
+        name: "Netflix",
+        category: "studio",
+        position: "bottom-left",
+        matchRule: "netflix",
+        width: 140,
+        height: 46,
+        svgContent: `<svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="136" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#ef4444" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#ffffff" text-anchor="middle" letter-spacing="2">NETFLIX</text></svg>`
+    },
+    {
+        id: "builtin_badge_disney",
+        name: "Disney+",
+        category: "studio",
+        position: "bottom-left",
+        matchRule: "disney",
+        width: 140,
+        height: 46,
+        svgContent: `<svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gdisney" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0284c7"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="136" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gdisney)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#ffffff" text-anchor="middle" letter-spacing="1.8">DISNEY+</text></svg>`
+    },
+    {
+        id: "builtin_badge_hbo_max",
+        name: "HBO Max",
+        category: "studio",
+        position: "bottom-left",
+        matchRule: "hbo",
+        width: 140,
+        height: 46,
+        svgContent: `<svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ghbo" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#9333ea"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="136" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#ghbo)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#ffffff" text-anchor="middle" letter-spacing="1.8">HBO MAX</text></svg>`
+    },
+    {
+        id: "builtin_badge_apple_tv",
+        name: "Apple TV+",
+        category: "studio",
+        position: "bottom-left",
+        matchRule: "apple_tv",
+        width: 140,
+        height: 46,
+        svgContent: `<svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="136" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#e2e8f0" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="70" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#ffffff" text-anchor="middle" letter-spacing="1.5">APPLE TV+</text></svg>`
+    },
+    {
+        id: "builtin_badge_prime_video",
+        name: "Prime Video",
+        category: "studio",
+        position: "bottom-left",
+        matchRule: "amazon",
+        width: 145,
+        height: 46,
+        svgContent: `<svg width="145" height="46" viewBox="0 0 145 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="141" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#00a8e1" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="137" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="72" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12.5" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">PRIME VIDEO</text></svg>`
+    },
+    {
+        id: "builtin_badge_a24",
+        name: "A24",
+        category: "studio",
+        position: "bottom-left",
+        matchRule: "a24",
+        width: 110,
+        height: 46,
+        svgContent: `<svg width="110" height="46" viewBox="0 0 110 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="106" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#f59e0b" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="102" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="55" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="14" fill="#fde68a" text-anchor="middle" letter-spacing="2.5">A24</text></svg>`
+    },
+    {
+        id: "builtin_badge_marvel",
+        name: "Marvel Studios",
+        category: "studio",
+        position: "bottom-left",
+        matchRule: "marvel",
+        width: 145,
+        height: 46,
+        svgContent: `<svg width="145" height="46" viewBox="0 0 145 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="141" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#dc2626" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="137" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="72" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13" fill="#fecaca" text-anchor="middle" letter-spacing="2">MARVEL</text></svg>`
+    },
+
+    // 8. Ratings & Accolades
+    {
+        id: "builtin_badge_certified_fresh",
+        name: "Certified Fresh",
+        category: "ratings",
+        position: "bottom-left",
+        matchRule: "rt_fresh",
+        width: 155,
+        height: 46,
+        svgContent: `<svg width="155" height="46" viewBox="0 0 155 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gfresh" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f43f5e"/><stop offset="100%" stop-color="#be123c"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="151" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gfresh)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="147" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="24" y="28" font-size="16">🍅</text><text x="86" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="11.5" fill="#fda4af" text-anchor="middle" letter-spacing="1.5">CERTIFIED FRESH</text></svg>`
+    },
+    {
+        id: "builtin_badge_imdb_top250",
+        name: "IMDb Top 250",
+        category: "ratings",
+        position: "bottom-left",
+        matchRule: "imdb_top_250",
+        width: 150,
+        height: 46,
+        svgContent: `<svg width="150" height="46" viewBox="0 0 150 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gtop" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fef08a"/><stop offset="100%" stop-color="#ca8a04"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="146" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gtop)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="142" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><rect x="12" y="11" width="30" height="22" rx="3.5" fill="#f5c518"/><text x="27" y="26" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="10" fill="#000" text-anchor="middle">IMDb</text><text x="92" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="#facc15" text-anchor="middle" letter-spacing="1.2">TOP 250</text></svg>`
+    },
+    {
+        id: "builtin_badge_metacritic_must_see",
+        name: "Metacritic Must-See",
+        category: "ratings",
+        position: "bottom-left",
+        matchRule: "metacritic_must_see",
+        width: 155,
+        height: 46,
+        svgContent: `<svg width="155" height="46" viewBox="0 0 155 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gmc" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#86efac"/><stop offset="100%" stop-color="#16a34a"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="151" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gmc)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="147" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><rect x="12" y="11" width="26" height="22" rx="3.5" fill="#66cc33"/><text x="25" y="26" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="10" fill="#fff" text-anchor="middle">MC</text><text x="92" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="11.5" fill="#86efac" text-anchor="middle" letter-spacing="1.2">MUST-SEE</text></svg>`
+    },
+    {
+        id: "builtin_badge_oscar_winner",
+        name: "Oscar Winner",
+        category: "ratings",
+        position: "bottom-left",
+        matchRule: "oscar_winner",
+        width: 150,
+        height: 46,
+        svgContent: `<svg width="150" height="46" viewBox="0 0 150 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="goscar" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fef08a"/><stop offset="50%" stop-color="#eab308"/><stop offset="100%" stop-color="#ca8a04"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="146" height="42" rx="8" fill="rgba(20, 15, 5, 0.95)" stroke="url(#goscar)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="142" y2="5" stroke="rgba(254,240,138,0.5)" stroke-width="1.2" stroke-linecap="round"/><text x="24" y="28" font-size="15">🏆</text><text x="86" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="#facc15" text-anchor="middle" letter-spacing="1.5">BEST PICTURE</text></svg>`
+    }
+];
+
+/**
+ * Internal helper to write essential built-in high-DPI SVGs to data/custom_badges and upsert records into prisma.customBadge.
+ */
+export async function seedDefaultCustomBadgesInternal(): Promise<{ count: number }> {
+    const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+    if (!fs.existsSync(badgeVaultDir)) {
+        fs.mkdirSync(badgeVaultDir, { recursive: true });
+    }
+
+    let seededCount = 0;
+    for (const b of DEFAULT_BUILTIN_BADGE_DEFINITIONS) {
+        try {
+            const fileName = `${b.id}.svg`;
+            const filePath = path.join(badgeVaultDir, fileName);
+            fs.writeFileSync(filePath, b.svgContent, "utf-8");
+
+            await prisma.customBadge.upsert({
+                where: { id: b.id },
+                update: {
+                    name: b.name,
+                    category: b.category,
+                    filePath,
+                    fileType: "svg",
+                    mimeType: "image/svg+xml",
+                    position: b.position,
+                    width: b.width,
+                    height: b.height,
+                    opacity: 1.0,
+                    matchRule: b.matchRule,
+                    enabled: true
+                },
+                create: {
+                    id: b.id,
+                    name: b.name,
+                    category: b.category,
+                    filePath,
+                    fileType: "svg",
+                    mimeType: "image/svg+xml",
+                    position: b.position,
+                    width: b.width,
+                    height: b.height,
+                    opacity: 1.0,
+                    matchRule: b.matchRule,
+                    enabled: true
+                }
+            });
+            seededCount++;
+        } catch (err: any) {
+            console.warn(`[BADGE-SEED] Failed seeding badge ${b.id}:`, err.message);
+        }
+    }
+
+    return { count: seededCount };
+}
+
+/**
+ * Server action to install / reset all 35+ essential custom badges in bulk with 1 click.
+ */
+export async function seedDefaultCustomBadgesAction() {
+    await verifyAdmin();
+    try {
+        const res = await seedDefaultCustomBadgesInternal();
+        const allBadges = await prisma.customBadge.findMany({ orderBy: { createdAt: "desc" } });
+        return {
+            success: true,
+            seededCount: res.count,
+            totalBadges: allBadges.length,
+            badges: allBadges,
+            message: `Successfully installed / reset ${res.count} essential high-DPI custom badges in your vault!`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed seeding default custom badges." };
+    }
+}
+
+/**
+ * Server action to upload and install a custom badge file (SVG, PNG, WebP).
+ */
+export async function uploadCustomBadgeAction(formData: FormData) {
+    await verifyAdmin();
+    try {
+        const file = formData.get("file") as File | null;
+        const name = (formData.get("name") as string) || "Custom Badge";
+        const category = (formData.get("category") as string) || "custom";
+        const position = (formData.get("position") as string) || "top-right";
+        const matchRule = (formData.get("matchRule") as string) || null;
+        const width = parseInt(formData.get("width") as string) || 140;
+        const height = parseInt(formData.get("height") as string) || 46;
+        const opacity = parseFloat(formData.get("opacity") as string) || 1.0;
+
+        if (!file) {
+            return { success: false, error: "No file provided for upload." };
+        }
+
+        const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+        if (!fs.existsSync(badgeVaultDir)) {
+            fs.mkdirSync(badgeVaultDir, { recursive: true });
+        }
+
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const ext = path.extname(file.name).toLowerCase() || ".png";
+        const fileId = `custom_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const destPath = path.join(badgeVaultDir, `${fileId}${ext}`);
+
+        fs.writeFileSync(destPath, buffer);
+
+        let measuredWidth = width;
+        let measuredHeight = height;
+        let mimeType = ext === ".svg" ? "image/svg+xml" : "image/png";
+        if (ext === ".jpg" || ext === ".jpeg") mimeType = "image/jpeg";
+        if (ext === ".webp") mimeType = "image/webp";
+
+        try {
+            const meta = await sharp(buffer).metadata();
+            if (meta.width) measuredWidth = meta.width;
+            if (meta.height) measuredHeight = meta.height;
+            if (meta.format) mimeType = `image/${meta.format}`;
+        } catch (sErr) {}
+
+        const badge = await prisma.customBadge.create({
+            data: {
+                id: fileId,
+                name,
+                category,
+                filePath: destPath,
+                fileType: ext.replace(".", "").toLowerCase(),
+                mimeType,
+                position,
+                width: measuredWidth,
+                height: measuredHeight,
+                opacity,
+                matchRule: matchRule ? matchRule.trim() : null,
+                enabled: true
+            }
+        });
+
+        return { success: true, badge, message: `Uploaded and installed "${name}" successfully!` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed uploading custom badge." };
+    }
+}
+
 export async function getCustomBadgesAction() {
     await verifyAdmin();
     try {
-        const badges = await prisma.customBadge.findMany({
+        let badges = await prisma.customBadge.findMany({
             orderBy: { createdAt: "desc" }
         });
+
+        // Auto-seed essential badges if vault is empty
+        if (badges.length === 0) {
+            await seedDefaultCustomBadgesInternal();
+            badges = await prisma.customBadge.findMany({
+                orderBy: { createdAt: "desc" }
+            });
+        }
 
         // Auto-heal any badges with outdated or truncated match rules (e.g. 4kplus, 4khdr, 4kdvhdrplus being saved as just '4k')
         for (const b of badges) {

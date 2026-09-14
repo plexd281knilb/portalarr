@@ -114,10 +114,19 @@ export function generateDovetailedResolutionHdrBadgeSvg(
     const isHdr = !isDv && (hdrType.includes("HDR") || hdrType === "HDR10");
 
     const width = isDv ? 245 : (isHdr10Plus ? 230 : 210);
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" : "rgba(8, 12, 22, 0.94)";
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" : 
+                   theme === "classic" ? "rgba(15, 23, 42, 0.96)" :
+                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
+                   theme === "cyber" ? "rgba(2, 6, 23, 0.95)" :
+                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
+                   "rgba(8, 12, 22, 0.94)";
 
     let strokeGrad = "url(#dtGoldGrad)";
-    if (isDv) strokeGrad = "url(#dtDvGrad)";
+    if (theme === "cyber") strokeGrad = "url(#dtCyberGrad)";
+    else if (theme === "crimson") strokeGrad = "url(#dtCrimsonGrad)";
+    else if (theme === "classic") strokeGrad = "#94a3b8";
+    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
+    else if (isDv) strokeGrad = "url(#dtDvGrad)";
     else if (isHdr10Plus) strokeGrad = "url(#dtPlusGrad)";
     else if (isHdr) strokeGrad = "url(#dtHdrGrad)";
     else if (isFhd) strokeGrad = "url(#dtFhdGrad)";
@@ -148,36 +157,46 @@ export function generateDovetailedResolutionHdrBadgeSvg(
                 <stop offset="0%" stop-color="#38bdf8" />
                 <stop offset="100%" stop-color="#0284c7" />
             </linearGradient>
+            <linearGradient id="dtCyberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#22d3ee" />
+                <stop offset="50%" stop-color="#a855f7" />
+                <stop offset="100%" stop-color="#ec4899" />
+            </linearGradient>
+            <linearGradient id="dtCrimsonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#f43f5e" />
+                <stop offset="50%" stop-color="#be123c" />
+                <stop offset="100%" stop-color="#881337" />
+            </linearGradient>
             <filter id="dtShadow" x="-15%" y="-15%" width="130%" height="130%">
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.85"/>
             </filter>
         </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="1.8" filter="url(#dtShadow)"/>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#dtShadow)"/>
         <!-- Specular Top Highlight -->
-        <line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="${theme === 'gold' ? 'rgba(254,240,138,0.5)' : theme === 'crimson' ? 'rgba(253,164,175,0.6)' : theme === 'cyber' ? 'rgba(34,211,238,0.6)' : 'rgba(255,255,255,0.4)'}" stroke-width="1.2" stroke-linecap="round"/>` : ''}
         
         <!-- Left: Resolution -->
-        <text x="36" y="29" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="18.5" fill="${is4k ? '#facc15' : '#38bdf8'}" text-anchor="middle" letter-spacing="0.5">${resText}</text>
+        <text x="36" y="29" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="18.5" fill="${theme === 'gold' || is4k ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle" letter-spacing="0.5">${resText}</text>
         <text x="70" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.6)" text-anchor="middle" letter-spacing="1.5">${resSub}</text>
         
         <!-- Dovetail Interlocking Notch / Vertical Divider -->
-        <line x1="90" y1="10" x2="90" y2="36" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
-        <circle cx="90" cy="23" r="2.5" fill="rgba(255,255,255,0.4)"/>
+        <line x1="90" y1="10" x2="90" y2="36" stroke="${theme === 'gold' ? 'rgba(250,204,21,0.4)' : theme === 'cyber' ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.25)'}" stroke-width="1.5"/>
+        <circle cx="90" cy="23" r="2.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : 'rgba(255,255,255,0.4)'}"/>
 
         <!-- Right: HDR / Dolby Vision / SDR -->
         ${isDv ? `
             <!-- Dolby double-D iconic mark -->
             <g transform="translate(104, 15)">
-                <rect x="0" y="0" width="4" height="16" rx="1.2" fill="#c084fc"/>
-                <path d="M 5 0 A 8 8 0 0 1 5 16 Z" fill="#c084fc"/>
-                <path d="M 18 0 A 8 8 0 0 0 18 16 Z" fill="#818cf8"/>
-                <rect x="19" y="0" width="4" height="16" rx="1.2" fill="#818cf8"/>
+                <rect x="0" y="0" width="4" height="16" rx="1.2" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#f43f5e' : '#c084fc'}"/>
+                <path d="M 5 0 A 8 8 0 0 1 5 16 Z" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#f43f5e' : '#c084fc'}"/>
+                <path d="M 18 0 A 8 8 0 0 0 18 16 Z" fill="${theme === 'cyber' ? '#a855f7' : theme === 'gold' ? '#eab308' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
+                <rect x="19" y="0" width="4" height="16" rx="1.2" fill="${theme === 'cyber' ? '#a855f7' : theme === 'gold' ? '#eab308' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
             </g>
             <text x="180" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="12.5" fill="#f8fafc" text-anchor="middle" letter-spacing="1.5">DOLBY VISION</text>
         ` : isHdr10Plus ? `
-            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14.5" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">HDR10+</text>
+            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14.5" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle" letter-spacing="1.5">HDR10+</text>
         ` : isHdr ? `
-            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14.5" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">${hdrType === "HDR10" ? "HDR10" : "HDR"}</text>
+            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14.5" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle" letter-spacing="1.5">${hdrType === "HDR10" ? "HDR10" : "HDR"}</text>
         ` : `
             <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="13" fill="rgba(255,255,255,0.7)" text-anchor="middle" letter-spacing="1.5">SDR</text>
         `}
@@ -195,20 +214,29 @@ export function generateResolutionBadgeSvg(
     const is4k = resolution === "4K";
     const bgFill = theme === "gold" && is4k 
         ? "url(#goldBgGrad)" 
-        : theme === "glass" 
-            ? "rgba(8, 12, 22, 0.92)" 
+        : theme === "gold"
+            ? "rgba(20, 15, 5, 0.95)"
             : theme === "cyber"
                 ? "rgba(2, 6, 23, 0.94)"
-                : "rgba(15, 23, 42, 0.94)";
+                : theme === "crimson"
+                    ? "rgba(20, 5, 10, 0.95)"
+                    : theme === "classic"
+                        ? "rgba(15, 23, 42, 0.94)"
+                        : theme === "minimal"
+                            ? "rgba(0, 0, 0, 0.85)"
+                            : "rgba(8, 12, 22, 0.92)";
     
-    const strokeGrad = is4k 
-        ? (theme === "cyber" ? "url(#cyberStrokeGrad)" : "url(#goldStrokeGrad)")
+    let strokeGrad = is4k 
+        ? (theme === "cyber" ? "url(#cyberStrokeGrad)" : theme === "crimson" ? "url(#crimsonStrokeGrad)" : "url(#goldStrokeGrad)")
         : resolution === "1080p"
-            ? "url(#fhdStrokeGrad)"
+            ? (theme === "cyber" ? "url(#cyberStrokeGrad)" : theme === "crimson" ? "url(#crimsonStrokeGrad)" : "url(#fhdStrokeGrad)")
             : "url(#hdStrokeGrad)";
 
-    const textColor = is4k && theme === "gold" ? "#000000" : "#ffffff";
-    const subColor = is4k && theme === "gold" ? "#1e293b" : is4k ? "#fef08a" : "#93c5fd";
+    if (theme === "classic") strokeGrad = "#94a3b8";
+    if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
+
+    const textColor = is4k && theme === "gold" ? "#000000" : theme === "cyber" ? "#22d3ee" : theme === "crimson" ? "#fda4af" : "#ffffff";
+    const subColor = is4k && theme === "gold" ? "#1e293b" : is4k ? "#fef08a" : theme === "cyber" ? "#a855f7" : theme === "crimson" ? "#f43f5e" : "#93c5fd";
     const textLabel = is4k ? "4K" : resolution;
     const subLabel = is4k ? "UHD" : resolution === "1080p" ? "FHD" : "HD";
     const dividerColor = is4k ? (theme === "gold" ? "rgba(0,0,0,0.3)" : "rgba(234,179,8,0.5)") : "rgba(148,163,184,0.4)";
@@ -238,14 +266,18 @@ export function generateResolutionBadgeSvg(
                 <stop offset="0%" stop-color="#22d3ee" />
                 <stop offset="100%" stop-color="#a855f7" />
             </linearGradient>
+            <linearGradient id="crimsonStrokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#f43f5e" />
+                <stop offset="100%" stop-color="#be123c" />
+            </linearGradient>
             <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
             </filter>
         </defs>
         <!-- Outer Glassmorphism Base -->
-        <rect x="2" y="2" width="136" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="1.8" filter="url(#kometaShadow)"/>
+        <rect x="2" y="2" width="136" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight (Kometa Gloss Effect) -->
-        <line x1="8" y1="5" x2="132" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="132" y2="5" stroke="${theme === 'gold' && is4k ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.4)'}" stroke-width="1.2" stroke-linecap="round"/>` : ''}
         <!-- Main Resolution Text -->
         <text x="40" y="29" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="20" fill="${textColor}" text-anchor="middle" letter-spacing="0.5">${textLabel}</text>
         <!-- Center Divider Line -->
@@ -265,7 +297,19 @@ export function generateHdrBadgeSvg(
 ): string {
     const isDv = hdrType === "DV";
     const width = isDv ? 175 : 140;
-    const bgFill = "rgba(8, 12, 22, 0.92)";
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
+                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
+                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
+                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
+                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
+                   "rgba(8, 12, 22, 0.92)";
+
+    let strokeGrad = isDv ? "url(#dvGrad)" : "url(#hdrGrad)";
+    if (theme === "gold") strokeGrad = "url(#hdrGoldGrad)";
+    else if (theme === "cyber") strokeGrad = "url(#hdrCyberGrad)";
+    else if (theme === "crimson") strokeGrad = "url(#hdrCrimsonGrad)";
+    else if (theme === "classic") strokeGrad = "#94a3b8";
+    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
 
     if (isDv) {
         return `
@@ -276,19 +320,28 @@ export function generateHdrBadgeSvg(
                     <stop offset="50%" stop-color="#818cf8" />
                     <stop offset="100%" stop-color="#6366f1" />
                 </linearGradient>
+                <linearGradient id="hdrGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#fef08a" /><stop offset="100%" stop-color="#eab308" />
+                </linearGradient>
+                <linearGradient id="hdrCyberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#22d3ee" /><stop offset="100%" stop-color="#a855f7" />
+                </linearGradient>
+                <linearGradient id="hdrCrimsonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#f43f5e" /><stop offset="100%" stop-color="#be123c" />
+                </linearGradient>
                 <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
                     <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
                 </filter>
             </defs>
-            <rect x="2" y="2" width="171" height="42" rx="8" fill="${bgFill}" stroke="url(#dvGrad)" stroke-width="1.8" filter="url(#kometaShadow)"/>
+            <rect x="2" y="2" width="171" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
             <!-- Specular Top Highlight -->
-            <line x1="8" y1="5" x2="167" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
+            ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="167" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
             <!-- Dolby double-D iconic mark -->
             <g transform="translate(14, 15)">
-                <rect x="0" y="0" width="4.5" height="16" rx="1.5" fill="#c084fc"/>
-                <path d="M 6 0 A 8 8 0 0 1 6 16 Z" fill="#c084fc"/>
-                <path d="M 21 0 A 8 8 0 0 0 21 16 Z" fill="#818cf8"/>
-                <rect x="22.5" y="0" width="4.5" height="16" rx="1.5" fill="#818cf8"/>
+                <rect x="0" y="0" width="4.5" height="16" rx="1.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#f43f5e' : '#c084fc'}"/>
+                <path d="M 6 0 A 8 8 0 0 1 6 16 Z" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#f43f5e' : '#c084fc'}"/>
+                <path d="M 21 0 A 8 8 0 0 0 21 16 Z" fill="${theme === 'gold' ? '#eab308' : theme === 'cyber' ? '#a855f7' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
+                <rect x="22.5" y="0" width="4.5" height="16" rx="1.5" fill="${theme === 'gold' ? '#eab308' : theme === 'cyber' ? '#a855f7' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
             </g>
             <!-- Dolby Vision Text -->
             <text x="106" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13.5" fill="#f8fafc" text-anchor="middle" letter-spacing="1.8">DOLBY VISION</text>
@@ -302,14 +355,23 @@ export function generateHdrBadgeSvg(
                 <stop offset="0%" stop-color="#38bdf8" />
                 <stop offset="100%" stop-color="#0284c7" />
             </linearGradient>
+            <linearGradient id="hdrGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#fef08a" /><stop offset="100%" stop-color="#eab308" />
+            </linearGradient>
+            <linearGradient id="hdrCyberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#22d3ee" /><stop offset="100%" stop-color="#a855f7" />
+            </linearGradient>
+            <linearGradient id="hdrCrimsonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#f43f5e" /><stop offset="100%" stop-color="#be123c" />
+            </linearGradient>
             <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
             </filter>
         </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="url(#hdrGrad)" stroke-width="1.8" filter="url(#kometaShadow)"/>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
-        <line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
-        <text x="${width / 2}" y="29" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="16" fill="#f8fafc" text-anchor="middle" letter-spacing="1.8">${hdrType}</text>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
+        <text x="${width / 2}" y="29" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="16" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#f8fafc'}" text-anchor="middle" letter-spacing="1.8">${hdrType}</text>
     </svg>`;
 }
 
@@ -317,7 +379,8 @@ export function generateHdrBadgeSvg(
  * Creates Kometa-Style SVG for Audio codec badge (Dolby Atmos, TrueHD, DTS:X, DTS-HD MA, 5.1/7.1).
  */
 export function generateAudioBadgeSvg(
-    audio: "ATMOS" | "TRUEHD" | "DTS:X" | "DTS-HD" | "5.1" | "7.1"
+    audio: "ATMOS" | "TRUEHD" | "DTS:X" | "DTS-HD" | "5.1" | "7.1" | string,
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
 ): string {
     const isAtmos = audio === "ATMOS";
     const isDts = audio.startsWith("DTS");
@@ -325,6 +388,20 @@ export function generateAudioBadgeSvg(
     const width = isAtmos ? 170 : isDts ? 155 : isTrueHd ? 145 : 135;
     const label = isAtmos ? "DOLBY ATMOS" : isTrueHd ? "TRUEHD 7.1" : audio === "DTS:X" ? "DTS:X" : audio === "DTS-HD" ? "DTS-HD MA" : `${audio} AUDIO`;
     
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
+                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
+                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
+                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
+                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
+                   "rgba(8, 12, 22, 0.92)";
+
+    let strokeGrad = `url(#audioStroke_${audio.replace(/[^a-zA-Z0-9]/g, '')})`;
+    if (theme === "gold") strokeGrad = "#eab308";
+    else if (theme === "cyber") strokeGrad = "#22d3ee";
+    else if (theme === "crimson") strokeGrad = "#f43f5e";
+    else if (theme === "classic") strokeGrad = "#94a3b8";
+    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
+
     return `
     <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -338,19 +415,36 @@ export function generateAudioBadgeSvg(
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
             </filter>
         </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(8, 12, 22, 0.92)" stroke="url(#audioStroke_${audio.replace(/[^a-zA-Z0-9]/g, '')})" stroke-width="1.8" filter="url(#kometaShadow)"/>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
-        <line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13.5" fill="#f8fafc" text-anchor="middle" letter-spacing="1.5">${label}</text>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#f8fafc'}" text-anchor="middle" letter-spacing="1.5">${label}</text>
     </svg>`;
 }
 
 /**
  * Creates Kometa-Style SVG for Audio Channels badge (7.1, 5.1, 2.0).
  */
-export function generateAudioChannelBadgeSvg(channels: string): string {
+export function generateAudioChannelBadgeSvg(
+    channels: string,
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
+): string {
     const width = 115;
     const label = `${channels} CH`;
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
+                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
+                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
+                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
+                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
+                   "rgba(8, 12, 22, 0.92)";
+
+    let strokeGrad = "url(#chGrad)";
+    if (theme === "gold") strokeGrad = "#eab308";
+    else if (theme === "cyber") strokeGrad = "#22d3ee";
+    else if (theme === "crimson") strokeGrad = "#f43f5e";
+    else if (theme === "classic") strokeGrad = "#94a3b8";
+    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
+
     return `
     <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -362,21 +456,38 @@ export function generateAudioChannelBadgeSvg(channels: string): string {
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
             </filter>
         </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(8, 12, 22, 0.92)" stroke="url(#chGrad)" stroke-width="1.8" filter="url(#kometaShadow)"/>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
-        <line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="14" fill="#38bdf8" text-anchor="middle" letter-spacing="1.8">${label}</text>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="14" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle" letter-spacing="1.8">${label}</text>
     </svg>`;
 }
 
 /**
  * Creates Kometa-Style SVG for Video Codec badge (HEVC, AVC, AV1, ProRes).
  */
-export function generateCodecBadgeSvg(codec: string): string {
+export function generateCodecBadgeSvg(
+    codec: string,
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
+): string {
     const width = 125;
     const cUpper = codec.toUpperCase();
     const label = cUpper.includes("HEVC") ? "HEVC • 10b" : cUpper.includes("AV1") ? "AV1 • HDR" : cUpper.includes("AVC") ? "AVC • x264" : cUpper;
     
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
+                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
+                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
+                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
+                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
+                   "rgba(8, 12, 22, 0.92)";
+
+    let strokeGrad = "url(#codecGrad)";
+    if (theme === "gold") strokeGrad = "#eab308";
+    else if (theme === "cyber") strokeGrad = "#a855f7";
+    else if (theme === "crimson") strokeGrad = "#f43f5e";
+    else if (theme === "classic") strokeGrad = "#94a3b8";
+    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
+
     return `
     <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -388,28 +499,46 @@ export function generateCodecBadgeSvg(codec: string): string {
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
             </filter>
         </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(8, 12, 22, 0.92)" stroke="url(#codecGrad)" stroke-width="1.8" filter="url(#kometaShadow)"/>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
-        <line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13" fill="#c7d2fe" text-anchor="middle" letter-spacing="1.5">${label}</text>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#c084fc' : theme === 'crimson' ? '#fda4af' : '#c7d2fe'}" text-anchor="middle" letter-spacing="1.5">${label}</text>
     </svg>`;
 }
 
 /**
  * Creates Kometa-Style SVG for Movie Edition / Cut badge (IMAX Enhanced, Criterion, Director's Cut, Extended, Remux).
  */
-export function generateEditionBadgeSvg(edition: string): string {
+export function generateEditionBadgeSvg(
+    edition: string,
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
+): string {
     const isImax = edition.toUpperCase().includes("IMAX");
     const isCriterion = edition.toUpperCase().includes("CRITERION");
     const isRemux = edition.toUpperCase().includes("REMUX");
     const width = isImax ? 165 : isCriterion ? 175 : isRemux ? 160 : 180;
-    const strokeGrad = isImax 
+    
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
+                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
+                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
+                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
+                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
+                   "rgba(8, 12, 22, 0.94)";
+
+    let strokeGrad = isImax 
         ? "url(#imaxGrad)" 
         : isCriterion 
             ? "url(#critGrad)" 
             : isRemux
                 ? "url(#remuxGrad)"
                 : "url(#editGrad)";
+
+    if (theme === "gold") strokeGrad = "url(#critGrad)";
+    else if (theme === "cyber") strokeGrad = "url(#imaxGrad)";
+    else if (theme === "crimson") strokeGrad = "#f43f5e";
+    else if (theme === "classic") strokeGrad = "#94a3b8";
+    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
+
     const label = isImax ? "IMAX ENHANCED" : isCriterion ? "CRITERION" : isRemux ? "REMUX • LOSSLESS" : edition.toUpperCase();
 
     return `
@@ -436,17 +565,20 @@ export function generateEditionBadgeSvg(edition: string): string {
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
             </filter>
         </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="${strokeGrad}" stroke-width="1.8" filter="url(#kometaShadow)"/>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
-        <line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="12.5" fill="#fdf4ff" text-anchor="middle" letter-spacing="1.5">${label}</text>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="12.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#38bdf8' : theme === 'crimson' ? '#fda4af' : '#fdf4ff'}" text-anchor="middle" letter-spacing="1.5">${label}</text>
     </svg>`;
 }
 
 /**
  * Creates Kometa-Style SVG for Studio / Network badge (HBO, Netflix, Disney+, Apple TV+, Prime, Marvel, DC, A24, Paramount+).
  */
-export function generateStudioLogoBadgeSvg(studio: string): string {
+export function generateStudioLogoBadgeSvg(
+    studio: string,
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
+): string {
     const s = studio.toUpperCase();
     const width = 145;
     let strokeColor = "#a855f7";
@@ -462,6 +594,19 @@ export function generateStudioLogoBadgeSvg(studio: string): string {
     else if (s.includes("PARAMOUNT")) strokeColor = "#0064ff";
     else if (s.includes("HBO") || s.includes("MAX")) strokeColor = "#9333ea";
 
+    if (theme === "gold") strokeColor = "#eab308";
+    else if (theme === "cyber") strokeColor = "#22d3ee";
+    else if (theme === "crimson") strokeColor = "#f43f5e";
+    else if (theme === "classic") strokeColor = "#94a3b8";
+    else if (theme === "minimal") strokeColor = "rgba(255,255,255,0.25)";
+
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
+                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
+                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
+                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
+                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
+                   "rgba(8, 12, 22, 0.94)";
+
     return `
     <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -469,22 +614,38 @@ export function generateStudioLogoBadgeSvg(studio: string): string {
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
             </filter>
         </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="${strokeColor}" stroke-width="1.8" filter="url(#kometaShadow)"/>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeColor}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
-        <line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13" fill="${textColor}" text-anchor="middle" letter-spacing="1.8">${s}</text>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : textColor}" text-anchor="middle" letter-spacing="1.8">${s}</text>
     </svg>`;
 }
 
 /**
  * Creates Kometa-Style SVG for Content Rating badge (G, PG, PG-13, R, NC-17, TV-MA, TV-14, TV-PG, TV-G).
  */
-export function generateContentRatingBadgeSvg(rating: string): string {
+export function generateContentRatingBadgeSvg(
+    rating: string,
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
+): string {
     const r = rating.toUpperCase();
     const isMature = r.includes("R") || r.includes("TV-MA") || r.includes("NC-17");
     const isTeen = r.includes("PG-13") || r.includes("TV-14");
     const width = 95;
-    const strokeColor = isMature ? "#f43f5e" : isTeen ? "#fb923c" : "#10b981";
+    let strokeColor = isMature ? "#f43f5e" : isTeen ? "#fb923c" : "#10b981";
+
+    if (theme === "gold") strokeColor = "#eab308";
+    else if (theme === "cyber") strokeColor = isMature ? "#f43f5e" : "#22d3ee";
+    else if (theme === "crimson") strokeColor = "#f43f5e";
+    else if (theme === "classic") strokeColor = "#94a3b8";
+    else if (theme === "minimal") strokeColor = "rgba(255,255,255,0.25)";
+
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
+                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
+                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
+                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
+                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
+                   "rgba(8, 12, 22, 0.92)";
 
     return `
     <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
@@ -493,22 +654,25 @@ export function generateContentRatingBadgeSvg(rating: string): string {
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
             </filter>
         </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="rgba(8, 12, 22, 0.92)" stroke="${strokeColor}" stroke-width="1.8" filter="url(#kometaShadow)"/>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeColor}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
-        <line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="14" fill="#f8fafc" text-anchor="middle" letter-spacing="1.2">${r}</text>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
+        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="14" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : '#f8fafc'}" text-anchor="middle" letter-spacing="1.2">${r}</text>
     </svg>`;
 }
 
 /**
  * Creates Kometa-Style SVG for Community Ratings badge (IMDb, RT Critics, RT Audience, Metacritic).
  */
-export function generateRatingsBadgeSvg(ratings: {
-    imdb?: number;
-    rtCritics?: number;
-    rtAudience?: number;
-    metacritic?: number;
-}): string {
+export function generateRatingsBadgeSvg(
+    ratings: {
+        imdb?: number;
+        rtCritics?: number;
+        rtAudience?: number;
+        metacritic?: number;
+    },
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
+): string {
     const segments: string[] = [];
     let curX = 12;
 
@@ -550,6 +714,19 @@ export function generateRatingsBadgeSvg(ratings: {
     if (segments.length === 0) return "";
 
     const totalWidth = curX + 6;
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
+                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
+                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
+                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
+                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
+                   "rgba(8, 12, 22, 0.94)";
+
+    const strokeColor = theme === "gold" ? "#eab308" :
+                        theme === "cyber" ? "#22d3ee" :
+                        theme === "crimson" ? "#f43f5e" :
+                        theme === "classic" ? "#94a3b8" :
+                        theme === "minimal" ? "rgba(255,255,255,0.25)" :
+                        "rgba(255, 255, 255, 0.25)";
 
     return `
     <svg width="${totalWidth}" height="46" viewBox="0 0 ${totalWidth} 46" xmlns="http://www.w3.org/2000/svg">
@@ -558,9 +735,9 @@ export function generateRatingsBadgeSvg(ratings: {
                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
             </filter>
         </defs>
-        <rect x="2" y="2" width="${totalWidth - 4}" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="rgba(255, 255, 255, 0.25)" stroke-width="1.5" filter="url(#kometaShadow)"/>
+        <rect x="2" y="2" width="${totalWidth - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeColor}" stroke-width="${theme === 'minimal' ? 1.2 : 1.5}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
-        <line x1="8" y1="5" x2="${totalWidth - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
+        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${totalWidth - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
         ${segments.join("")}
     </svg>`;
 }
@@ -1460,25 +1637,25 @@ export async function applyOverlaysToPoster(
         }
     }
     if (options.showCodec && mediaInfo.detectedBadges.codec && !hasCustomCodec) {
-        await pushSvgToBucket(codecPos, generateCodecBadgeSvg(mediaInfo.detectedBadges.codec), "codec");
+        await pushSvgToBucket(codecPos, generateCodecBadgeSvg(mediaInfo.detectedBadges.codec, options.theme), "codec");
     }
     if (options.showAudio !== false && mediaInfo.detectedBadges.audio && !hasCustomAudio) {
-        await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio), "audio");
+        await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio, options.theme), "audio");
     }
     if (options.showAudioChannels && mediaInfo.detectedBadges.audioChannels) {
-        await pushSvgToBucket(channelsPos, generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels), "channels");
+        await pushSvgToBucket(channelsPos, generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels, options.theme), "channels");
     }
     if (options.showEdition && mediaInfo.detectedBadges.edition && !hasCustomEdition) {
-        await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition), "edition");
+        await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition, options.theme), "edition");
     }
     if (options.showStudio && mediaInfo.detectedBadges.studio && !hasCustomStudio) {
-        await pushSvgToBucket(studioPos, generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio), "studio");
+        await pushSvgToBucket(studioPos, generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio, options.theme), "studio");
     }
     if (options.showContentRating && mediaInfo.detectedBadges.contentRating && !hasCustomContentRating) {
-        await pushSvgToBucket(contentRatingPos, generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating), "contentRating");
+        await pushSvgToBucket(contentRatingPos, generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating, options.theme), "contentRating");
     }
     if (options.showRatings && options.ratingsSource) {
-        const rSvg = generateRatingsBadgeSvg(options.ratingsSource);
+        const rSvg = generateRatingsBadgeSvg(options.ratingsSource, options.theme);
         if (rSvg) await pushSvgToBucket(ratingsPos, rSvg, "ratings");
     }
 

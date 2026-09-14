@@ -52,6 +52,11 @@ import {
     getCustomBadgesAction,
     saveCustomBadgeAction,
     deleteCustomBadgeAction,
+    deleteMultipleCustomBadgesAction,
+    toggleMultipleCustomBadgesAction,
+    toggleCustomBadgeAction,
+    seedDefaultCustomBadgesAction,
+    uploadCustomBadgeAction,
     downloadAllKometaPacksAction,
     readLocalKometaConfigAction,
     inspectKometaConfigFileAction,
@@ -175,7 +180,8 @@ export function KometaStudio() {
     const [simShowRating, setSimShowRating] = useState(false);
     const [simRatings, setSimRatings] = useState(false);
     const [simBadgeScale, setSimBadgeScale] = useState<number>(1.0);
-    const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal">("glass");
+    const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson">("glass");
+    const [seedingBadges, setSeedingBadges] = useState(false);
     const [simDovetailResolutionHdr, setSimDovetailResolutionHdr] = useState<boolean>(true);
     const [simPosterImage, setSimPosterImage] = useState<string>("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
     const [simActivePreset, setSimActivePreset] = useState<string>("4k_dv_atmos");
@@ -562,6 +568,372 @@ export function KometaStudio() {
         return categories;
     };
 
+    // Dynamic Theme Styling Helper for all 6 Themes
+    const getThemeBadgeStyle = (theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson", category: string, isDovetail = false) => {
+        if (theme === "gold") {
+            return {
+                container: "bg-gradient-to-r from-amber-950/95 via-yellow-950/90 to-slate-950/95 text-amber-200 border-amber-400/90 shadow-lg shadow-amber-950/80 ring-1 ring-amber-500/30",
+                highlight: "bg-yellow-300/40",
+                textPrimary: "text-amber-300 font-black",
+                textSecondary: "text-amber-200/80 font-bold",
+                accent: "bg-amber-400"
+            };
+        }
+        if (theme === "classic") {
+            return {
+                container: "bg-slate-900/98 text-slate-100 border-slate-600 shadow-md shadow-black/80",
+                highlight: "bg-white/20",
+                textPrimary: "text-white font-black",
+                textSecondary: "text-slate-300 font-bold",
+                accent: "bg-slate-400"
+            };
+        }
+        if (theme === "minimal") {
+            return {
+                container: "bg-black/90 text-white border-white/30 shadow-sm",
+                highlight: "hidden",
+                textPrimary: "text-white font-bold",
+                textSecondary: "text-white/70 font-medium",
+                accent: "bg-white"
+            };
+        }
+        if (theme === "cyber") {
+            return {
+                container: "bg-slate-950/95 text-cyan-200 border-cyan-400 shadow-lg shadow-cyan-950/80 ring-1 ring-fuchsia-500/40",
+                highlight: "bg-cyan-300/50",
+                textPrimary: "text-cyan-300 font-black",
+                textSecondary: "text-fuchsia-300 font-bold",
+                accent: "bg-cyan-400"
+            };
+        }
+        if (theme === "crimson") {
+            return {
+                container: "bg-gradient-to-r from-rose-950/95 via-red-950/90 to-slate-950/95 text-rose-100 border-rose-500 shadow-lg shadow-rose-950/80 ring-1 ring-rose-500/30",
+                highlight: "bg-rose-300/40",
+                textPrimary: "text-rose-300 font-black",
+                textSecondary: "text-rose-200/80 font-bold",
+                accent: "bg-rose-500"
+            };
+        }
+        // Default Obsidian Glass
+        if (category === "resolution") {
+            return {
+                container: "bg-slate-950/95 text-white border-amber-400/80 shadow-lg shadow-black/60",
+                highlight: "bg-white/40",
+                textPrimary: "text-amber-300 font-black",
+                textSecondary: "text-amber-200/80 font-bold",
+                accent: "bg-amber-400"
+            };
+        }
+        if (category === "hdr" || isDovetail) {
+            return {
+                container: "bg-slate-950/95 text-purple-200 border-purple-400/80 shadow-lg shadow-black/60",
+                highlight: "bg-white/40",
+                textPrimary: "text-purple-300 font-black",
+                textSecondary: "text-purple-200/80 font-bold",
+                accent: "bg-purple-400"
+            };
+        }
+        if (category === "audio") {
+            return {
+                container: "bg-slate-950/95 text-sky-200 border-sky-400/80 shadow-lg shadow-black/60",
+                highlight: "bg-white/40",
+                textPrimary: "text-sky-300 font-black",
+                textSecondary: "text-sky-200/80 font-bold",
+                accent: "bg-sky-400"
+            };
+        }
+        if (category === "codec") {
+            return {
+                container: "bg-slate-950/95 text-indigo-200 border-indigo-400/70 shadow-lg shadow-black/60",
+                highlight: "bg-white/40",
+                textPrimary: "text-indigo-300 font-black",
+                textSecondary: "text-indigo-200/80 font-bold",
+                accent: "bg-indigo-400"
+            };
+        }
+        if (category === "edition") {
+            return {
+                container: "bg-slate-950/95 text-sky-300 border-sky-400/80 shadow-lg shadow-black/60",
+                highlight: "bg-white/40",
+                textPrimary: "text-sky-300 font-black",
+                textSecondary: "text-sky-200/80 font-bold",
+                accent: "bg-sky-400"
+            };
+        }
+        if (category === "studio") {
+            return {
+                container: "bg-slate-950/95 text-purple-300 border-purple-500/80 shadow-lg shadow-black/60",
+                highlight: "bg-white/40",
+                textPrimary: "text-purple-300 font-black",
+                textSecondary: "text-purple-200/80 font-bold",
+                accent: "bg-purple-500"
+            };
+        }
+        if (category === "ratings" || category === "contentRating") {
+            return {
+                container: "bg-slate-950/95 text-amber-300 border-amber-500/80 shadow-lg shadow-black/60",
+                highlight: "bg-white/40",
+                textPrimary: "text-amber-300 font-black",
+                textSecondary: "text-amber-200/80 font-bold",
+                accent: "bg-amber-400"
+            };
+        }
+        return {
+            container: "bg-slate-950/95 text-white border-purple-400/80 shadow-lg shadow-black/60",
+            highlight: "bg-white/40",
+            textPrimary: "text-white font-black",
+            textSecondary: "text-slate-300 font-bold",
+            accent: "bg-purple-400"
+        };
+    };
+
+    // Computes badges positioned in a specific bucket, sorted by layerPriorityOrder
+    const getActiveBadgesForPosition = (pos: string) => {
+        const items: Array<{
+            key: string;
+            category: string;
+            jsx: React.ReactNode;
+        }> = [];
+
+        const simDetected = {
+            resolution: simShowResolution ? "4K" : undefined,
+            hdr: simShowHdr ? "DV" : undefined,
+            codec: simShowCodec ? "HEVC" : undefined,
+            audio: simShowAudio ? "ATMOS" : undefined,
+            audioChannels: simShowChannels ? "7.1" : undefined,
+            edition: simShowEdition ? "IMAX" : undefined,
+            studio: simShowStudio ? "HBO" : undefined,
+            contentRating: simShowRating ? "PG-13" : undefined
+        };
+
+        const isDovetailed = simDovetailResolutionHdr && 
+            simShowResolution && 
+            simShowHdr && 
+            simResolutionPosition === simHdrPosition &&
+            simResolutionPosition === pos;
+
+        const matchingResCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("resolution") && doesCustomBadgeMatchDetected(cb, simDetected));
+        const matchingHdrCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("hdr") && doesCustomBadgeMatchDetected(cb, simDetected));
+
+        // 1. Dovetailed Resolution + HDR
+        if (isDovetailed && !matchingResCustom && !matchingHdrCustom) {
+            const st = getThemeBadgeStyle(simTheme, "hdr", true);
+            items.push({
+                key: "resolution",
+                category: "resolution",
+                jsx: (
+                    <div key="dovetail" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-wider flex items-center gap-1.5 shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <span className={st.textPrimary}>4K</span>
+                        <span className={`text-[7.5px] tracking-widest ${st.textSecondary}`}>UHD</span>
+                        <div className="h-2.5 w-[1px] bg-white/30 mx-0.5 relative flex items-center justify-center">
+                            <div className="w-1 h-1 rounded-full bg-white/50" />
+                        </div>
+                        <span className={`w-1.5 h-2.5 rounded-sm inline-block shrink-0 ${st.accent}`} />
+                        <span className={`text-[8px] tracking-widest font-black ${st.textSecondary}`}>DOLBY VISION</span>
+                    </div>
+                )
+            });
+        } else {
+            // Independent Resolution
+            if (simShowResolution && simResolutionPosition === pos) {
+                const st = getThemeBadgeStyle(simTheme, "resolution");
+                items.push({
+                    key: "resolution",
+                    category: "resolution",
+                    jsx: (
+                        <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                            <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                            <span className={st.textPrimary}>4K</span>
+                            <span className={`text-[8px] border-l border-current pl-1 ml-0.5 tracking-widest ${st.textSecondary}`}>UHD</span>
+                        </div>
+                    )
+                });
+            }
+            // Independent HDR
+            if (simShowHdr && simHdrPosition === pos) {
+                const st = getThemeBadgeStyle(simTheme, "hdr");
+                items.push({
+                    key: "hdr",
+                    category: "hdr",
+                    jsx: (
+                        <div key="hdr" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1 ${st.container}`}>
+                            <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                            <span className={`w-1.5 h-2.5 rounded-sm inline-block mr-0.5 ${st.accent}`} />
+                            <span className={st.textPrimary}>DOLBY VISION</span>
+                        </div>
+                    )
+                });
+            }
+        }
+
+        // Video Codec
+        if (simShowCodec && simCodecPosition === pos) {
+            const st = getThemeBadgeStyle(simTheme, "codec");
+            items.push({
+                key: "codec",
+                category: "codec",
+                jsx: (
+                    <div key="codec" className={`relative px-1.5 py-0.5 rounded-md border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <span className={st.textPrimary}>HEVC • 10b</span>
+                    </div>
+                )
+            });
+        }
+
+        // Audio Codec
+        if (simShowAudio && simAudioPosition === pos) {
+            const st = getThemeBadgeStyle(simTheme, "audio");
+            items.push({
+                key: "audio",
+                category: "audio",
+                jsx: (
+                    <div key="audio" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <span className={st.textPrimary}>DOLBY ATMOS</span>
+                    </div>
+                )
+            });
+        }
+
+        // Audio Channels
+        if (simShowChannels && simChannelsPosition === pos) {
+            const st = getThemeBadgeStyle(simTheme, "audio");
+            items.push({
+                key: "channels",
+                category: "channels",
+                jsx: (
+                    <div key="channels" className={`relative px-1.5 py-0.5 rounded-md border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <span className={st.textPrimary}>7.1 SURROUND</span>
+                    </div>
+                )
+            });
+        }
+
+        // Edition / Cut
+        if (simShowEdition && simEditionPosition === pos) {
+            const st = getThemeBadgeStyle(simTheme, "edition");
+            items.push({
+                key: "edition",
+                category: "edition",
+                jsx: (
+                    <div key="edition" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <span className={st.textPrimary}>IMAX ENHANCED</span>
+                    </div>
+                )
+            });
+        }
+
+        // Studio / Network
+        if (simShowStudio && simStudioPosition === pos) {
+            const st = getThemeBadgeStyle(simTheme, "studio");
+            items.push({
+                key: "studio",
+                category: "studio",
+                jsx: (
+                    <div key="studio" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <span className={st.textPrimary}>HBO MAX</span>
+                    </div>
+                )
+            });
+        }
+
+        // Age Rating
+        if (simShowRating && simRatingPosition === pos) {
+            const st = getThemeBadgeStyle(simTheme, "contentRating");
+            items.push({
+                key: "contentRating",
+                category: "contentRating",
+                jsx: (
+                    <div key="rating" className={`relative px-1.5 py-0.5 rounded border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <span className={st.textPrimary}>PG-13</span>
+                    </div>
+                )
+            });
+        }
+
+        // Community Ratings
+        if (simRatings && simRatingsPosition === pos) {
+            const st = getThemeBadgeStyle(simTheme, "ratings");
+            items.push({
+                key: "ratings",
+                category: "ratings",
+                jsx: (
+                    <div key="ratings" className={`relative flex items-center gap-1.5 px-2 py-0.5 rounded-md border shadow-lg text-[10px] overflow-hidden backdrop-blur-md ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <div className="bg-yellow-400 text-black font-black px-1 rounded text-[8.5px] leading-tight">IMDb</div>
+                        <span className="font-bold text-white text-[10px]">8.6</span>
+                        <span className="text-[10px]">🍅</span>
+                        <span className="font-bold text-white text-[10px]">94%</span>
+                    </div>
+                )
+            });
+        }
+
+        // Sort items according to user-configured layer priority
+        items.sort((a, b) => {
+            const idxA = layerPriorityOrder.indexOf(a.key);
+            const idxB = layerPriorityOrder.indexOf(b.key);
+            return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+        });
+
+        return items.map(it => it.jsx);
+    };
+
+    // Authentic 45-Degree Corner Ribbon Simulator
+    const renderSimulatorCornerRibbon = () => {
+        if (!simShowRibbon) return null;
+        const activeRibbons = getActiveSimulatorRibbons();
+        if (activeRibbons.length === 0) return null;
+
+        const isTop = simRibbonPosition.startsWith("top");
+        const isRight = simRibbonPosition.endsWith("right");
+
+        const positionClasses: Record<string, string> = {
+            "top-right": "top-0 right-0",
+            "top-left": "top-0 left-0",
+            "bottom-right": "bottom-0 right-0",
+            "bottom-left": "bottom-0 left-0"
+        };
+
+        const rotation = (isTop && isRight) || (!isTop && !isRight) ? "rotate-45" : "-rotate-45";
+        
+        const themeGradients: Record<string, { bg: string; text: string; border: string }> = {
+            gold: { bg: "bg-gradient-to-b from-yellow-300 via-amber-500 to-amber-600", text: "text-slate-950 font-black", border: "border-yellow-200/80" },
+            crimson: { bg: "bg-gradient-to-b from-rose-500 via-red-600 to-rose-800", text: "text-white font-black", border: "border-rose-300/80" },
+            emerald: { bg: "bg-gradient-to-b from-emerald-400 via-emerald-600 to-emerald-800", text: "text-white font-black", border: "border-emerald-200/80" },
+            purple: { bg: "bg-gradient-to-b from-indigo-400 via-purple-600 to-purple-800", text: "text-white font-black", border: "border-purple-300/80" },
+            cyan: { bg: "bg-gradient-to-b from-sky-400 via-cyan-600 to-blue-800", text: "text-white font-black", border: "border-sky-200/80" },
+            pink: { bg: "bg-gradient-to-b from-pink-400 via-rose-500 to-pink-700", text: "text-white font-black", border: "border-pink-200/80" },
+            glass: { bg: "bg-slate-900/95 border-slate-600", text: "text-white font-black", border: "border-slate-400/80" },
+            orange: { bg: "bg-gradient-to-b from-amber-400 via-orange-500 to-orange-700", text: "text-white font-black", border: "border-orange-200/80" }
+        };
+
+        return (
+            <div className={`absolute ${positionClasses[simRibbonPosition] || "top-0 right-0"} w-28 h-28 overflow-hidden pointer-events-none z-30`}>
+                <div className={`absolute top-0 left-0 w-40 h-40 flex flex-col items-center justify-center -translate-x-6 -translate-y-6 ${rotation}`}>
+                    {activeRibbons.map((ribbon, idx) => {
+                        const st = themeGradients[ribbon.theme] || themeGradients.purple;
+                        return (
+                            <div
+                                key={idx}
+                                className={`w-full py-0.5 text-center text-[7.5px] font-black tracking-widest shadow-md border-y ${st.bg} ${st.text} ${st.border}`}
+                            >
+                                {ribbon.text}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
     // Calculate active overlays breakdown for the Live Simulator
     const getSimulatedLayersBreakdown = () => {
         const layers: Array<{
@@ -596,7 +968,7 @@ export function KometaStudio() {
                 category: "Resolution + HDR (Dovetailed)",
                 value: "4K UHD • DOLBY VISION",
                 sourceType: "builtin",
-                sourceName: `Kometa Dovetail SVG (${simTheme === "gold" ? "Gold" : "Obsidian"})`,
+                sourceName: `Kometa Dovetail SVG (${simTheme === "gold" ? "Gold" : simTheme === "cyber" ? "Cyber" : simTheme === "crimson" ? "Crimson" : "Obsidian"})`,
                 position: simResolutionPosition
             });
         } else {
@@ -604,7 +976,7 @@ export function KometaStudio() {
                 if (matchingResCustom) {
                     layers.push({ category: "Resolution", value: "4K UHD", sourceType: "custom", sourceName: matchingResCustom.name, position: matchingResCustom.position || simResolutionPosition });
                 } else {
-                    layers.push({ category: "Resolution", value: "4K UHD", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme === "gold" ? "Gold" : "Obsidian"})`, position: simResolutionPosition });
+                    layers.push({ category: "Resolution", value: "4K UHD", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme})`, position: simResolutionPosition });
                 }
             }
 
@@ -612,7 +984,7 @@ export function KometaStudio() {
                 if (matchingHdrCustom) {
                     layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "custom", sourceName: matchingHdrCustom.name, position: matchingHdrCustom.position || simHdrPosition });
                 } else {
-                    layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "builtin", sourceName: "Kometa SVG", position: simHdrPosition });
+                    layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme})`, position: simHdrPosition });
                 }
             }
         }
@@ -1090,8 +1462,283 @@ export function KometaStudio() {
         }
     };
 
+    // Custom Badge Handlers
+    const handleSeedDefaultBadges = async () => {
+        setSeedingBadges(true);
+        try {
+            const res = await seedDefaultCustomBadgesAction();
+            if (res.success && res.badges) {
+                setCustomBadges(res.badges);
+                setOverlayMessage({ success: true, text: res.message || "Installed 35+ default badges!" });
+            } else {
+                setOverlayMessage({ success: false, text: res.error || "Failed installing default badges." });
+            }
+        } catch (e: any) {
+            setOverlayMessage({ success: false, text: e.message || "Failed installing default badges." });
+        } finally {
+            setSeedingBadges(false);
+        }
+    };
+
+    const handleUploadCustomBadge = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!badgeUploadFile) {
+            setBadgeUploadError("Please select an SVG, PNG, or WebP file to upload.");
+            return;
+        }
+        setUploadingBadge(true);
+        setBadgeUploadError(null);
+        try {
+            const formData = new FormData();
+            formData.append("file", badgeUploadFile);
+            formData.append("name", badgeName || badgeUploadFile.name.replace(/\.[^/.]+$/, ""));
+            formData.append("category", badgeCategory);
+            formData.append("position", badgePosition);
+            if (badgeMatchRule) formData.append("matchRule", badgeMatchRule);
+
+            const res = await uploadCustomBadgeAction(formData);
+            if (res.success && res.badge) {
+                setCustomBadges(prev => [res.badge, ...prev]);
+                setBadgeUploadModalOpen(false);
+                setBadgeUploadFile(null);
+                setBadgeName("");
+                setBadgeMatchRule("");
+                setOverlayMessage({ success: true, text: res.message || "Custom badge uploaded successfully!" });
+            } else {
+                setBadgeUploadError(res.error || "Failed uploading badge.");
+            }
+        } catch (e: any) {
+            setBadgeUploadError(e.message || "Failed uploading badge.");
+        } finally {
+            setUploadingBadge(false);
+        }
+    };
+
+    const handleToggleCustomBadge = async (id: string, currentEnabled: boolean) => {
+        const nextVal = !currentEnabled;
+        setCustomBadges(prev => prev.map(b => b.id === id ? { ...b, enabled: nextVal } : b));
+        try {
+            await toggleCustomBadgeAction(id, nextVal);
+        } catch (e) {
+            setCustomBadges(prev => prev.map(b => b.id === id ? { ...b, enabled: currentEnabled } : b));
+        }
+    };
+
+    const handleDeleteCustomBadge = async (id: string) => {
+        setCustomBadges(prev => prev.filter(b => b.id !== id));
+        try {
+            await deleteCustomBadgeAction(id);
+        } catch (e) {
+            const res = await getCustomBadgesAction();
+            if (res.success && res.badges) setCustomBadges(res.badges);
+        }
+    };
+
+    const handleUpdateCustomBadgePosition = async (id: string, newPosition: string) => {
+        setCustomBadges(prev => prev.map(b => b.id === id ? { ...b, position: newPosition } : b));
+        try {
+            await saveCustomBadgeAction({ id, position: newPosition });
+        } catch (e) {}
+    };
+
+    const handleBulkToggleBadges = async (enabled: boolean) => {
+        const ids = selectedCustomBadgeIds.length > 0 ? selectedCustomBadgeIds : customBadges.map(b => b.id);
+        if (ids.length === 0) return;
+        setCustomBadges(prev => prev.map(b => ids.includes(b.id) ? { ...b, enabled } : b));
+        try {
+            await toggleMultipleCustomBadgesAction(ids, enabled);
+        } catch (e) {}
+    };
+
+    const handleBulkDeleteBadges = async () => {
+        if (selectedCustomBadgeIds.length === 0) return;
+        setDeletingCustomBadges(true);
+        const idsToDelete = [...selectedCustomBadgeIds];
+        setCustomBadges(prev => prev.filter(b => !idsToDelete.includes(b.id)));
+        setSelectedCustomBadgeIds([]);
+        try {
+            await deleteMultipleCustomBadgesAction(idsToDelete);
+        } catch (e) {
+            const res = await getCustomBadgesAction();
+            if (res.success && res.badges) setCustomBadges(res.badges);
+        } finally {
+            setDeletingCustomBadges(false);
+        }
+    };
+
+    // GitHub Repo Scan & Import Handlers
+    const handleScanGitHubRepo = async () => {
+        setScanningRepo(true);
+        setScanError(null);
+        setDiscoveredBadges([]);
+        try {
+            const res = await fetchGitHubBadgeRepoAction(githubRepoInput);
+            if (res.success && res.badges) {
+                setDiscoveredBadges(res.badges);
+                setSelectedBadgeIds(res.badges.map(b => b.id));
+            } else {
+                setScanError(res.error || "Failed scanning GitHub repository.");
+            }
+        } catch (e: any) {
+            setScanError(e.message || "Failed scanning repository.");
+        } finally {
+            setScanningRepo(false);
+        }
+    };
+
+    const handleImportGitHubBadges = async () => {
+        if (selectedBadgeIds.length === 0) return;
+        setImportingBadges(true);
+        setImportSuccessMsg(null);
+        try {
+            const toImport = discoveredBadges
+                .filter(b => selectedBadgeIds.includes(b.id))
+                .map(b => ({
+                    name: b.name,
+                    downloadUrl: b.downloadUrl,
+                    filename: b.path ? b.path.split("/").pop() || `${b.name}.svg` : `${b.name}.svg`,
+                    category: b.category,
+                    position: b.recommendedPosition,
+                    matchRule: b.inferredRule
+                }));
+            const res = await importGitHubBadgesAction(toImport);
+            if (res.success) {
+                setImportSuccessMsg(res.message || `Imported ${res.importedCount || 0} badges!`);
+                const badgeRes = await getCustomBadgesAction();
+                if (badgeRes.success && badgeRes.badges) {
+                    setCustomBadges(badgeRes.badges);
+                }
+                setTimeout(() => {
+                    setGithubModalOpen(false);
+                    setImportSuccessMsg(null);
+                }, 1500);
+            } else {
+                setScanError(res.error || "Failed importing badges.");
+            }
+        } catch (e: any) {
+            setScanError(e.message || "Failed importing badges.");
+        } finally {
+            setImportingBadges(false);
+        }
+    };
+
+    // Media Inspector Handlers
+    const handleSearchInspector = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!inspectorSearchQuery.trim()) return;
+        setSearchingPlex(true);
+        try {
+            const res = await searchPlexLibraryItemsAction(inspectorSearchQuery, selectedServerId, selectedSectionKey);
+            if (res.success && res.items) {
+                setSearchResults(res.items);
+                if (res.items.length > 0 && !inspectingItem) {
+                    handleInspectItem(res.items[0].ratingKey);
+                }
+            }
+        } catch (e) {
+            console.error("Failed searching plex library:", e);
+        } finally {
+            setSearchingPlex(false);
+        }
+    };
+
+    const handleInspectItem = async (ratingKey: string) => {
+        setLoadingInspection(true);
+        setSingleItemMsg(null);
+        try {
+            const res = await inspectPlexMediaItemAction(ratingKey, selectedServerId);
+            if (res.success && res.item) {
+                setInspectingItem(res.item);
+            }
+        } catch (e) {
+            console.error("Failed inspecting item:", e);
+        } finally {
+            setLoadingInspection(false);
+        }
+    };
+
+    const handleApplySingleItemOverlay = async (ratingKey: string) => {
+        setApplyingSingleOverlay(true);
+        setSingleItemMsg(null);
+        try {
+            const res = await applyOverlayToSingleItemAction(selectedServerId, selectedSectionKey, ratingKey, {
+                theme: simTheme,
+                showResolution: simShowResolution,
+                showHdr: simShowHdr,
+                showAudio: simShowAudio,
+                showAudioChannels: simShowChannels,
+                showCodec: simShowCodec,
+                showEdition: simShowEdition,
+                showStudio: simShowStudio,
+                showContentRating: simShowRating,
+                showRatings: simRatings,
+                dovetailResolutionHdr: simDovetailResolutionHdr,
+                badgeScale: simBadgeScale,
+                resolutionPosition: simResolutionPosition,
+                hdrPosition: simHdrPosition,
+                audioPosition: simAudioPosition,
+                channelsPosition: simChannelsPosition,
+                codecPosition: simCodecPosition,
+                editionPosition: simEditionPosition,
+                studioPosition: simStudioPosition,
+                contentRatingPosition: simRatingPosition,
+                ratingsPosition: simRatingsPosition,
+                showRibbon: simShowRibbon,
+                ribbonMode: simRibbonMode,
+                ribbonPosition: simRibbonPosition,
+                ribbonTheme: simRibbonTheme,
+                ribbonType: simRibbonType,
+                ribbonText: simRibbonText,
+                tieredRibbons: simTieredRibbons,
+                maxRibbonTiers: simMaxRibbonTiers,
+                layerPriorityOrder: layerPriorityOrder
+            });
+            if (res.success) {
+                setSingleItemMsg({ success: true, text: res.message || "Overlay applied to item successfully!" });
+                handleInspectItem(ratingKey);
+            } else {
+                setSingleItemMsg({ success: false, text: res.error || "Failed applying overlay." });
+            }
+        } catch (e: any) {
+            setSingleItemMsg({ success: false, text: e.message || "Failed applying overlay." });
+        } finally {
+            setApplyingSingleOverlay(false);
+        }
+    };
+
+    const handleRestoreSingleItemPoster = async (ratingKey: string) => {
+        setRevertingSingleOverlay(true);
+        setSingleItemMsg(null);
+        try {
+            const res = await restoreSingleItemPosterAction(selectedServerId, ratingKey);
+            if (res.success) {
+                setSingleItemMsg({ success: true, text: res.message || "Original artwork restored!" });
+                handleInspectItem(ratingKey);
+            } else {
+                setSingleItemMsg({ success: false, text: res.error || "Failed restoring artwork." });
+            }
+        } catch (e: any) {
+            setSingleItemMsg({ success: false, text: e.message || "Failed restoring artwork." });
+        } finally {
+            setRevertingSingleOverlay(false);
+        }
+    };
+
     const currentServer = servers.find(s => s.serverId === selectedServerId) || servers[0];
     const currentSections = currentServer?.sections || [];
+
+    const filteredCustomBadges = customBadges.filter(b => {
+        const matchesSearch = !customBadgeSearch.trim() || 
+            b.name.toLowerCase().includes(customBadgeSearch.toLowerCase()) || 
+            (b.matchRule && b.matchRule.toLowerCase().includes(customBadgeSearch.toLowerCase())) ||
+            (b.category && b.category.toLowerCase().includes(customBadgeSearch.toLowerCase()));
+        
+        if (!matchesSearch) return false;
+        if (customBadgeFilter === "all") return true;
+
+        const cats = getCustomBadgeCategoriesClient(b);
+        return cats.includes(customBadgeFilter) || b.category === customBadgeFilter;
+    });
 
     if (loading) {
         return (
@@ -1291,109 +1938,37 @@ export function KometaStudio() {
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
                                 />
 
+                                {/* Authentic 45-degree Corner Ribbon */}
+                                {renderSimulatorCornerRibbon()}
+
                                 {/* Top-Right Position */}
                                 <div className="absolute top-2.5 right-2.5 flex flex-col items-end gap-1.5 z-20 pointer-events-none">
-                                    {simDovetailResolutionHdr && simShowResolution && simShowHdr && simResolutionPosition === "top-right" && (
-                                        <div className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-wider flex items-center gap-1.5 shadow-lg overflow-hidden backdrop-blur-md ${
-                                            simTheme === "gold"
-                                                ? "bg-gradient-to-r from-amber-950/90 via-slate-950/95 to-slate-950/95 text-white border-amber-400/80"
-                                                : "bg-slate-950/95 text-white border-purple-400/80"
-                                        }`}>
-                                            <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                                            <span className="text-amber-300 font-black">4K</span>
-                                            <span className="text-[7.5px] opacity-75 font-bold tracking-widest text-amber-200/80">UHD</span>
-                                            <div className="h-2.5 w-[1px] bg-white/30 mx-0.5 relative flex items-center justify-center">
-                                                <div className="w-1 h-1 rounded-full bg-white/50" />
-                                            </div>
-                                            <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block shrink-0" />
-                                            <span className="text-[8px] text-purple-200 tracking-widest font-black">DOLBY VISION</span>
-                                        </div>
-                                    )}
-
-                                    {(!simDovetailResolutionHdr || simResolutionPosition !== simHdrPosition) && simShowResolution && simResolutionPosition === "top-right" && (
-                                        <div className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
-                                            simTheme === "gold" ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' : 'bg-slate-950/90 text-white border-amber-400/80'
-                                        }`}>
-                                            <span>4K</span>
-                                            <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>
-                                        </div>
-                                    )}
-
-                                    {(!simDovetailResolutionHdr || simResolutionPosition !== simHdrPosition) && simShowHdr && simHdrPosition === "top-right" && (
-                                        <div className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
-                                            <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
-                                            <span>DOLBY VISION</span>
-                                        </div>
-                                    )}
-
-                                    {simShowCodec && simCodecPosition === "top-right" && (
-                                        <div className="relative px-1.5 py-0.5 rounded-md border border-indigo-400/70 bg-slate-950/90 text-indigo-200 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
-                                            HEVC • 10b
-                                        </div>
-                                    )}
-
-                                    {simShowRibbon && simRibbonPosition === "top-right" && (
-                                        <div className="flex flex-col items-end gap-1">
-                                            {getActiveSimulatorRibbons().map((ribbon, rIdx) => (
-                                                <div 
-                                                    key={rIdx}
-                                                    className={`px-2 py-0.5 rounded text-[8px] font-black tracking-widest shadow-lg border ${
-                                                        ribbon.theme === "gold" ? "bg-amber-500 text-slate-950 border-amber-300" :
-                                                        ribbon.theme === "crimson" ? "bg-rose-600 text-white border-rose-400" :
-                                                        ribbon.theme === "emerald" ? "bg-emerald-600 text-white border-emerald-400" :
-                                                        "bg-purple-600 text-white border-purple-400"
-                                                    }`}
-                                                >
-                                                    {ribbon.text}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                    {getActiveBadgesForPosition("top-right")}
                                 </div>
 
                                 {/* Top-Left Position */}
                                 <div className="absolute top-2.5 left-2.5 flex flex-col items-start gap-1.5 z-20 pointer-events-none">
-                                    {simShowAudio && simAudioPosition === "top-left" && (
-                                        <div className="relative px-2 py-0.5 rounded-md border border-sky-400/80 bg-slate-950/90 text-sky-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
-                                            DOLBY ATMOS
-                                        </div>
-                                    )}
-                                    {simShowChannels && simChannelsPosition === "top-left" && (
-                                        <div className="relative px-1.5 py-0.5 rounded-md border border-cyan-400/70 bg-slate-950/90 text-cyan-300 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
-                                            7.1 SURROUND
-                                        </div>
-                                    )}
+                                    {getActiveBadgesForPosition("top-left")}
+                                </div>
+
+                                {/* Top-Center Position */}
+                                <div className="absolute top-2.5 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-20 pointer-events-none">
+                                    {getActiveBadgesForPosition("top-center")}
                                 </div>
 
                                 {/* Bottom-Left Position */}
                                 <div className="absolute bottom-2.5 left-2.5 flex flex-col items-start gap-1.5 z-20 pointer-events-none">
-                                    {simShowStudio && simStudioPosition === "bottom-left" && (
-                                        <div className="relative px-2 py-0.5 rounded-md border border-purple-500 text-purple-300 bg-slate-950/95 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
-                                            HBO MAX
-                                        </div>
-                                    )}
-                                    {simShowRating && simRatingPosition === "bottom-left" && (
-                                        <div className="relative px-1.5 py-0.5 rounded border border-amber-500 text-amber-300 bg-slate-950/90 text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md">
-                                            PG-13
-                                        </div>
-                                    )}
-                                    {simRatings && (
-                                        <div className="relative flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-950/95 border border-white/20 shadow-lg text-[10px] overflow-hidden backdrop-blur-md">
-                                            <div className="bg-yellow-400 text-black font-black px-1 rounded text-[8.5px] leading-tight">IMDb</div>
-                                            <span className="font-bold text-white text-[10px]">8.6</span>
-                                            <span className="text-[10px]">🍅</span>
-                                            <span className="font-bold text-white text-[10px]">94%</span>
-                                        </div>
-                                    )}
+                                    {getActiveBadgesForPosition("bottom-left")}
                                 </div>
 
                                 {/* Bottom-Right Position */}
                                 <div className="absolute bottom-2.5 right-2.5 flex flex-col items-end gap-1.5 z-20 pointer-events-none">
-                                    {simShowEdition && simEditionPosition === "bottom-right" && (
-                                        <div className="relative px-2 py-0.5 rounded-md border border-sky-400 bg-slate-950/95 text-sky-300 text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md">
-                                            IMAX ENHANCED
-                                        </div>
-                                    )}
+                                    {getActiveBadgesForPosition("bottom-right")}
+                                </div>
+
+                                {/* Bottom-Center Position */}
+                                <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-20 pointer-events-none">
+                                    {getActiveBadgesForPosition("bottom-center")}
                                 </div>
                             </div>
 
@@ -1446,6 +2021,8 @@ export function KometaStudio() {
                                         <SelectContent>
                                             <SelectItem value="glass">✨ Obsidian Glass</SelectItem>
                                             <SelectItem value="gold">💛 Amber Gold</SelectItem>
+                                            <SelectItem value="cyber">⚡ Cyberpunk Neon</SelectItem>
+                                            <SelectItem value="crimson">🔴 Crimson Edge</SelectItem>
                                             <SelectItem value="classic">🛡️ Classic Solid Dark</SelectItem>
                                             <SelectItem value="minimal">🔲 Minimalist Framed</SelectItem>
                                         </SelectContent>
@@ -1483,77 +2060,1078 @@ export function KometaStudio() {
                                 </div>
                             </div>
 
-                            {/* Badge Toggles List */}
+                            {/* Comprehensive Poster Badge Toggles with Positions */}
                             <div className="space-y-2.5 p-3.5 bg-slate-950/40 rounded-xl border border-slate-800">
                                 <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                                     <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                                        <Sliders className="h-4 w-4 text-purple-400" /> Comprehensive Poster Badge Toggles
+                                        <Sliders className="h-4 w-4 text-purple-400" /> Comprehensive Poster Badge Toggles &amp; Positions
                                     </span>
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                                     {/* Resolution */}
-                                    <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                                        <span className="font-medium text-slate-200">Resolution (4K / 1080p)</span>
-                                        <Switch checked={simShowResolution} onCheckedChange={setSimShowResolution} />
+                                    <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium text-slate-200">📺 Resolution (4K / 1080p)</span>
+                                            <Switch checked={simShowResolution} onCheckedChange={setSimShowResolution} />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                            <span className="text-[10px] text-slate-400">Position:</span>
+                                            <Select value={simResolutionPosition} onValueChange={setSimResolutionPosition}>
+                                                <SelectTrigger className="h-6 w-32 bg-slate-950 border-slate-800 text-[10px] py-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
 
                                     {/* HDR */}
-                                    <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                                        <span className="font-medium text-slate-200">HDR / Dolby Vision</span>
-                                        <Switch checked={simShowHdr} onCheckedChange={setSimShowHdr} />
-                                    </div>
-
-                                    {/* Audio Codec */}
-                                    <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                                        <span className="font-medium text-slate-200">Audio Codec (Dolby Atmos / DTS:X)</span>
-                                        <Switch checked={simShowAudio} onCheckedChange={setSimShowAudio} />
-                                    </div>
-
-                                    {/* Audio Channels */}
-                                    <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                                        <span className="font-medium text-slate-200">Surround Channels (7.1 / 5.1)</span>
-                                        <Switch checked={simShowChannels} onCheckedChange={setSimShowChannels} />
+                                    <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium text-slate-200">✨ HDR / Dolby Vision</span>
+                                            <Switch checked={simShowHdr} onCheckedChange={setSimShowHdr} />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                            <span className="text-[10px] text-slate-400">Position:</span>
+                                            <Select value={simHdrPosition} onValueChange={setSimHdrPosition}>
+                                                <SelectTrigger className="h-6 w-32 bg-slate-950 border-slate-800 text-[10px] py-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
 
                                     {/* Video Codec */}
-                                    <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                                        <span className="font-medium text-slate-200">Video Codec (HEVC / AV1)</span>
-                                        <Switch checked={simShowCodec} onCheckedChange={setSimShowCodec} />
+                                    <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium text-slate-200">🎞️ Video Codec (HEVC / AV1)</span>
+                                            <Switch checked={simShowCodec} onCheckedChange={setSimShowCodec} />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                            <span className="text-[10px] text-slate-400">Position:</span>
+                                            <Select value={simCodecPosition} onValueChange={setSimCodecPosition}>
+                                                <SelectTrigger className="h-6 w-32 bg-slate-950 border-slate-800 text-[10px] py-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Audio Codec */}
+                                    <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium text-slate-200">🔊 Audio Codec (Atmos / DTS)</span>
+                                            <Switch checked={simShowAudio} onCheckedChange={setSimShowAudio} />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                            <span className="text-[10px] text-slate-400">Position:</span>
+                                            <Select value={simAudioPosition} onValueChange={setSimAudioPosition}>
+                                                <SelectTrigger className="h-6 w-32 bg-slate-950 border-slate-800 text-[10px] py-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Audio Channels */}
+                                    <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium text-slate-200">🎛️ Surround Channels (7.1)</span>
+                                            <Switch checked={simShowChannels} onCheckedChange={setSimShowChannels} />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                            <span className="text-[10px] text-slate-400">Position:</span>
+                                            <Select value={simChannelsPosition} onValueChange={setSimChannelsPosition}>
+                                                <SelectTrigger className="h-6 w-32 bg-slate-950 border-slate-800 text-[10px] py-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
 
                                     {/* Edition Cuts */}
-                                    <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                                        <span className="font-medium text-slate-200">Edition Cuts (IMAX Enhanced)</span>
-                                        <Switch checked={simShowEdition} onCheckedChange={setSimShowEdition} />
+                                    <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium text-slate-200">🏷️ Edition Cuts (IMAX Enhanced)</span>
+                                            <Switch checked={simShowEdition} onCheckedChange={setSimShowEdition} />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                            <span className="text-[10px] text-slate-400">Position:</span>
+                                            <Select value={simEditionPosition} onValueChange={setSimEditionPosition}>
+                                                <SelectTrigger className="h-6 w-32 bg-slate-950 border-slate-800 text-[10px] py-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
 
                                     {/* Studio Logos */}
-                                    <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                                        <span className="font-medium text-slate-200">Studio / Network Logos (HBO / Netflix)</span>
-                                        <Switch checked={simShowStudio} onCheckedChange={setSimShowStudio} />
-                                    </div>
-
-                                    {/* US Age Ratings */}
-                                    <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                                        <span className="font-medium text-slate-200">Age Ratings (PG-13 / R / TV-MA)</span>
-                                        <Switch checked={simShowRating} onCheckedChange={setSimShowRating} />
-                                    </div>
-
-                                    {/* Corner Ribbons */}
-                                    <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 sm:col-span-2">
-                                        <div className="space-y-0.5">
-                                            <span className="font-medium text-slate-200">Tiered Corner Ribbons (Top 250 / Awards / Fresh)</span>
-                                            <p className="text-[10px] text-slate-400">Gloss ribbons with multi-tier stacking</p>
+                                    <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium text-slate-200">🏢 Studio / Network (HBO)</span>
+                                            <Switch checked={simShowStudio} onCheckedChange={setSimShowStudio} />
                                         </div>
-                                        <Switch checked={simShowRibbon} onCheckedChange={setSimShowRibbon} />
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                            <span className="text-[10px] text-slate-400">Position:</span>
+                                            <Select value={simStudioPosition} onValueChange={setSimStudioPosition}>
+                                                <SelectTrigger className="h-6 w-32 bg-slate-950 border-slate-800 text-[10px] py-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
+
+                                    {/* Age Ratings */}
+                                    <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium text-slate-200">🔞 Age Ratings (PG-13 / R)</span>
+                                            <Switch checked={simShowRating} onCheckedChange={setSimShowRating} />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                            <span className="text-[10px] text-slate-400">Position:</span>
+                                            <Select value={simRatingPosition} onValueChange={setSimRatingPosition}>
+                                                <SelectTrigger className="h-6 w-32 bg-slate-950 border-slate-800 text-[10px] py-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Community Ratings */}
+                                    <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2 sm:col-span-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium text-slate-200">⭐ Community Ratings (IMDb / Rotten Tomatoes)</span>
+                                            <Switch checked={simRatings} onCheckedChange={setSimRatings} />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                            <span className="text-[10px] text-slate-400">Position:</span>
+                                            <Select value={simRatingsPosition} onValueChange={setSimRatingsPosition}>
+                                                <SelectTrigger className="h-6 w-32 bg-slate-950 border-slate-800 text-[10px] py-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Authentic Diagonal Corner Ribbons Studio */}
+                            <div className="space-y-3 p-3.5 bg-slate-950/40 rounded-xl border border-slate-800">
+                                <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                            <Sparkles className="h-4 w-4 text-amber-400" /> Authentic 45° Corner Ribbons Studio
+                                        </span>
+                                        <p className="text-[10px] text-slate-400">High-gloss ribbons with multi-tier stacking and 4-corner diagonal placement</p>
+                                    </div>
+                                    <Switch checked={simShowRibbon} onCheckedChange={setSimShowRibbon} />
+                                </div>
+
+                                {simShowRibbon && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-300">Ribbon Corner</label>
+                                            <Select value={simRibbonPosition} onValueChange={(val: any) => setSimRibbonPosition(val)}>
+                                                <SelectTrigger className="h-7 bg-slate-900 border-slate-700 text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="top-right">Top-Right (45°)</SelectItem>
+                                                    <SelectItem value="top-left">Top-Left (-45°)</SelectItem>
+                                                    <SelectItem value="bottom-right">Bottom-Right (-45°)</SelectItem>
+                                                    <SelectItem value="bottom-left">Bottom-Left (45°)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-300">Ribbon Theme</label>
+                                            <Select value={simRibbonTheme} onValueChange={(val: any) => setSimRibbonTheme(val)}>
+                                                <SelectTrigger className="h-7 bg-slate-900 border-slate-700 text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="gold">💛 Amber Gold</SelectItem>
+                                                    <SelectItem value="crimson">🔴 Crimson Red</SelectItem>
+                                                    <SelectItem value="emerald">🟢 Emerald Green</SelectItem>
+                                                    <SelectItem value="purple">🟣 Royal Purple</SelectItem>
+                                                    <SelectItem value="cyan">🔵 Cyan Electric</SelectItem>
+                                                    <SelectItem value="pink">🌸 Neon Pink</SelectItem>
+                                                    <SelectItem value="glass">✨ Dark Obsidian</SelectItem>
+                                                    <SelectItem value="orange">🟠 Sunset Orange</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-300">Ribbon Mode</label>
+                                            <Select value={simRibbonMode} onValueChange={(val: any) => setSimRibbonMode(val)}>
+                                                <SelectTrigger className="h-7 bg-slate-900 border-slate-700 text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="tiered">Tiered Multi-Stack</SelectItem>
+                                                    <SelectItem value="auto_stack">Auto-Stack (Smart)</SelectItem>
+                                                    <SelectItem value="single">Single Custom Text</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {simRibbonMode === "single" && (
+                                            <div className="sm:col-span-3 space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-300">Custom Ribbon Banner Text</label>
+                                                <Input 
+                                                    value={simRibbonText} 
+                                                    onChange={e => setSimRibbonText(e.target.value)} 
+                                                    placeholder="e.g. IMDb TOP 250, OSCAR WINNER, CRITERION COLLECTION" 
+                                                    className="h-7 bg-slate-900 border-slate-700 text-xs text-slate-100"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Layer Priority & Rendering Order List */}
+                            <div className="space-y-2.5 p-3.5 bg-slate-950/40 rounded-xl border border-slate-800">
+                                <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                            <Layers className="h-4 w-4 text-purple-400" /> Layer Priority &amp; Rendering Order
+                                        </span>
+                                        <p className="text-[10px] text-slate-400">Order determines which badges render on top when sharing corners</p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setLayerPriorityOrder(DEFAULT_LAYER_PRIORITY_ORDER)}
+                                        className="text-[10px] text-purple-300 hover:text-purple-200 h-6 px-2"
+                                    >
+                                        ↺ Reset Order
+                                    </Button>
+                                </div>
+
+                                <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                                    {layerPriorityOrder.map((layerKey, idx) => {
+                                        const labels: Record<string, { name: string; icon: string }> = {
+                                            ribbon: { name: "Corner Gloss Ribbon", icon: "🎗️" },
+                                            resolution: { name: "Resolution (4K / 1080p)", icon: "📺" },
+                                            hdr: { name: "HDR / Dolby Vision", icon: "✨" },
+                                            codec: { name: "Video Codec (HEVC / AV1)", icon: "🎞️" },
+                                            audio: { name: "Audio Codec (Atmos / DTS)", icon: "🔊" },
+                                            channels: { name: "Surround Channels (7.1)", icon: "🎛️" },
+                                            edition: { name: "Edition Cut (IMAX)", icon: "🏷️" },
+                                            studio: { name: "Studio Logo (HBO)", icon: "🏢" },
+                                            ratings: { name: "Community Ratings (IMDb / RT)", icon: "⭐" },
+                                            contentRating: { name: "Age Rating (PG-13 / R)", icon: "🔞" }
+                                        };
+                                        const meta = labels[layerKey] || { name: layerKey, icon: "🏷️" };
+
+                                        return (
+                                            <div 
+                                                key={layerKey}
+                                                className="flex items-center justify-between p-2 rounded-lg bg-slate-900/90 border border-slate-800/90 text-xs"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[11px] font-mono text-purple-400 font-black w-4 text-center">#{idx + 1}</span>
+                                                    <span>{meta.icon}</span>
+                                                    <span className="font-semibold text-slate-200">{meta.name}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        disabled={idx === 0}
+                                                        onClick={() => {
+                                                            const next = [...layerPriorityOrder];
+                                                            const tmp = next[idx];
+                                                            next[idx] = next[idx - 1];
+                                                            next[idx - 1] = tmp;
+                                                            setLayerPriorityOrder(next);
+                                                        }}
+                                                        className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                                                        title="Move Priority Up"
+                                                    >
+                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={idx === layerPriorityOrder.length - 1}
+                                                        onClick={() => {
+                                                            const next = [...layerPriorityOrder];
+                                                            const tmp = next[idx];
+                                                            next[idx] = next[idx + 1];
+                                                            next[idx + 1] = tmp;
+                                                            setLayerPriorityOrder(next);
+                                                        }}
+                                                        className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                                                        title="Move Priority Down"
+                                                    >
+                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Custom Badges Vault & Repository Card */}
+            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <CardHeader className="p-6 pb-4 border-b border-slate-800/80">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <CardTitle className="text-xl font-black text-white flex items-center gap-2.5">
+                                <Zap className="h-5 w-5 text-amber-400 fill-amber-400/20" />
+                                <span>Custom Badges Vault &amp; Overrides Repository</span>
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-400">
+                                Upload high-DPI SVGs or PNG graphics to override default Kometa badges. Custom badges automatically take Priority 1 over built-in SVGs.
+                            </CardDescription>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={seedingBadges}
+                                onClick={handleSeedDefaultBadges}
+                                className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer"
+                                title="Seed or reset 35+ essential high-DPI SVGs (4K UHD, DV, HDR10+, Atmos, IMAX, Netflix, HBO Max, etc.)"
+                            >
+                                {seedingBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 fill-slate-950" />}
+                                <span>⚡ Install / Reset 35+ Essential Badges</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => setBadgeUploadModalOpen(true)}
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                <span>📤 Upload Custom Badge</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setGithubModalOpen(true)}
+                                className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5"
+                            >
+                                <DownloadCloud className="h-3.5 w-3.5" />
+                                <span>📥 Import from GitHub Repo</span>
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+
+                <CardContent className="p-6 space-y-4">
+                    {/* Search & Category Filter Pills */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            {[
+                                { id: "all", label: "All Badges" },
+                                { id: "resolution", label: "Resolution" },
+                                { id: "hdr", label: "HDR / DV" },
+                                { id: "audio", label: "Audio" },
+                                { id: "codec", label: "Video Codec" },
+                                { id: "channels", label: "Surround" },
+                                { id: "edition", label: "Editions" },
+                                { id: "studio", label: "Studios" },
+                                { id: "contentRating", label: "Age Ratings" },
+                                { id: "ribbon", label: "Ribbons" }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setCustomBadgeFilter(tab.id)}
+                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                        customBadgeFilter === tab.id
+                                            ? "bg-purple-600 text-white shadow-md shadow-purple-950/60"
+                                            : "bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white"
+                                    }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                                value={customBadgeSearch}
+                                onChange={e => setCustomBadgeSearch(e.target.value)}
+                                placeholder="Search badges by name or rule..."
+                                className="pl-8 h-8 bg-slate-950/80 border-slate-800 text-xs text-slate-100"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Bulk Action Controls */}
+                    {customBadges.length > 0 && (
+                        <div className="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 text-xs text-slate-400">
+                            <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[11px] font-mono border-purple-500/30 text-purple-300">
+                                    {filteredCustomBadges.length} of {customBadges.length} Badges
+                                </Badge>
+                                <span className="text-[10px] text-slate-500">•</span>
+                                <span className="text-[11px]">
+                                    {customBadges.filter(b => b.enabled !== false).length} Active Overrides
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleBulkToggleBadges(true)}
+                                    className="h-6 px-2 text-[10px] text-emerald-400 hover:text-emerald-300"
+                                >
+                                    Enable All
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleBulkToggleBadges(false)}
+                                    className="h-6 px-2 text-[10px] text-slate-400 hover:text-slate-300"
+                                >
+                                    Disable All
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Custom Badges Grid */}
+                    {filteredCustomBadges.length === 0 ? (
+                        <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 space-y-3">
+                            <Zap className="h-8 w-8 text-amber-400/50 mx-auto" />
+                            <p className="text-xs text-slate-400">No custom badges found matching your filter.</p>
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={handleSeedDefaultBadges}
+                                className="bg-purple-600 hover:bg-purple-500 text-white text-xs h-8 px-3"
+                            >
+                                ⚡ Install 35+ Essential High-DPI Badges
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {filteredCustomBadges.map(badge => {
+                                const isEnabled = badge.enabled !== false;
+                                return (
+                                    <div
+                                        key={badge.id}
+                                        className={`p-3 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                                            isEnabled
+                                                ? "bg-slate-950/90 border-slate-800 hover:border-purple-500/50 shadow-md"
+                                                : "bg-slate-950/40 border-slate-900 opacity-60 hover:opacity-100"
+                                        }`}
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 overflow-hidden p-1">
+                                                    {badge.filePath ? (
+                                                        <img 
+                                                            src={`/api/media/badge/${badge.id}?t=${Date.now()}`} 
+                                                            alt={badge.name} 
+                                                            className="w-full h-full object-contain"
+                                                            onError={(e) => {
+                                                                (e.target as HTMLElement).style.display = "none";
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <Zap className="h-4 w-4 text-amber-400" />
+                                                    )}
+                                                </div>
+                                                <div className="space-y-0.5 overflow-hidden">
+                                                    <span className="font-bold text-white text-xs block truncate" title={badge.name}>
+                                                        {badge.name}
+                                                    </span>
+                                                    <div className="flex items-center gap-1">
+                                                        <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono capitalize border-slate-700 text-slate-300">
+                                                            {badge.category || "custom"}
+                                                        </Badge>
+                                                        {badge.matchRule && (
+                                                            <span className="text-[9px] font-mono text-amber-300 truncate max-w-[80px]" title={`Rule: ${badge.matchRule}`}>
+                                                                {badge.matchRule}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <Switch
+                                                checked={isEnabled}
+                                                onCheckedChange={() => handleToggleCustomBadge(badge.id, isEnabled)}
+                                            />
+                                        </div>
+
+                                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-900 text-[10px]">
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-slate-500">Pos:</span>
+                                                <Select 
+                                                    value={badge.position || "top-right"} 
+                                                    onValueChange={(val) => handleUpdateCustomBadgePosition(badge.id, val)}
+                                                >
+                                                    <SelectTrigger className="h-5 w-24 bg-slate-900 border-slate-800 text-[9px] py-0 px-1.5">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div className="flex items-center gap-1">
+                                                <Badge className="text-[8px] px-1 py-0 bg-purple-950 text-purple-300 border-purple-500/30">
+                                                    ⚡ P1
+                                                </Badge>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteCustomBadge(badge.id)}
+                                                    className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
+                                                    title="Delete Custom Badge"
+                                                >
+                                                    <Trash2 className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Media Inspector & Stream Telemetry Diagnostics Card */}
+            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <CardHeader className="p-6 pb-4 border-b border-slate-800/80">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <CardTitle className="text-xl font-black text-white flex items-center gap-2.5">
+                                <Film className="h-5 w-5 text-sky-400" />
+                                <span>Media Inspector &amp; Stream Telemetry</span>
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-400">
+                                Test overlay generation and inspect detected video/audio codecs, HDR decisions, and custom priority overrides on actual Plex media items.
+                            </CardDescription>
+                        </div>
+                        <form onSubmit={handleSearchInspector} className="flex items-center gap-2 w-full sm:w-auto">
+                            <div className="relative w-full sm:w-64">
+                                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                <Input
+                                    value={inspectorSearchQuery}
+                                    onChange={e => setInspectorSearchQuery(e.target.value)}
+                                    placeholder="Search movie or show title..."
+                                    className="pl-8 h-8 bg-slate-950/80 border-slate-800 text-xs text-slate-100"
+                                />
+                            </div>
+                            <Button 
+                                type="submit" 
+                                size="sm" 
+                                disabled={searchingPlex || !inspectorSearchQuery.trim()}
+                                className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs h-8 px-3 gap-1"
+                            >
+                                {searchingPlex ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                                <span>Search</span>
+                            </Button>
+                        </form>
+                    </div>
+
+                    {singleItemMsg && (
+                        <div className={`mt-3 p-3 rounded-xl border text-xs flex items-center justify-between gap-2 animate-in fade-in-50 duration-200 ${
+                            singleItemMsg.success 
+                                ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" 
+                                : "bg-rose-950/80 border-rose-800 text-rose-300"
+                        }`}>
+                            <div className="flex items-center gap-2">
+                                {singleItemMsg.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : <XCircle className="h-4 w-4 shrink-0 text-rose-400" />}
+                                <span>{singleItemMsg.text}</span>
+                            </div>
+                            <button type="button" onClick={() => setSingleItemMsg(null)} className="opacity-70 hover:opacity-100 text-slate-300">
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
+                    )}
+                </CardHeader>
+
+                <CardContent className="p-6">
+                    {/* Search Results Quick Chooser */}
+                    {searchResults.length > 0 && (
+                        <div className="mb-6 space-y-2">
+                            <span className="text-xs font-bold text-slate-300">Select Media Item to Inspect:</span>
+                            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                                {searchResults.map(item => {
+                                    const isSelected = inspectingItem?.ratingKey === item.ratingKey;
+                                    return (
+                                        <button
+                                            key={item.ratingKey}
+                                            type="button"
+                                            onClick={() => handleInspectItem(item.ratingKey)}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? "bg-sky-600 text-white border-sky-400 shadow-md shadow-sky-950/60"
+                                                    : "bg-slate-950/80 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700"
+                                            }`}
+                                        >
+                                            <span>{item.title}</span>
+                                            {item.year && <span className="text-[10px] opacity-75">({item.year})</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {loadingInspection ? (
+                        <div className="flex flex-col items-center justify-center p-12 gap-3 text-slate-400">
+                            <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
+                            <p className="text-xs font-medium">Extracting stream telemetry and evaluating overlay rules...</p>
+                        </div>
+                    ) : inspectingItem ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                            {/* Poster Preview (4 Cols) */}
+                            <div className="lg:col-span-4 space-y-3">
+                                <div className="relative aspect-[2/3] max-w-[260px] mx-auto rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950">
+                                    <img 
+                                        src={inspectingItem.thumb ? `/api/media/image?url=${encodeURIComponent(inspectingItem.thumb)}` : simPosterImage} 
+                                        alt={inspectingItem.title} 
+                                        className="w-full h-full object-cover" 
+                                    />
+                                </div>
+                                <div className="flex items-center justify-center gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={applyingSingleOverlay}
+                                        onClick={() => handleApplySingleItemOverlay(inspectingItem.ratingKey)}
+                                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-8 px-3 gap-1.5"
+                                    >
+                                        {applyingSingleOverlay ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                                        <span>Apply Overlay</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={revertingSingleOverlay}
+                                        onClick={() => handleRestoreSingleItemPoster(inspectingItem.ratingKey)}
+                                        className="border-slate-700 text-slate-300 text-xs h-8 px-2.5 gap-1.5"
+                                    >
+                                        {revertingSingleOverlay ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                                        <span>Restore</span>
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Telemetry & Decision Matrix (8 Cols) */}
+                            <div className="lg:col-span-8 space-y-4">
+                                <div>
+                                    <h3 className="text-lg font-black text-white">{inspectingItem.title}</h3>
+                                    <p className="text-xs text-slate-400">
+                                        {inspectingItem.year || "Unknown Year"} • {inspectingItem.type === "movie" ? "Feature Film" : "TV Series"} • RatingKey: <code className="font-mono text-purple-300">{inspectingItem.ratingKey}</code>
+                                    </p>
+                                </div>
+
+                                {/* Stream Telemetry Tags */}
+                                <div className="space-y-1.5">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Detected Stream Telemetry:</span>
+                                    <div className="flex flex-wrap gap-1.5 text-[11px]">
+                                        {inspectingItem.detectedBadges?.resolution && (
+                                            <Badge className="bg-amber-950/80 text-amber-300 border-amber-500/40 font-bold">
+                                                📺 {inspectingItem.detectedBadges.resolution}
+                                            </Badge>
+                                        )}
+                                        {inspectingItem.detectedBadges?.hdr && (
+                                            <Badge className="bg-purple-950/80 text-purple-300 border-purple-500/40 font-bold">
+                                                ✨ {inspectingItem.detectedBadges.hdr}
+                                            </Badge>
+                                        )}
+                                        {inspectingItem.detectedBadges?.codec && (
+                                            <Badge className="bg-indigo-950/80 text-indigo-300 border-indigo-500/40 font-mono">
+                                                🎞️ {inspectingItem.detectedBadges.codec}
+                                            </Badge>
+                                        )}
+                                        {inspectingItem.detectedBadges?.audio && (
+                                            <Badge className="bg-sky-950/80 text-sky-300 border-sky-500/40 font-bold">
+                                                🔊 {inspectingItem.detectedBadges.audio} {inspectingItem.detectedBadges?.audioChannels ? `(${inspectingItem.detectedBadges.audioChannels} CH)` : ""}
+                                            </Badge>
+                                        )}
+                                        {inspectingItem.detectedBadges?.edition && (
+                                            <Badge className="bg-cyan-950/80 text-cyan-300 border-cyan-500/40 font-bold">
+                                                🏷️ {inspectingItem.detectedBadges.edition}
+                                            </Badge>
+                                        )}
+                                        {inspectingItem.detectedBadges?.studio && (
+                                            <Badge className="bg-purple-950/80 text-purple-300 border-purple-500/40 font-bold">
+                                                🏢 {inspectingItem.detectedBadges.studio}
+                                            </Badge>
+                                        )}
+                                        {inspectingItem.detectedBadges?.contentRating && (
+                                            <Badge className="bg-amber-950/80 text-amber-300 border-amber-500/40 font-bold">
+                                                🔞 {inspectingItem.detectedBadges.contentRating}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Decision Matrix Table */}
+                                <div className="space-y-1.5">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Overlay Decision Matrix:</span>
+                                    <div className="rounded-xl border border-slate-800 bg-slate-950/80 overflow-hidden divide-y divide-slate-800/80">
+                                        {getInspectedItemDecisionMatrix(inspectingItem).map((dec, idx) => (
+                                            <div key={idx} className="p-2.5 flex items-center justify-between gap-3 text-xs">
+                                                <div className="space-y-0.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-white">{dec.property}:</span>
+                                                        <span className="text-slate-300 font-mono">{dec.detectedValue}</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400">Position: <strong className="text-slate-300">{dec.position}</strong></p>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="font-mono text-xs text-purple-300">{dec.badgeName}</span>
+                                                    <Badge className={`text-[9px] px-1.5 py-0 ${
+                                                        dec.isCustom 
+                                                            ? "bg-purple-950 text-purple-300 border-purple-500/40" 
+                                                            : "bg-slate-800 text-slate-300 border-slate-700"
+                                                    }`}>
+                                                        {dec.priority}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 space-y-2">
+                            <Film className="h-8 w-8 text-slate-600 mx-auto" />
+                            <p className="text-xs text-slate-400">Search for a movie or TV show above to inspect its audio/video streams and test overlay application.</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Upload Custom Badge Modal */}
+            <Dialog open={badgeUploadModalOpen} onOpenChange={setBadgeUploadModalOpen}>
+                <DialogContent className="max-w-md bg-slate-900 border-slate-800 text-slate-100">
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <Plus className="h-5 w-5 text-purple-400" />
+                            <span>Upload Custom Badge Graphic</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Upload an SVG, PNG, or WebP graphic to override default Kometa badges.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleUploadCustomBadge} className="space-y-3.5 text-xs py-2">
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-200">Badge File (.svg, .png, .webp)</Label>
+                            <Input
+                                type="file"
+                                accept=".svg,.png,.webp,.jpg,.jpeg"
+                                onChange={e => {
+                                    const f = e.target.files?.[0];
+                                    if (f) {
+                                        setBadgeUploadFile(f);
+                                        if (!badgeName) setBadgeName(f.name.replace(/\.[^/.]+$/, ""));
+                                    }
+                                }}
+                                className="bg-slate-950 border-slate-800 text-xs cursor-pointer"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-200">Badge Display Name</Label>
+                            <Input
+                                value={badgeName}
+                                onChange={e => setBadgeName(e.target.value)}
+                                placeholder="e.g. 4K UHD Special Edition"
+                                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label className="text-xs text-slate-200">Category</Label>
+                                <Select value={badgeCategory} onValueChange={setBadgeCategory}>
+                                    <SelectTrigger className="bg-slate-950 border-slate-800 text-xs">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="resolution">Resolution</SelectItem>
+                                        <SelectItem value="hdr">HDR / Dolby Vision</SelectItem>
+                                        <SelectItem value="audio">Audio Codec</SelectItem>
+                                        <SelectItem value="codec">Video Codec</SelectItem>
+                                        <SelectItem value="edition">Edition Cut</SelectItem>
+                                        <SelectItem value="studio">Studio Logo</SelectItem>
+                                        <SelectItem value="contentRating">Age Rating</SelectItem>
+                                        <SelectItem value="custom">General Custom</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <Label className="text-xs text-slate-200">Target Position</Label>
+                                <Select value={badgePosition} onValueChange={setBadgePosition}>
+                                    <SelectTrigger className="bg-slate-950 border-slate-800 text-xs">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-200">Match Rule (Comma-separated)</Label>
+                            <Input
+                                value={badgeMatchRule}
+                                onChange={e => setBadgeMatchRule(e.target.value)}
+                                placeholder="e.g. 4k, dv, atmos, imax"
+                                className="bg-slate-950 border-slate-800 text-xs text-slate-100 font-mono"
+                            />
+                            <p className="text-[10px] text-slate-400">Match criteria in media stream tags to trigger this badge override.</p>
+                        </div>
+
+                        {badgeUploadError && (
+                            <div className="p-2.5 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs">
+                                {badgeUploadError}
+                            </div>
+                        )}
+
+                        <DialogFooter className="pt-2">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setBadgeUploadModalOpen(false)}>Cancel</Button>
+                            <Button
+                                type="submit"
+                                size="sm"
+                                disabled={uploadingBadge || !badgeUploadFile}
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs"
+                            >
+                                {uploadingBadge ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                                <span>Upload &amp; Install Badge</span>
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Import GitHub Badge Packs Modal */}
+            <Dialog open={githubModalOpen} onOpenChange={setGithubModalOpen}>
+                <DialogContent className="max-w-xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b border-slate-800">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <DownloadCloud className="h-5 w-5 text-sky-400" />
+                            <span>Import Badge Packs from GitHub</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Scan any GitHub repository or folder containing Kometa / PMM badges and batch import them directly into your vault.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3.5 flex-1 overflow-y-auto pr-1 py-2 text-xs">
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-200">GitHub Repository Folder URL</Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    value={githubRepoInput}
+                                    onChange={e => setGithubRepoInput(e.target.value)}
+                                    placeholder="https://github.com/jmxd/Kometa/tree/main/overlays/images"
+                                    className="bg-slate-950 border-slate-800 text-xs text-slate-100 font-mono"
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={scanningRepo || !githubRepoInput.trim()}
+                                    onClick={handleScanGitHubRepo}
+                                    className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs h-8 px-3 shrink-0"
+                                >
+                                    {scanningRepo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                                    <span>Scan Repo</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        {scanError && (
+                            <div className="p-2.5 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs">
+                                {scanError}
+                            </div>
+                        )}
+
+                        {importSuccessMsg && (
+                            <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                <span>{importSuccessMsg}</span>
+                            </div>
+                        )}
+
+                        {discoveredBadges.length > 0 && (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                                    <span>Discovered Badges ({discoveredBadges.length}):</span>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedBadgeIds(discoveredBadges.map(b => b.id))}
+                                            className="text-[10px] text-sky-400 hover:underline"
+                                        >
+                                            Select All
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedBadgeIds([])}
+                                            className="text-[10px] text-slate-400 hover:underline"
+                                        >
+                                            Deselect All
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+                                    {discoveredBadges.map(b => {
+                                        const isSelected = selectedBadgeIds.includes(b.id);
+                                        return (
+                                            <div
+                                                key={b.id}
+                                                onClick={() => {
+                                                    setSelectedBadgeIds(prev => 
+                                                        isSelected ? prev.filter(id => id !== b.id) : [...prev, b.id]
+                                                    );
+                                                }}
+                                                className={`p-2 rounded-lg border flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                                                    isSelected
+                                                        ? "bg-sky-950/40 border-sky-500/60 text-white"
+                                                        : "bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white"
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2 truncate">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={() => {}}
+                                                        className="rounded accent-sky-500"
+                                                    />
+                                                    <span className="font-semibold text-xs truncate">{b.name}</span>
+                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 border-slate-700 capitalize">
+                                                        {b.category}
+                                                    </Badge>
+                                                </div>
+                                                <span className="text-[9px] font-mono text-slate-500 shrink-0">
+                                                    {b.inferredRule || "auto"}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setGithubModalOpen(false)}>Close</Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={importingBadges || selectedBadgeIds.length === 0}
+                            onClick={handleImportGitHubBadges}
+                            className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs gap-1.5"
+                        >
+                            {importingBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5" />}
+                            <span>Import {selectedBadgeIds.length} Selected Badges</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Kometa Configuration Importer & Migration Modal */}
             <Dialog open={kometaModalOpen} onOpenChange={setKometaModalOpen}>
