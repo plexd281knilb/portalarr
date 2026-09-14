@@ -3093,14 +3093,23 @@ export async function getArtBackupAndBadgeStatsAction() {
 /**
  * Fetches recent items from a Plex library section with stream metadata for live simulation.
  */
-export async function getPlexRecentLibraryItemsAction(serverId: string, sectionKey?: string, limit = 40) {
+export async function getPlexRecentLibraryItemsAction(serverId: string, sectionKey?: string, limit = 50, sort = "addedAt:desc") {
     await verifyAdmin();
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured.", items: [] };
 
         const secKey = sectionKey || "1";
-        const items = await getPlexLibraryMediaItems(resolved.serverUrl, resolved.token, secKey, limit);
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        let items: PlexMediaStreamInfo[] = [];
+
+        for (const url of urlsToTry) {
+            try {
+                items = await getPlexLibraryMediaItems(url, resolved.token, secKey, limit, sort);
+                if (items.length > 0) break;
+            } catch (e) {}
+        }
+
         return { success: true, items, serverId: resolved.serverId };
     } catch (e: any) {
         return { success: false, error: e.message, items: [] };

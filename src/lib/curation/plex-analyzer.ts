@@ -11,6 +11,7 @@ export interface PlexMediaStreamInfo {
     ratingKey: string;
     key: string;
     title: string;
+    editionTitle?: string;
     year?: number;
     type: "movie" | "show" | "season" | "episode";
     thumb?: string;
@@ -102,17 +103,33 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
     let videoFormatLabel: string | undefined;
 
     // Detect edition from Plex editionTitle, title, or filePath
+    const rawEditionTitle = (metadata.editionTitle || metadata.edition || "").trim();
+    const editionTitleLower = rawEditionTitle.toLowerCase();
     const titleLower = (metadata.title || "").toLowerCase();
-    const editionTitle = (metadata.editionTitle || "").toLowerCase();
     const firstPartFile = (rawMediaList[0]?.Part?.[0] || rawMediaList[0]?.Part)?.file || "";
     const fileLower = firstPartFile.toLowerCase();
 
-    if (editionTitle.includes("imax") || titleLower.includes("imax") || fileLower.includes("imax")) detectedEdition = "IMAX";
-    else if (editionTitle.includes("criterion") || titleLower.includes("criterion") || fileLower.includes("criterion")) detectedEdition = "Criterion";
-    else if (editionTitle.includes("director") || titleLower.includes("director's cut") || fileLower.includes("directors.cut") || fileLower.includes("director.cut")) detectedEdition = "Director's Cut";
-    else if (editionTitle.includes("extended") || titleLower.includes("extended") || fileLower.includes("extended.cut") || fileLower.includes("extended.edition")) detectedEdition = "Extended";
-    else if (editionTitle.includes("remaster") || titleLower.includes("remaster") || fileLower.includes("remastered")) detectedEdition = "Remastered";
-    else if (fileLower.includes("remux")) detectedEdition = "Remux";
+    if (rawEditionTitle) {
+        detectedEdition = rawEditionTitle;
+    } else if (titleLower.includes("extended") || fileLower.includes("extended") || fileLower.includes(".ee.") || fileLower.includes("extended.edition") || fileLower.includes("extended.cut")) {
+        detectedEdition = "Extended Edition";
+    } else if (titleLower.includes("theatrical") || fileLower.includes("theatrical") || fileLower.includes(".te.")) {
+        detectedEdition = "Theatrical Edition";
+    } else if (titleLower.includes("director's cut") || titleLower.includes("directors cut") || fileLower.includes("directors.cut") || fileLower.includes("director.cut")) {
+        detectedEdition = "Director's Cut";
+    } else if (titleLower.includes("imax") || fileLower.includes("imax") || editionTitleLower.includes("imax")) {
+        detectedEdition = "IMAX Enhanced";
+    } else if (titleLower.includes("criterion") || fileLower.includes("criterion") || editionTitleLower.includes("criterion")) {
+        detectedEdition = "Criterion";
+    } else if (titleLower.includes("unrated") || fileLower.includes("unrated") || editionTitleLower.includes("unrated")) {
+        detectedEdition = "Unrated";
+    } else if (titleLower.includes("special edition") || fileLower.includes("special.edition") || editionTitleLower.includes("special edition")) {
+        detectedEdition = "Special Edition";
+    } else if (titleLower.includes("remaster") || fileLower.includes("remaster") || editionTitleLower.includes("remaster")) {
+        detectedEdition = "Remastered";
+    } else if (fileLower.includes("remux")) {
+        detectedEdition = "Remux";
+    }
 
     // Detect Studio
     const studioRaw = (metadata.studio || "").toLowerCase();
@@ -278,6 +295,7 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         ratingKey: String(metadata.ratingKey),
         key: metadata.key,
         title: metadata.title,
+        editionTitle: rawEditionTitle || detectedEdition || undefined,
         year: metadata.year ? parseInt(metadata.year, 10) : undefined,
         type: metadata.type || "movie",
         thumb: metadata.thumb,
@@ -635,17 +653,31 @@ export async function getPlexLibraryMediaItems(
     serverUrlOrCandidates: string | string[],
     token: string,
     sectionKey: string | number,
-    limit = 500
+    limit = 500,
+    sort?: string
 ): Promise<PlexMediaStreamInfo[]> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let lastError: any = null;
     let lastUrlAttempted = "";
+    const sortParam = sort ? `&sort=${encodeURIComponent(sort)}` : "";
+
+    const deduplicateResults = (metadata: any[]): PlexMediaStreamInfo[] => {
+        const seenKeys = new Set<string>();
+        const res: PlexMediaStreamInfo[] = [];
+        for (const m of metadata) {
+            const rKey = String(m.ratingKey || m.key || "");
+            if (!rKey || seenKeys.has(rKey)) continue;
+            seenKeys.add(rKey);
+            res.push(analyzeMediaStreamInfo(m));
+        }
+        return res;
+    };
 
     for (const cleanBase of urlsToTry) {
         if (!cleanBase) continue;
 
         // 1. Try standard query with includeGuids=1
-        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
         lastUrlAttempted = urlWithGuids;
         try {
             const controller = new AbortController();
@@ -676,7 +708,7 @@ export async function getPlexLibraryMediaItems(
                     metadata = parsePlexXmlMetadata(trimmed);
                 }
                 if (metadata.length > 0) {
-                    return metadata.map(analyzeMediaStreamInfo);
+                    return deduplicateResults(metadata);
                 }
             } else {
                 lastError = new Error(`HTTP ${res.status} (${res.statusText || "Error"})`);
@@ -686,7 +718,7 @@ export async function getPlexLibraryMediaItems(
         }
 
         // 2. Try fast fallback without includeGuids=1
-        const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}&X-Plex-Token=${encodeURIComponent(token)}`;
+        const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
         lastUrlAttempted = fallbackUrl;
         try {
             const fbController = new AbortController();
@@ -717,7 +749,7 @@ export async function getPlexLibraryMediaItems(
                     metadata = parsePlexXmlMetadata(trimmed);
                 }
                 if (metadata.length > 0) {
-                    return metadata.map(analyzeMediaStreamInfo);
+                    return deduplicateResults(metadata);
                 }
             } else {
                 lastError = new Error(`HTTP ${fbRes.status} (${fbRes.statusText || "Error"})`);
@@ -1692,10 +1724,9 @@ export async function searchPlexLibraryItems(
     const endpointsToTry: string[] = [];
 
     if (sectionKey) {
-        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/search?query=${encodeURIComponent(query)}&limit=30`);
-        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&sectionId=${encodeURIComponent(sectionKey)}&limit=30`);
-        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/all?title=${encodeURIComponent(query)}&X-Plex-Container-Start=0&X-Plex-Container-Size=30`);
-        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&limit=50`);
+        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/search?query=${encodeURIComponent(query)}&limit=40`);
+        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&sectionId=${encodeURIComponent(sectionKey)}&limit=40`);
+        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/all?title=${encodeURIComponent(query)}&X-Plex-Container-Start=0&X-Plex-Container-Size=40`);
     } else {
         endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&limit=50`);
         endpointsToTry.push(`${cleanBase}/search?query=${encodeURIComponent(query)}&limit=50`);
@@ -1752,7 +1783,7 @@ export async function searchPlexLibraryItems(
                 // If sectionKey filter is present and item has section info, match it
                 if (sectionKey) {
                     const itemSecId = String(item.librarySectionID || item.librarySectionKey || "");
-                    if (itemSecId && itemSecId !== String(sectionKey) && endpointsToTry.indexOf(endpoint) < 3) {
+                    if (itemSecId && itemSecId !== String(sectionKey)) {
                         continue;
                     }
                 }

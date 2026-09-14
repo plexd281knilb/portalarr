@@ -3695,6 +3695,7 @@ export function KometaStudio() {
                 serverId={selectedServerId}
                 sectionKey={selectedSectionKey}
                 serverName={servers.find(s => s.serverId === selectedServerId)?.serverName}
+                servers={servers}
                 onSelect={handleSelectRealPoster}
             />
         </div>

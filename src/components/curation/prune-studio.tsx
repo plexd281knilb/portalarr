@@ -1689,6 +1689,7 @@ export function PruneStudio() {
                 serverId={selectedServerId}
                 sectionKey={selectedSectionKey}
                 serverName={currentServer?.serverName}
+                servers={servers}
                 onSelect={handleSelectRealPoster}
             />
         </div>
