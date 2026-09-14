@@ -2429,7 +2429,7 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
         if (ruleId) {
             const rule = await prisma.mediaOverlayRule.findUnique({ where: { id: ruleId } });
             if (rule) {
-                let ruleRibbonMode: "single" | "tiered" | "auto_stack" = "single";
+                let ruleRibbonMode: "single" | "tiered" | "auto_stack" | "waterfall" = "single";
                 let ruleTieredRibbons: any[] | undefined;
                 let ruleMaxRibbonTiers = 3;
                 let ruleDovetail = true;
@@ -3338,7 +3338,7 @@ export async function applyOverlayToSingleItemAction(
         contentRatingPosition?: string;
         ratingsPosition?: string;
         showRibbon?: boolean;
-        ribbonMode?: "single" | "tiered" | "auto_stack";
+        ribbonMode?: "single" | "tiered" | "auto_stack" | "waterfall";
         tieredRibbons?: any[];
         maxRibbonTiers?: number;
         ribbonPosition?: string;

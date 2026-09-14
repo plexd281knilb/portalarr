@@ -297,19 +297,13 @@ export default function CurationStudio() {
         if (simRibbonMode === "single") {
             return [{ text: getEffectiveRibbonText(), theme: simRibbonTheme }];
         }
-        if (simRibbonMode === "auto_stack") {
-            return [
-                { text: "IMDb TOP 250", theme: "gold" },
-                { text: "CERTIFIED FRESH", theme: "crimson" },
-                { text: "4K UHD", theme: "purple" }
-            ].slice(0, simMaxRibbonTiers);
+        // Waterfall mode - First matching tier wins
+        const active = simTieredRibbons.filter(t => t.enabled && t.text && t.text.trim());
+        if (active.length > 0) {
+            const first = active[0];
+            return [{ text: first.text.trim().toUpperCase(), theme: first.theme }];
         }
-        // Tiered mode
-        const active = simTieredRibbons
-            .filter(t => t.enabled && t.text && t.text.trim())
-            .slice(0, simMaxRibbonTiers)
-            .map(t => ({ text: t.text.trim().toUpperCase(), theme: t.theme }));
-        return active.length > 0 ? active : [{ text: "IMDb TOP 250", theme: "gold" }];
+        return [{ text: "IMDb TOP 250", theme: "gold" }];
     };
 
     // Layer Priority Order Configuration
@@ -4860,29 +4854,15 @@ export default function CurationStudio() {
                                     }`}>
                                         {(() => {
                                             const activeRibbons = getActiveSimulatorRibbons();
-                                            const N = activeRibbons.length;
+                                            if (activeRibbons.length === 0) return null;
+                                            const r = activeRibbons[0];
                                             const isTop = simRibbonPosition.startsWith("top");
                                             const isRight = simRibbonPosition.endsWith("right");
                                             const rotation = (isTop && isRight) || (!isTop && !isRight) ? 45 : -45;
 
-                                            // Geometry offsets for 115x115 simulator viewBox
-                                            let stripeH = 18;
-                                            let fontSize = 7.5;
-                                            let yOffsets: number[] = [0];
-
-                                            if (N === 2) {
-                                                stripeH = 14;
-                                                fontSize = 6.2;
-                                                yOffsets = [-10, 10];
-                                            } else if (N === 3) {
-                                                stripeH = 12;
-                                                fontSize = 5.3;
-                                                yOffsets = [-18, 0, 18];
-                                            } else if (N === 4) {
-                                                stripeH = 10;
-                                                fontSize = 4.6;
-                                                yOffsets = [-24, -8, 8, 24];
-                                            }
+                                            const stripeH = 18;
+                                            const fontSize = 7.5;
+                                            const isGold = r.theme === "gold";
 
                                             return (
                                                 <svg width="115" height="115" viewBox="0 0 115 115" className="overflow-visible">
@@ -4890,49 +4870,41 @@ export default function CurationStudio() {
                                                         <filter id="sim-ribbon-shadow" x="-30%" y="-30%" width="160%" height="160%">
                                                             <feDropShadow dx="0" dy="1.8" stdDeviation="2" floodColor="#000000" floodOpacity="0.85"/>
                                                         </filter>
-                                                        {activeRibbons.map((r, idx) => (
-                                                            <linearGradient key={`sim-grad-${idx}-${r.theme}`} id={`sim-ribbon-grad-${idx}-${r.theme}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                                                                {r.theme === 'crimson' && <><stop offset="0%" stopColor="#ef4444"/><stop offset="100%" stopColor="#991b1b"/></>}
-                                                                {r.theme === 'emerald' && <><stop offset="0%" stopColor="#10b981"/><stop offset="100%" stopColor="#065f46"/></>}
-                                                                {r.theme === 'purple' && <><stop offset="0%" stopColor="#a855f7"/><stop offset="100%" stopColor="#6b21a8"/></>}
-                                                                {r.theme === 'gold' && <><stop offset="0%" stopColor="#fbbf24"/><stop offset="100%" stopColor="#b45309"/></>}
-                                                                {r.theme === 'cyan' && <><stop offset="0%" stopColor="#06b6d4"/><stop offset="100%" stopColor="#0e7490"/></>}
-                                                                {r.theme === 'pink' && <><stop offset="0%" stopColor="#ec4899"/><stop offset="100%" stopColor="#9d174d"/></>}
-                                                                {r.theme === 'glass' && <><stop offset="0%" stopColor="#334155"/><stop offset="100%" stopColor="#0f172a"/></>}
-                                                                {r.theme === 'orange' && <><stop offset="0%" stopColor="#f97316"/><stop offset="100%" stopColor="#c2410c"/></>}
-                                                            </linearGradient>
-                                                        ))}
+                                                        <linearGradient id={`sim-ribbon-grad-${r.theme}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                                                            {r.theme === 'crimson' && <><stop offset="0%" stopColor="#ef4444"/><stop offset="100%" stopColor="#991b1b"/></>}
+                                                            {r.theme === 'emerald' && <><stop offset="0%" stopColor="#10b981"/><stop offset="100%" stopColor="#065f46"/></>}
+                                                            {r.theme === 'purple' && <><stop offset="0%" stopColor="#a855f7"/><stop offset="100%" stopColor="#6b21a8"/></>}
+                                                            {r.theme === 'gold' && <><stop offset="0%" stopColor="#fbbf24"/><stop offset="100%" stopColor="#b45309"/></>}
+                                                            {r.theme === 'cyan' && <><stop offset="0%" stopColor="#06b6d4"/><stop offset="100%" stopColor="#0e7490"/></>}
+                                                            {r.theme === 'pink' && <><stop offset="0%" stopColor="#ec4899"/><stop offset="100%" stopColor="#9d174d"/></>}
+                                                            {r.theme === 'glass' && <><stop offset="0%" stopColor="#334155"/><stop offset="100%" stopColor="#0f172a"/></>}
+                                                            {r.theme === 'orange' && <><stop offset="0%" stopColor="#f97316"/><stop offset="100%" stopColor="#c2410c"/></>}
+                                                        </linearGradient>
                                                     </defs>
                                                     <g transform={`translate(57.5, 57.5) rotate(${rotation})`}>
-                                                        {activeRibbons.map((r, idx) => {
-                                                            const tierY = isTop ? yOffsets[idx] : -yOffsets[idx];
-                                                            const isGold = r.theme === "gold";
-                                                            return (
-                                                                <g key={`tier-${idx}`} filter="url(#sim-ribbon-shadow)">
-                                                                    <rect 
-                                                                        x="-110" 
-                                                                        y={tierY - stripeH / 2} 
-                                                                        width="220" 
-                                                                        height={stripeH} 
-                                                                        fill={`url(#sim-ribbon-grad-${idx}-${r.theme})`} 
-                                                                        stroke={isGold ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)"} 
-                                                                        strokeWidth="0.6"
-                                                                    />
-                                                                    <text 
-                                                                        x="0" 
-                                                                        y={tierY + fontSize * 0.35} 
-                                                                        fill={isGold ? "#000000" : "#ffffff"} 
-                                                                        fontSize={fontSize} 
-                                                                        fontWeight="900" 
-                                                                        textAnchor="middle" 
-                                                                        letterSpacing={N >= 3 ? "0.3" : "0.6"} 
-                                                                        fontFamily="sans-serif"
-                                                                    >
-                                                                        {r.text}
-                                                                    </text>
-                                                                </g>
-                                                            );
-                                                        })}
+                                                        <g filter="url(#sim-ribbon-shadow)">
+                                                            <rect 
+                                                                x="-110" 
+                                                                y={-stripeH / 2} 
+                                                                width="220" 
+                                                                height={stripeH} 
+                                                                fill={`url(#sim-ribbon-grad-${r.theme})`} 
+                                                                stroke={isGold ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)"} 
+                                                                strokeWidth="0.6"
+                                                            />
+                                                            <text 
+                                                                x="0" 
+                                                                y={fontSize * 0.35} 
+                                                                fill={isGold ? "#000000" : "#ffffff"} 
+                                                                fontSize={fontSize} 
+                                                                fontWeight="900" 
+                                                                textAnchor="middle" 
+                                                                letterSpacing="0.8" 
+                                                                fontFamily="sans-serif"
+                                                            >
+                                                                {r.text}
+                                                            </text>
+                                                        </g>
                                                     </g>
                                                 </svg>
                                             );

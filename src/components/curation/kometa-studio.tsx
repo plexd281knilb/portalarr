@@ -252,25 +252,39 @@ export function KometaStudio() {
     const [simRatingPosition, setSimRatingPosition] = useState<string>("bottom-left");
     const [simRatingsPosition, setSimRatingsPosition] = useState<string>("bottom-left");
 
-    // Ribbons
+    // Ribbons (Authentic Kometa Waterfall Priority)
     const [simShowRibbon, setSimShowRibbon] = useState(false);
     const [simRibbonPosition, setSimRibbonPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left">("top-right");
-    const [simRibbonTheme, setSimRibbonTheme] = useState<"purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange">("purple");
-    const [simRibbonType, setSimRibbonType] = useState<string>("auto_quality");
+    const [simRibbonTheme, setSimRibbonTheme] = useState<"purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange">("gold");
+    const [simRibbonType, setSimRibbonType] = useState<string>("imdb_top_250");
     const [simRibbonText, setSimRibbonText] = useState("");
-    const [simRibbonMode, setSimRibbonMode] = useState<"single" | "tiered" | "auto_stack">("tiered");
-    const [simMaxRibbonTiers, setSimMaxRibbonTiers] = useState<number>(3);
+    const [simRibbonMode, setSimRibbonMode] = useState<"single" | "tiered" | "auto_stack" | "waterfall">("waterfall");
+    const [simMaxRibbonTiers, setSimMaxRibbonTiers] = useState<number>(1);
+    
+    const DEFAULT_KOMETA_WATERFALL_RIBBONS: Array<{
+        id: string;
+        type: string;
+        text: string;
+        theme: "purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange";
+        enabled: boolean;
+        matchRule?: string;
+    }> = [
+        { id: "tier-1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
+        { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson", enabled: true },
+        { id: "tier-3", type: "oscar_winner", text: "OSCAR WINNER", theme: "gold", enabled: true },
+        { id: "tier-4", type: "auto_quality", text: "4K UHD", theme: "purple", enabled: true },
+        { id: "tier-5", type: "auto_edition", text: "SPECIAL EDITION", theme: "cyan", enabled: true },
+        { id: "tier-6", type: "leaving_soon", text: "LEAVING SOON", theme: "crimson", enabled: true }
+    ];
+
     const [simTieredRibbons, setSimTieredRibbons] = useState<Array<{
         id: string;
         type: string;
         text: string;
         theme: "purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange";
         enabled: boolean;
-    }>>([
-        { id: "tier-1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
-        { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson", enabled: true },
-        { id: "tier-3", type: "oscar_winner", text: "OSCAR WINNER", theme: "gold", enabled: false }
-    ]);
+        matchRule?: string;
+    }>>(DEFAULT_KOMETA_WATERFALL_RIBBONS);
 
     // Layer Priority Order
     const DEFAULT_LAYER_PRIORITY_ORDER = [
@@ -571,50 +585,240 @@ export function KometaStudio() {
         }
     };
 
-    // Helper functions for Ribbons
+    // Authentic Kometa Waterfall Ribbon Evaluation Engine
+    const WATERFALL_PRESET_OPTIONS = [
+        { value: "imdb_top_250", label: "🏆 IMDb Top 250 (Score ≥ 8.0)", defaultText: "IMDb TOP 250", defaultTheme: "gold" as const },
+        { value: "imdb_top_250_tv", label: "📺 IMDb Top TV Shows (Score ≥ 8.0)", defaultText: "IMDb TOP TV", defaultTheme: "gold" as const },
+        { value: "certified_fresh", label: "🍅 RT: Certified Fresh (≥ 75%)", defaultText: "CERTIFIED FRESH", defaultTheme: "crimson" as const },
+        { value: "rt_fresh", label: "🍅 RT: Fresh (≥ 60%)", defaultText: "RT FRESH", defaultTheme: "crimson" as const },
+        { value: "metacritic_must_see", label: "Ⓜ️ Metacritic: Must-See (≥ 81)", defaultText: "MUST-SEE", defaultTheme: "emerald" as const },
+        { value: "oscar_winner", label: "🥇 Academy Award / Oscar Winner", defaultText: "OSCAR WINNER", defaultTheme: "gold" as const },
+        { value: "academy_award", label: "🎬 Best Picture Winner", defaultText: "BEST PICTURE", defaultTheme: "gold" as const },
+        { value: "emmy_winner", label: "📺 Primetime Emmy Winner", defaultText: "EMMY WINNER", defaultTheme: "gold" as const },
+        { value: "golden_globe", label: "🏆 Golden Globe Winner", defaultText: "GOLDEN GLOBE", defaultTheme: "gold" as const },
+        { value: "critics_choice", label: "🎖️ Critics' Choice Award", defaultText: "CRITICS' CHOICE", defaultTheme: "cyan" as const },
+        { value: "bafta_winner", label: "🇬🇧 BAFTA Award Winner", defaultText: "BAFTA WINNER", defaultTheme: "gold" as const },
+        { value: "cannes_winner", label: "🌿 Cannes Palme d'Or Winner", defaultText: "PALME D'OR", defaultTheme: "gold" as const },
+        { value: "auto_quality", label: "📺 4K UHD / Dolby Vision Quality", defaultText: "4K UHD", defaultTheme: "purple" as const },
+        { value: "auto_edition", label: "🏷️ Special / IMAX Edition", defaultText: "SPECIAL EDITION", defaultTheme: "cyan" as const },
+        { value: "leaving_soon", label: "⏳ Leaving Soon", defaultText: "LEAVING SOON", defaultTheme: "crimson" as const },
+        { value: "custom", label: "⚙️ Custom Rule / Condition", defaultText: "FEATURED", defaultTheme: "glass" as const }
+    ];
+
     const getEffectiveRibbonText = (item?: any) => {
         if (simRibbonText && simRibbonText.trim()) return simRibbonText.trim().toUpperCase();
-        if (simRibbonType === "imdb_top_250") return "IMDb TOP 250";
-        if (simRibbonType === "imdb_top_250_tv") return "IMDb TOP TV";
-        if (simRibbonType === "certified_fresh") return "CERTIFIED FRESH";
-        if (simRibbonType === "rt_fresh") return "RT FRESH";
-        if (simRibbonType === "oscar_winner") return "OSCAR WINNER";
-        if (simRibbonType === "academy_award") return "BEST PICTURE";
-        if (simRibbonType === "emmy_winner") return "EMMY WINNER";
-        if (simRibbonType === "golden_globe") return "GOLDEN GLOBE";
-        if (simRibbonType === "critics_choice") return "CRITICS' CHOICE";
-        if (simRibbonType === "bafta_winner") return "BAFTA WINNER";
-        if (simRibbonType === "cannes_winner") return "PALME D'OR";
-        if (simRibbonType === "metacritic_must_see") return "MUST-SEE";
-        if (simRibbonType === "leaving_soon") return "LEAVING SOON";
-        if (simRibbonType === "auto_edition") {
-            if (item?.detectedBadges?.edition) return item.detectedBadges.edition.toUpperCase();
-            return "IMAX ENHANCED";
-        }
-        if (simRibbonType === "auto_quality") {
-            if (item?.detectedBadges?.resolution === "4K" || (!item && simShowResolution)) return "4K UHD";
-            if (item?.detectedBadges?.hdr || (!item && simShowHdr)) return (item?.detectedBadges?.hdr || "DOLBY VISION").toUpperCase();
-            return "4K UHD";
+        const found = WATERFALL_PRESET_OPTIONS.find(p => p.value === simRibbonType);
+        if (found) {
+            if (simRibbonType === "auto_edition") {
+                if (item?.detectedBadges?.edition) return item.detectedBadges.edition.toUpperCase();
+                return "IMAX ENHANCED";
+            }
+            if (simRibbonType === "auto_quality") {
+                if (item?.detectedBadges?.hdr === "DV" || (!item && simShowHdr)) return "DOLBY VISION";
+                return "4K UHD";
+            }
+            return found.defaultText;
         }
         return (simRibbonText.trim() || "FEATURED").toUpperCase();
     };
 
-    const getActiveSimulatorRibbons = (): Array<{ text: string; theme: string }> => {
+    const evaluateWaterfallRibbonClient = (
+        item: PlexMediaStreamInfo | null,
+        tieredRibbons: Array<{
+            id: string;
+            type: string;
+            text: string;
+            theme: "purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange";
+            enabled: boolean;
+            matchRule?: string;
+        }>,
+        simFallback: {
+            resolution?: string;
+            hdr?: string;
+            edition?: string;
+            ratings?: boolean;
+        }
+    ): { text: string; theme: "purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange"; matchedTierId?: string; matchedType?: string; priority: number; ruleLabel: string } | null => {
+        if (!tieredRibbons || tieredRibbons.length === 0) return null;
+
+        let priorityIdx = 1;
+        for (const tier of tieredRibbons) {
+            if (tier.enabled === false) {
+                priorityIdx++;
+                continue;
+            }
+
+            const type = (tier.type || "").toLowerCase();
+            let isMatch = false;
+            let ruleLabel = tier.text || type;
+
+            if (type === "imdb_top_250") {
+                ruleLabel = "IMDb Top 250 (Score ≥ 8.0)";
+                if (item) {
+                    const score = item.imdbRating ?? item.rating;
+                    if (item.type !== "show" && score && score >= 8.0) isMatch = true;
+                    else if (item.guids?.imdb && item.type !== "show") isMatch = true;
+                } else if (simFallback.ratings) {
+                    isMatch = true;
+                }
+            } else if (type === "imdb_top_250_tv") {
+                ruleLabel = "IMDb Top TV (Score ≥ 8.0)";
+                if (item) {
+                    const score = item.imdbRating ?? item.rating;
+                    if (item.type === "show" && score && score >= 8.0) isMatch = true;
+                }
+            } else if (type === "certified_fresh") {
+                ruleLabel = "RT Certified Fresh (≥ 75%)";
+                if (item) {
+                    const rtCrit = item.rtCriticsRating;
+                    const rtAud = item.rtAudienceRating;
+                    if ((rtCrit && rtCrit >= 75) || (rtAud && rtAud >= 80)) isMatch = true;
+                } else if (simFallback.ratings) {
+                    isMatch = true;
+                }
+            } else if (type === "rt_fresh") {
+                ruleLabel = "RT Fresh (≥ 60%)";
+                if (item) {
+                    const rtCrit = item.rtCriticsRating;
+                    if (rtCrit && rtCrit >= 60) isMatch = true;
+                }
+            } else if (type === "metacritic_must_see") {
+                ruleLabel = "Metacritic Must-See (≥ 81)";
+                if (item) {
+                    const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
+                    if (fullStr.includes("must-see") || (item.rating && item.rating >= 8.5)) isMatch = true;
+                }
+            } else if (type === "oscar_winner" || type === "academy_award") {
+                ruleLabel = "Academy Award / Oscar Winner";
+                if (item) {
+                    const fullStr = `${item.title} ${item.editionTitle || ""} ${item.genre || ""}`.toLowerCase();
+                    if (fullStr.includes("oscar") || fullStr.includes("academy award") || fullStr.includes("best picture") || fullStr.includes("lord of the rings") || fullStr.includes("godfather") || fullStr.includes("parasite") || fullStr.includes("oppenheimer") || fullStr.includes("everything everywhere") || fullStr.includes("gladiator") || fullStr.includes("titanic") || fullStr.includes("braveheart") || fullStr.includes("forrest gump")) isMatch = true;
+                }
+            } else if (type === "emmy_winner") {
+                ruleLabel = "Emmy Winner";
+                if (item) {
+                    const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
+                    if (fullStr.includes("emmy") || fullStr.includes("breaking bad") || fullStr.includes("succession") || fullStr.includes("game of thrones") || fullStr.includes("the bear") || fullStr.includes("sopranos") || fullStr.includes("the wire")) isMatch = true;
+                }
+            } else if (type === "golden_globe") {
+                ruleLabel = "Golden Globe Winner";
+                if (item) {
+                    const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
+                    if (fullStr.includes("golden globe")) isMatch = true;
+                }
+            } else if (type === "cannes_winner") {
+                ruleLabel = "Cannes Palme d'Or Winner";
+                if (item) {
+                    const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
+                    if (fullStr.includes("cannes") || fullStr.includes("palme d'or")) isMatch = true;
+                }
+            } else if (type === "bafta_winner") {
+                ruleLabel = "BAFTA Winner";
+                if (item) {
+                    const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
+                    if (fullStr.includes("bafta")) isMatch = true;
+                }
+            } else if (type === "critics_choice") {
+                ruleLabel = "Critics' Choice Award";
+                if (item) {
+                    const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
+                    if (fullStr.includes("critics' choice") || fullStr.includes("critics choice")) isMatch = true;
+                }
+            } else if (type === "auto_quality" || type === "4k_uhd") {
+                ruleLabel = "4K UHD / Dolby Vision";
+                if (item) {
+                    if (item.detectedBadges?.resolution === "4K" || item.detectedBadges?.hdr === "DV" || Boolean(item.detectedBadges?.hdr)) {
+                        isMatch = true;
+                    }
+                } else if (simFallback.resolution === "4K" || Boolean(simFallback.hdr)) {
+                    isMatch = true;
+                }
+            } else if (type === "auto_edition") {
+                ruleLabel = "Special / IMAX Edition";
+                if (item) {
+                    if (Boolean(item.detectedBadges?.edition || item.editionTitle)) isMatch = true;
+                } else if (Boolean(simFallback.edition)) {
+                    isMatch = true;
+                }
+            } else if (type === "leaving_soon") {
+                ruleLabel = "Leaving Soon";
+                if (item && Boolean(item.isLeavingSoon)) isMatch = true;
+            } else if (type === "custom" || tier.matchRule) {
+                ruleLabel = tier.text || "Custom Condition";
+                if (tier.matchRule && item) {
+                    isMatch = evaluateBadgeConditionClient(tier.matchRule, item.detectedBadges || {});
+                } else {
+                    isMatch = true;
+                }
+            }
+
+            if (isMatch) {
+                let text = tier.text;
+                let theme = tier.theme || "purple";
+
+                if (!text && type) {
+                    const preset = WATERFALL_PRESET_OPTIONS.find(p => p.value === type);
+                    if (preset) {
+                        text = preset.defaultText;
+                        if (!tier.theme) theme = preset.defaultTheme;
+                    }
+                    if (type === "auto_edition") {
+                        text = item?.detectedBadges?.edition?.toUpperCase() || (simFallback.edition ? simFallback.edition.toUpperCase() : "IMAX ENHANCED");
+                    } else if (type === "auto_quality") {
+                        if (item?.detectedBadges?.hdr === "DV" || simFallback.hdr === "DV") text = "DOLBY VISION";
+                        else text = "4K UHD";
+                    }
+                }
+
+                if (text && text.trim()) {
+                    return {
+                        text: text.trim().toUpperCase(),
+                        theme,
+                        matchedTierId: tier.id,
+                        matchedType: type,
+                        priority: priorityIdx,
+                        ruleLabel
+                    };
+                }
+            }
+
+            priorityIdx++;
+        }
+
+        return null;
+    };
+
+    const getActiveSimulatorRibbon = (): { text: string; theme: "purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange"; priority: number; ruleLabel: string } | null => {
+        if (!simShowRibbon) return null;
+
         if (simRibbonMode === "single") {
-            return [{ text: getEffectiveRibbonText(), theme: simRibbonTheme }];
+            const text = simRibbonText && simRibbonText.trim() ? simRibbonText.trim().toUpperCase() : getEffectiveRibbonText();
+            return {
+                text: text || "FEATURED",
+                theme: simRibbonTheme,
+                priority: 1,
+                ruleLabel: "Manual Custom Text"
+            };
         }
-        if (simRibbonMode === "auto_stack") {
-            return [
-                { text: "IMDb TOP 250", theme: "gold" },
-                { text: "CERTIFIED FRESH", theme: "crimson" },
-                { text: "4K UHD", theme: "purple" }
-            ].slice(0, simMaxRibbonTiers);
-        }
-        const active = simTieredRibbons
-            .filter(t => t.enabled && t.text && t.text.trim())
-            .slice(0, simMaxRibbonTiers)
-            .map(t => ({ text: t.text.trim().toUpperCase(), theme: t.theme }));
-        return active.length > 0 ? active : [{ text: "IMDb TOP 250", theme: "gold" }];
+
+        // Waterfall Mode (First Matching Priority Tier Wins)
+        const matched = evaluateWaterfallRibbonClient(
+            simSelectedRealItem,
+            simTieredRibbons,
+            {
+                resolution: simShowResolution ? "4K" : undefined,
+                hdr: simShowHdr ? "DV" : undefined,
+                edition: simShowEdition ? "IMAX" : undefined,
+                ratings: simRatings
+            }
+        );
+
+        return matched;
+    };
+
+    const getActiveSimulatorRibbons = (): Array<{ text: string; theme: "purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange" }> => {
+        const win = getActiveSimulatorRibbon();
+        return win ? [{ text: win.text, theme: win.theme }] : [];
     };
 
     // Client Matchers
@@ -1100,11 +1304,11 @@ export function KometaStudio() {
         return items.map(it => it.jsx);
     };
 
-    // Authentic 45-Degree Corner Ribbon Simulator
+    // Authentic 45-Degree Corner Ribbon Simulator (Single Waterfall Winning Ribbon)
     const renderSimulatorCornerRibbon = () => {
         if (!simShowRibbon) return null;
-        const activeRibbons = getActiveSimulatorRibbons();
-        if (activeRibbons.length === 0) return null;
+        const winningRibbon = getActiveSimulatorRibbon();
+        if (!winningRibbon || !winningRibbon.text) return null;
 
         const isTop = simRibbonPosition.startsWith("top");
         const isRight = simRibbonPosition.endsWith("right");
@@ -1118,31 +1322,27 @@ export function KometaStudio() {
 
         const rotation = (isTop && isRight) || (!isTop && !isRight) ? "rotate-45" : "-rotate-45";
         
-        const themeGradients: Record<string, { bg: string; text: string; border: string }> = {
-            gold: { bg: "bg-gradient-to-b from-yellow-300 via-amber-500 to-amber-600", text: "text-slate-950 font-black", border: "border-yellow-200/80" },
-            crimson: { bg: "bg-gradient-to-b from-rose-500 via-red-600 to-rose-800", text: "text-white font-black", border: "border-rose-300/80" },
-            emerald: { bg: "bg-gradient-to-b from-emerald-400 via-emerald-600 to-emerald-800", text: "text-white font-black", border: "border-emerald-200/80" },
-            purple: { bg: "bg-gradient-to-b from-indigo-400 via-purple-600 to-purple-800", text: "text-white font-black", border: "border-purple-300/80" },
-            cyan: { bg: "bg-gradient-to-b from-sky-400 via-cyan-600 to-blue-800", text: "text-white font-black", border: "border-sky-200/80" },
-            pink: { bg: "bg-gradient-to-b from-pink-400 via-rose-500 to-pink-700", text: "text-white font-black", border: "border-pink-200/80" },
-            glass: { bg: "bg-slate-900/95 border-slate-600", text: "text-white font-black", border: "border-slate-400/80" },
-            orange: { bg: "bg-gradient-to-b from-amber-400 via-orange-500 to-orange-700", text: "text-white font-black", border: "border-orange-200/80" }
+        const themeStyles: Record<string, { bg: string; text: string; border: string; glow: string }> = {
+            gold: { bg: "bg-gradient-to-b from-yellow-300 via-amber-500 to-amber-600", text: "text-slate-950 font-black", border: "border-t border-yellow-100/90 border-b border-amber-800/90", glow: "shadow-[0_4px_12px_rgba(245,158,11,0.55)]" },
+            crimson: { bg: "bg-gradient-to-b from-rose-500 via-red-600 to-rose-800", text: "text-white font-black", border: "border-t border-rose-300/80 border-b border-rose-950/90", glow: "shadow-[0_4px_12px_rgba(225,29,72,0.55)]" },
+            emerald: { bg: "bg-gradient-to-b from-emerald-400 via-emerald-600 to-emerald-800", text: "text-white font-black", border: "border-t border-emerald-200/80 border-b border-emerald-950/90", glow: "shadow-[0_4px_12px_rgba(16,185,129,0.55)]" },
+            purple: { bg: "bg-gradient-to-b from-indigo-400 via-purple-600 to-purple-800", text: "text-white font-black", border: "border-t border-purple-300/80 border-b border-purple-950/90", glow: "shadow-[0_4px_12px_rgba(147,51,234,0.55)]" },
+            cyan: { bg: "bg-gradient-to-b from-sky-400 via-cyan-600 to-blue-800", text: "text-white font-black", border: "border-t border-sky-200/80 border-b border-blue-950/90", glow: "shadow-[0_4px_12px_rgba(14,165,233,0.55)]" },
+            pink: { bg: "bg-gradient-to-b from-pink-400 via-rose-500 to-pink-700", text: "text-white font-black", border: "border-t border-pink-200/80 border-b border-pink-950/90", glow: "shadow-[0_4px_12px_rgba(236,72,153,0.55)]" },
+            glass: { bg: "bg-slate-900/95 border-slate-600", text: "text-white font-black", border: "border-t border-slate-400/80 border-b border-black", glow: "shadow-[0_4px_12px_rgba(0,0,0,0.8)]" },
+            orange: { bg: "bg-gradient-to-b from-amber-400 via-orange-500 to-orange-700", text: "text-white font-black", border: "border-t border-orange-200/80 border-b border-orange-950/90", glow: "shadow-[0_4px_12px_rgba(249,115,22,0.55)]" }
         };
+
+        const st = themeStyles[winningRibbon.theme] || themeStyles.purple;
 
         return (
             <div className={`absolute ${positionClasses[simRibbonPosition] || "top-0 right-0"} w-28 h-28 overflow-hidden pointer-events-none z-30`}>
-                <div className={`absolute top-0 left-0 w-40 h-40 flex flex-col items-center justify-center -translate-x-6 -translate-y-6 ${rotation}`}>
-                    {activeRibbons.map((ribbon, idx) => {
-                        const st = themeGradients[ribbon.theme] || themeGradients.purple;
-                        return (
-                            <div
-                                key={idx}
-                                className={`w-full py-0.5 text-center text-[7.5px] font-black tracking-widest shadow-md border-y ${st.bg} ${st.text} ${st.border}`}
-                            >
-                                {ribbon.text}
-                            </div>
-                        );
-                    })}
+                <div className={`absolute top-0 left-0 w-40 h-40 flex items-center justify-center -translate-x-6 -translate-y-6 ${rotation}`}>
+                    <div
+                        className={`w-full py-1 text-center text-[7.5px] font-black tracking-widest uppercase transition-all duration-300 ${st.bg} ${st.text} ${st.border} ${st.glow}`}
+                    >
+                        {winningRibbon.text}
+                    </div>
                 </div>
             </div>
         );
@@ -1257,14 +1457,12 @@ export function KometaStudio() {
         }
 
         if (simShowRibbon) {
-            const activeRibbons = getActiveSimulatorRibbons();
-            const ribbonText = activeRibbons.map(r => r.text).join(" • ");
-            const isMultiTier = activeRibbons.length > 1;
+            const win = getActiveSimulatorRibbon();
             layers.push({ 
                 category: "Corner Ribbon", 
-                value: ribbonText || getEffectiveRibbonText(), 
+                value: win ? `${win.text} (Priority #${win.priority})` : "None Matched", 
                 sourceType: "builtin", 
-                sourceName: `Gloss Ribbon (${simRibbonTheme}${isMultiTier ? ` • ${activeRibbons.length} Tiers` : ""})`, 
+                sourceName: win ? `Waterfall Ribbon (${win.theme})` : "Waterfall Ribbon (No Match)", 
                 position: simRibbonPosition 
             });
         }
@@ -2671,78 +2869,326 @@ export function KometaStudio() {
                                 </div>
                             </div>
 
-                            {/* Authentic Diagonal Corner Ribbons Studio */}
-                            <div className="space-y-3 p-3.5 bg-slate-950/40 rounded-xl border border-slate-800">
+                            {/* Authentic Kometa Waterfall Ribbons Studio */}
+                            <div className="space-y-3.5 p-3.5 bg-slate-950/40 rounded-xl border border-slate-800">
                                 <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                                     <div className="space-y-0.5">
                                         <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                                            <Sparkles className="h-4 w-4 text-amber-400" /> Authentic 45° Corner Ribbons Studio
+                                            <Sparkles className="h-4 w-4 text-amber-400" /> Authentic Kometa Waterfall Ribbons Studio
                                         </span>
-                                        <p className="text-[10px] text-slate-400">High-gloss ribbons with multi-tier stacking and 4-corner diagonal placement</p>
+                                        <p className="text-[10px] text-slate-400">Cascading priority evaluation: the highest qualifying tier awards a single high-gloss 45° corner ribbon.</p>
                                     </div>
                                     <Switch checked={simShowRibbon} onCheckedChange={setSimShowRibbon} />
                                 </div>
 
                                 {simShowRibbon && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-bold text-slate-300">Ribbon Corner</label>
-                                            <Select value={simRibbonPosition} onValueChange={(val: any) => setSimRibbonPosition(val)}>
-                                                <SelectTrigger className="h-7 bg-slate-900 border-slate-700 text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right (45°)</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left (-45°)</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right (-45°)</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left (45°)</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-bold text-slate-300">Ribbon Theme</label>
-                                            <Select value={simRibbonTheme} onValueChange={(val: any) => setSimRibbonTheme(val)}>
-                                                <SelectTrigger className="h-7 bg-slate-900 border-slate-700 text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="gold">💛 Amber Gold</SelectItem>
-                                                    <SelectItem value="crimson">🔴 Crimson Red</SelectItem>
-                                                    <SelectItem value="emerald">🟢 Emerald Green</SelectItem>
-                                                    <SelectItem value="purple">🟣 Royal Purple</SelectItem>
-                                                    <SelectItem value="cyan">🔵 Cyan Electric</SelectItem>
-                                                    <SelectItem value="pink">🌸 Neon Pink</SelectItem>
-                                                    <SelectItem value="glass">✨ Dark Obsidian</SelectItem>
-                                                    <SelectItem value="orange">🟠 Sunset Orange</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-bold text-slate-300">Ribbon Mode</label>
-                                            <Select value={simRibbonMode} onValueChange={(val: any) => setSimRibbonMode(val)}>
-                                                <SelectTrigger className="h-7 bg-slate-900 border-slate-700 text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="tiered">Tiered Multi-Stack</SelectItem>
-                                                    <SelectItem value="auto_stack">Auto-Stack (Smart)</SelectItem>
-                                                    <SelectItem value="single">Single Custom Text</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        {simRibbonMode === "single" && (
-                                            <div className="sm:col-span-3 space-y-1">
-                                                <label className="text-[10px] font-bold text-slate-300">Custom Ribbon Banner Text</label>
-                                                <Input 
-                                                    value={simRibbonText} 
-                                                    onChange={e => setSimRibbonText(e.target.value)} 
-                                                    placeholder="e.g. IMDb TOP 250, OSCAR WINNER, CRITERION COLLECTION" 
-                                                    className="h-7 bg-slate-900 border-slate-700 text-xs text-slate-100"
-                                                />
+                                    <div className="space-y-3 pt-1">
+                                        {/* Top Config Row */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-300">Ribbon Evaluation Mode</label>
+                                                <Select value={simRibbonMode} onValueChange={(val: any) => setSimRibbonMode(val)}>
+                                                    <SelectTrigger className="h-7 bg-slate-900 border-slate-700 text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="waterfall">🌊 Waterfall Priority (Kometa Standard — 1st Match Wins)</SelectItem>
+                                                        <SelectItem value="single">🏷️ Single Custom Text (Manual Fixed Ribbon)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
+
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-300">Ribbon Placement Corner</label>
+                                                <Select value={simRibbonPosition} onValueChange={(val: any) => setSimRibbonPosition(val)}>
+                                                    <SelectTrigger className="h-7 bg-slate-900 border-slate-700 text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right (45° Diagonal)</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left (-45° Diagonal)</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right (-45° Diagonal)</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left (45° Diagonal)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        {/* Single Custom Mode Controls */}
+                                        {simRibbonMode === "single" && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-2.5 bg-slate-900/60 rounded-lg border border-slate-800">
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-bold text-slate-300">Custom Ribbon Text</label>
+                                                    <Input 
+                                                        value={simRibbonText} 
+                                                        onChange={e => setSimRibbonText(e.target.value)} 
+                                                        placeholder="e.g. IMDb TOP 250, CRITERION COLLECTION" 
+                                                        className="h-7 bg-slate-950 border-slate-700 text-xs text-slate-100"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-bold text-slate-300">Ribbon Theme</label>
+                                                    <Select value={simRibbonTheme} onValueChange={(val: any) => setSimRibbonTheme(val)}>
+                                                        <SelectTrigger className="h-7 bg-slate-950 border-slate-700 text-xs">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="gold">💛 Amber Gold</SelectItem>
+                                                            <SelectItem value="crimson">🔴 Crimson Red</SelectItem>
+                                                            <SelectItem value="emerald">🟢 Emerald Green</SelectItem>
+                                                            <SelectItem value="purple">🟣 Royal Purple</SelectItem>
+                                                            <SelectItem value="cyan">🔵 Cyan Electric</SelectItem>
+                                                            <SelectItem value="pink">🌸 Neon Pink</SelectItem>
+                                                            <SelectItem value="glass">✨ Dark Obsidian</SelectItem>
+                                                            <SelectItem value="orange">🟠 Sunset Orange</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Waterfall Mode: Live Evaluation Diagnostics */}
+                                        {simRibbonMode !== "single" && (
+                                            <>
+                                                {(() => {
+                                                    const win = getActiveSimulatorRibbon();
+                                                    const themeBadgeClasses: Record<string, string> = {
+                                                        gold: "bg-amber-500/20 text-amber-300 border-amber-500/50",
+                                                        crimson: "bg-rose-500/20 text-rose-300 border-rose-500/50",
+                                                        emerald: "bg-emerald-500/20 text-emerald-300 border-emerald-500/50",
+                                                        purple: "bg-purple-500/20 text-purple-300 border-purple-500/50",
+                                                        cyan: "bg-sky-500/20 text-sky-300 border-sky-500/50",
+                                                        pink: "bg-pink-500/20 text-pink-300 border-pink-500/50",
+                                                        glass: "bg-slate-800 text-slate-300 border-slate-600",
+                                                        orange: "bg-orange-500/20 text-orange-300 border-orange-500/50"
+                                                    };
+
+                                                    return (
+                                                        <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800 space-y-1.5">
+                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="h-5 w-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-black shrink-0">
+                                                                        🎯
+                                                                    </div>
+                                                                    <span className="text-xs font-bold text-white">Waterfall Simulation Result:</span>
+                                                                    {win ? (
+                                                                        <Badge variant="outline" className={`text-[11px] px-2 py-0.5 font-black uppercase tracking-wider ${themeBadgeClasses[win.theme] || themeBadgeClasses.purple}`}>
+                                                                            Priority #{win.priority}: "{win.text}"
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold border border-slate-700 text-slate-400 bg-slate-800">
+                                                                            No Qualified Tier (No Ribbon)
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                {simSelectedRealItem && (
+                                                                    <span className="text-[9.5px] font-mono text-purple-300 bg-purple-950/50 px-2 py-0.5 rounded border border-purple-800/40 truncate max-w-[200px]" title={simSelectedRealItem.title}>
+                                                                        Telemetry: {simSelectedRealItem.title}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[10px] text-slate-400">
+                                                                {win 
+                                                                    ? `Cascade evaluated top-to-bottom and matched Priority #${win.priority} (${win.ruleLabel}). Lower-ranked tiers are bypassed.`
+                                                                    : "The simulated poster does not meet any enabled criteria in the priority list."}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })()}
+
+                                                {/* Waterfall Priority Tiers Reordering & Configuration */}
+                                                <div className="space-y-2 pt-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-0.5">
+                                                            <span className="text-[11px] font-bold text-slate-200">Waterfall Priority Cascading List</span>
+                                                            <p className="text-[9.5px] text-slate-400">Tiers are evaluated from top to bottom. The first qualifying tier awards the single corner ribbon.</p>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    const newId = `tier-${Date.now()}`;
+                                                                    setSimTieredRibbons(prev => [
+                                                                        ...prev,
+                                                                        { id: newId, type: "auto_quality", text: "4K UHD", theme: "purple", enabled: true }
+                                                                    ]);
+                                                                }}
+                                                                className="h-6 px-2 text-[10px] bg-slate-900 border-slate-700 text-purple-300 hover:text-white"
+                                                            >
+                                                                <Plus className="h-3 w-3 mr-1" /> Add Tier
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => setSimTieredRibbons(DEFAULT_KOMETA_WATERFALL_RIBBONS)}
+                                                                className="h-6 px-2 text-[10px] text-slate-400 hover:text-white"
+                                                            >
+                                                                ↺ Reset Defaults
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                                                        {simTieredRibbons.map((tier, idx) => {
+                                                            const isFirst = idx === 0;
+                                                            const isLast = idx === simTieredRibbons.length - 1;
+
+                                                            return (
+                                                                <div
+                                                                    key={tier.id || idx}
+                                                                    className={`p-2.5 rounded-lg border text-xs transition-all ${
+                                                                        tier.enabled 
+                                                                            ? "bg-slate-900/90 border-slate-800" 
+                                                                            : "bg-slate-950/60 border-slate-800/40 opacity-60"
+                                                                    }`}
+                                                                >
+                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                                        {/* Priority & Reordering */}
+                                                                        <div className="flex items-center gap-2 shrink-0">
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                className={`text-[10px] font-mono font-black px-1.5 py-0 ${
+                                                                                    isFirst 
+                                                                                        ? "border-amber-500/60 text-amber-300 bg-amber-950/30" 
+                                                                                        : "border-slate-700 text-slate-300 bg-slate-800"
+                                                                                }`}
+                                                                            >
+                                                                                #{idx + 1} {isFirst ? "(Top)" : ""}
+                                                                            </Badge>
+                                                                            <div className="flex items-center gap-0.5">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isFirst}
+                                                                                    onClick={() => {
+                                                                                        const next = [...simTieredRibbons];
+                                                                                        const tmp = next[idx];
+                                                                                        next[idx] = next[idx - 1];
+                                                                                        next[idx - 1] = tmp;
+                                                                                        setSimTieredRibbons(next);
+                                                                                    }}
+                                                                                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                                                                                    title="Move Priority Up"
+                                                                                >
+                                                                                    <ChevronUp className="h-3.5 w-3.5" />
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isLast}
+                                                                                    onClick={() => {
+                                                                                        const next = [...simTieredRibbons];
+                                                                                        const tmp = next[idx];
+                                                                                        next[idx] = next[idx + 1];
+                                                                                        next[idx + 1] = tmp;
+                                                                                        setSimTieredRibbons(next);
+                                                                                    }}
+                                                                                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                                                                                    title="Move Priority Down"
+                                                                                >
+                                                                                    <ChevronDown className="h-3.5 w-3.5" />
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Criteria Preset Selector */}
+                                                                        <div className="flex-1 min-w-[160px]">
+                                                                            <Select
+                                                                                value={tier.type || "custom"}
+                                                                                onValueChange={(val: any) => {
+                                                                                    const preset = WATERFALL_PRESET_OPTIONS.find(p => p.value === val);
+                                                                                    const next = [...simTieredRibbons];
+                                                                                    next[idx] = {
+                                                                                        ...next[idx],
+                                                                                        type: val,
+                                                                                        text: preset ? preset.defaultText : next[idx].text,
+                                                                                        theme: preset ? preset.defaultTheme : next[idx].theme
+                                                                                    };
+                                                                                    setSimTieredRibbons(next);
+                                                                                }}
+                                                                            >
+                                                                                <SelectTrigger className="h-7 bg-slate-950 border-slate-700 text-xs">
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    {WATERFALL_PRESET_OPTIONS.map(preset => (
+                                                                                        <SelectItem key={preset.value} value={preset.value} className="text-xs">
+                                                                                            {preset.label}
+                                                                                        </SelectItem>
+                                                                                    ))}
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        </div>
+
+                                                                        {/* Theme Selector */}
+                                                                        <div className="w-32 shrink-0">
+                                                                            <Select
+                                                                                value={tier.theme || "purple"}
+                                                                                onValueChange={(val: any) => {
+                                                                                    const next = [...simTieredRibbons];
+                                                                                    next[idx] = { ...next[idx], theme: val };
+                                                                                    setSimTieredRibbons(next);
+                                                                                }}
+                                                                            >
+                                                                                <SelectTrigger className="h-7 bg-slate-950 border-slate-700 text-xs">
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    <SelectItem value="gold">💛 Amber Gold</SelectItem>
+                                                                                    <SelectItem value="crimson">🔴 Crimson Red</SelectItem>
+                                                                                    <SelectItem value="emerald">🟢 Emerald</SelectItem>
+                                                                                    <SelectItem value="purple">🟣 Royal Purple</SelectItem>
+                                                                                    <SelectItem value="cyan">🔵 Cyan Electric</SelectItem>
+                                                                                    <SelectItem value="pink">🌸 Neon Pink</SelectItem>
+                                                                                    <SelectItem value="glass">✨ Dark Obsidian</SelectItem>
+                                                                                    <SelectItem value="orange">🟠 Sunset Orange</SelectItem>
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        </div>
+
+                                                                        {/* Custom Text Override */}
+                                                                        <div className="w-36 shrink-0">
+                                                                            <Input
+                                                                                value={tier.text || ""}
+                                                                                onChange={e => {
+                                                                                    const next = [...simTieredRibbons];
+                                                                                    next[idx] = { ...next[idx], text: e.target.value };
+                                                                                    setSimTieredRibbons(next);
+                                                                                }}
+                                                                                placeholder="Custom Text"
+                                                                                className="h-7 bg-slate-950 border-slate-700 text-xs px-2"
+                                                                            />
+                                                                        </div>
+
+                                                                        {/* Enabled Toggle & Delete */}
+                                                                        <div className="flex items-center gap-2 shrink-0">
+                                                                            <Switch
+                                                                                checked={tier.enabled !== false}
+                                                                                onCheckedChange={checked => {
+                                                                                    const next = [...simTieredRibbons];
+                                                                                    next[idx] = { ...next[idx], enabled: checked };
+                                                                                    setSimTieredRibbons(next);
+                                                                                }}
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setSimTieredRibbons(prev => prev.filter((_, i) => i !== idx));
+                                                                                }}
+                                                                                className="p-1 rounded hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 transition-colors"
+                                                                                title="Delete Tier"
+                                                                            >
+                                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </>
                                         )}
                                     </div>
                                 )}

@@ -9,8 +9,9 @@ export interface TieredRibbonItem {
     id?: string;
     text?: string;
     theme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange";
-    type?: "imdb_top_250" | "imdb_top_250_tv" | "certified_fresh" | "rt_fresh" | "oscar_winner" | "academy_award" | "emmy_winner" | "golden_globe" | "critics_choice" | "bafta_winner" | "cannes_winner" | "metacritic_must_see" | "auto_quality" | "auto_edition" | "leaving_soon" | "custom";
+    type?: "imdb_top_250" | "imdb_top_250_tv" | "certified_fresh" | "rt_fresh" | "oscar_winner" | "academy_award" | "emmy_winner" | "golden_globe" | "critics_choice" | "bafta_winner" | "cannes_winner" | "metacritic_must_see" | "auto_quality" | "auto_edition" | "leaving_soon" | "custom" | string;
     condition?: string;
+    matchRule?: string;
     enabled?: boolean;
 }
 
@@ -52,7 +53,7 @@ export interface OverlayOptions {
     badgeScale?: number;
     
     showRibbon?: boolean;
-    ribbonMode?: "single" | "tiered" | "auto_stack";
+    ribbonMode?: "single" | "tiered" | "auto_stack" | "waterfall";
     ribbonPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
     ribbonTheme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange";
     ribbonText?: string;
@@ -1150,112 +1151,385 @@ export function resolveRibbonPresetTextAndTheme(
 }
 
 /**
- * Generates Kometa-Style multi-tiered 45-degree diagonal corner ribbons.
- * Supports 1, 2, 3, or 4 concentric tiered stripes in the same corner (e.g., Top 250 + Certified Fresh + Oscar Winner).
+ * Generates an authentic Kometa-Style 45-degree diagonal corner ribbon.
+ * Renders a crisp single angled ribbon with rich gradients, specular highlight line, 
+ * fold accent border, drop shadow, and bold typography matching Kometa's official ribbon design.
  */
-export function generateTieredCornerRibbonSvg(
-    ribbons: Array<{ text: string; theme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" }>,
-    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right"
+export function generateKometaCornerRibbonSvg(
+    text: string,
+    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right",
+    theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "purple"
 ): string {
     const isTop = position.startsWith("top");
     const isRight = position.endsWith("right");
     const rotation = (isTop && isRight) || (!isTop && !isRight) ? 45 : -45;
 
-    const gradients: Record<string, { start: string; mid: string; end: string; border: string; text: string }> = {
-        crimson: { start: "#ef4444", mid: "#dc2626", end: "#991b1b", border: "#fca5a5", text: "#ffffff" },
-        emerald: { start: "#10b981", mid: "#059669", end: "#065f46", border: "#a7f3d0", text: "#ffffff" },
-        purple: { start: "#818cf8", mid: "#6366f1", end: "#4338ca", border: "#c7d2fe", text: "#ffffff" },
-        gold: { start: "#fef08a", mid: "#eab308", end: "#ca8a04", border: "#fef9c3", text: "#000000" },
-        cyan: { start: "#38bdf8", mid: "#0284c7", end: "#0369a1", border: "#bae6fd", text: "#ffffff" },
-        pink: { start: "#f472b6", mid: "#ec4899", end: "#be185d", border: "#fbcfe8", text: "#ffffff" },
-        glass: { start: "#334155", mid: "#1e293b", end: "#0f172a", border: "#94a3b8", text: "#f8fafc" },
-        orange: { start: "#fb923c", mid: "#ea580c", end: "#c2410c", border: "#ffedd5", text: "#ffffff" }
+    const gradients: Record<string, { start: string; mid: string; end: string; border: string; highlight: string; shadow: string; text: string }> = {
+        gold: { 
+            start: "#fef08a", 
+            mid: "#eab308", 
+            end: "#ca8a04", 
+            border: "#fef9c3", 
+            highlight: "rgba(255, 255, 255, 0.65)", 
+            shadow: "#713f12",
+            text: "#000000"
+        },
+        crimson: { 
+            start: "#fb7185", 
+            mid: "#e11d48", 
+            end: "#9f1239", 
+            border: "#fda4af", 
+            highlight: "rgba(255, 255, 255, 0.45)", 
+            shadow: "#4c0519",
+            text: "#ffffff"
+        },
+        emerald: { 
+            start: "#34d399", 
+            mid: "#059669", 
+            end: "#064e3b", 
+            border: "#a7f3d0", 
+            highlight: "rgba(255, 255, 255, 0.45)", 
+            shadow: "#022c22",
+            text: "#ffffff"
+        },
+        purple: { 
+            start: "#a5b4fc", 
+            mid: "#6366f1", 
+            end: "#3730a3", 
+            border: "#c7d2fe", 
+            highlight: "rgba(255, 255, 255, 0.45)", 
+            shadow: "#1e1b4b",
+            text: "#ffffff"
+        },
+        cyan: { 
+            start: "#67e8f9", 
+            mid: "#0284c7", 
+            end: "#075985", 
+            border: "#bae6fd", 
+            highlight: "rgba(255, 255, 255, 0.45)", 
+            shadow: "#082f49",
+            text: "#ffffff"
+        },
+        pink: { 
+            start: "#f472b6", 
+            mid: "#db2777", 
+            end: "#831843", 
+            border: "#fbcfe8", 
+            highlight: "rgba(255, 255, 255, 0.45)", 
+            shadow: "#500724",
+            text: "#ffffff"
+        },
+        glass: { 
+            start: "#475569", 
+            mid: "#1e293b", 
+            end: "#090d16", 
+            border: "#94a3b8", 
+            highlight: "rgba(255, 255, 255, 0.4)", 
+            shadow: "#020617",
+            text: "#f8fafc"
+        },
+        orange: { 
+            start: "#fdba74", 
+            mid: "#ea580c", 
+            end: "#9a3412", 
+            border: "#ffedd5", 
+            highlight: "rgba(255, 255, 255, 0.45)", 
+            shadow: "#431407",
+            text: "#ffffff"
+        }
     };
 
-    const activeRibbons = (ribbons || []).filter(r => r && r.text && r.text.trim().length > 0).slice(0, 4);
-    if (activeRibbons.length === 0) return `<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"></svg>`;
+    const g = gradients[theme] || gradients.purple;
+    const cleanText = (text || "FEATURED").trim().toUpperCase().slice(0, 30);
+    const gradId = `kometaRibbon_${theme}_${position}`;
 
-    const N = activeRibbons.length;
-    
-    // Calculate Y offsets, height, and font size based on number of tiers
-    let stripeH = 48;
-    let fontSize = 18;
-    let yOffsets: number[] = [0];
-
-    if (N === 2) {
-        stripeH = 40;
-        fontSize = 15;
-        yOffsets = [-28, 30];
-    } else if (N === 3) {
-        stripeH = 34;
-        fontSize = 13.5;
-        yOffsets = [-54, 0, 54];
-    } else if (N === 4) {
-        stripeH = 30;
-        fontSize = 11.5;
-        yOffsets = [-76, -26, 26, 76];
-    }
-
-    const defs: string[] = [];
-    const stripes: string[] = [];
-
-    defs.push(`
-        <filter id="ribbonShadow_${position}" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.85"/>
-        </filter>
-    `);
-
-    activeRibbons.forEach((r, idx) => {
-        const theme = r.theme || "purple";
-        const g = gradients[theme] || gradients.purple;
-        const gradId = `ribbonGrad_${theme}_${position}_tier${idx}`;
-        const cleanText = r.text.toUpperCase().slice(0, N >= 3 ? 24 : 28);
-
-        // Direction adjustment: for top corners, index 0 is outer (negative Y); for bottom corners, index 0 is outer (positive Y)
-        const tierY = isTop ? yOffsets[idx] : -yOffsets[idx];
-
-        defs.push(`
-            <linearGradient id="${gradId}" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="${g.start}" />
-                <stop offset="35%" stop-color="${g.mid}" />
-                <stop offset="100%" stop-color="${g.end}" />
-            </linearGradient>
-        `);
-
-        stripes.push(`
-            <!-- Tier ${idx + 1}: ${cleanText} -->
-            <g>
-                <rect x="-350" y="${tierY - stripeH / 2}" width="700" height="${stripeH}" fill="url(#${gradId})" filter="url(#ribbonShadow_${position})"/>
-                <!-- Specular Highlight Line -->
-                <line x1="-350" y1="${tierY - stripeH / 2 + 1.5}" x2="350" y2="${tierY - stripeH / 2 + 1.5}" stroke="${g.border}" stroke-width="1.3" opacity="0.85"/>
-                <!-- Bottom Border Line -->
-                <line x1="-350" y1="${tierY + stripeH / 2 - 1.5}" x2="350" y2="${tierY + stripeH / 2 - 1.5}" stroke="${g.border}" stroke-width="1.3" opacity="0.6"/>
-                <!-- Ribbon Text -->
-                <text x="0" y="${tierY + fontSize * 0.35}" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle" letter-spacing="${N >= 3 ? '1.6' : '2.2'}">${cleanText}</text>
-            </g>
-        `);
-    });
+    const stripeH = 48;
+    const tierY = 0;
+    const fontSize = cleanText.length > 20 ? 14 : cleanText.length > 15 ? 15.5 : 17;
 
     return `
     <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <defs>
-            ${defs.join("\n")}
+            <linearGradient id="${gradId}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="${g.start}" />
+                <stop offset="30%" stop-color="${g.mid}" />
+                <stop offset="85%" stop-color="${g.end}" />
+                <stop offset="100%" stop-color="${g.shadow}" />
+            </linearGradient>
+            <filter id="kometaDropShadow_${position}" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000000" flood-opacity="0.9"/>
+            </filter>
         </defs>
         <g transform="translate(200, 200) rotate(${rotation})">
-            ${stripes.join("\n")}
+            <!-- Main Diagonal Ribbon Banner -->
+            <rect x="-350" y="${tierY - stripeH / 2}" width="700" height="${stripeH}" fill="url(#${gradId})" filter="url(#kometaDropShadow_${position})"/>
+            <!-- Top Specular Highlight Line -->
+            <line x1="-350" y1="${tierY - stripeH / 2 + 1.5}" x2="350" y2="${tierY - stripeH / 2 + 1.5}" stroke="${g.border}" stroke-width="1.5" opacity="0.9"/>
+            <!-- Bottom Border / Fold Line -->
+            <line x1="-350" y1="${tierY + stripeH / 2 - 1}" x2="350" y2="${tierY + stripeH / 2 - 1}" stroke="${g.shadow}" stroke-width="1.8" opacity="0.95"/>
+            <!-- Ribbon Text -->
+            <text x="0" y="${tierY + fontSize * 0.35}" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle" letter-spacing="2.2">${cleanText}</text>
         </g>
     </svg>`;
 }
 
 /**
- * Generates Kometa-Style 45-degree single diagonal corner ribbon (backwards-compatibility wrapper).
+ * Generates Kometa-Style 45-degree single diagonal corner ribbon.
  */
 export function generateCornerRibbonSvg(
     text: string,
     position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right",
     theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "purple"
 ): string {
-    return generateTieredCornerRibbonSvg([{ text, theme }], position);
+    return generateKometaCornerRibbonSvg(text, position, theme);
+}
+
+/**
+ * Generates Kometa-Style diagonal corner ribbon. In Waterfall mode, evaluates list and outputs winning single ribbon.
+ */
+export function generateTieredCornerRibbonSvg(
+    ribbons: Array<{ text: string; theme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" }>,
+    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right"
+): string {
+    const first = ribbons && ribbons.length > 0 ? ribbons[0] : { text: "FEATURED", theme: "purple" as const };
+    return generateKometaCornerRibbonSvg(first.text, position, first.theme || "purple");
+}
+
+/**
+ * Helper to evaluate an individual condition token in a badge matchRule or ribbon criteria
+ */
+export function evaluateBadgeCondition(
+    condition: string,
+    detected?: {
+        resolution?: string | null;
+        hdr?: string | null;
+        audio?: string | null;
+        audioChannels?: string | null;
+        codec?: string | null;
+        edition?: string | null;
+        studio?: string | null;
+        contentRating?: string | null;
+    } | null,
+    audioFullStr: string = ""
+): boolean {
+    const c = (condition || "").trim().toLowerCase();
+    if (!c || c === "all" || c === "*") return true;
+    if (!detected) return false;
+
+    // 1. Resolution
+    if (c === "4k" || c === "2160p" || c === "uhd" || c === "ultra-hd" || c === "ultra hd") {
+        return detected.resolution === "4K";
+    }
+    if (c === "1080p" || c === "1080" || c === "fhd") {
+        return detected.resolution === "1080p";
+    }
+    if (c === "720p" || c === "720" || c === "hd") {
+        return detected.resolution === "720p";
+    }
+    if (c === "480p" || c === "480" || c === "576p" || c === "576" || c === "sd") {
+        return detected.resolution === "SD";
+    }
+
+    // 2. Dynamic Range / HDR
+    if (c === "dv" || c === "dolby vision" || c === "dovi") {
+        return detected.hdr === "DV";
+    }
+    if (c === "hdr10+" || c === "hdr+" || c === "hdrplus" || c === "plus") {
+        return detected.hdr === "HDR10+";
+    }
+    if (c === "hdr10") {
+        return detected.hdr === "HDR10" || detected.hdr === "HDR10+";
+    }
+    if (c === "hdr") {
+        return Boolean(detected.hdr);
+    }
+    if (c === "sdr") {
+        return !detected.hdr;
+    }
+
+    // 3. Audio & Channels
+    if (c === "atmos") {
+        return detected.audio === "ATMOS" || audioFullStr.includes("atmos");
+    }
+    if (c === "truehd") {
+        return detected.audio === "TRUEHD" || audioFullStr.includes("truehd");
+    }
+    if (c === "dts:x" || c === "dts-x" || c === "dts_x") {
+        return detected.audio === "DTS:X" || audioFullStr.includes("dts:x") || audioFullStr.includes("dts-x");
+    }
+    if (c === "dts-hd" || c === "dtshd" || c === "dts-ma" || c === "ma") {
+        return detected.audio === "DTS-HD" || audioFullStr.includes("dts-hd") || audioFullStr.includes("ma");
+    }
+    if (c === "dts") {
+        return (detected.audio || "").toUpperCase().startsWith("DTS") || audioFullStr.includes("dts");
+    }
+    if (c === "flac") return (detected.audio || "").toUpperCase() === "FLAC" || audioFullStr.includes("flac");
+    if (c === "eac3" || c === "digital+") return (detected.audio || "").toUpperCase() === "EAC3" || audioFullStr.includes("eac3");
+    if (c === "ac3") return (detected.audio || "").toUpperCase() === "AC3" || audioFullStr.includes("ac3");
+    if (c === "aac") return (detected.audio || "").toUpperCase() === "AAC" || audioFullStr.includes("aac");
+
+    if (c === "7.1" || c === "7_1") return detected.audioChannels === "7.1";
+    if (c === "5.1" || c === "5_1") return detected.audioChannels === "5.1";
+    if (c === "2.0" || c === "2_0") return detected.audioChannels === "2.0";
+
+    // 4. Video Codecs
+    if (c === "hevc" || c === "h265" || c === "x265") return detected.codec === "HEVC";
+    if (c === "av1") return detected.codec === "AV1";
+    if (c === "prores") return detected.codec === "ProRes";
+    if (c === "avc" || c === "h264" || c === "x264") return detected.codec === "AVC";
+
+    // 5. Editions
+    if (c === "imax") return (detected.edition || "").toLowerCase().includes("imax");
+    if (c === "criterion") return (detected.edition || "").toLowerCase().includes("criterion");
+    if (c === "remux") return (detected.edition || "").toLowerCase().includes("remux");
+    if (c === "directors_cut" || c === "director") return (detected.edition || "").toLowerCase().includes("director");
+    if (c === "extended") return (detected.edition || "").toLowerCase().includes("extended");
+    if (c === "theatrical") return (detected.edition || "").toLowerCase().includes("theatrical");
+    if (c === "remastered" || c === "remaster") return (detected.edition || "").toLowerCase().includes("remaster");
+
+    // 6. Studios
+    if (c === "netflix") return (detected.studio || "").toLowerCase().includes("netflix");
+    if (c === "disney") return (detected.studio || "").toLowerCase().includes("disney");
+    if (c === "hbo" || c === "max") return (detected.studio || "").toLowerCase().includes("hbo") || (detected.studio || "").toLowerCase().includes("max");
+    if (c === "apple" || c === "apple_tv") return (detected.studio || "").toLowerCase().includes("apple");
+    if (c === "amazon" || c === "prime") return (detected.studio || "").toLowerCase().includes("amazon") || (detected.studio || "").toLowerCase().includes("prime");
+    if (c === "paramount") return (detected.studio || "").toLowerCase().includes("paramount");
+    if (c === "marvel") return (detected.studio || "").toLowerCase().includes("marvel");
+    if (c === "dc") return (detected.studio || "").toLowerCase().includes("dc");
+    if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
+
+    // 7. Ratings
+    const cr = (detected.contentRating || "").toUpperCase();
+    if (c === "pg-13") return cr === "PG-13" || cr === "US:PG-13";
+    if (c === "nc-17") return cr === "NC-17" || cr === "US:NC-17";
+    if (c === "r") return cr === "R" || cr === "US:R";
+    if (c === "pg") return cr === "PG" || cr === "US:PG";
+    if (c === "g") return cr === "G" || cr === "US:G";
+    if (c === "tv-ma" || c === "tvma") return cr === "TV-MA" || cr === "US:TV-MA";
+    if (c === "tv-14" || c === "tv14") return cr === "TV-14" || cr === "US:TV-14";
+    if (c === "tv-pg" || c === "tvpg") return cr === "TV-PG" || cr === "US:TV-PG";
+    if (c === "tv-g" || c === "tvg") return cr === "TV-G" || cr === "US:TV-G";
+    if (c === "tv-y" || c === "tvy") return cr === "TV-Y" || cr === "US:TV-Y";
+    if (c === "tv-y7" || c === "tvy7") return cr === "TV-Y7" || cr === "US:TV-Y7";
+
+    return false;
+}
+
+/**
+ * Evaluates Waterfall Ribbon priority against media telemetry and returns the SINGLE winning ribbon.
+ * In Kometa, a waterfall cascades top-to-bottom through priority tiers. The FIRST matching tier wins.
+ */
+export function evaluateWaterfallRibbon(
+    mediaInfo: PlexMediaStreamInfo,
+    tieredRibbons?: TieredRibbonItem[],
+    options: {
+        leavingSoonDays?: number;
+        ratingsSource?: { rtCritics?: number; rtAudience?: number; metacritic?: number };
+    } = {}
+): { text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange"; matchedTierId?: string; matchedType?: string; priority: number } | null {
+    if (!tieredRibbons || tieredRibbons.length === 0) return null;
+
+    let priorityIdx = 1;
+    for (const tier of tieredRibbons) {
+        if (tier.enabled === false) {
+            priorityIdx++;
+            continue;
+        }
+
+        const type = (tier.type || "").toLowerCase();
+        let isMatch = false;
+
+        // 1. IMDb Top 250 (movies or TV)
+        if (type === "imdb_top_250") {
+            const score = mediaInfo.imdbRating ?? mediaInfo.rating;
+            if (mediaInfo.type !== "show" && score && score >= 8.0) isMatch = true;
+            else if (mediaInfo.guids?.imdb && mediaInfo.type !== "show") isMatch = true;
+        } else if (type === "imdb_top_250_tv") {
+            const score = mediaInfo.imdbRating ?? mediaInfo.rating;
+            if (mediaInfo.type === "show" && score && score >= 8.0) isMatch = true;
+        }
+        // 2. Rotten Tomatoes Certified Fresh / RT Fresh
+        else if (type === "certified_fresh") {
+            const rtCrit = mediaInfo.rtCriticsRating ?? options.ratingsSource?.rtCritics;
+            const rtAud = mediaInfo.rtAudienceRating ?? options.ratingsSource?.rtAudience;
+            if ((rtCrit && rtCrit >= 75) || (rtAud && rtAud >= 80)) isMatch = true;
+        } else if (type === "rt_fresh") {
+            const rtCrit = mediaInfo.rtCriticsRating ?? options.ratingsSource?.rtCritics;
+            if (rtCrit && rtCrit >= 60) isMatch = true;
+        }
+        // 3. Metacritic Must-See
+        else if (type === "metacritic_must_see") {
+            const meta = options.ratingsSource?.metacritic;
+            if (meta && meta >= 81) isMatch = true;
+        }
+        // 4. Awards (Oscar / Academy Award / Emmy / Golden Globe / Cannes / BAFTA / Critics Choice)
+        else if (type === "oscar_winner" || type === "academy_award") {
+            const fullStr = `${mediaInfo.title} ${mediaInfo.editionTitle || ""} ${mediaInfo.genre || ""}`.toLowerCase();
+            if (fullStr.includes("oscar") || fullStr.includes("academy award") || fullStr.includes("best picture")) isMatch = true;
+        } else if (type === "emmy_winner") {
+            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
+            if (fullStr.includes("emmy")) isMatch = true;
+        } else if (type === "golden_globe") {
+            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
+            if (fullStr.includes("golden globe")) isMatch = true;
+        } else if (type === "cannes_winner") {
+            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
+            if (fullStr.includes("cannes") || fullStr.includes("palme d'or")) isMatch = true;
+        } else if (type === "bafta_winner") {
+            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
+            if (fullStr.includes("bafta")) isMatch = true;
+        } else if (type === "critics_choice") {
+            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
+            if (fullStr.includes("critics' choice") || fullStr.includes("critics choice")) isMatch = true;
+        }
+        // 5. Quality (4K UHD / Dolby Vision)
+        else if (type === "auto_quality" || type === "4k_uhd") {
+            if (mediaInfo.detectedBadges?.resolution === "4K" || mediaInfo.detectedBadges?.hdr === "DV" || Boolean(mediaInfo.detectedBadges?.hdr)) {
+                isMatch = true;
+            }
+        }
+        // 6. Special Edition
+        else if (type === "auto_edition") {
+            if (Boolean(mediaInfo.detectedBadges?.edition)) isMatch = true;
+        }
+        // 7. Leaving Soon
+        else if (type === "leaving_soon") {
+            if (Boolean(mediaInfo.isLeavingSoon)) isMatch = true;
+        }
+        // 8. Custom rule
+        else if (type === "custom" || tier.matchRule) {
+            if (tier.matchRule) {
+                isMatch = evaluateBadgeCondition(tier.matchRule, mediaInfo.detectedBadges);
+            } else {
+                isMatch = true;
+            }
+        }
+
+        if (isMatch) {
+            let text = tier.text;
+            let theme = tier.theme || "purple";
+
+            if (!text && type) {
+                const mapped = resolveRibbonPresetTextAndTheme(type, mediaInfo, options.leavingSoonDays);
+                text = mapped.text;
+                if (!tier.theme) theme = mapped.theme;
+            }
+
+            if (text && text.trim()) {
+                return {
+                    text: text.trim().toUpperCase(),
+                    theme,
+                    matchedTierId: tier.id,
+                    matchedType: type,
+                    priority: priorityIdx
+                };
+            }
+        }
+
+        priorityIdx++;
+    }
+
+    return null;
 }
 
 /**
@@ -1301,74 +1575,13 @@ export async function applyOverlaysToPoster(
         });
     }
 
-    // 3. Diagonal Corner Ribbons (Single or Multi-Tiered Kometa Stack)
-    if (options.showRibbon || options.ribbonText || (options.tieredRibbons && options.tieredRibbons.length > 0) || options.ribbonMode === "auto_stack" || options.ribbonMode === "tiered") {
+    // 3. Diagonal Corner Ribbons (Kometa Waterfall Priority / Single Ribbon)
+    if (options.showRibbon || options.ribbonText || (options.tieredRibbons && options.tieredRibbons.length > 0) || options.ribbonMode === "auto_stack" || options.ribbonMode === "tiered" || options.ribbonMode === "waterfall") {
         const rPos = options.ribbonPosition || "top-right";
-        const maxTiers = options.maxRibbonTiers || 3;
-        const resolvedTiers: Array<{ text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" }> = [];
+        let winningRibbon: { text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" } | null = null;
 
-        if (options.ribbonMode === "tiered" && options.tieredRibbons && options.tieredRibbons.length > 0) {
-            // User configured explicit tiered ribbons
-            for (const tier of options.tieredRibbons) {
-                if (tier.enabled === false) continue;
-                let text = tier.text;
-                let theme = tier.theme || "purple";
-
-                if (!text && tier.type) {
-                    const mapped = resolveRibbonPresetTextAndTheme(tier.type, mediaInfo, options.leavingSoonDays);
-                    text = mapped.text;
-                    if (!tier.theme) theme = mapped.theme;
-                }
-
-                if (text) {
-                    resolvedTiers.push({ text, theme });
-                }
-            }
-        } else if (options.ribbonMode === "auto_stack") {
-            // Smart Auto-Qualification Stack: Checks all awards, ratings, quality qualifiers
-            // 1. IMDb Top 250 (movies or TV)
-            const imdbScore = mediaInfo.imdbRating ?? mediaInfo.rating;
-            if ((imdbScore && imdbScore >= 8.0) || mediaInfo.guids?.imdb) {
-                if (mediaInfo.type === "show") {
-                    resolvedTiers.push({ text: "IMDb TOP TV", theme: "gold" });
-                } else if (imdbScore && imdbScore >= 8.0) {
-                    resolvedTiers.push({ text: "IMDb TOP 250", theme: "gold" });
-                }
-            }
-
-            // 2. Rotten Tomatoes Certified Fresh / Fresh
-            const rtCrit = mediaInfo.rtCriticsRating ?? (options.ratingsSource?.rtCritics);
-            const rtAud = mediaInfo.rtAudienceRating ?? (options.ratingsSource?.rtAudience);
-            if ((rtCrit && rtCrit >= 75) || (rtAud && rtAud >= 80)) {
-                resolvedTiers.push({ text: "CERTIFIED FRESH", theme: "crimson" });
-            } else if (rtCrit && rtCrit >= 60) {
-                resolvedTiers.push({ text: "RT FRESH", theme: "crimson" });
-            }
-
-            // 3. Metacritic Must-See
-            const metaScore = options.ratingsSource?.metacritic;
-            if (metaScore && metaScore >= 81) {
-                resolvedTiers.push({ text: "MUST-SEE", theme: "emerald" });
-            }
-
-            // 4. Quality (4K UHD / Dolby Vision)
-            if (mediaInfo.detectedBadges.hdr === "DV") {
-                resolvedTiers.push({ text: "DOLBY VISION", theme: "purple" });
-            } else if (mediaInfo.detectedBadges.resolution === "4K") {
-                resolvedTiers.push({ text: "4K UHD", theme: "purple" });
-            }
-
-            // 5. Special Edition
-            if (mediaInfo.detectedBadges.edition) {
-                resolvedTiers.push({ text: mediaInfo.detectedBadges.edition, theme: "cyan" });
-            }
-
-            // 6. Leaving Soon
-            if (mediaInfo.isLeavingSoon) {
-                resolvedTiers.push({ text: options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays}D` : "LEAVING SOON", theme: "crimson" });
-            }
-        } else {
-            // Single Ribbon Mode
+        if (options.ribbonMode === "single") {
+            // Single explicit custom text
             let rText = options.ribbonText;
             let rTheme = options.ribbonTheme || "purple";
 
@@ -1388,12 +1601,31 @@ export async function applyOverlaysToPoster(
                 }
             }
 
-            resolvedTiers.push({ text: rText, theme: rTheme });
+            winningRibbon = { text: rText, theme: rTheme };
+        } else {
+            // Waterfall Priority Mode (Default in Kometa)
+            const waterfallTiers = (options.tieredRibbons && options.tieredRibbons.length > 0)
+                ? options.tieredRibbons
+                : [
+                    { id: "tier-1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold" as const, enabled: true },
+                    { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson" as const, enabled: true },
+                    { id: "tier-3", type: "auto_quality", text: "4K UHD", theme: "purple" as const, enabled: true },
+                    { id: "tier-4", type: "auto_edition", text: "SPECIAL EDITION", theme: "cyan" as const, enabled: true },
+                    { id: "tier-5", type: "leaving_soon", text: "LEAVING SOON", theme: "crimson" as const, enabled: true }
+                ];
+
+            const matched = evaluateWaterfallRibbon(mediaInfo, waterfallTiers, {
+                leavingSoonDays: options.leavingSoonDays,
+                ratingsSource: options.ratingsSource
+            });
+
+            if (matched) {
+                winningRibbon = { text: matched.text, theme: matched.theme };
+            }
         }
 
-        const finalTiers = resolvedTiers.slice(0, maxTiers);
-        if (finalTiers.length > 0) {
-            const cornerRibbonSvg = generateTieredCornerRibbonSvg(finalTiers, rPos);
+        if (winningRibbon && winningRibbon.text) {
+            const cornerRibbonSvg = generateKometaCornerRibbonSvg(winningRibbon.text, rPos, winningRibbon.theme);
             const ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(380, 380).toBuffer();
 
             const rTop = rPos.startsWith("top") ? (options.showLeavingSoon ? 78 : 0) : 1500 - 380;
@@ -1405,124 +1637,6 @@ export async function applyOverlaysToPoster(
                 left: rLeft
             });
         }
-    }
-
-    // 4. Custom Badge Media Stream Matcher
-    // Helper to evaluate an individual condition token in a badge matchRule
-    function evaluateBadgeCondition(
-        condition: string,
-        detected: {
-            resolution?: string | null;
-            hdr?: string | null;
-            audio?: string | null;
-            audioChannels?: string | null;
-            codec?: string | null;
-            edition?: string | null;
-            studio?: string | null;
-            contentRating?: string | null;
-        },
-        audioFullStr: string = ""
-    ): boolean {
-        const c = condition.trim().toLowerCase();
-        if (!c || c === "all" || c === "*") return true;
-
-        // 1. Resolution
-        if (c === "4k" || c === "2160p" || c === "uhd" || c === "ultra-hd" || c === "ultra hd") {
-            return detected.resolution === "4K";
-        }
-        if (c === "1080p" || c === "1080" || c === "fhd") {
-            return detected.resolution === "1080p";
-        }
-        if (c === "720p" || c === "720" || c === "hd") {
-            return detected.resolution === "720p";
-        }
-        if (c === "480p" || c === "480" || c === "576p" || c === "576" || c === "sd") {
-            return detected.resolution === "SD";
-        }
-
-        // 2. Dynamic Range / HDR
-        if (c === "dv" || c === "dolby vision" || c === "dovi") {
-            return detected.hdr === "DV";
-        }
-        if (c === "hdr10+" || c === "hdr+" || c === "hdrplus" || c === "plus") {
-            return detected.hdr === "HDR10+";
-        }
-        if (c === "hdr10") {
-            return detected.hdr === "HDR10" || detected.hdr === "HDR10+";
-        }
-        if (c === "hdr") {
-            return Boolean(detected.hdr);
-        }
-        if (c === "sdr") {
-            return !detected.hdr;
-        }
-
-        // 3. Audio & Channels
-        if (c === "atmos") {
-            return detected.audio === "ATMOS" || audioFullStr.includes("atmos");
-        }
-        if (c === "truehd") {
-            return detected.audio === "TRUEHD" || audioFullStr.includes("truehd");
-        }
-        if (c === "dts:x" || c === "dts-x" || c === "dts_x") {
-            return detected.audio === "DTS:X" || audioFullStr.includes("dts:x") || audioFullStr.includes("dts-x");
-        }
-        if (c === "dts-hd" || c === "dtshd" || c === "dts-ma" || c === "ma") {
-            return detected.audio === "DTS-HD" || audioFullStr.includes("dts-hd") || audioFullStr.includes("ma");
-        }
-        if (c === "dts") {
-            return (detected.audio || "").toUpperCase().startsWith("DTS") || audioFullStr.includes("dts");
-        }
-        if (c === "flac") return (detected.audio || "").toUpperCase() === "FLAC" || audioFullStr.includes("flac");
-        if (c === "eac3" || c === "digital+") return (detected.audio || "").toUpperCase() === "EAC3" || audioFullStr.includes("eac3");
-        if (c === "ac3") return (detected.audio || "").toUpperCase() === "AC3" || audioFullStr.includes("ac3");
-        if (c === "aac") return (detected.audio || "").toUpperCase() === "AAC" || audioFullStr.includes("aac");
-
-        if (c === "7.1" || c === "7_1") return detected.audioChannels === "7.1";
-        if (c === "5.1" || c === "5_1") return detected.audioChannels === "5.1";
-        if (c === "2.0" || c === "2_0") return detected.audioChannels === "2.0";
-
-        // 4. Video Codecs
-        if (c === "hevc" || c === "h265" || c === "x265") return detected.codec === "HEVC";
-        if (c === "av1") return detected.codec === "AV1";
-        if (c === "prores") return detected.codec === "ProRes";
-        if (c === "avc" || c === "h264" || c === "x264") return detected.codec === "AVC";
-
-        // 5. Editions
-        if (c === "imax") return (detected.edition || "").toLowerCase().includes("imax");
-        if (c === "criterion") return (detected.edition || "").toLowerCase().includes("criterion");
-        if (c === "remux") return (detected.edition || "").toLowerCase().includes("remux");
-        if (c === "directors_cut" || c === "director") return (detected.edition || "").toLowerCase().includes("director");
-        if (c === "extended") return (detected.edition || "").toLowerCase().includes("extended");
-        if (c === "theatrical") return (detected.edition || "").toLowerCase().includes("theatrical");
-        if (c === "remastered" || c === "remaster") return (detected.edition || "").toLowerCase().includes("remaster");
-
-        // 6. Studios
-        if (c === "netflix") return (detected.studio || "").toLowerCase().includes("netflix");
-        if (c === "disney") return (detected.studio || "").toLowerCase().includes("disney");
-        if (c === "hbo" || c === "max") return (detected.studio || "").toLowerCase().includes("hbo") || (detected.studio || "").toLowerCase().includes("max");
-        if (c === "apple" || c === "apple_tv") return (detected.studio || "").toLowerCase().includes("apple");
-        if (c === "amazon" || c === "prime") return (detected.studio || "").toLowerCase().includes("amazon") || (detected.studio || "").toLowerCase().includes("prime");
-        if (c === "paramount") return (detected.studio || "").toLowerCase().includes("paramount");
-        if (c === "marvel") return (detected.studio || "").toLowerCase().includes("marvel");
-        if (c === "dc") return (detected.studio || "").toLowerCase().includes("dc");
-        if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
-
-        // 7. Ratings
-        const cr = (detected.contentRating || "").toUpperCase();
-        if (c === "pg-13") return cr === "PG-13" || cr === "US:PG-13";
-        if (c === "nc-17") return cr === "NC-17" || cr === "US:NC-17";
-        if (c === "r") return cr === "R" || cr === "US:R";
-        if (c === "pg") return cr === "PG" || cr === "US:PG";
-        if (c === "g") return cr === "G" || cr === "US:G";
-        if (c === "tv-ma" || c === "tvma") return cr === "TV-MA" || cr === "US:TV-MA";
-        if (c === "tv-14" || c === "tv14") return cr === "TV-14" || cr === "US:TV-14";
-        if (c === "tv-pg" || c === "tvpg") return cr === "TV-PG" || cr === "US:TV-PG";
-        if (c === "tv-g" || c === "tvg") return cr === "TV-G" || cr === "US:TV-G";
-        if (c === "tv-y" || c === "tvy") return cr === "TV-Y" || cr === "US:TV-Y";
-        if (c === "tv-y7" || c === "tvy7") return cr === "TV-Y7" || cr === "US:TV-Y7";
-
-        return false;
     }
 
     // 4. Custom Badge Media Stream Matcher with Dovetail & Compound Support
