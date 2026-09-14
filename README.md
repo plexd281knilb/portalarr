@@ -38,6 +38,9 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 
 ### 2. Local Setup
 ```bash
+# Keep codebase synchronized across development computers
+git pull origin main
+
 # Install dependencies
 npm install
 
