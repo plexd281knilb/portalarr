@@ -205,6 +205,7 @@ export function PruneStudio() {
     // Server / Section Switch
     const handleSelectServer = async (srvId: string) => {
         setSelectedServerId(srvId);
+        loadLeavingSoonItems(srvId);
         const srv = servers.find(s => s.serverId === srvId);
         let srvSections = srv?.sections || [];
 
@@ -402,10 +403,10 @@ export function PruneStudio() {
         loadInitialData();
     }, []);
 
-    const loadLeavingSoonItems = async () => {
+    const loadLeavingSoonItems = async (srvId = selectedServerId) => {
         setLeavingSoonLoading(true);
         try {
-            const res = await getLeavingSoonItemsAction();
+            const res = await getLeavingSoonItemsAction(srvId || undefined);
             if (res.success && res.items) {
                 setLeavingSoonItems(res.items);
             }

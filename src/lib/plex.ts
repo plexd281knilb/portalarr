@@ -981,41 +981,72 @@ export async function resolveWorkingPlexServerConnection(
         }
     } catch (e) {}
 
+    // Also check manual Plex servers and media apps in DB
+    let manualMatchingServer: any = null;
+    try {
+        const manualPlex = await prisma.plexServer.findMany();
+        for (const s of manualPlex) {
+            if (serverIdOrName && (
+                s.id === serverIdOrName || 
+                s.name.toLowerCase() === serverIdOrName.toLowerCase() || 
+                (s.clientIdentifier && s.clientIdentifier.toLowerCase() === serverIdOrName.toLowerCase())
+            )) {
+                manualMatchingServer = s;
+                if (s.token) token = decryptData(s.token);
+                break;
+            }
+        }
+    } catch (e) {}
+
     // Locate target server from resources
+    const isSpecificTargetRequested = Boolean(
+        serverIdOrName && 
+        serverIdOrName.trim().length > 0 && 
+        serverIdOrName !== "default" && 
+        serverIdOrName !== "main"
+    );
+
     let targetServer: PlexServerResource | undefined;
-    if (serverIdOrName) {
+    if (isSpecificTargetRequested) {
         targetServer = servers.find(s => 
-            s.clientIdentifier.toLowerCase() === serverIdOrName.toLowerCase() ||
-            s.name.toLowerCase() === serverIdOrName.toLowerCase()
+            s.clientIdentifier.toLowerCase() === serverIdOrName!.toLowerCase() ||
+            s.name.toLowerCase() === serverIdOrName!.toLowerCase()
         );
-    }
-    if (!targetServer && servers.length > 0) {
+    } else {
         targetServer = servers[0];
     }
 
     // Lazy cloud fallback only if target server not found in resources
     let targetCloud: any = undefined;
-    if (!targetServer) {
+    if (!targetServer && isSpecificTargetRequested) {
         const cloudServersMap = await getPlexCloudServersMap(token).catch(() => new Map());
-        targetCloud = serverIdOrName ? (
-            cloudServersMap.get(serverIdOrName) ||
+        targetCloud = cloudServersMap.get(serverIdOrName!) ||
             Array.from(cloudServersMap.values()).find((c: any) => 
-                c.serverId?.toLowerCase() === serverIdOrName.toLowerCase() ||
-                c.serverName?.toLowerCase() === serverIdOrName.toLowerCase()
-            )
-        ) : Array.from(cloudServersMap.values())[0];
+                c.serverId?.toLowerCase() === serverIdOrName!.toLowerCase() ||
+                c.serverName?.toLowerCase() === serverIdOrName!.toLowerCase()
+            );
+    } else if (!targetServer && !isSpecificTargetRequested) {
+        const cloudServersMap = await getPlexCloudServersMap(token).catch(() => new Map());
+        targetCloud = Array.from(cloudServersMap.values())[0];
     }
 
-    const serverId = targetServer?.clientIdentifier || targetCloud?.serverId || serverIdOrName || "plex-server";
-    const serverName = targetServer?.name || targetCloud?.serverName || "Plex Server";
+    // STRICT ISOLATION GUARD:
+    // If a specific server was requested and we cannot find it anywhere, DO NOT fall back to servers[0] (Main Server)!
+    if (isSpecificTargetRequested && !targetServer && !targetCloud && !manualMatchingServer) {
+        logger.addLog("WARN", "PLEX", `[SERVER-ISOLATION-GUARD] Requested Plex server "${serverIdOrName}" not found. Strictly blocked fallback to other servers to prevent unintended cross-server modifications.`);
+        return null;
+    }
+
+    const serverId = targetServer?.clientIdentifier || targetCloud?.serverId || manualMatchingServer?.clientIdentifier || manualMatchingServer?.id || serverIdOrName || "plex-server";
+    const serverName = targetServer?.name || targetCloud?.serverName || manualMatchingServer?.name || "Plex Server";
     const serverToken = targetServer?.accessToken || token;
 
-    // Build candidates in optimal priority order:
-    // 1. Configured DB URLs (user's explicitly defined Plex URL in Settings or MediaApp)
-    // 2. Target server connection URIs (https://*.plex.direct and http alternatives) - in-memory DNS resolves these directly to IP with valid TLS!
-    // 3. Direct LAN IP:port from target server (http://<ip>:<port> and https://<ip>:<port>)
-    // 4. Cloud directUrl for target server
-    // 5. Standard local container/host defaults (localhost, 127.0.0.1, host.docker.internal, plex)
+    // Determine if this server is the primary / main server
+    const isMainServer = !isSpecificTargetRequested || 
+                         (servers.length > 0 && servers[0].clientIdentifier === serverId) ||
+                         (servers.length > 0 && servers[0].name.toLowerCase() === serverName.toLowerCase());
+
+    // Build candidates in optimal priority order FOR THIS SPECIFIC SERVER:
     const priorityUrls: string[] = [];
     const directLanUrls: string[] = [];
     const otherUrls: string[] = [];
@@ -1055,34 +1086,39 @@ export async function resolveWorkingPlexServerConnection(
         }
     };
 
-    // 1. User configured DB URLs first
-    for (const u of dbPlexUrls) addCandidate(u, true);
+    // 1. If manual PlexServer DB record matched this server, add its URL first:
+    if (manualMatchingServer?.url) {
+        addCandidate(manualMatchingServer.url, true);
+    }
 
-    // 2. Server connection URIs (including .plex.direct)
+    // 2. Server-specific connection URIs from Plex API (targetServer.connections):
     if (targetServer?.connections) {
         for (const c of targetServer.connections) {
-            if (c.uri) addCandidate(c.uri);
+            if (c.uri) addCandidate(c.uri, Boolean(c.local));
             if (c.address && c.port) {
-                addCandidate(`http://${c.address}:${c.port}`);
-                addCandidate(`https://${c.address}:${c.port}`);
+                addCandidate(`http://${c.address}:${c.port}`, true);
+                addCandidate(`https://${c.address}:${c.port}`, true);
             }
         }
     }
 
-    // 3. Cloud directUrl
+    // 3. Cloud directUrl for target server:
     if (targetCloud?.directUrl) {
-        addCandidate(targetCloud.directUrl);
+        addCandidate(targetCloud.directUrl, true);
     }
 
-    // 4. Fallback local / Docker container hosts
-    addCandidate("http://127.0.0.1:32400");
-    addCandidate("http://localhost:32400");
-    addCandidate("http://host.docker.internal:32400");
-    addCandidate("http://plex:32400");
+    // 4. ONLY IF THIS IS THE MAIN/PRIMARY SERVER, include mainPlexUrl / localhost defaults:
+    if (isMainServer) {
+        if (mainPlexUrl) addCandidate(mainPlexUrl, true);
+        addCandidate("http://127.0.0.1:32400");
+        addCandidate("http://localhost:32400");
+        addCandidate("http://host.docker.internal:32400");
+        addCandidate("http://plex:32400");
+    }
 
     const candidateUrls = Array.from(new Set([...priorityUrls, ...directLanUrls, ...otherUrls]));
 
-    // Probe candidates with 3.5s timeout to find the verified working connection
+    // Probe candidates with machineIdentifier verification
     const probeFailures: string[] = [];
     let workingUrl = "";
 
@@ -1090,7 +1126,7 @@ export async function resolveWorkingPlexServerConnection(
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3500);
-            const res = await fetch(`${cand}/library/sections?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
+            const res = await fetch(`${cand}/identity?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                 headers: {
                     Accept: "application/json, application/xml, text/xml, */*",
                     "X-Plex-Token": serverToken,
@@ -1100,7 +1136,32 @@ export async function resolveWorkingPlexServerConnection(
                 cache: "no-store"
             });
             clearTimeout(timeoutId);
+
             if (res.ok) {
+                const text = await res.text();
+                // Check machineIdentifier in JSON or XML
+                let returnedMachineId = "";
+                if (text.startsWith("{")) {
+                    try {
+                        const parsed = JSON.parse(text);
+                        returnedMachineId = parsed.MediaContainer?.machineIdentifier || "";
+                    } catch (e) {}
+                }
+                if (!returnedMachineId) {
+                    const match = text.match(/\bmachineIdentifier=["']([^"']+)["']/i);
+                    if (match) returnedMachineId = match[1];
+                }
+
+                // If target server has a known clientIdentifier, verify it matches!
+                const expectedClientId = targetServer?.clientIdentifier || targetCloud?.serverId || manualMatchingServer?.clientIdentifier;
+                if (expectedClientId && returnedMachineId) {
+                    if (returnedMachineId.toLowerCase() !== expectedClientId.toLowerCase()) {
+                        // REJECT: Candidate URL belongs to a DIFFERENT Plex server!
+                        probeFailures.push(`${cand} (mismatched server identity: expected ${expectedClientId}, got ${returnedMachineId})`);
+                        continue;
+                    }
+                }
+
                 workingUrl = cand;
                 break;
             } else {
@@ -1112,13 +1173,13 @@ export async function resolveWorkingPlexServerConnection(
         }
     }
 
-    // Secondary fallback: test /identity if /library/sections timed out
+    // Secondary probe fallback: test /library/sections
     if (!workingUrl) {
         for (const cand of candidateUrls) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2000);
-                const res = await fetch(`${cand}/identity?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
+                const timeoutId = setTimeout(() => controller.abort(), 2500);
+                const res = await fetch(`${cand}/library/sections?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                     headers: {
                         Accept: "application/json, application/xml, text/xml, */*",
                         "X-Plex-Token": serverToken,
@@ -1128,6 +1189,7 @@ export async function resolveWorkingPlexServerConnection(
                     cache: "no-store"
                 });
                 clearTimeout(timeoutId);
+
                 if (res.ok) {
                     workingUrl = cand;
                     break;
@@ -1139,7 +1201,7 @@ export async function resolveWorkingPlexServerConnection(
     const finalUrl = workingUrl || candidateUrls[0] || "";
 
     if (workingUrl) {
-        logger.addLog("INFO", "PLEX", `Resolved verified working connection for Plex server "${serverName}" (${serverId}): ${workingUrl}`);
+        logger.addLog("INFO", "PLEX", `[SERVER-ISOLATION] Resolved verified working connection for Plex server "${serverName}" (${serverId}): ${workingUrl}`);
     } else {
         logger.addLog("WARN", "PLEX", `Could not verify connection to Plex server "${serverName}" across ${candidateUrls.length} candidate URLs: ${probeFailures.join("; ")}. Falling back to ${finalUrl}`);
     }

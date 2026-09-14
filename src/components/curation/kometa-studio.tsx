@@ -77,7 +77,8 @@ import {
     getCurationSettingsAction,
     saveCurationSettingsAction,
     toggleCurationLibrarySectionAction,
-    runFullCurationSyncAction
+    runFullCurationSyncAction,
+    runServerCurationSyncAction
 } from "@/app/curation-actions";
 
 interface PlexServerItem {
@@ -415,12 +416,11 @@ export function KometaStudio() {
         }
     };
 
-    // Run overlay sync job now
+    // Run overlay sync job now (strictly scoped to selected server)
     const handleRunOverlaySync = async () => {
         setRunningOverlaySync(true);
         setOverlaySyncResult(null);
         try {
-            // Apply overlays to current section or run full overlay sync
             let res: any;
             if (selectedServerId && selectedSectionKey) {
                 res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey);
@@ -434,6 +434,20 @@ export function KometaStudio() {
                     setOverlaySyncResult({
                         success: false,
                         text: res.error || "Failed running overlay sync."
+                    });
+                }
+            } else if (selectedServerId) {
+                res = await runServerCurationSyncAction(selectedServerId);
+                if (res.success) {
+                    setOverlaySyncResult({
+                        success: true,
+                        text: `Server Sync Completed (${res.serverName || selectedServerId}): ${res.overlaysAppliedCount ?? 0} posters updated.`,
+                        details: res.details
+                    });
+                } else {
+                    setOverlaySyncResult({
+                        success: false,
+                        text: res.details?.[0] || res.error || "Failed running server overlay sync."
                     });
                 }
             } else {

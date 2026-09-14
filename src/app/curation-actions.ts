@@ -379,7 +379,7 @@ export async function getPlexServerSectionsAction(serverId: string) {
     const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
     if (!token) return { success: false, error: "Plex token not configured." };
 
-    const sections = await getPlexServerSections(token, serverId, settings?.mainPlexUrl || undefined);
+    const sections = await getPlexServerSections(token, serverId);
     return {
         success: true,
         serverId,
@@ -2537,24 +2537,24 @@ export async function applyOverlaysToLibraryAction(serverId: string, sectionKey:
 export async function revertLibraryOverlaysAction(serverId: string) {
     await verifyAdmin();
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        const serverUrl = settings?.mainPlexUrl || "";
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: `Plex server "${serverId}" unreachable or token not configured.` };
 
-        if (!token || !serverUrl) return { success: false, error: "Plex connection credentials not found." };
-
-        const result = await restoreAllOriginalArtworks(serverUrl, token, serverId);
+        const result = await restoreAllOriginalArtworks(resolved.serverUrl, resolved.token, resolved.serverId);
         return result;
     } catch (e: any) {
         return { success: false, error: e.message };
     }
 }
 
-export async function getLeavingSoonItemsAction() {
+export async function getLeavingSoonItemsAction(serverId?: string) {
     await verifyAdmin();
     try {
         const items = await prisma.mediaContentAdvisory.findMany({
-            where: { isLeavingSoon: true },
+            where: {
+                isLeavingSoon: true,
+                ...(serverId ? { serverId } : {})
+            },
             orderBy: { leavingSoonDate: "asc" }
         });
         return { success: true, items };
@@ -2619,12 +2619,9 @@ export async function unmarkItemLeavingSoonAction(ratingKey: string, serverId: s
         });
 
         // Revert poster art if backed up
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        const serverUrl = settings?.mainPlexUrl || "";
-
-        if (token && serverUrl) {
-            await restoreItemOriginalArtwork(serverUrl, token, serverId, ratingKey);
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (resolved?.serverUrl) {
+            await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, ratingKey).catch(() => {});
         }
 
         return { success: true, message: "Removed leaving soon flag." };
@@ -2959,10 +2956,6 @@ export async function executePruneAction(
 export async function clearAllLeavingSoonFlagsAction(serverId?: string) {
     await verifyAdmin();
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        const serverUrl = settings?.mainPlexUrl || "";
-
         const whereClause = serverId ? { serverId } : {};
 
         // Find all leaving soon items to restore posters
@@ -2970,12 +2963,25 @@ export async function clearAllLeavingSoonFlagsAction(serverId?: string) {
             where: { ...whereClause, isLeavingSoon: true }
         });
 
-        if (token && serverUrl) {
-            for (const adv of advisories) {
-                if (adv.serverId && adv.ratingKey) {
-                    await restoreItemOriginalArtwork(serverUrl, token, adv.serverId, adv.ratingKey).catch(() => {});
-                }
+        // Group by serverId and restore posters on each specific server
+        const byServer = new Map<string, string[]>();
+        for (const adv of advisories) {
+            if (adv.serverId && adv.ratingKey) {
+                const list = byServer.get(adv.serverId) || [];
+                list.push(adv.ratingKey);
+                byServer.set(adv.serverId, list);
             }
+        }
+
+        for (const [srvId, rKeys] of byServer.entries()) {
+            try {
+                const resolved = await resolveWorkingPlexServerConnection(srvId);
+                if (resolved?.serverUrl) {
+                    for (const rKey of rKeys) {
+                        await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, rKey).catch(() => {});
+                    }
+                }
+            } catch (err) {}
         }
 
         await prisma.mediaContentAdvisory.updateMany({
@@ -3449,13 +3455,10 @@ export async function applyOverlayToSingleItemAction(
 export async function restoreSingleItemPosterAction(serverId: string, ratingKey: string) {
     await verifyAdmin();
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        const serverUrl = settings?.mainPlexUrl || "";
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: `Plex server "${serverId}" unreachable or token not configured.` };
 
-        if (!token || !serverUrl) return { success: false, error: "Plex server connection missing." };
-
-        const res = await restoreItemOriginalArtwork(serverUrl, token, serverId, ratingKey);
+        const res = await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, ratingKey);
         return {
             success: res.success,
             message: res.success ? "Restored original pristine poster!" : (res.message || "Artwork not found in backup vault.")
@@ -3522,7 +3525,7 @@ export async function runFullCurationSyncInternal(): Promise<{
                     const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
                     if (!resolved || !resolved.serverUrl) continue;
 
-                    const srvSections = await getPlexServerSections(resolved.token, srv.clientIdentifier, settings?.mainPlexUrl || undefined);
+                    const srvSections = await getPlexServerSections(resolved.token, srv.clientIdentifier);
 
                     for (const sec of srvSections) {
                         const isSecEnabled = await isSectionEnabledInList(enabledServersForOverlays, srv.clientIdentifier, String(sec.key));
@@ -3570,7 +3573,9 @@ export async function runFullCurationSyncInternal(): Promise<{
                 };
 
                 for (const srv of servers) {
-                    const srvSections = await getPlexServerSections(token, srv.clientIdentifier, settings?.mainPlexUrl || undefined);
+                    const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
+                    if (!resolved || !resolved.serverUrl) continue;
+                    const srvSections = await getPlexServerSections(resolved.token, srv.clientIdentifier);
                     for (const sec of srvSections) {
                         try {
                             const pRes = await applyParentalTagsToLibrary(srv.clientIdentifier, String(sec.key), tagOptions);
@@ -3646,6 +3651,65 @@ export async function runFullCurationSyncAction() {
             leavingSoonCount: 0,
             timestamp: new Date().toISOString(),
             details: [e.message || "Full curation sync encountered an unexpected error."]
+        };
+    }
+}
+
+/**
+ * Server action to trigger curation overlay sync on a SINGLE strictly isolated server.
+ * Guarantees zero side effects or changes on any other Plex server.
+ */
+export async function runServerCurationSyncAction(serverId: string, sectionKey?: string) {
+    await verifyAdmin();
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) {
+            return { 
+                success: false, 
+                error: `Plex server "${serverId}" unreachable or token not configured.`,
+                details: [`Server "${serverId}" could not be resolved.`]
+            };
+        }
+
+        const details: string[] = [];
+        let overlaysAppliedCount = 0;
+
+        if (sectionKey) {
+            const res = await applyOverlaysToLibraryInternal(serverId, sectionKey);
+            if (res.success && res.appliedCount) {
+                overlaysAppliedCount = res.appliedCount;
+                details.push(`Applied overlays to ${res.appliedCount} items in library section ${sectionKey}.`);
+            } else if (!res.success) {
+                details.push(`Library ${sectionKey} error: ${res.error || "Failed applying overlays"}`);
+            }
+        } else {
+            const sections = await getPlexServerSections(resolved.token, serverId);
+            for (const sec of sections) {
+                try {
+                    const res = await applyOverlaysToLibraryInternal(serverId, String(sec.key));
+                    if (res.success && res.appliedCount) {
+                        overlaysAppliedCount += res.appliedCount;
+                        details.push(`Applied overlays to ${res.appliedCount} items in "${sec.title}".`);
+                    }
+                } catch (e: any) {
+                    details.push(`Section "${sec.title}" error: ${e.message}`);
+                }
+            }
+        }
+
+        return {
+            success: true,
+            serverName: resolved.serverName,
+            serverId: resolved.serverId,
+            overlaysAppliedCount,
+            details,
+            message: `Scoped sync on "${resolved.serverName}": ${overlaysAppliedCount} posters updated.`
+        };
+    } catch (e: any) {
+        return { 
+            success: false, 
+            error: e.message, 
+            details: [e.message] 
         };
     }
 }
