@@ -34,7 +34,8 @@ import {
     Clock,
     Clock3,
     Calendar,
-    Power
+    Power,
+    ImageIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +47,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurationNavHeader } from "./curation-nav-header";
+import { PlexPosterPickerModal } from "./plex-poster-picker-modal";
+import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import {
     getPlexServersAndSectionsAction,
     getPlexServerSectionsAction,
@@ -192,7 +195,50 @@ export function KometaStudio() {
     const [seedingBadges, setSeedingBadges] = useState(false);
     const [simDovetailResolutionHdr, setSimDovetailResolutionHdr] = useState<boolean>(true);
     const [simPosterImage, setSimPosterImage] = useState<string>("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
-    const [simActivePreset, setSimActivePreset] = useState<string>("4k_dv_atmos");
+    const [posterPickerModalOpen, setPosterPickerModalOpen] = useState(false);
+    const [simSelectedRealItem, setSimSelectedRealItem] = useState<PlexMediaStreamInfo | null>(null);
+
+    const handleSelectRealPoster = (item: PlexMediaStreamInfo, posterUrl: string) => {
+        setSimPosterImage(posterUrl);
+        setSimSelectedRealItem(item);
+
+        const res = item.detectedBadges?.resolution || item.media?.[0]?.videoResolution;
+        const isDv = item.detectedBadges?.hdr === "DV" || item.media?.[0]?.hdrFormat === "Dolby Vision";
+        const isHdr = isDv || item.detectedBadges?.hdr !== undefined || (item.media?.[0]?.hdrFormat && item.media[0].hdrFormat !== "SDR");
+        const audio = item.detectedBadges?.audio || item.media?.[0]?.audioCodec;
+        const channels = item.detectedBadges?.audioChannels || item.media?.[0]?.audioChannels;
+        const codec = item.detectedBadges?.codec || item.media?.[0]?.videoCodec;
+        const studio = item.detectedBadges?.studio || item.studio;
+        const rating = item.detectedBadges?.contentRating || item.contentRating;
+        const edition = item.detectedBadges?.edition;
+
+        // Synchronize simulator badges to match real media telemetry
+        if (res) {
+            setSimShowResolution(true);
+        }
+        if (isDv || isHdr) {
+            setSimShowHdr(true);
+            setSimDovetailResolutionHdr(true);
+        }
+        if (audio) {
+            setSimShowAudio(true);
+        }
+        if (channels) {
+            setSimShowChannels(true);
+        }
+        if (codec) {
+            setSimShowCodec(true);
+        }
+        if (studio) {
+            setSimShowStudio(true);
+        }
+        if (rating) {
+            setSimShowRating(true);
+        }
+        if (edition) {
+            setSimShowEdition(true);
+        }
+    };
     
     // Positions
     const [simResolutionPosition, setSimResolutionPosition] = useState<string>("top-right");
@@ -1546,8 +1592,6 @@ export function KometaStudio() {
     };
 
     const handleApplyKometaToSimulator = async (overrideLibName?: string) => {
-        setSimActivePreset("my_kometa_config");
-
         let converted: any = null;
         if (kometaInspectionResult?.convertedLibraries) {
             const keys = Object.keys(kometaInspectionResult.convertedLibraries);
@@ -2164,14 +2208,76 @@ export function KometaStudio() {
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Live Simulator Poster View (5 Cols) */}
                         <div className="lg:col-span-5 space-y-4">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
                                 <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                                     <Eye className="h-4 w-4 text-purple-400" /> Live Poster Simulator
                                 </span>
-                                <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-300 bg-purple-950/30">
-                                    Interactive Preview
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setPosterPickerModalOpen(true)}
+                                        className="h-7 text-[11px] gap-1.5 border-purple-500/40 hover:bg-purple-950/40 text-purple-200 hover:text-purple-100"
+                                    >
+                                        <ImageIcon className="h-3.5 w-3.5 text-purple-400" /> Pull Poster from Plex
+                                    </Button>
+                                    <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-300 bg-purple-950/30">
+                                        Interactive Preview
+                                    </Badge>
+                                </div>
                             </div>
+
+                            {/* Real Item Telemetry Banner if selected */}
+                            {simSelectedRealItem && (
+                                <div className="p-2.5 bg-purple-950/40 border border-purple-800/60 rounded-xl text-xs flex items-center justify-between gap-2 animate-in fade-in-50">
+                                    <div className="space-y-0.5 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="font-bold text-white truncate">{simSelectedRealItem.title}</span>
+                                            {simSelectedRealItem.year && (
+                                                <span className="text-[10px] text-purple-300 font-mono">({simSelectedRealItem.year})</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-purple-200/80">
+                                            {(simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution) && (
+                                                <span className="px-1.5 py-0.2 bg-purple-900/60 rounded text-purple-300 font-mono">
+                                                    {simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution}
+                                                </span>
+                                            )}
+                                            {(simSelectedRealItem.detectedBadges?.hdr === "DV" || simSelectedRealItem.media?.[0]?.hdrFormat === "Dolby Vision") && (
+                                                <span className="px-1.5 py-0.2 bg-amber-900/60 rounded text-amber-300 font-bold">DV</span>
+                                            )}
+                                            {(simSelectedRealItem.detectedBadges?.hdr && simSelectedRealItem.detectedBadges.hdr !== "DV") && (
+                                                <span className="px-1.5 py-0.2 bg-blue-900/60 rounded text-blue-300 font-bold">
+                                                    {simSelectedRealItem.detectedBadges.hdr}
+                                                </span>
+                                            )}
+                                            {(simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec) && (
+                                                <span className="px-1.5 py-0.2 bg-slate-800 rounded text-slate-300 uppercase">
+                                                    {simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec}
+                                                </span>
+                                            )}
+                                            {(simSelectedRealItem.detectedBadges?.audioChannels || simSelectedRealItem.media?.[0]?.audioChannels) && (
+                                                <span className="px-1.5 py-0.2 bg-slate-800 rounded text-slate-300">
+                                                    {simSelectedRealItem.detectedBadges?.audioChannels || `${simSelectedRealItem.media?.[0]?.audioChannels}ch`}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setSimSelectedRealItem(null);
+                                            setSimPosterImage("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+                                        }}
+                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white shrink-0"
+                                    >
+                                        Reset Sample
+                                    </Button>
+                                </div>
+                            )}
 
                             {/* Simulated Poster Card */}
                             <div className="relative aspect-[2/3] max-w-[320px] mx-auto rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl group bg-slate-950">
@@ -3581,6 +3687,16 @@ export function KometaStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Plex Real Media Poster Picker Modal */}
+            <PlexPosterPickerModal
+                open={posterPickerModalOpen}
+                onOpenChange={setPosterPickerModalOpen}
+                serverId={selectedServerId}
+                sectionKey={selectedSectionKey}
+                serverName={servers.find(s => s.serverId === selectedServerId)?.serverName}
+                onSelect={handleSelectRealPoster}
+            />
         </div>
     );
 }

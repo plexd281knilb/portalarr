@@ -32,7 +32,11 @@ import {
     FolderCheck,
     Archive,
     Power,
-    Flame
+    Flame,
+    ImageIcon,
+    Sparkles,
+    Eye,
+    Tag
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +47,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurationNavHeader } from "./curation-nav-header";
+import { PlexPosterPickerModal } from "./plex-poster-picker-modal";
+import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import {
     getPlexServersAndSectionsAction,
     getPlexServerSectionsAction,
@@ -59,8 +65,19 @@ import {
     executePruneAction,
     saveServerStorageConfigAction,
     validateDirectoryPathAction,
-    getArtBackupAndBadgeStatsAction
+    getArtBackupAndBadgeStatsAction,
+    getPlaceholderPreviewDataUrlAction
 } from "@/app/curation-actions";
+
+export const PRUNE_BANNER_PRESETS = [
+    { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const },
+    { id: "leaving_days", label: "⏳ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "bottom" as const },
+    { id: "leaving_soon", label: "⚠️ Leaving Soon (Plex Collection)", defaultText: "LEAVING SOON", theme: "crimson-red", pos: "corner" as const },
+    { id: "auto_prune", label: "⏳ Auto-Pruning on {date}", defaultText: "AUTO-PRUNE ON {date}", theme: "amber-gold", pos: "bottom" as const },
+    { id: "storage_cleanup", label: "📦 Storage Reclaim: {reason}", defaultText: "STORAGE CLEANUP: {reason}", theme: "indigo-purple", pos: "bottom" as const },
+    { id: "unwatched_warning", label: "👀 Unwatched Grace Period ({days} Days)", defaultText: "UNWATCHED • {days} DAYS LEFT", theme: "amber-gold", pos: "bottom" as const },
+    { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} • {status}", theme: "cyber-neon", pos: "bottom" as const }
+];
 
 interface PlexServerItem {
     serverId: string;
@@ -258,6 +275,86 @@ export function PruneStudio() {
     const [storageConfigSavedMsg, setStorageConfigSavedMsg] = useState(false);
     const [pathCheckResults, setPathCheckResults] = useState<Record<string, { checking: boolean; success?: boolean; msg?: string }>>({});
     const [vaultStats, setVaultStats] = useState<{ backupCount: number; backupBytes: number; badgeCount: number; badgeBytes: number; backupDir: string; badgeDir: string } | null>(null);
+
+    // Live Leaving Soon Banner Simulator States
+    const [posterPickerModalOpen, setPosterPickerModalOpen] = useState(false);
+    const [simSelectedRealItem, setSimSelectedRealItem] = useState<PlexMediaStreamInfo | null>(null);
+    const [simPosterUrl, setSimPosterUrl] = useState<string>("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+    const [simBannerType, setSimBannerType] = useState<string>("leaving_date");
+    const [simBannerText, setSimBannerText] = useState<string>("LEAVING ON {date}");
+    const [simBannerTheme, setSimBannerTheme] = useState<string>("crimson-red");
+    const [simBannerPosition, setSimBannerPosition] = useState<"bottom" | "top" | "corner">("bottom");
+    const [simTemplateDate, setSimTemplateDate] = useState<string>("10/31/2026");
+    const [simTemplateDays, setSimTemplateDays] = useState<number>(14);
+    const [simTemplateReason, setSimTemplateReason] = useState<string>("Unwatched for 180+ Days");
+    const [simTemplateStatus, setSimTemplateStatus] = useState<string>("Leaving Soon");
+    const [simPreviewDataUrl, setSimPreviewDataUrl] = useState<string | null>(null);
+
+    const generatePrunePreview = async (
+        posterUrl: string | null,
+        title: string,
+        type = simBannerType,
+        text = simBannerText,
+        theme = simBannerTheme,
+        position = simBannerPosition,
+        date = simTemplateDate,
+        days = simTemplateDays,
+        reason = simTemplateReason,
+        status = simTemplateStatus
+    ) => {
+        try {
+            const res = await getPlaceholderPreviewDataUrlAction(posterUrl, title, {
+                bannerType: type,
+                bannerText: text,
+                bannerTheme: theme,
+                bannerPosition: position,
+                date,
+                formattedDate: date,
+                daysRemaining: days,
+                reason,
+                status
+            });
+            if (res.success && res.dataUrl) {
+                setSimPreviewDataUrl(res.dataUrl);
+            }
+        } catch (e) {
+            console.error("Failed generating prune preview:", e);
+        }
+    };
+
+    const handleSelectRealPoster = (item: PlexMediaStreamInfo, posterUrl: string) => {
+        setSimSelectedRealItem(item);
+        setSimPosterUrl(posterUrl);
+        generatePrunePreview(
+            posterUrl,
+            item.title,
+            simBannerType,
+            simBannerText,
+            simBannerTheme,
+            simBannerPosition,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    const handleInsertToken = (token: string) => {
+        const next = simBannerText ? `${simBannerText} ${token}` : token;
+        setSimBannerText(next);
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            next,
+            simBannerTheme,
+            simBannerPosition,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
 
     // Initial Data Fetch
     useEffect(() => {
@@ -867,6 +964,308 @@ export function PruneStudio() {
                             )}
                         </CardContent>
                     </Card>
+
+                    {/* Leaving Soon Banner & Poster Live Simulator */}
+                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                        <CardHeader className="p-4 border-b border-slate-800/80">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                <div className="space-y-0.5">
+                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                        <Sparkles className="h-4 w-4 text-rose-400" />
+                                        <span>Leaving Soon Banner &amp; Poster Live Simulator</span>
+                                    </CardTitle>
+                                    <CardDescription className="text-xs text-slate-400">
+                                        Customize overlay ribbons and banners applied to items in the Leaving Soon collection, test dynamic template variables, or test on real media from your Plex libraries.
+                                    </CardDescription>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setPosterPickerModalOpen(true)}
+                                    className="h-7 text-[11px] gap-1.5 border-rose-500/40 hover:bg-rose-950/40 text-rose-200 hover:text-rose-100 shrink-0"
+                                >
+                                    <ImageIcon className="h-3.5 w-3.5 text-rose-400" /> Pull Poster from Plex
+                                </Button>
+                            </div>
+
+                            {/* Real Item Telemetry Banner if selected */}
+                            {simSelectedRealItem && (
+                                <div className="mt-3 p-2.5 bg-rose-950/30 border border-rose-800/50 rounded-xl text-xs flex items-center justify-between gap-2">
+                                    <div className="space-y-0.5 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="font-bold text-white truncate">{simSelectedRealItem.title}</span>
+                                            {simSelectedRealItem.year && (
+                                                <span className="text-[10px] text-rose-300 font-mono">({simSelectedRealItem.year})</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-rose-200/80">
+                                            {(simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution) && (
+                                                <span className="px-1.5 py-0.2 bg-rose-900/40 rounded text-rose-300 font-mono">
+                                                    {simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution}
+                                                </span>
+                                            )}
+                                            {(simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec) && (
+                                                <span className="px-1.5 py-0.2 bg-slate-800 rounded text-slate-300 uppercase">
+                                                    {simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setSimSelectedRealItem(null);
+                                            setSimPosterUrl("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+                                            generatePrunePreview(
+                                                "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80",
+                                                "Sample Media",
+                                                simBannerType,
+                                                simBannerText,
+                                                simBannerTheme,
+                                                simBannerPosition
+                                            );
+                                        }}
+                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white shrink-0"
+                                    >
+                                        Reset Sample
+                                    </Button>
+                                </div>
+                            )}
+                        </CardHeader>
+
+                        <CardContent className="p-5">
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                                {/* Left: Composite Poster Preview */}
+                                <div className="lg:col-span-5 flex flex-col items-center space-y-2">
+                                    <div className="relative aspect-[2/3] w-full max-w-[220px] rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-700/80 shadow-2xl">
+                                        {simPreviewDataUrl ? (
+                                            <img src={simPreviewDataUrl} alt="Leaving Soon Preview" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full text-slate-500 text-xs gap-1.5">
+                                                <Loader2 className="h-4 w-4 animate-spin text-rose-400" />
+                                                <span>Rendering banner preview...</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 font-mono">Live Composite Preview</span>
+                                </div>
+
+                                {/* Right: Banner Controls & Variable Chips */}
+                                <div className="lg:col-span-7 space-y-3.5 text-xs">
+                                    {/* Template Presets Selector */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[11px] text-slate-300 font-semibold">Banner Style Preset:</Label>
+                                        <Select
+                                            value={simBannerType}
+                                            onValueChange={(val) => {
+                                                const found = PRUNE_BANNER_PRESETS.find(p => p.id === val);
+                                                setSimBannerType(val);
+                                                const nextText = found?.defaultText || "LEAVING ON {date}";
+                                                setSimBannerText(nextText);
+                                                if (found?.theme) setSimBannerTheme(found.theme);
+                                                if (found?.pos) setSimBannerPosition(found.pos);
+                                                generatePrunePreview(
+                                                    simSelectedRealItem ? simPosterUrl : null,
+                                                    simSelectedRealItem?.title || "Sample Media",
+                                                    val,
+                                                    nextText,
+                                                    found?.theme || simBannerTheme,
+                                                    found?.pos || simBannerPosition
+                                                );
+                                            }}
+                                        >
+                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-64">
+                                                {PRUNE_BANNER_PRESETS.map(p => (
+                                                    <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Banner Text Template with Variable Insertion Chips */}
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-[11px] text-slate-300 font-semibold">Banner Text Template:</Label>
+                                            <span className="text-[10px] text-rose-400 font-mono">Click chips to insert:</span>
+                                        </div>
+                                        <Input
+                                            value={simBannerText}
+                                            onChange={(e) => {
+                                                setSimBannerText(e.target.value);
+                                                generatePrunePreview(
+                                                    simSelectedRealItem ? simPosterUrl : null,
+                                                    simSelectedRealItem?.title || "Sample Media",
+                                                    simBannerType,
+                                                    e.target.value
+                                                );
+                                            }}
+                                            className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
+                                            placeholder="e.g. LEAVING ON {date}"
+                                        />
+
+                                        {/* Variable Insertion Chips */}
+                                        <div className="flex flex-wrap gap-1 pt-1">
+                                            {[
+                                                { token: "{date}", label: "+ {date}" },
+                                                { token: "{days}", label: "+ {days}" },
+                                                { token: "{title}", label: "+ {title}" },
+                                                { token: "{reason}", label: "+ {reason}" },
+                                                { token: "{status}", label: "+ {status}" },
+                                                { token: "{quality}", label: "+ {quality}" }
+                                            ].map(chip => (
+                                                <button
+                                                    key={chip.token}
+                                                    type="button"
+                                                    onClick={() => handleInsertToken(chip.token)}
+                                                    className="px-2 py-0.5 rounded-md bg-rose-500/20 hover:bg-rose-500 hover:text-white text-rose-300 border border-rose-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
+                                                >
+                                                    {chip.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Color Theme & Position Controls */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] text-slate-400">Color Theme:</Label>
+                                            <Select
+                                                value={simBannerTheme}
+                                                onValueChange={(val) => {
+                                                    setSimBannerTheme(val);
+                                                    generatePrunePreview(
+                                                        simSelectedRealItem ? simPosterUrl : null,
+                                                        simSelectedRealItem?.title || "Sample Media",
+                                                        simBannerType,
+                                                        simBannerText,
+                                                        val
+                                                    );
+                                                }}
+                                            >
+                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="crimson-red">🔴 Crimson Red</SelectItem>
+                                                    <SelectItem value="amber-gold">💛 Amber Gold</SelectItem>
+                                                    <SelectItem value="indigo-purple">🟣 Indigo Purple</SelectItem>
+                                                    <SelectItem value="emerald-green">🟢 Emerald Green</SelectItem>
+                                                    <SelectItem value="cinematic-blue">🔵 Cinematic Blue</SelectItem>
+                                                    <SelectItem value="cyber-neon">⚡ Cyber Neon</SelectItem>
+                                                    <SelectItem value="glass">✨ Obsidian Glass</SelectItem>
+                                                    <SelectItem value="slate-frosted">🛡️ Slate Frosted</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] text-slate-400">Position:</Label>
+                                            <Select
+                                                value={simBannerPosition}
+                                                onValueChange={(val: any) => {
+                                                    setSimBannerPosition(val);
+                                                    generatePrunePreview(
+                                                        simSelectedRealItem ? simPosterUrl : null,
+                                                        simSelectedRealItem?.title || "Sample Media",
+                                                        simBannerType,
+                                                        simBannerText,
+                                                        simBannerTheme,
+                                                        val
+                                                    );
+                                                }}
+                                            >
+                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="bottom">Bottom Overlay</SelectItem>
+                                                    <SelectItem value="top">Top Overlay</SelectItem>
+                                                    <SelectItem value="corner">45° Corner Ribbon</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Live Variable Test Values */}
+                                    <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                            Live Test Variables:
+                                        </span>
+                                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Date {'{date}'}:</Label>
+                                                <Input
+                                                    value={simTemplateDate}
+                                                    onChange={(e) => {
+                                                        setSimTemplateDate(e.target.value);
+                                                        generatePrunePreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simBannerType,
+                                                            simBannerText,
+                                                            simBannerTheme,
+                                                            simBannerPosition,
+                                                            e.target.value
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Days {'{days}'}:</Label>
+                                                <Input
+                                                    type="number"
+                                                    value={simTemplateDays}
+                                                    onChange={(e) => {
+                                                        const num = parseInt(e.target.value, 10) || 0;
+                                                        setSimTemplateDays(num);
+                                                        generatePrunePreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simBannerType,
+                                                            simBannerText,
+                                                            simBannerTheme,
+                                                            simBannerPosition,
+                                                            simTemplateDate,
+                                                            num
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <Label className="text-[9px] text-slate-500">Reason {'{reason}'}:</Label>
+                                                <Input
+                                                    value={simTemplateReason}
+                                                    onChange={(e) => {
+                                                        setSimTemplateReason(e.target.value);
+                                                        generatePrunePreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simBannerType,
+                                                            simBannerText,
+                                                            simBannerTheme,
+                                                            simBannerPosition,
+                                                            simTemplateDate,
+                                                            simTemplateDays,
+                                                            e.target.value
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             )}
 
@@ -1282,6 +1681,16 @@ export function PruneStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Plex Real Media Poster Picker Modal */}
+            <PlexPosterPickerModal
+                open={posterPickerModalOpen}
+                onOpenChange={setPosterPickerModalOpen}
+                serverId={selectedServerId}
+                sectionKey={selectedSectionKey}
+                serverName={currentServer?.serverName}
+                onSelect={handleSelectRealPoster}
+            />
         </div>
     );
 }

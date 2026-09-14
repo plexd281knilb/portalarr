@@ -3091,6 +3091,23 @@ export async function getArtBackupAndBadgeStatsAction() {
 }
 
 /**
+ * Fetches recent items from a Plex library section with stream metadata for live simulation.
+ */
+export async function getPlexRecentLibraryItemsAction(serverId: string, sectionKey?: string, limit = 40) {
+    await verifyAdmin();
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured.", items: [] };
+
+        const secKey = sectionKey || "1";
+        const items = await getPlexLibraryMediaItems(resolved.serverUrl, resolved.token, secKey, limit);
+        return { success: true, items, serverId: resolved.serverId };
+    } catch (e: any) {
+        return { success: false, error: e.message, items: [] };
+    }
+}
+
+/**
  * Searches Plex library items across hubs or a specific library section.
  */
 export async function searchPlexLibraryItemsAction(serverId: string, query: string, sectionKey?: string) {
@@ -4330,10 +4347,16 @@ export async function getPlaceholderPreviewDataUrlAction(
     posterUrl: string | null | undefined,
     title: string,
     options: {
-        bannerType?: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "not_requested" | "custom";
+        bannerType?: string;
         bannerText?: string;
-        bannerTheme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted";
+        bannerTheme?: string;
         bannerPosition?: "top" | "bottom" | "corner";
+        daysRemaining?: number | string;
+        formattedDate?: string;
+        date?: string;
+        source?: string;
+        status?: string;
+        reason?: string;
     } = {}
 ) {
     await verifyAdmin();
@@ -4342,7 +4365,13 @@ export async function getPlaceholderPreviewDataUrlAction(
             type: options.bannerType || "not_requested",
             customText: options.bannerText || "NOT REQUESTED",
             theme: options.bannerTheme || "crimson-red",
-            position: options.bannerPosition || "bottom"
+            position: options.bannerPosition || "bottom",
+            daysRemaining: options.daysRemaining,
+            formattedDate: options.formattedDate,
+            date: options.date,
+            source: options.source,
+            status: options.status,
+            reason: options.reason
         });
 
         const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
@@ -4366,10 +4395,16 @@ export async function createPlaceholderItemAction(
         mediaType: "movie" | "tv";
         posterPath: string | null;
         overview?: string;
-        bannerType?: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "not_requested" | "custom";
+        bannerType?: string;
         bannerText?: string;
-        bannerTheme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted";
+        bannerTheme?: string;
         bannerPosition?: "top" | "bottom" | "corner";
+        daysRemaining?: number | string;
+        formattedDate?: string;
+        date?: string;
+        source?: string;
+        status?: string;
+        reason?: string;
     }
 ) {
     await verifyAdmin();
@@ -4390,7 +4425,13 @@ export async function createPlaceholderItemAction(
             type: bannerType,
             customText: bannerText,
             theme: bannerTheme,
-            position: bannerPosition
+            position: bannerPosition,
+            daysRemaining: itemData.daysRemaining,
+            formattedDate: itemData.formattedDate,
+            date: itemData.date,
+            source: itemData.source,
+            status: itemData.status,
+            reason: itemData.reason
         });
 
         const cleanTitle = itemData.title.replace(/[\/\\:*?"<>|]/g, "_").trim();

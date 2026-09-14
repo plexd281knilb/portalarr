@@ -62,6 +62,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurationNavHeader } from "./curation-nav-header";
+import { PlexPosterPickerModal } from "./plex-poster-picker-modal";
+import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import {
     getPlexServersAndSectionsAction,
     getPlexServerSectionsAction,
@@ -89,6 +91,21 @@ import {
     COLLECTION_PRESETS,
     CollectionPreset
 } from "@/lib/curation/presets";
+
+export const AGREGARR_BANNER_PRESETS = [
+    { id: "downloading_soon", label: "⏳ Downloading Soon", defaultText: "DOWNLOADING SOON", theme: "amber-gold", pos: "bottom" as const },
+    { id: "in_radarr", label: "🎬 Monitored in Radarr", defaultText: "MONITORED IN RADARR", theme: "amber-gold", pos: "bottom" as const },
+    { id: "in_sonarr", label: "📺 Monitored in Sonarr", defaultText: "MONITORED IN SONARR", theme: "cinematic-blue", pos: "bottom" as const },
+    { id: "digital_release", label: "⚡ Digital Release on {date}", defaultText: "DIGITAL RELEASE ON {date}", theme: "cinematic-blue", pos: "bottom" as const },
+    { id: "countdown", label: "⏳ Streaming in {days} Days", defaultText: "STREAMING IN {days} DAYS", theme: "indigo-purple", pos: "bottom" as const },
+    { id: "in_theaters", label: "🍿 In Theaters", defaultText: "IN THEATERS", theme: "amber-gold", pos: "bottom" as const },
+    { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const },
+    { id: "leaving_days", label: "⚠️ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "bottom" as const },
+    { id: "trending_not_requested", label: "🔥 Trending • Not Requested", defaultText: "TRENDING • NOT REQUESTED", theme: "crimson-red", pos: "bottom" as const },
+    { id: "popular_streaming", label: "✨ Popular on {source}", defaultText: "POPULAR ON {source}", theme: "indigo-purple", pos: "bottom" as const },
+    { id: "missing_library", label: "❌ Missing from Library", defaultText: "MISSING FROM LIBRARY", theme: "crimson-red", pos: "bottom" as const },
+    { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} • {status}", theme: "cyber-neon", pos: "bottom" as const }
+];
 
 interface PlexServerItem {
     serverId: string;
@@ -178,13 +195,23 @@ export function AgregarrStudio() {
     const [trendingLibraryFilter, setTrendingLibraryFilter] = useState<"all" | "in_library" | "missing">("all");
     const [placeholderModalOpen, setPlaceholderModalOpen] = useState(false);
     const [selectedPlaceholderItem, setSelectedPlaceholderItem] = useState<any | null>(null);
-    const [placeholderModalBannerType, setPlaceholderModalBannerType] = useState<"not_requested" | "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "custom">("not_requested");
+    const [placeholderModalBannerType, setPlaceholderModalBannerType] = useState<string>("not_requested");
     const [placeholderModalBannerText, setPlaceholderModalBannerText] = useState("NOT REQUESTED");
-    const [placeholderModalBannerTheme, setPlaceholderModalBannerTheme] = useState<"crimson-red" | "indigo-purple" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted">("crimson-red");
+    const [placeholderModalBannerTheme, setPlaceholderModalBannerTheme] = useState<string>("crimson-red");
     const [placeholderModalBannerPosition, setPlaceholderModalBannerPosition] = useState<"bottom" | "top" | "corner">("bottom");
     const [generatingPlaceholder, setGeneratingPlaceholder] = useState(false);
     const [placeholderPreviewDataUrl, setPlaceholderPreviewDataUrl] = useState<string | null>(null);
     const [placeholderSuccessMsg, setPlaceholderSuccessMsg] = useState<string | null>(null);
+
+    // Live Simulator & Template Variable States
+    const [posterPickerModalOpen, setPosterPickerModalOpen] = useState(false);
+    const [simSelectedRealItem, setSimSelectedRealItem] = useState<PlexMediaStreamInfo | null>(null);
+    const [simPosterUrl, setSimPosterUrl] = useState<string>("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+    const [templateVarDate, setTemplateVarDate] = useState<string>("6/1/2026");
+    const [templateVarDays, setTemplateVarDays] = useState<number>(7);
+    const [templateVarSource, setTemplateVarSource] = useState<string>("Netflix");
+    const [templateVarStatus, setTemplateVarStatus] = useState<string>("Downloading Soon");
+    const [templateVarReason, setTemplateVarReason] = useState<string>("Storage Optimization");
 
     // Coming Soon Shares & Disk Settings
     const [comingSoonShares, setComingSoonShares] = useState<Record<string, string>>({});
@@ -702,14 +729,25 @@ export function AgregarrStudio() {
         type = placeholderModalBannerType,
         text = placeholderModalBannerText,
         theme = placeholderModalBannerTheme,
-        position = placeholderModalBannerPosition
+        position = placeholderModalBannerPosition,
+        date = templateVarDate,
+        days = templateVarDays,
+        source = templateVarSource,
+        status = templateVarStatus,
+        reason = templateVarReason
     ) => {
         try {
             const res = await getPlaceholderPreviewDataUrlAction(posterPath, title, {
                 bannerType: type,
                 bannerText: text,
                 bannerTheme: theme,
-                bannerPosition: position
+                bannerPosition: position,
+                date,
+                formattedDate: date,
+                daysRemaining: days,
+                source,
+                status,
+                reason
             });
             if (res.success && res.dataUrl) {
                 setPlaceholderPreviewDataUrl(res.dataUrl);
@@ -717,6 +755,45 @@ export function AgregarrStudio() {
         } catch (e) {
             console.error("Failed generating preview:", e);
         }
+    };
+
+    const handleSelectRealPoster = (item: PlexMediaStreamInfo, posterUrl: string) => {
+        setSimSelectedRealItem(item);
+        setSimPosterUrl(posterUrl);
+        if (selectedPlaceholderItem) {
+            setSelectedPlaceholderItem((prev: any) => ({ ...prev, title: item.title, posterPath: posterUrl }));
+        }
+        generatePlaceholderPreview(
+            posterUrl,
+            item.title,
+            placeholderModalBannerType,
+            placeholderModalBannerText,
+            placeholderModalBannerTheme,
+            placeholderModalBannerPosition,
+            templateVarDate,
+            templateVarDays,
+            templateVarSource,
+            templateVarStatus,
+            templateVarReason
+        );
+    };
+
+    const handleInsertToken = (token: string) => {
+        const next = placeholderModalBannerText ? `${placeholderModalBannerText} ${token}` : token;
+        setPlaceholderModalBannerText(next);
+        generatePlaceholderPreview(
+            selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+            selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
+            placeholderModalBannerType,
+            next,
+            placeholderModalBannerTheme,
+            placeholderModalBannerPosition,
+            templateVarDate,
+            templateVarDays,
+            templateVarSource,
+            templateVarStatus,
+            templateVarReason
+        );
     };
 
     const handleCreatePlaceholder = async () => {
@@ -734,7 +811,13 @@ export function AgregarrStudio() {
                 bannerType: placeholderModalBannerType,
                 bannerText: placeholderModalBannerText,
                 bannerTheme: placeholderModalBannerTheme,
-                bannerPosition: placeholderModalBannerPosition
+                bannerPosition: placeholderModalBannerPosition,
+                date: templateVarDate,
+                formattedDate: templateVarDate,
+                daysRemaining: templateVarDays,
+                source: templateVarSource,
+                status: templateVarStatus,
+                reason: templateVarReason
             });
 
             if (res.success) {
@@ -1602,31 +1685,323 @@ export function AgregarrStudio() {
                             {sharesSavedMsg && <span className="text-xs text-emerald-400 font-bold ml-2">✓ Saved!</span>}
                         </div>
 
-                        {/* Banner Showcase */}
-                        <div className="space-y-4 p-4 bg-slate-950/60 rounded-xl border border-slate-800">
-                            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                                <Sparkles className="h-4 w-4 text-amber-400" /> Banner Styles &amp; Positions
-                            </h4>
-                            <p className="text-[11px] text-slate-400">
-                                Agregarr creates high-resolution composite posters matching the Agregarr standard.
-                            </p>
+                        {/* Agregarr Banner & Poster Simulator Studio */}
+                        <div className="space-y-4 p-5 bg-slate-950/80 rounded-2xl border border-slate-800 shadow-xl">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                                <div>
+                                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                        <Sparkles className="h-4 w-4 text-amber-400" /> Agregarr Banner &amp; Poster Live Simulator
+                                    </h4>
+                                    <p className="text-[11px] text-slate-400">
+                                        Preview dynamic composite banners, template variables, and pull real posters from your Plex library.
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setPosterPickerModalOpen(true)}
+                                    className="h-7 text-[11px] gap-1.5 border-amber-500/40 hover:bg-amber-950/40 text-amber-200 hover:text-amber-100 shrink-0"
+                                >
+                                    <ImageIcon className="h-3.5 w-3.5 text-amber-400" /> Pull Poster from Plex
+                                </Button>
+                            </div>
 
-                            <div className="space-y-2 text-xs">
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
-                                    <span className="font-semibold text-rose-300">NOT REQUESTED</span>
-                                    <Badge className="bg-rose-950 text-rose-300 border-rose-500/40 text-[10px]">Crimson Red</Badge>
+                            {/* Real Media Item Telemetry Badge */}
+                            {simSelectedRealItem && (
+                                <div className="p-2.5 bg-amber-950/30 border border-amber-800/50 rounded-xl text-xs flex items-center justify-between gap-2">
+                                    <div className="space-y-0.5 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="font-bold text-white truncate">{simSelectedRealItem.title}</span>
+                                            {simSelectedRealItem.year && (
+                                                <span className="text-[10px] text-amber-300 font-mono">({simSelectedRealItem.year})</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-amber-200/80">
+                                            {(simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution) && (
+                                                <span className="px-1.5 py-0.2 bg-amber-900/40 rounded text-amber-300 font-mono">
+                                                    {simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution}
+                                                </span>
+                                            )}
+                                            {(simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec) && (
+                                                <span className="px-1.5 py-0.2 bg-slate-800 rounded text-slate-300 uppercase">
+                                                    {simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setSimSelectedRealItem(null);
+                                            setSimPosterUrl("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+                                            generatePlaceholderPreview(
+                                                "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80",
+                                                "Sample Media",
+                                                placeholderModalBannerType,
+                                                placeholderModalBannerText,
+                                                placeholderModalBannerTheme,
+                                                placeholderModalBannerPosition
+                                            );
+                                        }}
+                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white shrink-0"
+                                    >
+                                        Reset Sample
+                                    </Button>
                                 </div>
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
-                                    <span className="font-semibold text-amber-300">IN THEATERS</span>
-                                    <Badge className="bg-amber-950 text-amber-300 border-amber-500/40 text-[10px]">Amber Gold</Badge>
+                            )}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
+                                {/* Left: Composite Poster Preview */}
+                                <div className="sm:col-span-5 flex flex-col items-center space-y-2">
+                                    <div className="relative aspect-[2/3] w-full max-w-[200px] rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-700/80 shadow-2xl">
+                                        {placeholderPreviewDataUrl ? (
+                                            <img src={placeholderPreviewDataUrl} alt="Composite Preview" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full text-slate-500 text-xs gap-1.5">
+                                                <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                                                <span>Rendering...</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 font-mono">Live Composite Preview</span>
                                 </div>
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
-                                    <span className="font-semibold text-cyan-300">NOW STREAMING</span>
-                                    <Badge className="bg-cyan-950 text-cyan-300 border-cyan-500/40 text-[10px]">Cinematic Blue</Badge>
-                                </div>
-                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
-                                    <span className="font-semibold text-purple-300">COMING IN X DAYS</span>
-                                    <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[10px]">Indigo Purple</Badge>
+
+                                {/* Right: Banner Controls & Variable Chips */}
+                                <div className="sm:col-span-7 space-y-3 text-xs">
+                                    {/* Template Presets Selector */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[11px] text-slate-300 font-semibold">Agregarr Banner Preset:</Label>
+                                        <Select
+                                            value={placeholderModalBannerType}
+                                            onValueChange={(val) => {
+                                                const found = AGREGARR_BANNER_PRESETS.find(p => p.id === val);
+                                                setPlaceholderModalBannerType(val);
+                                                const nextText = found?.defaultText || "NOT REQUESTED";
+                                                setPlaceholderModalBannerText(nextText);
+                                                if (found?.theme) setPlaceholderModalBannerTheme(found.theme);
+                                                if (found?.pos) setPlaceholderModalBannerPosition(found.pos);
+                                                generatePlaceholderPreview(
+                                                    simSelectedRealItem ? simPosterUrl : null,
+                                                    simSelectedRealItem?.title || "Sample Media",
+                                                    val,
+                                                    nextText,
+                                                    found?.theme || placeholderModalBannerTheme,
+                                                    found?.pos || placeholderModalBannerPosition
+                                                );
+                                            }}
+                                        >
+                                            <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-64">
+                                                {AGREGARR_BANNER_PRESETS.map(p => (
+                                                    <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Banner Text Template with Variable Insertion Chips */}
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-[11px] text-slate-300 font-semibold">Banner Text Template:</Label>
+                                            <span className="text-[10px] text-amber-400 font-mono">Click chips to insert:</span>
+                                        </div>
+                                        <Input
+                                            value={placeholderModalBannerText}
+                                            onChange={(e) => {
+                                                setPlaceholderModalBannerText(e.target.value);
+                                                generatePlaceholderPreview(
+                                                    simSelectedRealItem ? simPosterUrl : null,
+                                                    simSelectedRealItem?.title || "Sample Media",
+                                                    placeholderModalBannerType,
+                                                    e.target.value
+                                                );
+                                            }}
+                                            className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-white"
+                                            placeholder="e.g. DIGITAL RELEASE ON {date}"
+                                        />
+
+                                        {/* Agregarr Variable Insertion Chips */}
+                                        <div className="flex flex-wrap gap-1 pt-1">
+                                            {[
+                                                { token: "{date}", label: "+ {date}" },
+                                                { token: "{days}", label: "+ {days}" },
+                                                { token: "{title}", label: "+ {title}" },
+                                                { token: "{source}", label: "+ {source}" },
+                                                { token: "{status}", label: "+ {status}" },
+                                                { token: "{reason}", label: "+ {reason}" },
+                                                { token: "{quality}", label: "+ {quality}" }
+                                            ].map(chip => (
+                                                <button
+                                                    key={chip.token}
+                                                    type="button"
+                                                    onClick={() => handleInsertToken(chip.token)}
+                                                    className="px-2 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
+                                                >
+                                                    {chip.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Color Theme & Position Controls */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] text-slate-400">Color Theme:</Label>
+                                            <Select
+                                                value={placeholderModalBannerTheme}
+                                                onValueChange={(val) => {
+                                                    setPlaceholderModalBannerTheme(val);
+                                                    generatePlaceholderPreview(
+                                                        simSelectedRealItem ? simPosterUrl : null,
+                                                        simSelectedRealItem?.title || "Sample Media",
+                                                        placeholderModalBannerType,
+                                                        placeholderModalBannerText,
+                                                        val
+                                                    );
+                                                }}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-7">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="crimson-red">🔴 Crimson Red</SelectItem>
+                                                    <SelectItem value="amber-gold">💛 Amber Gold</SelectItem>
+                                                    <SelectItem value="indigo-purple">🟣 Indigo Purple</SelectItem>
+                                                    <SelectItem value="emerald-green">🟢 Emerald Green</SelectItem>
+                                                    <SelectItem value="cinematic-blue">🔵 Cinematic Blue</SelectItem>
+                                                    <SelectItem value="cyber-neon">⚡ Cyber Neon</SelectItem>
+                                                    <SelectItem value="glass">✨ Obsidian Glass</SelectItem>
+                                                    <SelectItem value="netflix-red">🟥 Netflix Red</SelectItem>
+                                                    <SelectItem value="slate-frosted">🛡️ Slate Frosted</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] text-slate-400">Position:</Label>
+                                            <Select
+                                                value={placeholderModalBannerPosition}
+                                                onValueChange={(val: any) => {
+                                                    setPlaceholderModalBannerPosition(val);
+                                                    generatePlaceholderPreview(
+                                                        simSelectedRealItem ? simPosterUrl : null,
+                                                        simSelectedRealItem?.title || "Sample Media",
+                                                        placeholderModalBannerType,
+                                                        placeholderModalBannerText,
+                                                        placeholderModalBannerTheme,
+                                                        val
+                                                    );
+                                                }}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-7">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="bottom">Bottom Overlay</SelectItem>
+                                                    <SelectItem value="top">Top Overlay</SelectItem>
+                                                    <SelectItem value="corner">45° Corner Ribbon</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Live Variable Test Values */}
+                                    <div className="p-2.5 bg-slate-900/90 rounded-xl border border-slate-800/80 space-y-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                            Live Test Variables:
+                                        </span>
+                                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Date {'{date}'}:</Label>
+                                                <Input
+                                                    value={templateVarDate}
+                                                    onChange={(e) => {
+                                                        setTemplateVarDate(e.target.value);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            e.target.value
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-950 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Days {'{days}'}:</Label>
+                                                <Input
+                                                    type="number"
+                                                    value={templateVarDays}
+                                                    onChange={(e) => {
+                                                        const num = parseInt(e.target.value, 10) || 0;
+                                                        setTemplateVarDays(num);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            templateVarDate,
+                                                            num
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-950 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Source {'{source}'}:</Label>
+                                                <Input
+                                                    value={templateVarSource}
+                                                    onChange={(e) => {
+                                                        setTemplateVarSource(e.target.value);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            templateVarDate,
+                                                            templateVarDays,
+                                                            e.target.value
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-950 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Status {'{status}'}:</Label>
+                                                <Input
+                                                    value={templateVarStatus}
+                                                    onChange={(e) => {
+                                                        setTemplateVarStatus(e.target.value);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            templateVarDate,
+                                                            templateVarDays,
+                                                            templateVarSource,
+                                                            e.target.value
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-950 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2101,90 +2476,181 @@ export function AgregarrStudio() {
 
             {/* Placeholder Creation Modal */}
             <Dialog open={placeholderModalOpen} onOpenChange={setPlaceholderModalOpen}>
-                <DialogContent className="max-w-xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
-                    <DialogHeader className="pb-2 border-b border-slate-800">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Tag className="h-5 w-5 text-amber-400" />
-                            <span>Create Coming Soon Placeholder</span>
-                        </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400 truncate">
-                            {selectedPlaceholderItem?.title} ({selectedPlaceholderItem?.year || "Upcoming"})
-                        </DialogDescription>
+                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b border-slate-800 flex flex-row items-center justify-between">
+                        <div className="space-y-0.5">
+                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <Tag className="h-5 w-5 text-amber-400" />
+                                <span>Create Coming Soon Placeholder</span>
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-slate-400 truncate">
+                                {selectedPlaceholderItem?.title} ({selectedPlaceholderItem?.year || "Upcoming"})
+                            </DialogDescription>
+                        </div>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setPosterPickerModalOpen(true)}
+                            className="h-7 text-[11px] gap-1.5 border-amber-500/40 hover:bg-amber-950/40 text-amber-200 hover:text-amber-100 shrink-0"
+                        >
+                            <ImageIcon className="h-3.5 w-3.5 text-amber-400" /> Pull Poster from Plex
+                        </Button>
                     </DialogHeader>
 
                     <div className="flex-1 overflow-y-auto space-y-4 py-3 text-xs pr-1">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                             {/* Preview Poster */}
-                            <div className="flex flex-col items-center justify-center space-y-2">
+                            <div className="sm:col-span-5 flex flex-col items-center justify-center space-y-2">
                                 <div className="aspect-[2/3] w-36 rounded-xl overflow-hidden bg-slate-950 border-2 border-slate-700 shadow-xl">
                                     {placeholderPreviewDataUrl ? (
                                         <img src={placeholderPreviewDataUrl} alt="Preview" className="w-full h-full object-cover" />
                                     ) : (
-                                        <div className="flex items-center justify-center h-full text-slate-600">Loading...</div>
+                                        <div className="flex items-center justify-center h-full text-slate-600 gap-1.5">
+                                            <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                                            <span>Loading...</span>
+                                        </div>
                                     )}
                                 </div>
-                                <span className="text-[10px] text-slate-400">Live Composite Preview</span>
+                                <span className="text-[10px] text-slate-400 font-mono">Live Composite Preview</span>
                             </div>
 
                             {/* Controls */}
-                            <div className="space-y-3">
+                            <div className="sm:col-span-7 space-y-3">
                                 <div className="space-y-1">
-                                    <Label className="text-xs text-slate-300">Banner Type:</Label>
+                                    <Label className="text-xs text-slate-300">Banner Preset:</Label>
                                     <Select
                                         value={placeholderModalBannerType}
                                         onValueChange={(val: any) => {
+                                            const found = AGREGARR_BANNER_PRESETS.find(p => p.id === val);
                                             setPlaceholderModalBannerType(val);
-                                            const defaultText = val === "in_theaters" ? "IN THEATERS" : val === "now_streaming" ? "NOW STREAMING" : val === "countdown" ? "COMING SOON" : "NOT REQUESTED";
+                                            const defaultText = found?.defaultText || "NOT REQUESTED";
                                             setPlaceholderModalBannerText(defaultText);
-                                            generatePlaceholderPreview(selectedPlaceholderItem?.posterPath, selectedPlaceholderItem?.title, val, defaultText);
+                                            if (found?.theme) setPlaceholderModalBannerTheme(found.theme);
+                                            if (found?.pos) setPlaceholderModalBannerPosition(found.pos);
+                                            generatePlaceholderPreview(
+                                                selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+                                                selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
+                                                val,
+                                                defaultText,
+                                                found?.theme || placeholderModalBannerTheme,
+                                                found?.pos || placeholderModalBannerPosition
+                                            );
                                         }}
                                     >
                                         <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="not_requested">NOT REQUESTED</SelectItem>
-                                            <SelectItem value="in_theaters">IN THEATERS</SelectItem>
-                                            <SelectItem value="now_streaming">NOW STREAMING</SelectItem>
-                                            <SelectItem value="countdown">COUNTDOWN</SelectItem>
-                                            <SelectItem value="coming_soon">COMING SOON</SelectItem>
-                                            <SelectItem value="custom">CUSTOM TEXT</SelectItem>
+                                        <SelectContent className="max-h-64">
+                                            {AGREGARR_BANNER_PRESETS.map(p => (
+                                                <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
 
                                 <div className="space-y-1">
-                                    <Label className="text-xs text-slate-300">Banner Text:</Label>
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-300">Banner Text Template:</Label>
+                                        <span className="text-[10px] text-amber-400 font-mono">Click chips to insert:</span>
+                                    </div>
                                     <Input
                                         value={placeholderModalBannerText}
                                         onChange={(e) => {
                                             setPlaceholderModalBannerText(e.target.value);
-                                            generatePlaceholderPreview(selectedPlaceholderItem?.posterPath, selectedPlaceholderItem?.title, placeholderModalBannerType, e.target.value);
+                                            generatePlaceholderPreview(
+                                                selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+                                                selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
+                                                placeholderModalBannerType,
+                                                e.target.value
+                                            );
                                         }}
-                                        className="h-8 text-xs bg-slate-950 border-slate-800"
+                                        className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
+                                        placeholder="e.g. DIGITAL RELEASE ON {date}"
                                     />
+
+                                    {/* Variable Insertion Chips */}
+                                    <div className="flex flex-wrap gap-1 pt-1">
+                                        {[
+                                            { token: "{date}", label: "+ {date}" },
+                                            { token: "{days}", label: "+ {days}" },
+                                            { token: "{title}", label: "+ {title}" },
+                                            { token: "{source}", label: "+ {source}" },
+                                            { token: "{status}", label: "+ {status}" },
+                                            { token: "{reason}", label: "+ {reason}" },
+                                            { token: "{quality}", label: "+ {quality}" }
+                                        ].map(chip => (
+                                            <button
+                                                key={chip.token}
+                                                type="button"
+                                                onClick={() => handleInsertToken(chip.token)}
+                                                className="px-2 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
+                                            >
+                                                {chip.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
-                                <div className="space-y-1">
-                                    <Label className="text-xs text-slate-300">Color Theme:</Label>
-                                    <Select
-                                        value={placeholderModalBannerTheme}
-                                        onValueChange={(val: any) => {
-                                            setPlaceholderModalBannerTheme(val);
-                                            generatePlaceholderPreview(selectedPlaceholderItem?.posterPath, selectedPlaceholderItem?.title, placeholderModalBannerType, placeholderModalBannerText, val);
-                                        }}
-                                    >
-                                        <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="crimson-red">🔴 Crimson Red</SelectItem>
-                                            <SelectItem value="amber-gold">💛 Amber Gold</SelectItem>
-                                            <SelectItem value="indigo-purple">🟣 Indigo Purple</SelectItem>
-                                            <SelectItem value="emerald-green">🟢 Emerald Green</SelectItem>
-                                            <SelectItem value="cinematic-blue">🔵 Cinematic Blue</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-1">
+                                        <Label className="text-xs text-slate-300">Color Theme:</Label>
+                                        <Select
+                                            value={placeholderModalBannerTheme}
+                                            onValueChange={(val: any) => {
+                                                setPlaceholderModalBannerTheme(val);
+                                                generatePlaceholderPreview(
+                                                    selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+                                                    selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
+                                                    placeholderModalBannerType,
+                                                    placeholderModalBannerText,
+                                                    val
+                                                );
+                                            }}
+                                        >
+                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="crimson-red">🔴 Crimson Red</SelectItem>
+                                                <SelectItem value="amber-gold">💛 Amber Gold</SelectItem>
+                                                <SelectItem value="indigo-purple">🟣 Indigo Purple</SelectItem>
+                                                <SelectItem value="emerald-green">🟢 Emerald Green</SelectItem>
+                                                <SelectItem value="cinematic-blue">🔵 Cinematic Blue</SelectItem>
+                                                <SelectItem value="cyber-neon">⚡ Cyber Neon</SelectItem>
+                                                <SelectItem value="glass">✨ Obsidian Glass</SelectItem>
+                                                <SelectItem value="netflix-red">🟥 Netflix Red</SelectItem>
+                                                <SelectItem value="slate-frosted">🛡️ Slate Frosted</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <Label className="text-xs text-slate-300">Position:</Label>
+                                        <Select
+                                            value={placeholderModalBannerPosition}
+                                            onValueChange={(val: any) => {
+                                                setPlaceholderModalBannerPosition(val);
+                                                generatePlaceholderPreview(
+                                                    selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+                                                    selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
+                                                    placeholderModalBannerType,
+                                                    placeholderModalBannerText,
+                                                    placeholderModalBannerTheme,
+                                                    val
+                                                );
+                                            }}
+                                        >
+                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="bottom">Bottom Overlay</SelectItem>
+                                                <SelectItem value="top">Top Overlay</SelectItem>
+                                                <SelectItem value="corner">45° Corner Ribbon</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2214,6 +2680,16 @@ export function AgregarrStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Plex Real Media Poster Picker Modal */}
+            <PlexPosterPickerModal
+                open={posterPickerModalOpen}
+                onOpenChange={setPosterPickerModalOpen}
+                serverId={selectedServerId}
+                sectionKey={selectedSectionKey}
+                serverName={currentServer?.serverName}
+                onSelect={handleSelectRealPoster}
+            />
         </div>
     );
 }

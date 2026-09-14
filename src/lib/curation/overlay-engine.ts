@@ -801,33 +801,124 @@ export function generateDigitalReleaseRibbonSvg(daysRemaining: number, formatted
 }
 
 /**
- * Creates Kometa/Agregarr-Style SVG for Placeholder Banner with customizable themes & timings.
+ * Interpolates dynamic template variables for Agregarr/Kometa style banners:
+ * {date}, {days}, {title}, {source}, {status}, {reason}, {quality}
+ */
+export function interpolateBannerText(
+    template: string,
+    variables: {
+        title?: string;
+        date?: string;
+        formattedDate?: string;
+        days?: number | string;
+        daysRemaining?: number | string;
+        source?: string;
+        status?: string;
+        reason?: string;
+        quality?: string;
+    } = {}
+): string {
+    if (!template) return "";
+    let result = template;
+    const dateVal = variables.formattedDate || variables.date || "";
+    const daysVal = String(variables.daysRemaining ?? variables.days ?? "7");
+    const titleVal = variables.title || "";
+    const sourceVal = variables.source || "Radarr";
+    const statusVal = variables.status || "Downloading Soon";
+    const reasonVal = variables.reason || "Storage Threshold";
+    const qualityVal = variables.quality || "4K UHD";
+
+    result = result
+        .replace(/\{date\}/gi, dateVal)
+        .replace(/\{formattedDate\}/gi, dateVal)
+        .replace(/\{days\}/gi, daysVal)
+        .replace(/\{daysRemaining\}/gi, daysVal)
+        .replace(/\{title\}/gi, titleVal)
+        .replace(/\{source\}/gi, sourceVal)
+        .replace(/\{status\}/gi, statusVal)
+        .replace(/\{reason\}/gi, reasonVal)
+        .replace(/\{quality\}/gi, qualityVal);
+
+    return result;
+}
+
+/**
+ * Creates Kometa/Agregarr-Style SVG for Placeholder & Status Banners with customizable themes, templates & variables.
  */
 export function generatePlaceholderRibbonSvg(
-    type: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "not_requested" | "custom",
+    type: string,
     options: {
-        daysRemaining?: number;
+        daysRemaining?: number | string;
         formattedDate?: string;
+        date?: string;
         customText?: string;
-        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted";
+        title?: string;
+        source?: string;
+        status?: string;
+        reason?: string;
+        quality?: string;
+        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted" | "cyber-neon" | string;
     } = {}
 ): string {
     const theme = options.theme || "indigo-purple";
+    const dateStr = options.formattedDate || options.date || "";
+    const daysStr = String(options.daysRemaining ?? "7");
 
     let label = "🚀 COMING SOON";
-    if (type === "in_theaters") {
-        label = "🎬 IN THEATERS NOW";
-    } else if (type === "now_streaming") {
-        label = "🔥 NOW STREAMING ON DIGITAL";
-    } else if (type === "countdown") {
-        const days = options.daysRemaining ?? 7;
-        label = days === 0 ? "✨ STREAMING TODAY" : `✨ STREAMING IN ${days} DAYS${options.formattedDate ? ` (${options.formattedDate})` : ''}`;
-    } else if (type === "releasing_date") {
-        label = options.formattedDate ? `📅 RELEASING ${options.formattedDate}` : "📅 RELEASE DATE ANNOUNCED";
-    } else if (type === "not_requested") {
-        label = options.customText ? options.customText.toUpperCase() : "🚫 NOT REQUESTED";
-    } else if (type === "custom" && options.customText) {
-        label = options.customText.toUpperCase();
+
+    switch (type) {
+        case "in_theaters":
+            label = dateStr ? `🎬 IN THEATERS (${dateStr})` : "🎬 IN THEATERS NOW";
+            break;
+        case "now_streaming":
+            label = "🔥 NOW STREAMING ON DIGITAL";
+            break;
+        case "countdown":
+            label = daysStr === "0" ? "✨ STREAMING TODAY" : `✨ STREAMING IN ${daysStr} DAYS${dateStr ? ` (${dateStr})` : ''}`;
+            break;
+        case "releasing_date":
+        case "digital_release":
+            label = dateStr ? `📅 DIGITAL RELEASE ON ${dateStr}` : "📅 DIGITAL RELEASE ANNOUNCED";
+            break;
+        case "downloading_soon":
+            label = "⬇️ DOWNLOADING SOON";
+            break;
+        case "in_radarr":
+            label = "🎬 MONITORED IN RADARR";
+            break;
+        case "in_sonarr":
+            label = "📺 MONITORED IN SONARR";
+            break;
+        case "leaving_date":
+            label = dateStr ? `⚠️ LEAVING ON ${dateStr}` : "⚠️ LEAVING SOON";
+            break;
+        case "leaving_days":
+        case "leaving_soon":
+            label = daysStr && daysStr !== "0" ? `⚠️ LEAVING IN ${daysStr} DAYS` : "⚠️ LEAVING SOON";
+            break;
+        case "trending_not_requested":
+            label = "🔥 TRENDING • NOT REQUESTED";
+            break;
+        case "popular_streaming":
+            label = `👑 POPULAR ON ${options.source || "STREAMING"}`.toUpperCase();
+            break;
+        case "missing_library":
+            label = "🚫 NOT IN PLEX LIBRARY";
+            break;
+        case "not_requested":
+            label = options.customText ? options.customText.toUpperCase() : "🚫 NOT REQUESTED";
+            break;
+        case "custom":
+        default:
+            if (options.customText) {
+                label = interpolateBannerText(options.customText, options).toUpperCase();
+            }
+            break;
+    }
+
+    // Apply template interpolation if custom text contains braces
+    if (options.customText && options.customText.includes("{")) {
+        label = interpolateBannerText(options.customText, options).toUpperCase();
     }
 
     let gradStops = `<stop offset="0%" stop-color="#1e1b4b" /><stop offset="50%" stop-color="#6366f1" /><stop offset="100%" stop-color="#1e1b4b" />`;
@@ -845,10 +936,19 @@ export function generatePlaceholderRibbonSvg(
     } else if (theme === "cinematic-blue") {
         gradStops = `<stop offset="0%" stop-color="#082f49" /><stop offset="50%" stop-color="#0284c7" /><stop offset="100%" stop-color="#082f49" />`;
         lineStroke = "#7dd3fc";
+    } else if (theme === "cyber-neon") {
+        gradStops = `<stop offset="0%" stop-color="#4c0519" /><stop offset="50%" stop-color="#06b6d4" /><stop offset="100%" stop-color="#4c0519" />`;
+        lineStroke = "#22d3ee";
     } else if (theme === "glass" || theme === "slate-frosted") {
         gradStops = `<stop offset="0%" stop-color="rgba(8,12,22,0.94)" /><stop offset="100%" stop-color="rgba(8,12,22,0.94)" />`;
         lineStroke = "rgba(255,255,255,0.4)";
     }
+
+    const safeLabel = (label || "COMING SOON")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
 
     return `
     <svg width="600" height="54" viewBox="0 0 600 54" xmlns="http://www.w3.org/2000/svg">
@@ -863,7 +963,7 @@ export function generatePlaceholderRibbonSvg(
         <rect x="0" y="0" width="600" height="54" fill="url(#phGrad)" filter="url(#phShadow)"/>
         <line x1="0" y1="2" x2="600" y2="2" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
         <line x1="0" y1="52" x2="600" y2="52" stroke="${lineStroke}" stroke-width="2"/>
-        <text x="300" y="34" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="17.5" fill="#ffffff" text-anchor="middle" letter-spacing="2.5">${label}</text>
+        <text x="300" y="34" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="16.5" fill="#ffffff" text-anchor="middle" letter-spacing="2">${safeLabel}</text>
     </svg>`;
 }
 
@@ -874,9 +974,15 @@ export async function generatePlaceholderPosterBuffer(
     posterUrl: string | null | undefined,
     title: string,
     options: {
-        type?: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "not_requested" | "custom";
+        type?: string;
         customText?: string;
-        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted";
+        daysRemaining?: number | string;
+        formattedDate?: string;
+        date?: string;
+        source?: string;
+        status?: string;
+        reason?: string;
+        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted" | "cyber-neon" | string;
         position?: "top" | "bottom" | "corner";
     } = {}
 ): Promise<Buffer> {
@@ -921,7 +1027,7 @@ export async function generatePlaceholderPosterBuffer(
 
     const type = options.type || "not_requested";
     const position = options.position || "bottom";
-    const theme = options.theme || (type === "not_requested" ? "crimson-red" : "indigo-purple");
+    const theme = (options.theme as any) || (type === "not_requested" ? "crimson-red" : "indigo-purple");
 
     const composites: any[] = [];
 
@@ -930,10 +1036,13 @@ export async function generatePlaceholderPosterBuffer(
         if (theme === "crimson-red" || theme === "netflix-red") ribbonTheme = "crimson";
         else if (theme === "emerald-green") ribbonTheme = "emerald";
         else if (theme === "amber-gold") ribbonTheme = "gold";
-        else if (theme === "cinematic-blue") ribbonTheme = "cyan";
+        else if (theme === "cinematic-blue" || theme === "cyber-neon") ribbonTheme = "cyan";
         else if (theme === "glass" || theme === "slate-frosted") ribbonTheme = "glass";
 
-        const text = options.customText || (type === "not_requested" ? "NOT REQUESTED" : type.toUpperCase());
+        let text = options.customText || (type === "not_requested" ? "NOT REQUESTED" : type.toUpperCase().replace(/_/g, ' '));
+        if (options.customText && options.customText.includes("{")) {
+            text = interpolateBannerText(options.customText, { title, ...options });
+        }
         const cornerSvg = generateCornerRibbonSvg(text, "top-right", ribbonTheme);
         composites.push({
             input: Buffer.from(cornerSvg),
@@ -942,7 +1051,8 @@ export async function generatePlaceholderPosterBuffer(
         });
     } else {
         const bannerSvg = generatePlaceholderRibbonSvg(type, {
-            customText: options.customText,
+            title,
+            ...options,
             theme
         });
         const topPos = position === "top" ? 0 : height - 54;
