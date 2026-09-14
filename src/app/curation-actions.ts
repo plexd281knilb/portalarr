@@ -3687,24 +3687,80 @@ export async function createPlaceholderItemAction(
 }
 
 /**
+/**
+ * Reads a local Kometa YAML configuration file from disk.
+ */
+export async function readLocalKometaConfigAction(customPath?: string) {
+    await verifyAdmin();
+    try {
+        const candidatePaths: string[] = [];
+        if (customPath && customPath.trim()) {
+            candidatePaths.push(customPath.trim());
+            if (!path.isAbsolute(customPath.trim())) {
+                candidatePaths.push(path.join(process.cwd(), customPath.trim()));
+            }
+        }
+        candidatePaths.push(
+            path.join(process.cwd(), "kometaconfig.yml"),
+            path.join(process.cwd(), "config.yml"),
+            path.join(process.cwd(), "config", "config.yml"),
+            path.join(process.cwd(), "config", "kometaconfig.yml")
+        );
+
+        let resolvedPath: string | null = null;
+        for (const p of candidatePaths) {
+            if (fs.existsSync(p)) {
+                resolvedPath = p;
+                break;
+            }
+        }
+
+        if (!resolvedPath) {
+            return {
+                success: false,
+                error: customPath 
+                    ? `No Kometa configuration file found at "${customPath}".` 
+                    : "No Kometa config file (kometaconfig.yml or config.yml) found in project directory."
+            };
+        }
+
+        const content = fs.readFileSync(resolvedPath, "utf-8");
+        const stats = fs.statSync(resolvedPath);
+        const lineCount = content.split(/\r?\n/).length;
+
+        return {
+            success: true,
+            filePath: resolvedPath,
+            fileName: path.basename(resolvedPath),
+            content,
+            fileSizeBytes: stats.size,
+            lineCount,
+            message: `Loaded ${path.basename(resolvedPath)} (${stats.size} bytes, ${lineCount} lines)`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed reading Kometa config file." };
+    }
+}
+
+/**
  * Inspects and parses a Kometa YAML configuration file (from disk or string).
  */
-export async function inspectKometaConfigFileAction(yamlContent?: string) {
+export async function inspectKometaConfigFileAction(yamlContent?: string, customPath?: string) {
     await verifyAdmin();
     try {
         let content = yamlContent;
         let source = "uploaded_content";
 
         if (!content || !content.trim()) {
-            const diskPath = path.join(process.cwd(), "kometaconfig.yml");
-            if (fs.existsSync(diskPath)) {
-                content = fs.readFileSync(diskPath, "utf-8");
-                source = "kometaconfig.yml (disk root)";
+            const diskRes = await readLocalKometaConfigAction(customPath);
+            if (diskRes.success && diskRes.content) {
+                content = diskRes.content;
+                source = diskRes.fileName || "kometaconfig.yml (disk)";
             }
         }
 
         if (!content || !content.trim()) {
-            return { success: false, error: "No Kometa configuration YAML found." };
+            return { success: false, error: "No Kometa configuration YAML found to inspect." };
         }
 
         const parsed = parseKometaYamlString(content);
@@ -3713,32 +3769,67 @@ export async function inspectKometaConfigFileAction(yamlContent?: string) {
         return {
             success: true,
             source,
+            rawYaml: content,
             parsed,
             libraryCount: libraryNames.length,
             libraryNames,
             hasPlex: Boolean(parsed.plex?.url),
-            hasTmdb: Boolean(parsed.tmdb?.apikey)
+            hasTmdb: Boolean(parsed.tmdb?.apikey),
+            tmdbApiKey: parsed.tmdb?.apikey || "",
+            plexUrl: parsed.plex?.url || "",
+            plexToken: parsed.plex?.token || ""
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed inspecting Kometa configuration." };
     }
 }
 
+export interface ImportKometaConfigOptions {
+    yamlContent?: string;
+    customPath?: string;
+    targetServerId?: string;
+    libraryMappings?: Array<{
+        kometaLibName: string;
+        serverId: string;
+        sectionKey: string;
+        enabled?: boolean;
+    }>;
+    importTmdbKey?: boolean;
+    importPlexCredentials?: boolean;
+}
+
 /**
  * Imports a Kometa YAML configuration, creates/updates corresponding Portalarr overlay rules,
  * and configures connections (TMDb / Plex) seamlessly.
  */
-export async function importKometaConfigAction(yamlContent?: string, targetServerId?: string) {
+export async function importKometaConfigAction(
+    paramsOrYaml?: string | ImportKometaConfigOptions,
+    targetServerId?: string
+) {
     await verifyAdmin();
     try {
-        let content = yamlContent;
+        let content: string | undefined;
+        let customPath: string | undefined;
+        let selectedServerId = targetServerId || "main";
+        let libraryMappings: Array<{ kometaLibName: string; serverId: string; sectionKey: string; enabled?: boolean }> | undefined;
+        let importTmdbKey = true;
         let source = "uploaded_content";
 
+        if (typeof paramsOrYaml === "string") {
+            content = paramsOrYaml;
+        } else if (paramsOrYaml && typeof paramsOrYaml === "object") {
+            content = paramsOrYaml.yamlContent;
+            customPath = paramsOrYaml.customPath;
+            if (paramsOrYaml.targetServerId) selectedServerId = paramsOrYaml.targetServerId;
+            libraryMappings = paramsOrYaml.libraryMappings;
+            if (paramsOrYaml.importTmdbKey !== undefined) importTmdbKey = paramsOrYaml.importTmdbKey;
+        }
+
         if (!content || !content.trim()) {
-            const diskPath = path.join(process.cwd(), "kometaconfig.yml");
-            if (fs.existsSync(diskPath)) {
-                content = fs.readFileSync(diskPath, "utf-8");
-                source = "kometaconfig.yml (disk root)";
+            const diskRes = await readLocalKometaConfigAction(customPath);
+            if (diskRes.success && diskRes.content) {
+                content = diskRes.content;
+                source = diskRes.fileName || "kometaconfig.yml (disk)";
             }
         }
 
@@ -3750,9 +3841,9 @@ export async function importKometaConfigAction(yamlContent?: string, targetServe
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         let tmdbUpdated = false;
 
-        // 1. Auto-save TMDb API Key if provided and missing
-        if (parsed.tmdb?.apikey) {
-            if (!settings?.tmdbApiKey || settings.tmdbApiKey.trim().length === 0) {
+        // 1. Auto-save TMDb API Key if requested and present
+        if (importTmdbKey && parsed.tmdb?.apikey) {
+            if (!settings?.tmdbApiKey || settings.tmdbApiKey.trim().length === 0 || paramsOrYaml && typeof paramsOrYaml === "object" && paramsOrYaml.importTmdbKey) {
                 await prisma.settings.upsert({
                     where: { id: "global" },
                     update: { tmdbApiKey: parsed.tmdb.apikey },
@@ -3765,13 +3856,15 @@ export async function importKometaConfigAction(yamlContent?: string, targetServe
         // 2. Resolve target server and library sections
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         let plexSections: any[] = [];
-        let serverId = targetServerId || "main";
+        let serverId = selectedServerId;
 
         if (token) {
             try {
                 const servers = await getPlexServers(token);
                 if (servers && servers.length > 0) {
-                    serverId = targetServerId || servers[0].clientIdentifier;
+                    if (!selectedServerId || selectedServerId === "main") {
+                        serverId = servers[0].clientIdentifier;
+                    }
                     const resolved = await resolveWorkingPlexServerConnection(serverId);
                     if (resolved && resolved.serverUrl) {
                         plexSections = await getPlexServerSections(resolved.token, serverId, resolved.serverUrl);
@@ -3784,20 +3877,30 @@ export async function importKometaConfigAction(yamlContent?: string, targetServe
 
         // 3. Map each Kometa library to Portalarr overlay rule
         for (const [libName, kometaLib] of Object.entries(parsed.libraries)) {
-            // Find matching Plex section key if available
-            let sectionKey = "1";
-            const cleanName = libName.toLowerCase().trim();
-            const matchedSection = plexSections.find(s => 
-                s.title?.toLowerCase().trim() === cleanName || 
-                (cleanName.includes("movie") && s.type === "movie") ||
-                ((cleanName.includes("tv") || cleanName.includes("show")) && s.type === "show")
-            );
-
-            if (matchedSection) {
-                sectionKey = String(matchedSection.key);
+            // Check if user provided explicit mapping
+            const explicitMapping = libraryMappings?.find(m => m.kometaLibName === libName);
+            if (explicitMapping && explicitMapping.enabled === false) {
+                continue; // User skipped this library
             }
 
-            const rulePayload = convertKometaLibraryToPortalarrOverlay(kometaLib, serverId, sectionKey);
+            let effectiveServerId = explicitMapping?.serverId || serverId;
+            let sectionKey = explicitMapping?.sectionKey || "1";
+
+            if (!explicitMapping) {
+                // Find matching Plex section key if available
+                const cleanName = libName.toLowerCase().trim();
+                const matchedSection = plexSections.find(s => 
+                    s.title?.toLowerCase().trim() === cleanName || 
+                    (cleanName.includes("movie") && s.type === "movie") ||
+                    ((cleanName.includes("tv") || cleanName.includes("show")) && s.type === "show")
+                );
+
+                if (matchedSection) {
+                    sectionKey = String(matchedSection.key);
+                }
+            }
+
+            const rulePayload = convertKometaLibraryToPortalarrOverlay(kometaLib, effectiveServerId, sectionKey);
 
             // Save or update overlay rule
             const saveRes = await saveOverlayRuleAction({
@@ -3833,6 +3936,7 @@ export async function importKometaConfigAction(yamlContent?: string, targetServe
             if (saveRes.success && saveRes.rule) {
                 appliedRules.push({
                     library: libName,
+                    serverId: effectiveServerId,
                     sectionKey,
                     ruleId: saveRes.rule.id,
                     rule: rulePayload

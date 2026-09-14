@@ -54,6 +54,7 @@ import {
     getTrendingAndPlaceholderMediaAction,
     getPlaceholderPreviewDataUrlAction,
     createPlaceholderItemAction,
+    readLocalKometaConfigAction,
     inspectKometaConfigFileAction,
     importKometaConfigAction
 } from "@/app/curation-actions";
@@ -84,7 +85,7 @@ import {
     Upload, Image as ImageIcon, MoveUp, MoveDown, CalendarClock,
     Palette, ChevronUp, ChevronDown, Tag, Compass, Home, Clock3,
     Search, FileText, Info, Play, CheckCheck, Globe, Download, DownloadCloud, Package, Maximize2,
-    RotateCcw, Edit2, Bookmark, ArrowLeft, X
+    RotateCcw, Edit2, Bookmark, ArrowLeft, X, FileCode, UploadCloud, FolderOpen
 } from "lucide-react";
 
 export default function CurationStudio() {
@@ -174,9 +175,20 @@ export default function CurationStudio() {
     const [kometaModalOpen, setKometaModalOpen] = useState(false);
     const [kometaInspecting, setKometaInspecting] = useState(false);
     const [kometaImporting, setKometaImporting] = useState(false);
+    const [kometaLoadingDisk, setKometaLoadingDisk] = useState(false);
     const [kometaInspectionResult, setKometaInspectionResult] = useState<any | null>(null);
     const [kometaYamlInput, setKometaYamlInput] = useState<string>("");
+    const [kometaCustomPathInput, setKometaCustomPathInput] = useState<string>("");
     const [kometaImportSuccessMsg, setKometaImportSuccessMsg] = useState<string | null>(null);
+    const [kometaImportErrorMsg, setKometaImportErrorMsg] = useState<string | null>(null);
+    const [kometaImportTmdb, setKometaImportTmdb] = useState<boolean>(true);
+    const [kometaActiveViewTab, setKometaActiveViewTab] = useState<"overview" | "mapping" | "editor">("overview");
+    const [kometaLibMappings, setKometaLibMappings] = useState<Array<{
+        kometaLibName: string;
+        serverId: string;
+        sectionKey: string;
+        enabled: boolean;
+    }>>([]);
 
     // Overlay Rules & Simulator
     const [overlayRules, setOverlayRules] = useState<any[]>([]);
@@ -356,38 +368,150 @@ export default function CurationStudio() {
         }
     };
 
+    // Initialize library mappings from parsed Kometa config
+    const initKometaLibraryMappings = (parsedLibraries: Record<string, any>, defaultSrvId?: string) => {
+        if (!parsedLibraries) return [];
+        const targetSrv = servers.find(s => s.serverId === defaultSrvId) || servers[0];
+        const srvSections = targetSrv?.sections || [];
+
+        return Object.keys(parsedLibraries).map(libName => {
+            const cleanName = libName.toLowerCase().trim();
+            const matched = srvSections.find((s: any) => 
+                s.title?.toLowerCase().trim() === cleanName ||
+                (cleanName.includes("movie") && s.type === "movie") ||
+                ((cleanName.includes("tv") || cleanName.includes("show")) && s.type === "show")
+            );
+            return {
+                kometaLibName: libName,
+                serverId: targetSrv?.serverId || defaultSrvId || "main",
+                sectionKey: matched ? String(matched.key) : (srvSections[0] ? String(srvSections[0].key) : "1"),
+                enabled: true
+            };
+        });
+    };
+
     // Open and inspect Kometa Config
     const handleOpenKometaModal = async () => {
         setKometaModalOpen(true);
-        setKometaInspecting(true);
         setKometaImportSuccessMsg(null);
+        setKometaImportErrorMsg(null);
+
+        // If we already have YAML text loaded in state, inspect it
+        if (kometaYamlInput && kometaYamlInput.trim()) {
+            handleInspectKometaYaml(kometaYamlInput);
+            return;
+        }
+
+        // Otherwise auto-attempt to read local kometaconfig.yml from server disk root
+        setKometaInspecting(true);
         try {
-            const res = await inspectKometaConfigFileAction(kometaYamlInput || undefined);
-            if (res.success) {
-                setKometaInspectionResult(res);
+            const diskRes = await readLocalKometaConfigAction();
+            if (diskRes.success && diskRes.content) {
+                setKometaYamlInput(diskRes.content);
+                const inspectRes = await inspectKometaConfigFileAction(diskRes.content);
+                if (inspectRes.success) {
+                    setKometaInspectionResult(inspectRes);
+                    if (inspectRes.parsed?.libraries) {
+                        setKometaLibMappings(initKometaLibraryMappings(inspectRes.parsed.libraries, selectedServerId));
+                    }
+                }
             } else {
                 setKometaInspectionResult(null);
             }
-        } catch (e) {
+        } catch (e: any) {
+            console.error("Failed inspecting local Kometa config:", e);
             setKometaInspectionResult(null);
         } finally {
             setKometaInspecting(false);
         }
     };
 
+    // Load a specific local file from server disk
+    const handleLoadDiskKometaConfig = async (customPath?: string) => {
+        setKometaLoadingDisk(true);
+        setKometaImportSuccessMsg(null);
+        setKometaImportErrorMsg(null);
+        try {
+            const diskRes = await readLocalKometaConfigAction(customPath);
+            if (diskRes.success && diskRes.content) {
+                setKometaYamlInput(diskRes.content);
+                setKometaInspecting(true);
+                const inspectRes = await inspectKometaConfigFileAction(diskRes.content, customPath);
+                if (inspectRes.success) {
+                    setKometaInspectionResult(inspectRes);
+                    if (inspectRes.parsed?.libraries) {
+                        setKometaLibMappings(initKometaLibraryMappings(inspectRes.parsed.libraries, selectedServerId));
+                    }
+                    setKometaImportSuccessMsg(`Loaded "${diskRes.fileName}" (${diskRes.lineCount} lines)!`);
+                    setTimeout(() => setKometaImportSuccessMsg(null), 4000);
+                } else {
+                    setKometaImportErrorMsg(inspectRes.error || "Failed inspecting file.");
+                }
+            } else {
+                setKometaImportErrorMsg(diskRes.error || "File not found on server disk.");
+            }
+        } catch (e: any) {
+            setKometaImportErrorMsg(e.message || "Failed loading file.");
+        } finally {
+            setKometaLoadingDisk(false);
+            setKometaInspecting(false);
+        }
+    };
+
+    // Handle file upload from user's browser / computer
+    const handleFileUploadKometa = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const text = event.target?.result as string;
+            if (text) {
+                setKometaYamlInput(text);
+                setKometaInspecting(true);
+                setKometaImportSuccessMsg(null);
+                setKometaImportErrorMsg(null);
+                try {
+                    const inspectRes = await inspectKometaConfigFileAction(text);
+                    if (inspectRes.success) {
+                        setKometaInspectionResult(inspectRes);
+                        if (inspectRes.parsed?.libraries) {
+                            setKometaLibMappings(initKometaLibraryMappings(inspectRes.parsed.libraries, selectedServerId));
+                        }
+                        setKometaImportSuccessMsg(`Loaded "${file.name}" (${(file.size / 1024).toFixed(1)} KB)!`);
+                        setTimeout(() => setKometaImportSuccessMsg(null), 4000);
+                    } else {
+                        setKometaImportErrorMsg(inspectRes.error || "Failed parsing YAML.");
+                    }
+                } catch (err: any) {
+                    setKometaImportErrorMsg(err.message || "Failed parsing uploaded YAML.");
+                } finally {
+                    setKometaInspecting(false);
+                }
+            }
+        };
+        reader.readAsText(file);
+    };
+
     // Re-inspect upon YAML input change or re-scan
     const handleInspectKometaYaml = async (yamlText?: string) => {
         setKometaInspecting(true);
         setKometaImportSuccessMsg(null);
+        setKometaImportErrorMsg(null);
         try {
             const res = await inspectKometaConfigFileAction(yamlText);
             if (res.success) {
                 setKometaInspectionResult(res);
+                if (res.parsed?.libraries) {
+                    setKometaLibMappings(initKometaLibraryMappings(res.parsed.libraries, selectedServerId));
+                }
             } else {
                 setKometaInspectionResult(null);
+                setKometaImportErrorMsg(res.error || "Invalid YAML syntax.");
             }
-        } catch (e) {
+        } catch (e: any) {
             setKometaInspectionResult(null);
+            setKometaImportErrorMsg(e.message || "Failed analyzing YAML.");
         } finally {
             setKometaInspecting(false);
         }
@@ -397,20 +521,30 @@ export default function CurationStudio() {
     const handleImportKometaConfig = async () => {
         setKometaImporting(true);
         setKometaImportSuccessMsg(null);
+        setKometaImportErrorMsg(null);
         try {
-            const res = await importKometaConfigAction(kometaYamlInput || undefined, selectedServerId || undefined);
+            const res = await importKometaConfigAction({
+                yamlContent: kometaYamlInput || undefined,
+                targetServerId: selectedServerId || undefined,
+                libraryMappings: kometaLibMappings.length > 0 ? kometaLibMappings : undefined,
+                importTmdbKey: kometaImportTmdb
+            });
             if (res.success) {
                 setKometaImportSuccessMsg(res.message || "Successfully imported Kometa configuration!");
                 const rulesRes = await getOverlayRulesAction(selectedServerId || undefined, selectedSectionKey || undefined);
                 if (rulesRes.success && rulesRes.rules) {
                     setOverlayRules(rulesRes.rules);
                 }
+                const badgeRes = await getCustomBadgesAction();
+                if (badgeRes?.success && badgeRes.badges) {
+                    setCustomBadges(badgeRes.badges);
+                }
                 handleApplyKometaToSimulator();
             } else {
-                setKometaImportSuccessMsg(res.error || "Failed importing Kometa configuration.");
+                setKometaImportErrorMsg(res.error || "Failed importing Kometa configuration.");
             }
         } catch (e: any) {
-            setKometaImportSuccessMsg(e.message || "Failed importing Kometa configuration.");
+            setKometaImportErrorMsg(e.message || "Failed importing Kometa configuration.");
         } finally {
             setKometaImporting(false);
         }
@@ -3485,8 +3619,17 @@ export default function CurationStudio() {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="bg-slate-900/80 border-slate-800 text-slate-300 px-3 py-1.5 text-xs font-semibold flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2.5">
+                    <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleOpenKometaModal}
+                        className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs h-9 px-3.5 gap-2 shadow-lg shadow-amber-950/40 cursor-pointer transition-all hover:scale-105"
+                    >
+                        <Zap className="h-4 w-4 fill-slate-950" />
+                        <span>📥 Load Kometa Config</span>
+                    </Button>
+                    <Badge variant="outline" className="bg-slate-900/80 border-slate-800 text-slate-300 px-3 py-2 text-xs font-semibold flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                         <span>{servers.length} Connected {servers.length === 1 ? 'Server' : 'Servers'}</span>
                     </Badge>
@@ -4922,7 +5065,17 @@ export default function CurationStudio() {
                                                     Position layers independently. Top-ranked (#1) layers render foremost when sharing corners.
                                                 </p>
                                             </div>
-                                            <div className="flex items-center gap-2 shrink-0">
+                                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={handleOpenKometaModal}
+                                                    className="bg-amber-950/70 hover:bg-amber-900/90 border border-amber-500/50 text-amber-200 text-[11px] h-7 px-2.5 gap-1.5 shadow-sm font-bold cursor-pointer"
+                                                    title="Load & import existing Kometa config.yml / kometaconfig.yml file"
+                                                >
+                                                    <Zap className="h-3.5 w-3.5 text-amber-400 fill-amber-400/30" />
+                                                    <span>📥 Load Kometa Config</span>
+                                                </Button>
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -9521,151 +9674,461 @@ export default function CurationStudio() {
 
             {/* Kometa Configuration Importer & Migration Modal */}
             <Dialog open={kometaModalOpen} onOpenChange={setKometaModalOpen}>
-                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="text-base font-bold flex items-center gap-2">
-                            <Zap className="h-4 w-4 text-amber-400" />
-                            <span>Kometa Configuration Importer (`kometaconfig.yml`)</span>
-                        </DialogTitle>
+                <DialogContent className="max-w-3xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b border-slate-800">
+                        <div className="flex items-center justify-between">
+                            <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-white">
+                                <Zap className="h-5 w-5 text-amber-400 fill-amber-400/30" />
+                                <span>Kometa &amp; PMM Configuration Studio</span>
+                            </DialogTitle>
+                            <Badge variant="outline" className="bg-amber-950/40 text-amber-300 border-amber-500/40 text-xs font-semibold">
+                                YAML Importer &amp; Migrator
+                            </Badge>
+                        </div>
                         <DialogDescription className="text-xs text-slate-400">
-                            Seamlessly import your existing Kometa YAML config into Portalarr. Automatically configures resolution overlays, tiered ribbon priorities, content ratings, network logos, TMDb API key, and asset paths.
+                            Load your existing Kometa or Plex-Meta-Manager <code className="text-amber-300 font-mono">config.yml</code> directly from your computer, server disk, or paste raw YAML. Automatically converts overlay rules, ribbons, and TMDb keys.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-2">
-                        {/* Inspection Status & Detected Config */}
-                        {kometaInspecting ? (
-                            <div className="p-6 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col items-center justify-center gap-2 text-slate-400">
-                                <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
-                                <span className="text-xs">Inspecting Kometa configuration...</span>
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs py-2">
+                        {/* Source Loader Bar: File Upload, Quick Server Disk Buttons, Custom Path */}
+                        <div className="p-3.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                                    <FolderOpen className="h-4 w-4 text-purple-400" /> Load Configuration Source
+                                </span>
+                                <span className="text-[10px] text-slate-400">Select an import method</span>
                             </div>
-                        ) : kometaInspectionResult ? (
-                            <div className="space-y-3">
-                                <div className="p-3 bg-gradient-to-r from-amber-950/40 via-slate-950/70 to-slate-950/70 rounded-xl border border-amber-500/40 flex items-center justify-between">
-                                    <div className="space-y-0.5">
-                                        <div className="flex items-center gap-2">
-                                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px]">
-                                                {kometaInspectionResult.source}
-                                            </Badge>
-                                            <span className="text-xs font-bold text-white">Kometa Config Detected</span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-400">
-                                            Found {kometaInspectionResult.libraryCount} configured library sections ({kometaInspectionResult.libraryNames?.join(", ")}).
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {kometaInspectionResult.hasTmdb && (
-                                            <Badge className="bg-sky-500/20 text-sky-300 border-sky-500/30 text-[10px]">
-                                                ✓ TMDb Key
-                                            </Badge>
-                                        )}
-                                        {kometaInspectionResult.hasPlex && (
-                                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px]">
-                                                ✓ PMS URL
-                                            </Badge>
-                                        )}
-                                    </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {/* Option 1: Browse / Upload File */}
+                                <div className="p-3 bg-slate-900/90 rounded-xl border border-dashed border-slate-700/80 hover:border-amber-500/60 transition-colors flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer relative group">
+                                    <UploadCloud className="h-5 w-5 text-amber-400 group-hover:scale-110 transition-transform" />
+                                    <span className="font-bold text-slate-200 text-xs">Upload config.yml File</span>
+                                    <p className="text-[10px] text-slate-400">Drag &amp; drop or click to browse from your device</p>
+                                    <input 
+                                        type="file" 
+                                        accept=".yml,.yaml,.txt" 
+                                        onChange={handleFileUploadKometa}
+                                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+                                    />
                                 </div>
 
-                                {/* Libraries Breakdown */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {Object.entries(kometaInspectionResult.parsed?.libraries || {}).map(([name, lib]: [string, any]) => (
-                                        <div key={name} className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                                                    {name.toLowerCase().includes("tv") ? <Tv className="h-3.5 w-3.5 text-sky-400" /> : <Film className="h-3.5 w-3.5 text-purple-400" />}
-                                                    {name}
-                                                </span>
-                                                <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-300">
-                                                    {lib.overlayFiles?.length || 0} Overlays
-                                                </Badge>
-                                            </div>
-                                            <ul className="space-y-1 text-[11px] text-slate-300">
-                                                {lib.overlayFiles?.map((ov: any, idx: number) => {
-                                                    const def = (ov.defaultName || "").toLowerCase();
-                                                    if (def.includes("resolution")) {
-                                                        return (
-                                                            <li key={idx} className="flex items-center gap-1.5 text-amber-300">
-                                                                <Check className="h-3 w-3" />
-                                                                <span>4K Resolution + Dovetailed HDR</span>
-                                                            </li>
-                                                        );
-                                                    }
-                                                    if (def.includes("ribbon")) {
-                                                        return (
-                                                            <li key={idx} className="flex items-center gap-1.5 text-yellow-400">
-                                                                <Check className="h-3 w-3" />
-                                                                <span>Ranked Ribbons (IMDb Top 250 &gt; RT Fresh &gt; MC)</span>
-                                                            </li>
-                                                        );
-                                                    }
-                                                    if (def.includes("content_rating")) {
-                                                        return (
-                                                            <li key={idx} className="flex items-center gap-1.5 text-rose-300">
-                                                                <Check className="h-3 w-3" />
-                                                                <span>US Content Rating (Bottom-Left)</span>
-                                                            </li>
-                                                        );
-                                                    }
-                                                    if (def.includes("network")) {
-                                                        return (
-                                                            <li key={idx} className="flex items-center gap-1.5 text-sky-300">
-                                                                <Check className="h-3 w-3" />
-                                                                <span>TV Network / Studio Logos (Top-Left)</span>
-                                                            </li>
-                                                        );
-                                                    }
-                                                    return (
-                                                        <li key={idx} className="flex items-center gap-1.5 text-slate-400">
-                                                            <Check className="h-3 w-3" />
-                                                            <span>{ov.defaultName}</span>
-                                                        </li>
-                                                    );
-                                                })}
-                                            </ul>
-                                        </div>
-                                    ))}
+                                {/* Option 2: Quick Load from Server Disk */}
+                                <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2 flex flex-col justify-between">
+                                    <div>
+                                        <span className="font-bold text-slate-200 text-xs flex items-center gap-1">
+                                            <HardDrive className="h-3.5 w-3.5 text-cyan-400" /> Quick Server Disk
+                                        </span>
+                                        <p className="text-[10px] text-slate-400">Load files detected in project or mount root</p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={kometaLoadingDisk}
+                                            onClick={() => handleLoadDiskKometaConfig("kometaconfig.yml")}
+                                            className="bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700 text-[11px] h-7 px-2 gap-1 font-mono"
+                                        >
+                                            {kometaLoadingDisk ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileCode className="h-3 w-3" />}
+                                            kometaconfig.yml
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={kometaLoadingDisk}
+                                            onClick={() => handleLoadDiskKometaConfig("config.yml")}
+                                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 text-[11px] h-7 px-2 gap-1 font-mono"
+                                        >
+                                            config.yml
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={kometaLoadingDisk}
+                                            onClick={() => handleLoadDiskKometaConfig("config/config.yml")}
+                                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 text-[11px] h-7 px-2 gap-1 font-mono"
+                                        >
+                                            config/config.yml
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 text-center space-y-2">
-                                <p className="text-xs text-slate-400">No `kometaconfig.yml` file found on server disk. You can paste your YAML content below.</p>
-                            </div>
-                        )}
 
-                        {/* Optional Custom YAML Textarea */}
-                        <div className="space-y-1.5 pt-2">
-                            <Label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                                <span>Paste or Edit Kometa YAML (Optional)</span>
-                                {kometaYamlInput && (
-                                    <button 
-                                        type="button" 
-                                        onClick={() => handleInspectKometaYaml(kometaYamlInput)}
-                                        className="text-[10px] text-amber-400 hover:underline"
-                                    >
-                                        Re-analyze YAML
-                                    </button>
-                                )}
-                            </Label>
-                            <Textarea
-                                value={kometaYamlInput}
-                                onChange={e => {
-                                    setKometaYamlInput(e.target.value);
-                                    if (e.target.value.trim().length > 20) {
-                                        handleInspectKometaYaml(e.target.value);
-                                    }
-                                }}
-                                placeholder="libraries:&#10;  Movies:&#10;    overlay_files:&#10;    - default: resolution&#10;    - default: ribbon..."
-                                className="bg-slate-950 border-slate-800 font-mono text-xs h-28"
-                            />
+                            {/* Option 3: Custom File Path Input */}
+                            <div className="flex items-center gap-2 pt-1">
+                                <Input 
+                                    value={kometaCustomPathInput}
+                                    onChange={e => setKometaCustomPathInput(e.target.value)}
+                                    placeholder="Or enter custom file path: e.g. /mnt/user/appdata/kometa/config.yml"
+                                    className="bg-slate-900 border-slate-800 text-xs h-8 font-mono placeholder:text-slate-500"
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={kometaLoadingDisk || !kometaCustomPathInput.trim()}
+                                    onClick={() => handleLoadDiskKometaConfig(kometaCustomPathInput.trim())}
+                                    className="bg-slate-800 hover:bg-slate-700 text-white text-xs h-8 px-3 shrink-0"
+                                >
+                                    {kometaLoadingDisk ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <FolderCheck className="h-3.5 w-3.5 mr-1" />}
+                                    Load Path
+                                </Button>
+                            </div>
                         </div>
 
+                        {/* Status Messages */}
                         {kometaImportSuccessMsg && (
-                            <div className="p-3 bg-emerald-950/80 border border-emerald-800 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
+                            <div className="p-3 bg-emerald-950/80 border border-emerald-800 rounded-xl text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
                                 <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                                 <span>{kometaImportSuccessMsg}</span>
                             </div>
                         )}
+
+                        {kometaImportErrorMsg && (
+                            <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-xl text-xs text-rose-300 flex items-center gap-2 animate-in fade-in-50">
+                                <XCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                                <span>{kometaImportErrorMsg}</span>
+                            </div>
+                        )}
+
+                        {/* Sub-Tabs: Overview, Mapping, Editor */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                                    <button
+                                        type="button"
+                                        onClick={() => setKometaActiveViewTab("overview")}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                            kometaActiveViewTab === "overview"
+                                                ? "bg-purple-600 text-white shadow-sm"
+                                                : "text-slate-400 hover:text-white"
+                                        }`}
+                                    >
+                                        📋 Overview &amp; Rules {kometaInspectionResult?.libraryCount ? `(${kometaInspectionResult.libraryCount})` : ""}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setKometaActiveViewTab("mapping")}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                            kometaActiveViewTab === "mapping"
+                                                ? "bg-purple-600 text-white shadow-sm"
+                                                : "text-slate-400 hover:text-white"
+                                        }`}
+                                    >
+                                        🔀 Library Mapping
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setKometaActiveViewTab("editor")}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                            kometaActiveViewTab === "editor"
+                                                ? "bg-purple-600 text-white shadow-sm"
+                                                : "text-slate-400 hover:text-white"
+                                        }`}
+                                    >
+                                        📝 Raw YAML Editor
+                                    </button>
+                                </div>
+
+                                {kometaInspectionResult && (
+                                    <Badge variant="outline" className="text-[10px] border-slate-700 text-slate-300">
+                                        Source: {kometaInspectionResult.source}
+                                    </Badge>
+                                )}
+                            </div>
+
+                            {/* View 1: Overview & Detected Rules */}
+                            {kometaActiveViewTab === "overview" && (
+                                <div className="space-y-3">
+                                    {kometaInspecting ? (
+                                        <div className="p-8 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col items-center justify-center gap-2 text-slate-400">
+                                            <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+                                            <span className="text-xs">Inspecting Kometa configuration...</span>
+                                        </div>
+                                    ) : kometaInspectionResult ? (
+                                        <>
+                                            {/* Summary Card */}
+                                            <div className="p-3.5 bg-gradient-to-r from-amber-950/40 via-slate-950/80 to-slate-950/80 rounded-xl border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-mono font-bold">
+                                                            {kometaInspectionResult.source}
+                                                        </Badge>
+                                                        <span className="text-xs font-bold text-white">Parsed Configuration</span>
+                                                    </div>
+                                                    <p className="text-[11px] text-slate-300">
+                                                        Found <strong>{kometaInspectionResult.libraryCount}</strong> library section(s): {kometaInspectionResult.libraryNames?.join(", ")}.
+                                                    </p>
+                                                </div>
+
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    {kometaInspectionResult.hasTmdb && (
+                                                        <label className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 rounded-lg border border-sky-500/30 text-[11px] text-sky-200 cursor-pointer">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={kometaImportTmdb} 
+                                                                onChange={e => setKometaImportTmdb(e.target.checked)} 
+                                                                className="rounded border-slate-700 text-sky-500 focus:ring-0" 
+                                                            />
+                                                            <span>Save TMDb API Key</span>
+                                                        </label>
+                                                    )}
+                                                    {kometaInspectionResult.hasPlex && (
+                                                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px] py-1">
+                                                            ✓ PMS URL Detected
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Libraries Breakdown Grid */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {Object.entries(kometaInspectionResult.parsed?.libraries || {}).map(([name, lib]: [string, any]) => (
+                                                    <div key={name} className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2.5">
+                                                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                                                {name.toLowerCase().includes("tv") || name.toLowerCase().includes("show") 
+                                                                    ? <Tv className="h-4 w-4 text-sky-400" /> 
+                                                                    : <Film className="h-4 w-4 text-purple-400" />}
+                                                                {name}
+                                                            </span>
+                                                            <Badge variant="outline" className="text-[10px] font-mono border-slate-700 text-slate-300">
+                                                                {lib.overlayFiles?.length || 0} Overlays
+                                                            </Badge>
+                                                        </div>
+
+                                                        <ul className="space-y-1.5 text-[11px] text-slate-300">
+                                                            {lib.overlayFiles?.map((ov: any, idx: number) => {
+                                                                const def = (ov.defaultName || "").toLowerCase();
+                                                                const vars = ov.templateVariables || {};
+                                                                if (def.includes("resolution") || vars.use_resolution) {
+                                                                    return (
+                                                                        <li key={idx} className="flex items-center gap-2 text-amber-300 bg-amber-950/20 p-1.5 rounded-lg border border-amber-500/20">
+                                                                            <Check className="h-3.5 w-3.5 shrink-0" />
+                                                                            <div>
+                                                                                <strong className="block text-white">4K Resolution &amp; Dovetailed HDR</strong>
+                                                                                <span className="text-[10px] opacity-80">4K UHD, 1080p FHD, Dolby Vision &amp; HDR10+</span>
+                                                                            </div>
+                                                                        </li>
+                                                                    );
+                                                                }
+                                                                if (def.includes("ribbon")) {
+                                                                    const styleName = vars.style || "yellow";
+                                                                    return (
+                                                                        <li key={idx} className="flex items-center gap-2 text-yellow-300 bg-yellow-950/20 p-1.5 rounded-lg border border-yellow-500/20">
+                                                                            <Check className="h-3.5 w-3.5 shrink-0" />
+                                                                            <div>
+                                                                                <strong className="block text-white">Tiered Ribbons ({styleName.toUpperCase()})</strong>
+                                                                                <span className="text-[10px] opacity-80">IMDb Top 250 &gt; RT Certified Fresh &gt; Metacritic</span>
+                                                                            </div>
+                                                                        </li>
+                                                                    );
+                                                                }
+                                                                if (def.includes("content_rating")) {
+                                                                    return (
+                                                                        <li key={idx} className="flex items-center gap-2 text-rose-300 bg-rose-950/20 p-1.5 rounded-lg border border-rose-500/20">
+                                                                            <Check className="h-3.5 w-3.5 shrink-0" />
+                                                                            <div>
+                                                                                <strong className="block text-white">US Content Ratings</strong>
+                                                                                <span className="text-[10px] opacity-80">PG-13, R, TV-MA, NC-17 (Bottom-Left)</span>
+                                                                            </div>
+                                                                        </li>
+                                                                    );
+                                                                }
+                                                                if (def.includes("network") || def.includes("studio")) {
+                                                                    return (
+                                                                        <li key={idx} className="flex items-center gap-2 text-sky-300 bg-sky-950/20 p-1.5 rounded-lg border border-sky-500/20">
+                                                                            <Check className="h-3.5 w-3.5 shrink-0" />
+                                                                            <div>
+                                                                                <strong className="block text-white">Network &amp; Studio Logos</strong>
+                                                                                <span className="text-[10px] opacity-80">HBO, Netflix, Disney+, Apple TV+, Prime (Top-Left)</span>
+                                                                            </div>
+                                                                        </li>
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <li key={idx} className="flex items-center gap-2 text-slate-400 bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+                                                                        <Check className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                                                                        <span>{ov.defaultName}</span>
+                                                                    </li>
+                                                                );
+                                                            })}
+                                                        </ul>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="p-8 bg-slate-950/40 rounded-xl border border-slate-800 text-center space-y-2">
+                                            <FileCode className="h-8 w-8 text-slate-600 mx-auto" />
+                                            <p className="text-xs text-slate-300 font-semibold">No Kometa configuration loaded yet.</p>
+                                            <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                                                Click <strong>&quot;Upload config.yml File&quot;</strong> above, click one of the quick disk buttons, or paste your YAML text in the editor tab.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* View 2: Library Mapping Tab */}
+                            {kometaActiveViewTab === "mapping" && (
+                                <div className="space-y-3">
+                                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1 text-slate-300">
+                                        <span className="font-bold text-white text-xs">Plex Server &amp; Section Routing Matrix</span>
+                                        <p className="text-[11px] text-slate-400">
+                                            Map each Kometa library definition to a local Plex Server and section in Portalarr:
+                                        </p>
+                                    </div>
+
+                                    {kometaLibMappings.length === 0 ? (
+                                        <div className="p-6 bg-slate-950/40 rounded-xl border border-slate-800 text-center text-slate-400">
+                                            No libraries detected. Load a config file first.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2.5">
+                                            {kometaLibMappings.map((mapping, idx) => {
+                                                const srv = servers.find(s => s.serverId === mapping.serverId) || servers[0];
+                                                const srvSections = srv?.sections || [];
+
+                                                return (
+                                                    <div 
+                                                        key={mapping.kometaLibName} 
+                                                        className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all ${
+                                                            mapping.enabled 
+                                                                ? "bg-slate-950/90 border-slate-800" 
+                                                                : "bg-slate-950/40 border-slate-850 opacity-60"
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={mapping.enabled} 
+                                                                onChange={e => {
+                                                                    const next = [...kometaLibMappings];
+                                                                    next[idx].enabled = e.target.checked;
+                                                                    setKometaLibMappings(next);
+                                                                }}
+                                                                className="rounded border-slate-700 text-purple-600 focus:ring-0 h-4 w-4 shrink-0" 
+                                                            />
+                                                            <div className="space-y-0.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-bold text-white text-xs">{mapping.kometaLibName}</span>
+                                                                    <Badge className="bg-purple-950/60 text-purple-300 border-purple-500/30 text-[10px]">
+                                                                        Kometa Lib
+                                                                    </Badge>
+                                                                </div>
+                                                                <p className="text-[10px] text-slate-400">
+                                                                    Will generate &quot;Kometa - {mapping.kometaLibName}&quot; overlay rule
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                                            {/* Target Plex Server */}
+                                                            {servers.length > 1 && (
+                                                                <Select 
+                                                                    value={mapping.serverId} 
+                                                                    onValueChange={sId => {
+                                                                        const next = [...kometaLibMappings];
+                                                                        next[idx].serverId = sId;
+                                                                        const sObj = servers.find(s => s.serverId === sId);
+                                                                        if (sObj?.sections?.[0]) {
+                                                                            next[idx].sectionKey = String(sObj.sections[0].key);
+                                                                        }
+                                                                        setKometaLibMappings(next);
+                                                                    }}
+                                                                >
+                                                                    <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 w-36">
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {servers.map(s => (
+                                                                            <SelectItem key={s.serverId} value={s.serverId}>
+                                                                                {s.serverName}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            )}
+
+                                                            {/* Target Section */}
+                                                            <Select 
+                                                                value={mapping.sectionKey} 
+                                                                onValueChange={secKey => {
+                                                                    const next = [...kometaLibMappings];
+                                                                    next[idx].sectionKey = secKey;
+                                                                    setKometaLibMappings(next);
+                                                                }}
+                                                            >
+                                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 w-44">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {srvSections.map((sec: any) => (
+                                                                        <SelectItem key={sec.key} value={String(sec.key)}>
+                                                                            {sec.title} (Key {sec.key})
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* View 3: Raw YAML Editor Tab */}
+                            {kometaActiveViewTab === "editor" && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                            <FileCode className="h-3.5 w-3.5 text-amber-400" /> Kometa YAML Document
+                                        </Label>
+                                        <div className="flex items-center gap-2">
+                                            {kometaYamlInput && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => setKometaYamlInput("")}
+                                                    className="text-[10px] text-slate-400 hover:text-rose-300 h-6 px-2"
+                                                >
+                                                    Clear
+                                                </Button>
+                                            )}
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={kometaInspecting || !kometaYamlInput.trim()}
+                                                onClick={() => handleInspectKometaYaml(kometaYamlInput)}
+                                                className="bg-slate-800 border-slate-700 text-amber-300 hover:text-white text-[10px] h-6 px-2.5 gap-1"
+                                            >
+                                                <RefreshCw className={`h-3 w-3 ${kometaInspecting ? "animate-spin" : ""}`} />
+                                                Re-analyze YAML
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <Textarea
+                                        value={kometaYamlInput}
+                                        onChange={e => {
+                                            setKometaYamlInput(e.target.value);
+                                            if (e.target.value.trim().length > 20) {
+                                                handleInspectKometaYaml(e.target.value);
+                                            }
+                                        }}
+                                        placeholder="libraries:&#10;  Movies:&#10;    overlay_files:&#10;    - default: resolution&#10;    - default: ribbon..."
+                                        className="bg-slate-950 border-slate-800 font-mono text-xs h-56 leading-relaxed text-slate-200"
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
@@ -9677,9 +10140,10 @@ export default function CurationStudio() {
                                 handleApplyKometaToSimulator();
                                 setKometaModalOpen(false);
                             }}
-                            className="text-xs border-slate-700 hover:bg-slate-800"
+                            className="text-xs border-slate-700 hover:bg-slate-800 gap-1.5 text-slate-300"
                         >
-                            🎨 Preview in Simulator
+                            <Palette className="h-3.5 w-3.5 text-purple-400" />
+                            <span>Preview in Poster Simulator</span>
                         </Button>
                         <div className="flex items-center gap-2">
                             <Button type="button" variant="ghost" size="sm" onClick={() => setKometaModalOpen(false)}>Close</Button>
@@ -9688,7 +10152,7 @@ export default function CurationStudio() {
                                 size="sm"
                                 disabled={kometaImporting || (!kometaInspectionResult && !kometaYamlInput)}
                                 onClick={handleImportKometaConfig}
-                                className="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-black text-xs gap-1.5 shadow-md"
+                                className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
                             >
                                 {kometaImporting ? (
                                     <>
@@ -9698,7 +10162,7 @@ export default function CurationStudio() {
                                 ) : (
                                     <>
                                         <Zap className="h-3.5 w-3.5 fill-slate-950" />
-                                        <span>Apply Kometa Configuration</span>
+                                        <span>Import &amp; Apply to Portalarr</span>
                                     </>
                                 )}
                             </Button>
