@@ -1,8 +1,7 @@
 import fs from "fs";
 import path from "path";
-import yaml from "js-yaml";
+import { load as yamlLoad } from "js-yaml";
 import prisma from "@/lib/prisma";
-import { logger } from "@/lib/logger";
 import { TieredRibbonItem } from "./overlay-engine";
 
 export interface ParsedKometaOverlayFile {
@@ -44,7 +43,7 @@ export function parseKometaYamlString(yamlText: string): ParsedKometaConfig {
     if (!yamlText || !yamlText.trim()) return config;
 
     try {
-        const rawDoc: any = yaml.load(yamlText);
+        const rawDoc: any = yamlLoad(yamlText);
         if (!rawDoc || typeof rawDoc !== "object") return config;
 
         // 1. Plex Connections
