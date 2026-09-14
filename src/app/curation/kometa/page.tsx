@@ -9,7 +9,7 @@ export const metadata = {
     description: "4K UHD, HDR, Dolby Vision dovetailing, studio audio codecs, US age ratings, network logos, and tiered gloss ribbons."
 };
 
-export default async function CurationKometaPage() {
+export default async function CurationKometaSubPage() {
     const user = await getCurrentUser();
     if (!user) {
         redirect("/login");

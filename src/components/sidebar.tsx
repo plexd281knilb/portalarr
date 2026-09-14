@@ -18,7 +18,8 @@ import {
   Terminal,
   Film,
   Tv,
-  Sparkles
+  Sparkles,
+  Trash2
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -175,16 +176,46 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                 </div>
                 <Link href="/curation">
                   <Button
-                    variant={pathname.startsWith("/curation") ? "secondary" : "ghost"}
+                    variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
                     className={cn(
                       "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/curation")
+                      pathname === "/curation" || pathname.startsWith("/curation/kometa")
                         ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.25)] ring-1 ring-purple-500/40 font-bold"
                         : "text-purple-400/80 hover:text-purple-300 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
                     )}
                   >
                     <Sparkles className="mr-2 h-4 w-4 text-purple-400" />
-                    Curation Studio
+                    Kometa Overlays
+                  </Button>
+                </Link>
+
+                <Link href="/curation/agregarr">
+                  <Button
+                    variant={pathname.startsWith("/curation/agregarr") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/curation/agregarr")
+                        ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40 font-bold"
+                        : "text-amber-400/80 hover:text-amber-300 hover:bg-amber-950/30 hover:ring-1 hover:ring-amber-500/40"
+                    )}
+                  >
+                    <Film className="mr-2 h-4 w-4 text-amber-400" />
+                    Agregarr Hubs
+                  </Button>
+                </Link>
+
+                <Link href="/curation/prune">
+                  <Button
+                    variant={pathname.startsWith("/curation/prune") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/curation/prune")
+                        ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.25)] ring-1 ring-rose-500/40 font-bold"
+                        : "text-rose-400/80 hover:text-rose-300 hover:bg-rose-950/30 hover:ring-1 hover:ring-rose-500/40"
+                    )}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4 text-rose-400" />
+                    Maintainerr Prune
                   </Button>
                 </Link>
 
@@ -398,15 +429,43 @@ export function MobileSidebar() {
                       </div>
                       <Link href="/curation" onClick={() => setIsOpen(false)}>
                         <Button
-                          variant={pathname.startsWith("/curation") ? "secondary" : "ghost"}
+                          variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
                           className={cn(
                             "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/curation")
+                            pathname === "/curation" || pathname.startsWith("/curation/kometa")
                               ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.25)] ring-1 ring-purple-500/40 font-bold"
                               : "text-purple-400/80 hover:text-purple-300 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
                           )}
                         >
-                          <Sparkles className="mr-2 h-4 w-4 text-purple-400" /> Curation Studio
+                          <Sparkles className="mr-2 h-4 w-4 text-purple-400" /> Kometa Overlays
+                        </Button>
+                      </Link>
+
+                      <Link href="/curation/agregarr" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/curation/agregarr") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/curation/agregarr")
+                              ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40 font-bold"
+                              : "text-amber-400/80 hover:text-amber-300 hover:bg-amber-950/30 hover:ring-1 hover:ring-amber-500/40"
+                          )}
+                        >
+                          <Film className="mr-2 h-4 w-4 text-amber-400" /> Agregarr Hubs
+                        </Button>
+                      </Link>
+
+                      <Link href="/curation/prune" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/curation/prune") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/curation/prune")
+                              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.25)] ring-1 ring-rose-500/40 font-bold"
+                              : "text-rose-400/80 hover:text-rose-300 hover:bg-rose-950/30 hover:ring-1 hover:ring-rose-500/40"
+                          )}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4 text-rose-400" /> Maintainerr Prune
                         </Button>
                       </Link>
 
