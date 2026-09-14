@@ -235,7 +235,6 @@ export default function CurationStudio() {
     const [simRibbonType, setSimRibbonType] = useState<
         | "auto_quality"
         | "auto_edition"
-        | "leaving_soon"
         | "custom"
         | "imdb_top_250"
         | "imdb_top_250_tv"
@@ -280,7 +279,6 @@ export default function CurationStudio() {
         if (simRibbonType === "bafta_winner") return "BAFTA WINNER";
         if (simRibbonType === "cannes_winner") return "PALME D'OR";
         if (simRibbonType === "metacritic_must_see") return "MUST-SEE";
-        if (simRibbonType === "leaving_soon") return "LEAVING SOON";
         if (simRibbonType === "auto_edition") {
             if (item?.detectedBadges?.edition) return item.detectedBadges.edition.toUpperCase();
             return "IMAX ENHANCED";
@@ -5362,7 +5360,7 @@ export default function CurationStudio() {
                                                                                         setSimRibbonType(val);
                                                                                         if (val === "imdb_top_250" || val === "imdb_top_250_tv" || val === "oscar_winner" || val === "academy_award" || val === "golden_globe" || val === "bafta_winner" || val === "cannes_winner") {
                                                                                             setSimRibbonTheme("gold");
-                                                                                        } else if (val === "certified_fresh" || val === "rt_fresh" || val === "leaving_soon") {
+                                                                                        } else if (val === "certified_fresh" || val === "rt_fresh") {
                                                                                             setSimRibbonTheme("crimson");
                                                                                         } else if (val === "emmy_winner") {
                                                                                             setSimRibbonTheme("purple");
@@ -5394,7 +5392,6 @@ export default function CurationStudio() {
                                                                                         <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-700/60 mt-1 pt-1">⚡ Auto Dynamic Metadata</div>
                                                                                         <SelectItem value="auto_quality">Auto Quality (4K / DV / HDR)</SelectItem>
                                                                                         <SelectItem value="auto_edition">Auto Edition (IMAX / Remux / Cut)</SelectItem>
-                                                                                        <SelectItem value="leaving_soon">Leaving Soon Countdown</SelectItem>
 
                                                                                         <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-700/60 mt-1 pt-1">✍️ Custom Banner</div>
                                                                                         <SelectItem value="custom">Custom Text Banner</SelectItem>
@@ -5537,7 +5534,6 @@ export default function CurationStudio() {
                                                                                                             else if (val === "metacritic_must_see") { next[tIdx].text = "MUST-SEE"; next[tIdx].theme = "emerald"; }
                                                                                                             else if (val === "auto_quality") { next[tIdx].text = "4K UHD"; next[tIdx].theme = "purple"; }
                                                                                                             else if (val === "auto_edition") { next[tIdx].text = "SPECIAL EDITION"; next[tIdx].theme = "cyan"; }
-                                                                                                            else if (val === "leaving_soon") { next[tIdx].text = "LEAVING SOON"; next[tIdx].theme = "crimson"; }
                                                                                                             setSimTieredRibbons(next);
                                                                                                         }}
                                                                                                     >
@@ -5559,7 +5555,6 @@ export default function CurationStudio() {
                                                                                                             <SelectItem value="metacritic_must_see">💎 Metacritic Must-See</SelectItem>
                                                                                                             <SelectItem value="auto_quality">⚡ 4K UHD / DV</SelectItem>
                                                                                                             <SelectItem value="auto_edition">🎞️ Edition Cut</SelectItem>
-                                                                                                            <SelectItem value="leaving_soon">⚠️ Leaving Soon</SelectItem>
                                                                                                             <SelectItem value="custom">✍️ Custom Text</SelectItem>
                                                                                                         </SelectContent>
                                                                                                     </Select>

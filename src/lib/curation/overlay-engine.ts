@@ -1610,8 +1610,7 @@ export async function applyOverlaysToPoster(
                     { id: "tier-1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold" as const, enabled: true },
                     { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson" as const, enabled: true },
                     { id: "tier-3", type: "auto_quality", text: "4K UHD", theme: "purple" as const, enabled: true },
-                    { id: "tier-4", type: "auto_edition", text: "SPECIAL EDITION", theme: "cyan" as const, enabled: true },
-                    { id: "tier-5", type: "leaving_soon", text: "LEAVING SOON", theme: "crimson" as const, enabled: true }
+                    { id: "tier-4", type: "auto_edition", text: "SPECIAL EDITION", theme: "cyan" as const, enabled: true }
                 ];
 
             const matched = evaluateWaterfallRibbon(mediaInfo, waterfallTiers, {

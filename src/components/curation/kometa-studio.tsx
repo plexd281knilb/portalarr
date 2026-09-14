@@ -277,8 +277,7 @@ export function KometaStudio() {
         { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson", enabled: true },
         { id: "tier-3", type: "oscar_winner", text: "OSCAR WINNER", theme: "gold", enabled: true },
         { id: "tier-4", type: "auto_quality", text: "4K UHD", theme: "purple", enabled: true },
-        { id: "tier-5", type: "auto_edition", text: "SPECIAL EDITION", theme: "cyan", enabled: true },
-        { id: "tier-6", type: "leaving_soon", text: "LEAVING SOON", theme: "crimson", enabled: true }
+        { id: "tier-5", type: "auto_edition", text: "SPECIAL EDITION", theme: "cyan", enabled: true }
     ];
 
     const [simTieredRibbons, setSimTieredRibbons] = useState<Array<{
@@ -612,7 +611,6 @@ export function KometaStudio() {
         { value: "cannes_winner", label: "🌿 Cannes Palme d'Or Winner", defaultText: "PALME D'OR", defaultTheme: "gold" as const },
         { value: "auto_quality", label: "📺 4K UHD / Dolby Vision Quality", defaultText: "4K UHD", defaultTheme: "purple" as const },
         { value: "auto_edition", label: "🏷️ Special / IMAX Edition", defaultText: "SPECIAL EDITION", defaultTheme: "cyan" as const },
-        { value: "leaving_soon", label: "⏳ Leaving Soon", defaultText: "LEAVING SOON", defaultTheme: "crimson" as const },
         { value: "custom", label: "⚙️ Custom Rule / Condition", defaultText: "FEATURED", defaultTheme: "glass" as const }
     ];
 
@@ -751,9 +749,6 @@ export function KometaStudio() {
                 } else if (Boolean(simFallback.edition)) {
                     isMatch = true;
                 }
-            } else if (type === "leaving_soon") {
-                ruleLabel = "Leaving Soon";
-                if (item && Boolean(item.isLeavingSoon)) isMatch = true;
             } else if (type === "custom" || tier.matchRule) {
                 ruleLabel = tier.text || "Custom Condition";
                 if (tier.matchRule && item) {
