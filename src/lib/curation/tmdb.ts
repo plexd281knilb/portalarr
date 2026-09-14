@@ -325,3 +325,85 @@ export async function searchTmdbTv(title: string, year?: number): Promise<TmdbMe
         return [];
     }
 }
+
+/**
+ * Discover Trending & Popular Media by Streaming Provider (e.g. Disney+ = 337, Netflix = 8, Apple TV+ = 350, Amazon = 9, Max = 384)
+ * Supports Family & Kids filtering (G, PG, Animation, Family).
+ */
+export async function getTmdbStreamingProviderMedia(
+    providerId: number,
+    options: {
+        isKids?: boolean;
+        mediaType?: "movie" | "tv" | "both";
+        page?: number;
+        minVotes?: number;
+    } = {}
+): Promise<TmdbMediaItem[]> {
+    const { isKids = false, mediaType = "both", page = 1, minVotes = 10 } = options;
+    const items: TmdbMediaItem[] = [];
+
+    try {
+        // Fetch Movies
+        if (mediaType === "movie" || mediaType === "both") {
+            const movieParams: Record<string, string | number> = {
+                with_watch_providers: providerId,
+                watch_region: "US",
+                sort_by: "popularity.desc",
+                "vote_count.gte": minVotes,
+                page
+            };
+
+            if (isKids) {
+                movieParams.with_genres = "16,10751"; // Animation, Family
+                movieParams.certification_country = "US";
+                movieParams["certification.lte"] = "PG";
+            }
+
+            const movieData = await tmdbFetch("/discover/movie", movieParams);
+            if (movieData?.results) {
+                items.push(...movieData.results.map(mapTmdbMovie));
+            }
+        }
+
+        // Fetch TV Shows
+        if (mediaType === "tv" || mediaType === "both") {
+            const tvParams: Record<string, string | number> = {
+                with_watch_providers: providerId,
+                watch_region: "US",
+                sort_by: "popularity.desc",
+                "vote_count.gte": Math.max(5, Math.floor(minVotes / 2)),
+                page
+            };
+
+            if (isKids) {
+                tvParams.with_genres = "16,10751,10762"; // Animation, Family, Kids
+            }
+
+            const tvData = await tmdbFetch("/discover/tv", tvParams);
+            if (tvData?.results) {
+                items.push(...tvData.results.map(mapTmdbTv));
+            }
+        }
+
+        // Sort combined list by popularity descending
+        items.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+        return items;
+    } catch {
+        return items;
+    }
+}
+
+/**
+ * Get Disney+ Trending (All or Kids)
+ */
+export async function getDisneyTrending(isKids = false, page = 1): Promise<TmdbMediaItem[]> {
+    return await getTmdbStreamingProviderMedia(337, { isKids, mediaType: "both", page, minVotes: 10 });
+}
+
+/**
+ * Get Netflix Trending (All or Kids)
+ */
+export async function getNetflixTrending(isKids = false, page = 1): Promise<TmdbMediaItem[]> {
+    return await getTmdbStreamingProviderMedia(8, { isKids, mediaType: "both", page, minVotes: 10 });
+}
+

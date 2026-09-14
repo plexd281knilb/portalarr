@@ -50,7 +50,10 @@ import {
     importGitHubBadgesAction,
     getPresetBadgePacksAction,
     previewCollectionMatchingAction,
-    downloadAllKometaPacksAction
+    downloadAllKometaPacksAction,
+    getTrendingAndPlaceholderMediaAction,
+    getPlaceholderPreviewDataUrlAction,
+    createPlaceholderItemAction
 } from "@/app/curation-actions";
 import { 
     COLLECTION_PRESETS, 
@@ -329,6 +332,26 @@ export default function CurationStudio() {
     const [pathCheckResults, setPathCheckResults] = useState<Record<string, { checking: boolean; success?: boolean; msg?: string }>>({});
     const [vaultStats, setVaultStats] = useState<{ backupCount: number; backupBytes: number; badgeCount: number; badgeBytes: number; backupDir: string; badgeDir: string } | null>(null);
 
+    // Trending Media & Placeholder Hub States (Disney, Disney Kids, Netflix, Netflix Kids, Digital, Theatrical)
+    const [trendingCategory, setTrendingCategory] = useState<"all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "digital" | "theatrical">("all");
+    const [trendingMedia, setTrendingMedia] = useState<any[]>([]);
+    const [trendingLoading, setTrendingLoading] = useState(false);
+    const [trendingSearchQuery, setTrendingSearchQuery] = useState("");
+    const [trendingInLibraryCount, setTrendingInLibraryCount] = useState(0);
+    const [trendingMissingCount, setTrendingMissingCount] = useState(0);
+    const [trendingLibraryFilter, setTrendingLibraryFilter] = useState<"all" | "in_library" | "missing">("all");
+    const [placeholderModalOpen, setPlaceholderModalOpen] = useState(false);
+    const [selectedPlaceholderItem, setSelectedPlaceholderItem] = useState<any | null>(null);
+    const [placeholderModalBannerType, setPlaceholderModalBannerType] = useState<"not_requested" | "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "custom">("not_requested");
+    const [placeholderModalBannerText, setPlaceholderModalBannerText] = useState("NOT REQUESTED");
+    const [placeholderModalBannerTheme, setPlaceholderModalBannerTheme] = useState<"crimson-red" | "indigo-purple" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted">("crimson-red");
+    const [placeholderModalBannerPosition, setPlaceholderModalBannerPosition] = useState<"bottom" | "top" | "corner">("bottom");
+    const [generatingPlaceholder, setGeneratingPlaceholder] = useState(false);
+    const [placeholderPreviewDataUrl, setPlaceholderPreviewDataUrl] = useState<string | null>(null);
+    const [placeholderPreviewLoading, setPlaceholderPreviewLoading] = useState(false);
+    const [placeholderSuccessMsg, setPlaceholderSuccessMsg] = useState<string | null>(null);
+    const [placeholderCreatedDataUrl, setPlaceholderCreatedDataUrl] = useState<string | null>(null);
+
     // Agregarr Placeholder Overlays Simulator & Timings
     const [placeholderSimState, setPlaceholderSimState] = useState<"theatrical" | "countdown" | "now_streaming" | "custom">("countdown");
     const [savingPlaceholders, setSavingPlaceholders] = useState(false);
@@ -576,6 +599,119 @@ export default function CurationStudio() {
         }
     };
 
+    const loadTrendingMedia = async (category = trendingCategory, srvId = selectedServerId, secKey = selectedSectionKey) => {
+        setTrendingLoading(true);
+        try {
+            const res = await getTrendingAndPlaceholderMediaAction(srvId || undefined, secKey || undefined, category as any);
+            if (res.success && res.items) {
+                setTrendingMedia(res.items);
+                setTrendingInLibraryCount(res.inLibraryCount || 0);
+                setTrendingMissingCount(res.missingCount || 0);
+            }
+        } catch (e) {
+            console.error("Failed loading trending media:", e);
+        } finally {
+            setTrendingLoading(false);
+        }
+    };
+
+    const handleOpenPlaceholderModal = async (item: any) => {
+        setSelectedPlaceholderItem(item);
+        setPlaceholderModalBannerType("not_requested");
+        setPlaceholderModalBannerText("NOT REQUESTED");
+        setPlaceholderModalBannerTheme("crimson-red");
+        setPlaceholderModalBannerPosition("bottom");
+        setPlaceholderSuccessMsg(null);
+        setPlaceholderCreatedDataUrl(null);
+        setPlaceholderModalOpen(true);
+        setPlaceholderPreviewLoading(true);
+        try {
+            const prevRes = await getPlaceholderPreviewDataUrlAction(
+                item.posterPath,
+                item.title,
+                {
+                    bannerType: "not_requested",
+                    bannerText: "NOT REQUESTED",
+                    bannerTheme: "crimson-red",
+                    bannerPosition: "bottom"
+                }
+            );
+            if (prevRes.success && prevRes.dataUrl) {
+                setPlaceholderPreviewDataUrl(prevRes.dataUrl);
+            }
+        } catch (e) {
+            console.error("Failed generating placeholder preview:", e);
+        } finally {
+            setPlaceholderPreviewLoading(false);
+        }
+    };
+
+    const handleRefreshPlaceholderPreview = async (
+        bType = placeholderModalBannerType,
+        bText = placeholderModalBannerText,
+        bTheme = placeholderModalBannerTheme,
+        bPos = placeholderModalBannerPosition
+    ) => {
+        if (!selectedPlaceholderItem) return;
+        setPlaceholderPreviewLoading(true);
+        try {
+            const prevRes = await getPlaceholderPreviewDataUrlAction(
+                selectedPlaceholderItem.posterPath,
+                selectedPlaceholderItem.title,
+                {
+                    bannerType: bType as any,
+                    bannerText: bText,
+                    bannerTheme: bTheme as any,
+                    bannerPosition: bPos as any
+                }
+            );
+            if (prevRes.success && prevRes.dataUrl) {
+                setPlaceholderPreviewDataUrl(prevRes.dataUrl);
+            }
+        } catch (e) {
+            console.error("Failed refreshing placeholder preview:", e);
+        } finally {
+            setPlaceholderPreviewLoading(false);
+        }
+    };
+
+    const handleCreatePlaceholderItem = async () => {
+        if (!selectedPlaceholderItem || !selectedServerId) return;
+        setGeneratingPlaceholder(true);
+        setPlaceholderSuccessMsg(null);
+        try {
+            const res = await createPlaceholderItemAction(
+                selectedServerId,
+                selectedSectionKey,
+                {
+                    tmdbId: selectedPlaceholderItem.id,
+                    title: selectedPlaceholderItem.title,
+                    year: selectedPlaceholderItem.year,
+                    mediaType: selectedPlaceholderItem.mediaType,
+                    posterPath: selectedPlaceholderItem.posterPath,
+                    overview: selectedPlaceholderItem.overview,
+                    bannerType: placeholderModalBannerType,
+                    bannerText: placeholderModalBannerText,
+                    bannerTheme: placeholderModalBannerTheme,
+                    bannerPosition: placeholderModalBannerPosition
+                }
+            );
+            if (res.success) {
+                setPlaceholderSuccessMsg(res.message || `Created "${placeholderModalBannerText}" placeholder card!`);
+                if (res.dataUrl) {
+                    setPlaceholderCreatedDataUrl(res.dataUrl);
+                }
+                setTrendingMedia(prev => prev.map(it => it.id === selectedPlaceholderItem.id ? { ...it, hasPlaceholder: true, placeholderBanner: placeholderModalBannerText } : it));
+            } else {
+                setPlaceholderSuccessMsg(`Error: ${res.error || "Failed to create placeholder card."}`);
+            }
+        } catch (e: any) {
+            setPlaceholderSuccessMsg(`Error: ${e.message || "Failed creating placeholder."}`);
+        } finally {
+            setGeneratingPlaceholder(false);
+        }
+    };
+
     useEffect(() => {
         loadData();
     }, []);
@@ -583,12 +719,16 @@ export default function CurationStudio() {
     useEffect(() => {
         if (selectedServerId && selectedSectionKey) {
             loadCollections(selectedServerId, selectedSectionKey);
+            if (subTab === "releases") {
+                loadTrendingMedia(trendingCategory, selectedServerId, selectedSectionKey);
+            }
         }
     }, [selectedServerId, selectedSectionKey]);
 
     useEffect(() => {
         if (subTab === "releases") {
             loadReleases();
+            loadTrendingMedia(trendingCategory);
         } else if (subTab === "badges" && customBadges.length === 0) {
             getCustomBadgesAction().then(res => {
                 if (res?.success && res.badges) setCustomBadges(res.badges);
@@ -2568,6 +2708,20 @@ export default function CurationStudio() {
             );
         }
         if (s === "tmdb") {
+            if (q.includes("provider:337") || q.includes("disney") || q.includes("network:2739")) {
+                return (
+                    <Badge variant="secondary" className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 gap-1">
+                        <span>✨</span> Disney+
+                    </Badge>
+                );
+            }
+            if (q.includes("provider:8") || q.includes("netflix") || q.includes("network:213")) {
+                return (
+                    <Badge variant="secondary" className="text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/40 gap-1">
+                        <span>🔴</span> Netflix
+                    </Badge>
+                );
+            }
             return (
                 <Badge variant="secondary" className="text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 gap-1">
                     <span>🎬</span> TMDb
@@ -3058,8 +3212,8 @@ export default function CurationStudio() {
                         <span className="truncate">Media Inspector</span>
                     </TabsTrigger>
                     <TabsTrigger value="releases" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 min-w-0">
-                        <Calendar className="h-4 w-4 text-emerald-400 shrink-0" />
-                        <span className="truncate">Digital Releases</span>
+                        <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <span className="truncate">Trending & Placeholders</span>
                     </TabsTrigger>
                     <TabsTrigger value="pruning" className="py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl transition-all duration-200 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-slate-800/80 min-w-0">
                         <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
@@ -5736,9 +5890,632 @@ export default function CurationStudio() {
                 </TabsContent>
 
                 {/* ========================================================================= */}
-                {/* TAB 4: UPCOMING DIGITAL RELEASES & AGREGARR PLACEHOLDER TIMINGS */}
+                {/* TAB 4: TRENDING MEDIA & NOT-REQUESTED PLACEHOLDER STUDIO */}
                 {/* ========================================================================= */}
                 <TabsContent value="releases" className="space-y-6">
+                    {/* Trending Media & Placeholder Studio Deck */}
+                    <Card className="bg-slate-900/80 border-slate-800 shadow-xl overflow-hidden">
+                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 bg-gradient-to-br from-purple-500/20 to-pink-500/20 text-purple-400 rounded-xl border border-purple-500/30">
+                                            <Sparkles className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                                Trending Media & Placeholder Studio
+                                                <Badge className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[10px] font-bold border-none">
+                                                    Disney+ • Netflix • Digital • Cinema
+                                                </Badge>
+                                            </CardTitle>
+                                            <CardDescription className="text-xs text-slate-400">
+                                                Discover top-trending streaming content, compare live against your Plex library, and deploy 1-click &quot;NOT REQUESTED&quot; placeholder cards.
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <div className="relative w-48 sm:w-60">
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                        <Input
+                                            value={trendingSearchQuery}
+                                            onChange={e => setTrendingSearchQuery(e.target.value)}
+                                            placeholder="Search trending titles..."
+                                            className="bg-slate-950/80 border-slate-700 text-xs pl-8 h-8 rounded-lg"
+                                        />
+                                    </div>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => loadTrendingMedia(trendingCategory)}
+                                        disabled={trendingLoading}
+                                        className="h-8 px-2.5 text-xs border-slate-700 hover:border-purple-500 text-slate-200 gap-1.5"
+                                    >
+                                        <RefreshCw className={`h-3.5 w-3.5 text-purple-400 ${trendingLoading ? 'animate-spin' : ''}`} />
+                                        <span className="hidden sm:inline">Refresh</span>
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Streaming Provider Category Selector Tabs */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-slate-800/60 mt-3">
+                                <button
+                                    onClick={() => {
+                                        setTrendingCategory("all");
+                                        loadTrendingMedia("all");
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                        trendingCategory === "all"
+                                            ? "bg-purple-600 text-white shadow-md shadow-purple-900/40"
+                                            : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                    }`}
+                                >
+                                    <Globe className="h-3.5 w-3.5" />
+                                    <span>All Trending</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setTrendingCategory("disney");
+                                        loadTrendingMedia("disney");
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                        trendingCategory === "disney"
+                                            ? "bg-blue-600 text-white shadow-md shadow-blue-900/40"
+                                            : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                    }`}
+                                >
+                                    <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
+                                    <span>✨ Disney+ Trending</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setTrendingCategory("disney_kids");
+                                        loadTrendingMedia("disney_kids");
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                        trendingCategory === "disney_kids"
+                                            ? "bg-cyan-600 text-white shadow-md shadow-cyan-900/40"
+                                            : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                    }`}
+                                >
+                                    <span>🧸</span>
+                                    <span>Disney+ Kids & Family</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setTrendingCategory("netflix");
+                                        loadTrendingMedia("netflix");
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                        trendingCategory === "netflix"
+                                            ? "bg-red-600 text-white shadow-md shadow-red-900/40"
+                                            : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                    }`}
+                                >
+                                    <Film className="h-3.5 w-3.5 text-red-300" />
+                                    <span>🔴 Netflix Trending</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setTrendingCategory("netflix_kids");
+                                        loadTrendingMedia("netflix_kids");
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                        trendingCategory === "netflix_kids"
+                                            ? "bg-rose-600 text-white shadow-md shadow-rose-900/40"
+                                            : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                    }`}
+                                >
+                                    <span>🎈</span>
+                                    <span>Netflix Kids & Family</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setTrendingCategory("digital");
+                                        loadTrendingMedia("digital");
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                        trendingCategory === "digital"
+                                            ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/40"
+                                            : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                    }`}
+                                >
+                                    <Zap className="h-3.5 w-3.5 text-emerald-300" />
+                                    <span>⚡ Digital Releases</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setTrendingCategory("theatrical");
+                                        loadTrendingMedia("theatrical");
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                        trendingCategory === "theatrical"
+                                            ? "bg-amber-600 text-white shadow-md shadow-amber-900/40"
+                                            : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                    }`}
+                                >
+                                    <Film className="h-3.5 w-3.5 text-amber-300" />
+                                    <span>🎬 Now Playing in Theaters</span>
+                                </button>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-5 space-y-4">
+                            {/* Library Match Summary & Filter Pills */}
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-xs">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-slate-400 font-medium">Library Comparison:</span>
+                                    <Badge variant="outline" className="bg-slate-900 border-slate-700 text-slate-200">
+                                        Total: <strong className="ml-1 text-white">{trendingMedia.length}</strong>
+                                    </Badge>
+                                    <Badge variant="outline" className="bg-emerald-950/60 border-emerald-800 text-emerald-300">
+                                        ✓ In Plex Library: <strong className="ml-1 text-emerald-200">{trendingInLibraryCount}</strong>
+                                    </Badge>
+                                    <Badge variant="outline" className="bg-rose-950/60 border-rose-800 text-rose-300">
+                                        🚫 Not Requested / Missing: <strong className="ml-1 text-rose-200">{trendingMissingCount}</strong>
+                                    </Badge>
+                                </div>
+
+                                <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                                    <button
+                                        onClick={() => setTrendingLibraryFilter("all")}
+                                        className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                                            trendingLibraryFilter === "all" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
+                                        }`}
+                                    >
+                                        Show All ({trendingMedia.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setTrendingLibraryFilter("missing")}
+                                        className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                                            trendingLibraryFilter === "missing" ? "bg-rose-600 text-white" : "text-slate-400 hover:text-white"
+                                        }`}
+                                    >
+                                        Missing Only ({trendingMissingCount})
+                                    </button>
+                                    <button
+                                        onClick={() => setTrendingLibraryFilter("in_library")}
+                                        className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                                            trendingLibraryFilter === "in_library" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-white"
+                                        }`}
+                                    >
+                                        In Library ({trendingInLibraryCount})
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Media Cards Grid */}
+                            {trendingLoading ? (
+                                <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+                                    <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+                                    <p className="text-xs font-medium text-slate-300">Fetching trending streaming titles & cross-referencing Plex GUIDs...</p>
+                                </div>
+                            ) : trendingMedia.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 space-y-2">
+                                    <Film className="h-10 w-10 text-slate-600" />
+                                    <p className="text-sm font-semibold text-slate-300">No trending media loaded</p>
+                                    <p className="text-xs text-slate-500">Click &quot;Refresh&quot; or select a streaming provider to discover titles.</p>
+                                    <Button size="sm" onClick={() => loadTrendingMedia(trendingCategory)} className="mt-2 bg-purple-600 hover:bg-purple-500 text-white text-xs">
+                                        Load Trending Titles
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                    {trendingMedia
+                                        .filter(item => {
+                                            if (trendingLibraryFilter === "in_library" && !item.inLibrary) return false;
+                                            if (trendingLibraryFilter === "missing" && item.inLibrary) return false;
+                                            if (trendingSearchQuery) {
+                                                const q = trendingSearchQuery.toLowerCase();
+                                                const matchTitle = (item.title || "").toLowerCase().includes(q);
+                                                const matchYear = String(item.year || "").includes(q);
+                                                return matchTitle || matchYear;
+                                            }
+                                            return true;
+                                        })
+                                        .map((item: any) => {
+                                            const isDisney = trendingCategory.includes("disney");
+                                            const isNetflix = trendingCategory.includes("netflix");
+                                            const isDigital = Boolean(item.digitalReleaseDate);
+
+                                            return (
+                                                <div 
+                                                    key={item.id} 
+                                                    className={`bg-slate-900/80 border rounded-xl overflow-hidden shadow-lg flex flex-col justify-between group transition-all duration-200 ${
+                                                        item.inLibrary 
+                                                            ? "border-emerald-500/30 hover:border-emerald-400" 
+                                                            : item.hasPlaceholder
+                                                                ? "border-purple-500/40 hover:border-purple-400"
+                                                                : "border-rose-500/30 hover:border-rose-400"
+                                                    }`}
+                                                >
+                                                    <div className="relative aspect-[2/3] bg-slate-950 overflow-hidden">
+                                                        {item.posterPath ? (
+                                                            <img 
+                                                                src={`https://image.tmdb.org/t/p/w500${item.posterPath}`} 
+                                                                alt={item.title} 
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                                loading="lazy"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-1 p-2 text-center">
+                                                                <Film className="h-8 w-8 text-slate-700" />
+                                                                <span className="text-[10px] text-slate-500">{item.title}</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Top Ribbon Badge: Streaming Provider / Category */}
+                                                        {isDisney ? (
+                                                            <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-700 py-0.5 px-1.5 text-center text-[8.5px] font-black text-white uppercase tracking-wider shadow-md">
+                                                                ✨ DISNEY+ {item.certification ? `• ${item.certification}` : ''}
+                                                            </div>
+                                                        ) : isNetflix ? (
+                                                            <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-red-700 via-rose-600 to-red-700 py-0.5 px-1.5 text-center text-[8.5px] font-black text-white uppercase tracking-wider shadow-md">
+                                                                🔴 NETFLIX {item.mediaType === "tv" ? "SERIES" : "MOVIE"}
+                                                            </div>
+                                                        ) : isDigital ? (
+                                                            <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 py-0.5 px-1.5 text-center text-[8.5px] font-black text-white uppercase tracking-wider shadow-md">
+                                                                ⚡ DIGITAL STREAMING
+                                                            </div>
+                                                        ) : (
+                                                            <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-sky-700 via-blue-600 to-sky-700 py-0.5 px-1.5 text-center text-[8.5px] font-black text-white uppercase tracking-wider shadow-md">
+                                                                🎬 THEATRICAL
+                                                            </div>
+                                                        )}
+
+                                                        {/* Bottom Ribbon: In Library vs Missing / Placeholder */}
+                                                        {item.inLibrary ? (
+                                                            <div className="absolute bottom-0 left-0 right-0 bg-emerald-950/90 border-t border-emerald-500/50 py-0.5 px-1.5 text-center text-[9px] font-bold text-emerald-300 flex items-center justify-center gap-1">
+                                                                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                                                                <span>IN PLEX LIBRARY</span>
+                                                            </div>
+                                                        ) : item.hasPlaceholder ? (
+                                                            <div className="absolute bottom-0 left-0 right-0 bg-purple-950/90 border-t border-purple-500/50 py-0.5 px-1.5 text-center text-[9px] font-bold text-purple-300 flex items-center justify-center gap-1">
+                                                                <Sparkles className="h-3 w-3 text-purple-400" />
+                                                                <span>{item.placeholderBanner || "PLACEHOLDER ACTIVE"}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="absolute bottom-0 left-0 right-0 bg-rose-950/90 border-t border-rose-500/50 py-0.5 px-1.5 text-center text-[9px] font-bold text-rose-300 flex items-center justify-center gap-1">
+                                                                <Ban className="h-3 w-3 text-rose-400" />
+                                                                <span>NOT REQUESTED</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="p-2.5 space-y-2 flex-1 flex flex-col justify-between">
+                                                        <div className="space-y-0.5">
+                                                            <h4 className="text-xs font-bold text-white line-clamp-1 group-hover:text-purple-300 transition-colors" title={item.title}>
+                                                                {item.title}
+                                                            </h4>
+                                                            <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                                                                <span>{item.year || item.releaseDate?.split("-")[0] || "TBD"}</span>
+                                                                {item.voteAverage ? (
+                                                                    <span className="text-amber-400 font-bold flex items-center gap-0.5">
+                                                                        ★ {item.voteAverage.toFixed(1)}
+                                                                    </span>
+                                                                ) : null}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Action Button */}
+                                                        <div>
+                                                            {!item.inLibrary ? (
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    onClick={() => handleOpenPlaceholderModal(item)}
+                                                                    className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px] h-7 px-2 gap-1 shadow-md shadow-rose-950/50"
+                                                                >
+                                                                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                                                                    <span className="truncate">Add Placeholder</span>
+                                                                </Button>
+                                                            ) : (
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => handleOpenPlaceholderModal(item)}
+                                                                    className="w-full border-slate-700 hover:border-purple-500 text-slate-300 hover:text-white text-[11px] h-7 px-2 gap-1"
+                                                                >
+                                                                    <Sparkles className="h-3 w-3 text-purple-400 shrink-0" />
+                                                                    <span className="truncate">Make Banner</span>
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Placeholder Customizer Modal Dialog */}
+                    <Dialog open={placeholderModalOpen} onOpenChange={setPlaceholderModalOpen}>
+                        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto bg-slate-900 border-slate-800 text-white p-6 shadow-2xl">
+                            <DialogHeader className="pb-3 border-b border-slate-800">
+                                <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                                    <Sparkles className="h-5 w-5 text-rose-400" />
+                                    <span>Customize Placeholder Poster & Card</span>
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-slate-400">
+                                    Create a Sharp-composited poster with customizable ribbon banner overlay for <strong className="text-white">{selectedPlaceholderItem?.title}</strong> ({selectedPlaceholderItem?.year || "TBD"}).
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 py-4">
+                                {/* Live Sharp Rendered Image Preview (5 cols) */}
+                                <div className="md:col-span-5 flex flex-col items-center justify-center p-4 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
+                                    <div className="text-center space-y-0.5">
+                                        <span className="text-xs font-bold text-slate-200 flex items-center justify-center gap-1.5">
+                                            <Eye className="h-3.5 w-3.5 text-rose-400" /> Live High-Res Sharp Composite
+                                        </span>
+                                        <p className="text-[10px] text-slate-500">600×900px master composite rendering</p>
+                                    </div>
+
+                                    {/* Poster Box */}
+                                    <div className="relative w-[210px] h-[315px] rounded-xl overflow-hidden shadow-2xl border-2 border-slate-700 bg-slate-950 flex items-center justify-center group">
+                                        {placeholderPreviewLoading ? (
+                                            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-2 text-rose-400">
+                                                <Loader2 className="h-8 w-8 animate-spin" />
+                                                <span className="text-[10px] font-semibold text-slate-300">Rendering Sharp Composite...</span>
+                                            </div>
+                                        ) : null}
+
+                                        {placeholderPreviewDataUrl ? (
+                                            <img
+                                                src={placeholderPreviewDataUrl}
+                                                alt="Placeholder Preview"
+                                                className="w-full h-full object-cover"
+                                            />
+                                        ) : selectedPlaceholderItem?.posterPath ? (
+                                            <img
+                                                src={`https://image.tmdb.org/t/p/w500${selectedPlaceholderItem.posterPath}`}
+                                                alt={selectedPlaceholderItem?.title}
+                                                className="w-full h-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center text-slate-600 gap-2">
+                                                <Film className="h-12 w-12" />
+                                                <span className="text-xs font-semibold">{selectedPlaceholderItem?.title}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleRefreshPlaceholderPreview()}
+                                        disabled={placeholderPreviewLoading}
+                                        className="text-xs h-7 px-3 border-slate-700 hover:border-rose-500 text-slate-300 gap-1.5"
+                                    >
+                                        <RefreshCw className={`h-3 w-3 text-rose-400 ${placeholderPreviewLoading ? 'animate-spin' : ''}`} />
+                                        <span>Refresh Live Render</span>
+                                    </Button>
+                                </div>
+
+                                {/* Form Settings Controls (7 cols) */}
+                                <div className="md:col-span-7 space-y-4 text-xs">
+                                    {/* Preset Style Select */}
+                                    <div className="space-y-1.5">
+                                        <Label className="font-semibold text-slate-200">Banner Preset Style</Label>
+                                        <Select
+                                            value={placeholderModalBannerType}
+                                            onValueChange={(val: any) => {
+                                                setPlaceholderModalBannerType(val);
+                                                let nextText = placeholderModalBannerText;
+                                                let nextTheme = placeholderModalBannerTheme;
+                                                if (val === "not_requested") {
+                                                    nextText = "NOT REQUESTED";
+                                                    nextTheme = "crimson-red";
+                                                } else if (val === "coming_soon") {
+                                                    nextText = "COMING SOON";
+                                                    nextTheme = "indigo-purple";
+                                                } else if (val === "in_theaters") {
+                                                    nextText = "IN THEATERS NOW";
+                                                    nextTheme = "cinematic-blue";
+                                                } else if (val === "now_streaming") {
+                                                    nextText = "NOW STREAMING";
+                                                    nextTheme = "emerald-green";
+                                                } else if (val === "countdown") {
+                                                    nextText = "STREAMING IN 14 DAYS";
+                                                    nextTheme = "amber-gold";
+                                                }
+                                                setPlaceholderModalBannerText(nextText);
+                                                setPlaceholderModalBannerTheme(nextTheme);
+                                                handleRefreshPlaceholderPreview(val, nextText, nextTheme, placeholderModalBannerPosition);
+                                            }}
+                                        >
+                                            <SelectTrigger className="bg-slate-800/90 border-slate-700 text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                                                <SelectItem value="not_requested">🚫 Not Requested (Default - Red/Crimson)</SelectItem>
+                                                <SelectItem value="coming_soon">🚀 Coming Soon (Purple Glow)</SelectItem>
+                                                <SelectItem value="in_theaters">🎬 In Theaters Now (Cinema Blue)</SelectItem>
+                                                <SelectItem value="now_streaming">🔥 Now Streaming on Digital (Emerald)</SelectItem>
+                                                <SelectItem value="countdown">⏳ Countdown Window (Amber Gold)</SelectItem>
+                                                <SelectItem value="releasing_date">📅 Release Date Announced</SelectItem>
+                                                <SelectItem value="custom">✏️ Custom Text & Theme</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Custom Banner Text */}
+                                    <div className="space-y-1.5">
+                                        <Label className="font-semibold text-slate-200">Custom Banner Text</Label>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                value={placeholderModalBannerText}
+                                                onChange={e => {
+                                                    const val = e.target.value.toUpperCase();
+                                                    setPlaceholderModalBannerText(val);
+                                                    handleRefreshPlaceholderPreview(placeholderModalBannerType, val, placeholderModalBannerTheme, placeholderModalBannerPosition);
+                                                }}
+                                                placeholder="e.g. NOT REQUESTED or REQUEST ON PORTALARR"
+                                                className="bg-slate-800/90 border-slate-700 font-mono text-xs uppercase"
+                                            />
+                                        </div>
+
+                                        {/* Quick Suggestion Chips */}
+                                        <div className="flex flex-wrap gap-1 pt-1">
+                                            {[
+                                                "NOT REQUESTED",
+                                                "REQUEST ON PORTALARR",
+                                                "COMING SOON",
+                                                "DISNEY+ EXCLUSIVE",
+                                                "NETFLIX ORIGINAL",
+                                                "NOW STREAMING"
+                                            ].map(chip => (
+                                                <button
+                                                    key={chip}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPlaceholderModalBannerText(chip);
+                                                        handleRefreshPlaceholderPreview(placeholderModalBannerType, chip, placeholderModalBannerTheme, placeholderModalBannerPosition);
+                                                    }}
+                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all border ${
+                                                        placeholderModalBannerText === chip
+                                                            ? "bg-rose-600 text-white border-rose-500"
+                                                            : "bg-slate-800 text-slate-300 border-slate-700 hover:text-white"
+                                                    }`}
+                                                >
+                                                    {chip}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Banner Theme & Position Row */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <Label className="font-semibold text-slate-200">Banner Color Theme</Label>
+                                            <Select
+                                                value={placeholderModalBannerTheme}
+                                                onValueChange={(val: any) => {
+                                                    setPlaceholderModalBannerTheme(val);
+                                                    handleRefreshPlaceholderPreview(placeholderModalBannerType, placeholderModalBannerText, val, placeholderModalBannerPosition);
+                                                }}
+                                            >
+                                                <SelectTrigger className="bg-slate-800/90 border-slate-700 text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                                                    <SelectItem value="crimson-red">🔴 Crimson / Not Requested (Red Gradient)</SelectItem>
+                                                    <SelectItem value="netflix-red">🟥 Netflix Crimson Red</SelectItem>
+                                                    <SelectItem value="indigo-purple">🟪 Cyberpunk Purple Gradient</SelectItem>
+                                                    <SelectItem value="emerald-green">🟩 Emerald Forest Green</SelectItem>
+                                                    <SelectItem value="amber-gold">🟨 Golden Amber Glow</SelectItem>
+                                                    <SelectItem value="cinematic-blue">🟦 Sapphire Cinematic Blue</SelectItem>
+                                                    <SelectItem value="slate-frosted">⬛ Slate Frosted Glass</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="font-semibold text-slate-200">Banner Placement</Label>
+                                            <Select
+                                                value={placeholderModalBannerPosition}
+                                                onValueChange={(val: any) => {
+                                                    setPlaceholderModalBannerPosition(val);
+                                                    handleRefreshPlaceholderPreview(placeholderModalBannerType, placeholderModalBannerText, placeholderModalBannerTheme, val);
+                                                }}
+                                            >
+                                                <SelectTrigger className="bg-slate-800/90 border-slate-700 text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                                                    <SelectItem value="bottom">Bottom Full-Width Banner</SelectItem>
+                                                    <SelectItem value="top">Top Full-Width Banner</SelectItem>
+                                                    <SelectItem value="corner">Top-Left Angled Corner Ribbon</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Deployment Details & Coming Soon Target Share Notice */}
+                                    <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-1.5 text-[11px] text-slate-400">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-semibold text-slate-200 flex items-center gap-1">
+                                                <Server className="h-3.5 w-3.5 text-indigo-400" /> Target Server:
+                                            </span>
+                                            <span className="text-white font-mono">
+                                                {servers.find(s => s.serverId === selectedServerId)?.serverName || "Selected Server"}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-semibold text-slate-200 flex items-center gap-1">
+                                                <FolderCheck className="h-3.5 w-3.5 text-emerald-400" /> Coming Soon Share:
+                                            </span>
+                                            <span className="text-purple-300 font-mono text-[10px] truncate max-w-[240px]">
+                                                {comingSoonShares[selectedServerId] || "Registered in advisory database"}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-800">
+                                            Creates folder <code className="text-slate-300">{selectedPlaceholderItem?.title} ({selectedPlaceholderItem?.year || "2025"})</code> with composite <code className="text-slate-300">poster.png</code> and a dummy <code className="text-slate-300">.disc</code> stub file.
+                                        </p>
+                                    </div>
+
+                                    {/* Status Message */}
+                                    {placeholderSuccessMsg && (
+                                        <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                                            placeholderSuccessMsg.startsWith("Error")
+                                                ? "bg-rose-950/70 border border-rose-800 text-rose-300"
+                                                : "bg-emerald-950/70 border border-emerald-800 text-emerald-300"
+                                        }`}>
+                                            {placeholderSuccessMsg.startsWith("Error") ? (
+                                                <XCircle className="h-4 w-4 shrink-0" />
+                                            ) : (
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                            )}
+                                            <span>{placeholderSuccessMsg}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-slate-800">
+                                <div>
+                                    {placeholderPreviewDataUrl && (
+                                        <a
+                                            href={placeholderCreatedDataUrl || placeholderPreviewDataUrl}
+                                            download={`${(selectedPlaceholderItem?.title || "placeholder").replace(/[^a-zA-Z0-9]/g, "_")}_placeholder.png`}
+                                            className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 font-semibold px-2 py-1"
+                                        >
+                                            <Download className="h-3.5 w-3.5" />
+                                            <span>Download Composite Poster</span>
+                                        </a>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setPlaceholderModalOpen(false)}
+                                        className="border-slate-700 text-slate-300 hover:text-white text-xs"
+                                    >
+                                        Close
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={handleCreatePlaceholderItem}
+                                        disabled={generatingPlaceholder}
+                                        className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-4 gap-1.5 shadow-lg shadow-rose-950/50"
+                                    >
+                                        {generatingPlaceholder ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                                        <span>Create & Deploy Placeholder</span>
+                                    </Button>
+                                </div>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
                     {/* Agregarr Placeholder Overlays & Timings Deck */}
                     <Card className="bg-slate-900/80 border-slate-800 shadow-xl overflow-hidden">
                         <CardHeader className="p-5 pb-3 border-b border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">

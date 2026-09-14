@@ -182,6 +182,34 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSortPrefix: "!14_"
     },
     {
+        id: "netflix-trending",
+        title: "Netflix Trending & Top Charts",
+        type: "dynamic",
+        category: "dynamic",
+        description: "The hottest movies and binge-worthy TV series trending on Netflix right now.",
+        icon: "Film",
+        sourceType: "tmdb",
+        sourceQuery: "provider:8", // Netflix Watch Provider
+        mediaType: "both",
+        defaultSort: "rating",
+        defaultHomeOrder: 15,
+        defaultSortPrefix: "!15_Netflix"
+    },
+    {
+        id: "netflix-kids-trending",
+        title: "Netflix Kids & Family Trending",
+        type: "dynamic",
+        category: "dynamic",
+        description: "Top-rated animated films, cartoons, and family adventures streaming on Netflix.",
+        icon: "Film",
+        sourceType: "tmdb",
+        sourceQuery: "provider:8:kids", // Netflix Kids
+        mediaType: "both",
+        defaultSort: "rating",
+        defaultHomeOrder: 16,
+        defaultSortPrefix: "!16_NetflixKids"
+    },
+    {
         id: "disney-plus-originals",
         title: "Disney+ Originals",
         type: "curated",
@@ -192,8 +220,36 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceQuery: "network:2739", // Disney+
         mediaType: "both",
         defaultSort: "release",
-        defaultHomeOrder: 15,
-        defaultSortPrefix: "!15_"
+        defaultHomeOrder: 17,
+        defaultSortPrefix: "!17_"
+    },
+    {
+        id: "disney-trending",
+        title: "Disney+ Trending & Top Charts",
+        type: "dynamic",
+        category: "dynamic",
+        description: "Blockbuster franchise films, Star Wars, Marvel, and popular series trending on Disney+.",
+        icon: "Sparkles",
+        sourceType: "tmdb",
+        sourceQuery: "provider:337", // Disney+ Watch Provider
+        mediaType: "both",
+        defaultSort: "release",
+        defaultHomeOrder: 18,
+        defaultSortPrefix: "!18_Disney"
+    },
+    {
+        id: "disney-kids-trending",
+        title: "Disney+ Kids & Family Trending",
+        type: "dynamic",
+        category: "dynamic",
+        description: "Beloved Disney animated classics, Pixar wonders, and wholesome family favorites.",
+        icon: "Sparkles",
+        sourceType: "tmdb",
+        sourceQuery: "provider:337:kids", // Disney+ Kids
+        mediaType: "both",
+        defaultSort: "release",
+        defaultHomeOrder: 19,
+        defaultSortPrefix: "!19_DisneyKids"
     },
 
     // 📼 DECADES

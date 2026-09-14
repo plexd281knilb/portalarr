@@ -20,7 +20,7 @@ export interface OverlayOptions {
     showDigitalRelease?: boolean;
     digitalReleaseDate?: string;
     showPlaceholder?: boolean;
-    placeholderType?: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "custom";
+    placeholderType?: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "not_requested" | "custom";
     placeholderDays?: number;
     placeholderDate?: string;
     placeholderText?: string;
@@ -523,12 +523,12 @@ export function generateDigitalReleaseRibbonSvg(daysRemaining: number, formatted
  * Creates Kometa/Agregarr-Style SVG for Placeholder Banner with customizable themes & timings.
  */
 export function generatePlaceholderRibbonSvg(
-    type: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "custom",
+    type: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "not_requested" | "custom",
     options: {
         daysRemaining?: number;
         formattedDate?: string;
         customText?: string;
-        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass";
+        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted";
     } = {}
 ): string {
     const theme = options.theme || "indigo-purple";
@@ -543,6 +543,8 @@ export function generatePlaceholderRibbonSvg(
         label = days === 0 ? "✨ STREAMING TODAY" : `✨ STREAMING IN ${days} DAYS${options.formattedDate ? ` (${options.formattedDate})` : ''}`;
     } else if (type === "releasing_date") {
         label = options.formattedDate ? `📅 RELEASING ${options.formattedDate}` : "📅 RELEASE DATE ANNOUNCED";
+    } else if (type === "not_requested") {
+        label = options.customText ? options.customText.toUpperCase() : "🚫 NOT REQUESTED";
     } else if (type === "custom" && options.customText) {
         label = options.customText.toUpperCase();
     }
@@ -550,7 +552,7 @@ export function generatePlaceholderRibbonSvg(
     let gradStops = `<stop offset="0%" stop-color="#1e1b4b" /><stop offset="50%" stop-color="#6366f1" /><stop offset="100%" stop-color="#1e1b4b" />`;
     let lineStroke = "#a5b4fc";
 
-    if (theme === "crimson-red") {
+    if (theme === "crimson-red" || theme === "netflix-red") {
         gradStops = `<stop offset="0%" stop-color="#881337" /><stop offset="50%" stop-color="#e11d48" /><stop offset="100%" stop-color="#881337" />`;
         lineStroke = "#fda4af";
     } else if (theme === "emerald-green") {
@@ -562,7 +564,7 @@ export function generatePlaceholderRibbonSvg(
     } else if (theme === "cinematic-blue") {
         gradStops = `<stop offset="0%" stop-color="#082f49" /><stop offset="50%" stop-color="#0284c7" /><stop offset="100%" stop-color="#082f49" />`;
         lineStroke = "#7dd3fc";
-    } else if (theme === "glass") {
+    } else if (theme === "glass" || theme === "slate-frosted") {
         gradStops = `<stop offset="0%" stop-color="rgba(8,12,22,0.94)" /><stop offset="100%" stop-color="rgba(8,12,22,0.94)" />`;
         lineStroke = "rgba(255,255,255,0.4)";
     }
@@ -582,6 +584,95 @@ export function generatePlaceholderRibbonSvg(
         <line x1="0" y1="52" x2="600" y2="52" stroke="${lineStroke}" stroke-width="2"/>
         <text x="300" y="34" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="17.5" fill="#ffffff" text-anchor="middle" letter-spacing="2.5">${label}</text>
     </svg>`;
+}
+
+/**
+ * Generates a full high-resolution composited placeholder poster with custom banner / ribbon.
+ */
+export async function generatePlaceholderPosterBuffer(
+    posterUrl: string | null | undefined,
+    title: string,
+    options: {
+        type?: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "not_requested" | "custom";
+        customText?: string;
+        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted";
+        position?: "top" | "bottom" | "corner";
+    } = {}
+): Promise<Buffer> {
+    const width = 600;
+    const height = 900;
+    let baseBuffer: Buffer | null = null;
+
+    if (posterUrl && posterUrl.startsWith("http")) {
+        try {
+            const res = await fetch(posterUrl);
+            if (res.ok) {
+                const arrayBuf = await res.arrayBuffer();
+                baseBuffer = Buffer.from(arrayBuf);
+            }
+        } catch (e) {
+            baseBuffer = null;
+        }
+    }
+
+    let pipeline: ReturnType<typeof sharp>;
+    if (baseBuffer) {
+        pipeline = sharp(baseBuffer).resize(width, height, { fit: "cover" });
+    } else {
+        // Fallback stylish dark poster
+        const safeTitle = (title || "Placeholder Media").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const fallbackSvg = `
+        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#090d16" />
+                    <stop offset="50%" stop-color="#111827" />
+                    <stop offset="100%" stop-color="#030712" />
+                </linearGradient>
+            </defs>
+            <rect width="${width}" height="${height}" fill="url(#bgGrad)" />
+            <circle cx="300" cy="400" r="80" fill="rgba(99,102,241,0.1)" stroke="rgba(99,102,241,0.3)" stroke-width="2"/>
+            <text x="300" y="420" font-family="sans-serif" font-weight="900" font-size="48" fill="#6366f1" text-anchor="middle">🎬</text>
+            <text x="300" y="540" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="28" fill="#f8fafc" text-anchor="middle">${safeTitle}</text>
+        </svg>`;
+        pipeline = sharp(Buffer.from(fallbackSvg)).png();
+    }
+
+    const type = options.type || "not_requested";
+    const position = options.position || "bottom";
+    const theme = options.theme || (type === "not_requested" ? "crimson-red" : "indigo-purple");
+
+    const composites: any[] = [];
+
+    if (position === "corner") {
+        let ribbonTheme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "purple";
+        if (theme === "crimson-red" || theme === "netflix-red") ribbonTheme = "crimson";
+        else if (theme === "emerald-green") ribbonTheme = "emerald";
+        else if (theme === "amber-gold") ribbonTheme = "gold";
+        else if (theme === "cinematic-blue") ribbonTheme = "cyan";
+        else if (theme === "glass" || theme === "slate-frosted") ribbonTheme = "glass";
+
+        const text = options.customText || (type === "not_requested" ? "NOT REQUESTED" : type.toUpperCase());
+        const cornerSvg = generateCornerRibbonSvg(text, "top-right", ribbonTheme);
+        composites.push({
+            input: Buffer.from(cornerSvg),
+            top: 0,
+            left: width - 160
+        });
+    } else {
+        const bannerSvg = generatePlaceholderRibbonSvg(type, {
+            customText: options.customText,
+            theme
+        });
+        const topPos = position === "top" ? 0 : height - 54;
+        composites.push({
+            input: Buffer.from(bannerSvg),
+            top: topPos,
+            left: 0
+        });
+    }
+
+    return await pipeline.composite(composites).png().toBuffer();
 }
 
 /**

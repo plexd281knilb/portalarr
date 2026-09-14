@@ -29,7 +29,9 @@ import {
     backupAndApplyOverlay, 
     restoreItemOriginalArtwork, 
     restoreAllOriginalArtworks, 
-    OverlayOptions 
+    OverlayOptions,
+    generatePlaceholderPosterBuffer,
+    generatePlaceholderRibbonSvg
 } from "@/lib/curation/overlay-engine";
 import { 
     getTmdbTrending, 
@@ -41,7 +43,11 @@ import {
     getTmdbStudioMovies, 
     getTmdbNetworkShows, 
     searchTmdbMovie, 
-    searchTmdbTv 
+    searchTmdbTv,
+    getTmdbStreamingProviderMedia,
+    getDisneyTrending,
+    getNetflixTrending,
+    TmdbMediaItem
 } from "@/lib/curation/tmdb";
 import { 
     getTraktTrendingMovies, 
@@ -680,6 +686,37 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                         titles.includes(it.title.toLowerCase())
                     ).map(it => it.ratingKey));
                 }
+            } else if (collection.sourceQuery?.startsWith("network:")) {
+                const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
+                const shows = await getTmdbNetworkShows(netId);
+                const tmdbIds = shows.map(s => String(s.id));
+                const titles = shows.map(s => s.title.toLowerCase());
+
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
+                    (it.title && titles.includes(it.title.toLowerCase()))
+                ).map(it => it.ratingKey));
+            } else if (collection.sourceQuery?.startsWith("provider:")) {
+                const parts = collection.sourceQuery.split(":");
+                const provId = parseInt(parts[1], 10) || 8;
+                const isKids = parts.length > 2 && parts[2] === "kids";
+                const providerMedia = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+                const tmdbIds = providerMedia.map(m => String(m.id));
+                const titles = providerMedia.map(m => m.title.toLowerCase());
+
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
+                    (it.title && titles.includes(it.title.toLowerCase()))
+                ).map(it => it.ratingKey));
+            } else if (collection.sourceQuery === "digital_releases") {
+                const upcoming = await getTmdbUpcomingMovies();
+                const tmdbIds = upcoming.map(m => String(m.id));
+                const titles = upcoming.map(m => m.title.toLowerCase());
+
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
+                    (it.title && titles.includes(it.title.toLowerCase()))
+                ).map(it => it.ratingKey));
             }
         } else if (collection.sourceType === "trakt") {
             if (collection.sourceQuery === "trending") {
@@ -861,6 +898,28 @@ export async function previewCollectionMatchingAction(
                         );
                     }
                 }
+            } else if (sourceQuery.startsWith("provider:")) {
+                const parts = sourceQuery.split(":");
+                const provId = parseInt(parts[1], 10) || 8;
+                const isKids = parts.length > 2 && parts[2] === "kids";
+                const provName = provId === 337 ? "Disney+" : provId === 8 ? "Netflix" : `Provider #${provId}`;
+                executionMethod = `TMDb Streaming Provider API: Querying ${provName} ${isKids ? "(Kids & Family)" : "Trending Top Charts"}. Matches against Plex library metadata.`;
+                const providerMedia = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+                const tmdbIds = providerMedia.map(m => String(m.id));
+                const titles = providerMedia.map(m => m.title.toLowerCase());
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
+                    (it.title && titles.includes(it.title.toLowerCase()))
+                );
+            } else if (sourceQuery === "digital_releases") {
+                executionMethod = `TMDb Releases API: Querying new digital streaming releases.`;
+                const upcoming = await getTmdbUpcomingMovies();
+                const tmdbIds = upcoming.map(m => String(m.id));
+                const titles = upcoming.map(m => m.title.toLowerCase());
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
+                    (it.title && titles.includes(it.title.toLowerCase()))
+                );
             } else {
                 executionMethod = `TMDb Query: ${sourceQuery}`;
             }
@@ -3175,6 +3234,285 @@ export async function downloadAllKometaPacksAction() {
         return { success: false, error: e.message || "Failed bulk downloading Kometa badges." };
     }
 }
+
+/**
+ * Server action to fetch trending media (All, Disney, Disney Kids, Netflix, Netflix Kids, Digital, Theatrical)
+ * and compare with the selected Plex library to identify "In Library" vs "Not Requested / Missing".
+ */
+export async function getTrendingAndPlaceholderMediaAction(
+    serverId?: string,
+    sectionKey?: string,
+    category: "all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "digital" | "theatrical" = "all"
+) {
+    await verifyAdmin();
+    try {
+        let trendingItems: TmdbMediaItem[] = [];
+
+        if (category === "disney") {
+            trendingItems = await getDisneyTrending(false);
+        } else if (category === "disney_kids") {
+            trendingItems = await getDisneyTrending(true);
+        } else if (category === "netflix") {
+            trendingItems = await getNetflixTrending(false);
+        } else if (category === "netflix_kids") {
+            trendingItems = await getNetflixTrending(true);
+        } else if (category === "digital") {
+            const upcoming = await getTmdbUpcomingMovies();
+            trendingItems = upcoming.filter(it => Boolean(it.digitalReleaseDate));
+        } else if (category === "theatrical") {
+            trendingItems = await getTmdbNowPlayingMovies();
+        } else {
+            trendingItems = await getTmdbTrending("all", "week");
+        }
+
+        // If no items returned (e.g. offline fallback), provide safe empty
+        if (!trendingItems || trendingItems.length === 0) {
+            return {
+                success: true,
+                category,
+                totalCount: 0,
+                inLibraryCount: 0,
+                missingCount: 0,
+                items: []
+            };
+        }
+
+        // Check against Plex Library if serverId and sectionKey are provided
+        let libraryItems: any[] = [];
+        if (serverId && sectionKey) {
+            try {
+                const resolved = await resolveWorkingPlexServerConnection(serverId);
+                if (resolved && resolved.serverUrl) {
+                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 1000);
+                }
+            } catch (err: any) {
+                console.warn("[PLACEHOLDER-ACTION] Failed fetching library items for comparison:", err.message);
+            }
+        }
+
+        const libraryTmdbIds = new Set(libraryItems.map(it => it.guids?.tmdb).filter(Boolean));
+        const libraryImdbIds = new Set(libraryItems.map(it => it.guids?.imdb).filter(Boolean));
+        const libraryTitles = new Map(libraryItems.map(it => [it.title?.toLowerCase().trim(), it]));
+
+        let inLibraryCount = 0;
+        const enrichedItems = trendingItems.map(item => {
+            const tmdbStr = String(item.id);
+            let match = null;
+
+            if (libraryTmdbIds.has(tmdbStr)) {
+                match = libraryItems.find(it => it.guids?.tmdb === tmdbStr);
+            } else if (item.imdbId && libraryImdbIds.has(item.imdbId)) {
+                match = libraryItems.find(it => it.guids?.imdb === item.imdbId);
+            } else if (item.title) {
+                const clean = item.title.toLowerCase().trim();
+                if (libraryTitles.has(clean)) {
+                    match = libraryTitles.get(clean);
+                }
+            }
+
+            const inLibrary = Boolean(match);
+            if (inLibrary) inLibraryCount++;
+
+            const releaseYear = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
+
+            return {
+                id: item.id,
+                title: item.title,
+                originalTitle: item.originalTitle,
+                overview: item.overview,
+                posterPath: item.posterPath,
+                backdropPath: item.backdropPath,
+                mediaType: item.mediaType,
+                releaseDate: item.releaseDate,
+                year: releaseYear,
+                theatricalReleaseDate: item.theatricalReleaseDate,
+                digitalReleaseDate: item.digitalReleaseDate,
+                inTheaters: item.inTheaters,
+                voteAverage: item.voteAverage,
+                popularity: item.popularity,
+                certification: item.certification,
+                imdbId: item.imdbId,
+                inLibrary,
+                libraryRatingKey: match?.ratingKey,
+                detectedBadges: match?.detectedBadges
+            };
+        });
+
+        return {
+            success: true,
+            category,
+            totalCount: enrichedItems.length,
+            inLibraryCount,
+            missingCount: enrichedItems.length - inLibraryCount,
+            items: enrichedItems
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message, items: [] };
+    }
+}
+
+/**
+ * Server action to generate a preview data URL (base64 PNG) of a placeholder poster with banner.
+ */
+export async function getPlaceholderPreviewDataUrlAction(
+    posterUrl: string | null | undefined,
+    title: string,
+    options: {
+        bannerType?: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "not_requested" | "custom";
+        bannerText?: string;
+        bannerTheme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted";
+        bannerPosition?: "top" | "bottom" | "corner";
+    } = {}
+) {
+    await verifyAdmin();
+    try {
+        const buffer = await generatePlaceholderPosterBuffer(posterUrl, title, {
+            type: options.bannerType || "not_requested",
+            customText: options.bannerText || "NOT REQUESTED",
+            theme: options.bannerTheme || "crimson-red",
+            position: options.bannerPosition || "bottom"
+        });
+
+        const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+        return { success: true, dataUrl };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Server action to create/deploy a placeholder item for a title not currently in the Plex library.
+ * Writes to the configured coming soon share folder and saves the advisory record.
+ */
+export async function createPlaceholderItemAction(
+    serverId: string,
+    sectionKey: string,
+    itemData: {
+        tmdbId: number;
+        title: string;
+        year?: number;
+        mediaType: "movie" | "tv";
+        posterPath: string | null;
+        overview?: string;
+        bannerType?: "in_theaters" | "countdown" | "now_streaming" | "releasing_date" | "coming_soon" | "not_requested" | "custom";
+        bannerText?: string;
+        bannerTheme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted";
+        bannerPosition?: "top" | "bottom" | "corner";
+    }
+) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const comingSoonShares: Record<string, string> = settings?.comingSoonShares 
+            ? JSON.parse(settings.comingSoonShares) 
+            : {};
+        
+        const sharePath = comingSoonShares[serverId];
+        const bannerText = itemData.bannerText?.trim() || "NOT REQUESTED";
+        const bannerType = itemData.bannerType || "not_requested";
+        const bannerTheme = itemData.bannerTheme || "crimson-red";
+        const bannerPosition = itemData.bannerPosition || "bottom";
+
+        // Generate high-resolution composite placeholder poster
+        const posterBuffer = await generatePlaceholderPosterBuffer(itemData.posterPath, itemData.title, {
+            type: bannerType,
+            customText: bannerText,
+            theme: bannerTheme,
+            position: bannerPosition
+        });
+
+        const cleanTitle = itemData.title.replace(/[\/\\:*?"<>|]/g, "_").trim();
+        const yearStr = itemData.year ? ` (${itemData.year})` : "";
+        let shareSaved = false;
+        let createdFolderPath = "";
+
+        // If a coming soon share is configured, write the placeholder folder structure
+        if (sharePath && fs.existsSync(sharePath)) {
+            const folderName = `${cleanTitle}${yearStr}`;
+            const targetDir = path.join(sharePath, folderName);
+            if (!fs.existsSync(targetDir)) {
+                fs.mkdirSync(targetDir, { recursive: true });
+            }
+
+            // Save poster.png
+            const posterFilePath = path.join(targetDir, "poster.png");
+            fs.writeFileSync(posterFilePath, posterBuffer);
+
+            // Save lightweight stub file (.strm or .disc)
+            const stubFile = path.join(targetDir, `${cleanTitle}${yearStr}.disc`);
+            fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nCreated: ${new Date().toISOString()}\n`);
+
+            shareSaved = true;
+            createdFolderPath = targetDir;
+            logger.addLog("SUCCESS", "CURATION", `Created coming soon placeholder on disk for "${itemData.title}" at "${targetDir}"`);
+        }
+
+        // Save record into MediaContentAdvisory for tracking and display
+        const placeholderKey = `placeholder_tmdb_${itemData.tmdbId}`;
+        await prisma.mediaContentAdvisory.upsert({
+            where: {
+                ratingKey_serverId: {
+                    ratingKey: placeholderKey,
+                    serverId
+                }
+            },
+            update: {
+                title: itemData.title,
+                tmdbId: String(itemData.tmdbId),
+                leavingReason: `Placeholder: ${bannerText}`,
+                customTags: JSON.stringify({
+                    isPlaceholder: true,
+                    bannerText,
+                    bannerTheme,
+                    bannerPosition,
+                    bannerType,
+                    mediaType: itemData.mediaType,
+                    year: itemData.year,
+                    posterPath: itemData.posterPath,
+                    sharePath: createdFolderPath || null,
+                    createdAt: new Date().toISOString()
+                })
+            },
+            create: {
+                ratingKey: placeholderKey,
+                serverId,
+                title: itemData.title,
+                tmdbId: String(itemData.tmdbId),
+                leavingReason: `Placeholder: ${bannerText}`,
+                customTags: JSON.stringify({
+                    isPlaceholder: true,
+                    bannerText,
+                    bannerTheme,
+                    bannerPosition,
+                    bannerType,
+                    mediaType: itemData.mediaType,
+                    year: itemData.year,
+                    posterPath: itemData.posterPath,
+                    sharePath: createdFolderPath || null,
+                    createdAt: new Date().toISOString()
+                })
+            }
+        });
+
+        const dataUrl = `data:image/png;base64,${posterBuffer.toString("base64")}`;
+
+        return {
+            success: true,
+            title: itemData.title,
+            bannerText,
+            shareSaved,
+            folderPath: createdFolderPath,
+            dataUrl,
+            message: shareSaved
+                ? `Created placeholder card & deployed to Coming Soon share for "${itemData.title}"!`
+                : `Created "${bannerText}" placeholder card for "${itemData.title}"!`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 
 
 
