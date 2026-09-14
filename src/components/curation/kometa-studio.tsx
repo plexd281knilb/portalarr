@@ -877,15 +877,24 @@ export function KometaStudio() {
             jsx: React.ReactNode;
         }> = [];
 
+        const realRes = simSelectedRealItem?.detectedBadges?.resolution || simSelectedRealItem?.media?.[0]?.videoResolution;
+        const realHdr = simSelectedRealItem?.detectedBadges?.hdr || (simSelectedRealItem?.media?.[0]?.hdrFormat !== "SDR" ? simSelectedRealItem?.media?.[0]?.hdrFormat : undefined);
+        const realCodec = simSelectedRealItem?.detectedBadges?.codec || simSelectedRealItem?.media?.[0]?.videoCodec;
+        const realAudio = simSelectedRealItem?.detectedBadges?.audio || simSelectedRealItem?.media?.[0]?.audioProfile || simSelectedRealItem?.media?.[0]?.audioCodec;
+        const realChannels = simSelectedRealItem?.detectedBadges?.audioChannels || (simSelectedRealItem?.media?.[0]?.audioChannels ? `${simSelectedRealItem.media[0].audioChannels}` : undefined);
+        const realEdition = simSelectedRealItem?.editionTitle || simSelectedRealItem?.detectedBadges?.edition;
+        const realStudio = simSelectedRealItem?.detectedBadges?.studio || simSelectedRealItem?.studio;
+        const realRating = simSelectedRealItem?.detectedBadges?.contentRating || simSelectedRealItem?.contentRating;
+
         const simDetected = {
-            resolution: simShowResolution ? "4K" : undefined,
-            hdr: simShowHdr ? "DV" : undefined,
-            codec: simShowCodec ? "HEVC" : undefined,
-            audio: simShowAudio ? "ATMOS" : undefined,
-            audioChannels: simShowChannels ? "7.1" : undefined,
-            edition: simShowEdition ? "IMAX" : undefined,
-            studio: simShowStudio ? "HBO" : undefined,
-            contentRating: simShowRating ? "PG-13" : undefined
+            resolution: simShowResolution ? (realRes || "4K") : undefined,
+            hdr: simShowHdr ? (realHdr || "DV") : undefined,
+            codec: simShowCodec ? (realCodec || "HEVC") : undefined,
+            audio: simShowAudio ? (realAudio || "ATMOS") : undefined,
+            audioChannels: simShowChannels ? (realChannels || "7.1") : undefined,
+            edition: simShowEdition ? (realEdition || "IMAX") : undefined,
+            studio: simShowStudio ? (realStudio || "HBO") : undefined,
+            contentRating: simShowRating ? (realRating || "PG-13") : undefined
         };
 
         const isDovetailed = simDovetailResolutionHdr && 
@@ -900,19 +909,21 @@ export function KometaStudio() {
         // 1. Dovetailed Resolution + HDR
         if (isDovetailed && !matchingResCustom && !matchingHdrCustom) {
             const st = getThemeBadgeStyle(simTheme, "hdr", true);
+            const resText = (simDetected.resolution || "4K").toUpperCase();
+            const hdrText = (simDetected.hdr || "DOLBY VISION").toUpperCase();
             items.push({
                 key: "resolution",
                 category: "resolution",
                 jsx: (
                     <div key="dovetail" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-wider flex items-center gap-1.5 shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
                         <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>4K</span>
-                        <span className={`text-[7.5px] tracking-widest ${st.textSecondary}`}>UHD</span>
+                        <span className={st.textPrimary}>{resText}</span>
+                        <span className={`text-[7.5px] tracking-widest ${st.textSecondary}`}>{resText.includes("4K") ? "UHD" : "FHD"}</span>
                         <div className="h-2.5 w-[1px] bg-white/30 mx-0.5 relative flex items-center justify-center">
                             <div className="w-1 h-1 rounded-full bg-white/50" />
                         </div>
                         <span className={`w-1.5 h-2.5 rounded-sm inline-block shrink-0 ${st.accent}`} />
-                        <span className={`text-[8px] tracking-widest font-black ${st.textSecondary}`}>DOLBY VISION</span>
+                        <span className={`text-[8px] tracking-widest font-black ${st.textSecondary}`}>{hdrText}</span>
                     </div>
                 )
             });
@@ -920,14 +931,15 @@ export function KometaStudio() {
             // Independent Resolution
             if (simShowResolution && simResolutionPosition === pos) {
                 const st = getThemeBadgeStyle(simTheme, "resolution");
+                const resText = (simDetected.resolution || "4K").toUpperCase();
                 items.push({
                     key: "resolution",
                     category: "resolution",
                     jsx: (
                         <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
                             <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                            <span className={st.textPrimary}>4K</span>
-                            <span className={`text-[8px] border-l border-current pl-1 ml-0.5 tracking-widest ${st.textSecondary}`}>UHD</span>
+                            <span className={st.textPrimary}>{resText}</span>
+                            <span className={`text-[8px] border-l border-current pl-1 ml-0.5 tracking-widest ${st.textSecondary}`}>{resText.includes("4K") ? "UHD" : "FHD"}</span>
                         </div>
                     )
                 });
@@ -935,6 +947,7 @@ export function KometaStudio() {
             // Independent HDR
             if (simShowHdr && simHdrPosition === pos) {
                 const st = getThemeBadgeStyle(simTheme, "hdr");
+                const hdrText = (simDetected.hdr || "DOLBY VISION").toUpperCase();
                 items.push({
                     key: "hdr",
                     category: "hdr",
@@ -942,7 +955,7 @@ export function KometaStudio() {
                         <div key="hdr" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1 ${st.container}`}>
                             <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
                             <span className={`w-1.5 h-2.5 rounded-sm inline-block mr-0.5 ${st.accent}`} />
-                            <span className={st.textPrimary}>DOLBY VISION</span>
+                            <span className={st.textPrimary}>{hdrText}</span>
                         </div>
                     )
                 });
@@ -952,13 +965,14 @@ export function KometaStudio() {
         // Video Codec
         if (simShowCodec && simCodecPosition === pos) {
             const st = getThemeBadgeStyle(simTheme, "codec");
+            const codecText = (simDetected.codec || "HEVC").toUpperCase();
             items.push({
                 key: "codec",
                 category: "codec",
                 jsx: (
                     <div key="codec" className={`relative px-1.5 py-0.5 rounded-md border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
                         <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>HEVC • 10b</span>
+                        <span className={st.textPrimary}>{codecText}</span>
                     </div>
                 )
             });
@@ -967,13 +981,14 @@ export function KometaStudio() {
         // Audio Codec
         if (simShowAudio && simAudioPosition === pos) {
             const st = getThemeBadgeStyle(simTheme, "audio");
+            const audioText = (simDetected.audio || "DOLBY ATMOS").toUpperCase();
             items.push({
                 key: "audio",
                 category: "audio",
                 jsx: (
                     <div key="audio" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
                         <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>DOLBY ATMOS</span>
+                        <span className={st.textPrimary}>{audioText}</span>
                     </div>
                 )
             });
@@ -982,13 +997,14 @@ export function KometaStudio() {
         // Audio Channels
         if (simShowChannels && simChannelsPosition === pos) {
             const st = getThemeBadgeStyle(simTheme, "audio");
+            const channelsText = simDetected.audioChannels ? `${simDetected.audioChannels} SURROUND` : "7.1 SURROUND";
             items.push({
                 key: "channels",
                 category: "channels",
                 jsx: (
                     <div key="channels" className={`relative px-1.5 py-0.5 rounded-md border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
                         <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>7.1 SURROUND</span>
+                        <span className={st.textPrimary}>{channelsText}</span>
                     </div>
                 )
             });
@@ -997,13 +1013,14 @@ export function KometaStudio() {
         // Edition / Cut
         if (simShowEdition && simEditionPosition === pos) {
             const st = getThemeBadgeStyle(simTheme, "edition");
+            const editionText = (simDetected.edition || "IMAX ENHANCED").toUpperCase();
             items.push({
                 key: "edition",
                 category: "edition",
                 jsx: (
                     <div key="edition" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
                         <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>IMAX ENHANCED</span>
+                        <span className={st.textPrimary}>{editionText}</span>
                     </div>
                 )
             });
@@ -1012,13 +1029,14 @@ export function KometaStudio() {
         // Studio / Network
         if (simShowStudio && simStudioPosition === pos) {
             const st = getThemeBadgeStyle(simTheme, "studio");
+            const studioText = (simDetected.studio || "HBO MAX").toUpperCase();
             items.push({
                 key: "studio",
                 category: "studio",
                 jsx: (
                     <div key="studio" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
                         <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>HBO MAX</span>
+                        <span className={st.textPrimary}>{studioText}</span>
                     </div>
                 )
             });
@@ -1027,13 +1045,14 @@ export function KometaStudio() {
         // Age Rating
         if (simShowRating && simRatingPosition === pos) {
             const st = getThemeBadgeStyle(simTheme, "contentRating");
+            const ratingText = (simDetected.contentRating || "PG-13").toUpperCase();
             items.push({
                 key: "contentRating",
                 category: "contentRating",
                 jsx: (
                     <div key="rating" className={`relative px-1.5 py-0.5 rounded border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
                         <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>PG-13</span>
+                        <span className={st.textPrimary}>{ratingText}</span>
                     </div>
                 )
             });

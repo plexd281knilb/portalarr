@@ -393,8 +393,22 @@ export function PlexPosterPickerModal({
                                 const hasDv = it.detectedBadges?.hdr === "DV" || it.media?.[0]?.hdrFormat === "Dolby Vision";
                                 const hasHdr = hasDv || Boolean(it.detectedBadges?.hdr) || (it.media?.[0]?.hdrFormat && it.media[0].hdrFormat !== "SDR");
                                 const edition = it.editionTitle || it.detectedBadges?.edition;
-                                const audio = it.detectedBadges?.audio || it.media?.[0]?.audioProfile || it.media?.[0]?.audioCodec;
-                                const channels = it.detectedBadges?.audioChannels || (it.media?.[0]?.audioChannels ? `${it.media[0].audioChannels}` : undefined);
+                                
+                                // Clean formatted audio & channel badges
+                                const rawAudio = (it.detectedBadges?.audio || it.media?.[0]?.audioProfile || it.media?.[0]?.audioCodec || "").toLowerCase();
+                                const audio = rawAudio.includes("atmos") ? "ATMOS"
+                                    : rawAudio.includes("truehd") ? "TRUEHD"
+                                    : rawAudio.includes("dts:x") || rawAudio.includes("dts-x") ? "DTS:X"
+                                    : rawAudio.includes("dts-hd") || rawAudio.includes("master audio") ? "DTS-HD"
+                                    : rawAudio.includes("dts") ? "DTS"
+                                    : rawAudio.includes("eac3") || rawAudio.includes("digital+") ? "E-AC3"
+                                    : rawAudio.includes("ac3") || rawAudio.includes("dolby digital") ? "AC3"
+                                    : rawAudio.includes("flac") ? "FLAC"
+                                    : rawAudio.includes("aac") ? "AAC"
+                                    : rawAudio ? (rawAudio.length <= 8 ? rawAudio.toUpperCase() : "AUDIO") : undefined;
+
+                                const rawChannels = it.detectedBadges?.audioChannels || (it.media?.[0]?.audioChannels ? (it.media[0].audioChannels >= 8 ? "7.1" : it.media[0].audioChannels >= 6 ? "5.1" : it.media[0].audioChannels === 2 ? "2.0" : `${it.media[0].audioChannels}`) : undefined);
+                                const channels = rawChannels;
                                 const contentRating = it.detectedBadges?.contentRating || it.contentRating;
                                 const codec = it.detectedBadges?.codec || it.media?.[0]?.videoCodec;
 

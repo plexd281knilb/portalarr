@@ -967,6 +967,54 @@ export function generatePlaceholderRibbonSvg(
     </svg>`;
 }
 
+async function resolvePosterBuffer(posterUrl: string | null | undefined, title?: string): Promise<Buffer | null> {
+    if (!posterUrl) return null;
+
+    // 1. Full HTTP URL
+    if (posterUrl.startsWith("http://") || posterUrl.startsWith("https://")) {
+        try {
+            const res = await fetch(posterUrl);
+            if (res.ok) {
+                const arrayBuf = await res.arrayBuffer();
+                if (arrayBuf.byteLength > 200) return Buffer.from(arrayBuf);
+            }
+        } catch (e) {}
+    }
+
+    // 2. Relative /api/media/image URL or PMS proxy URL
+    if (posterUrl.startsWith("/api/media/image") || posterUrl.includes("thumb=") || posterUrl.includes("serverId=")) {
+        try {
+            const dummyUrl = new URL(posterUrl, "http://localhost:3000");
+            const serverId = dummyUrl.searchParams.get("serverId") || dummyUrl.searchParams.get("instanceId") || "";
+            const thumb = dummyUrl.searchParams.get("thumb") || dummyUrl.searchParams.get("url") || "";
+
+            if (serverId && thumb) {
+                const { resolveWorkingPlexServerConnection } = await import("@/lib/plex");
+                const resolved = await resolveWorkingPlexServerConnection(serverId);
+                if (resolved && resolved.serverUrl) {
+                    const candidateUrls = [resolved.serverUrl, ...resolved.allCandidateUrls];
+                    for (const baseUrl of candidateUrls) {
+                        const cleanBase = baseUrl.replace(/\/+$/, "");
+                        const sep = thumb.includes("?") ? "&" : "?";
+                        const directUrl = `${cleanBase}${thumb}${sep}X-Plex-Token=${encodeURIComponent(resolved.token)}`;
+                        try {
+                            const res = await fetch(directUrl, { headers: { "X-Plex-Token": resolved.token } });
+                            if (res.ok) {
+                                const arrayBuf = await res.arrayBuffer();
+                                if (arrayBuf.byteLength > 200) {
+                                    return Buffer.from(arrayBuf);
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    return null;
+}
+
 /**
  * Generates a full high-resolution composited placeholder poster with custom banner / ribbon.
  */
@@ -988,19 +1036,7 @@ export async function generatePlaceholderPosterBuffer(
 ): Promise<Buffer> {
     const width = 600;
     const height = 900;
-    let baseBuffer: Buffer | null = null;
-
-    if (posterUrl && posterUrl.startsWith("http")) {
-        try {
-            const res = await fetch(posterUrl);
-            if (res.ok) {
-                const arrayBuf = await res.arrayBuffer();
-                baseBuffer = Buffer.from(arrayBuf);
-            }
-        } catch (e) {
-            baseBuffer = null;
-        }
-    }
+    const baseBuffer: Buffer | null = await resolvePosterBuffer(posterUrl, title);
 
     let pipeline: ReturnType<typeof sharp>;
     if (baseBuffer) {
