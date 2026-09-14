@@ -3293,6 +3293,122 @@ export async function downloadAllKometaPacksAction() {
 }
 
 /**
+ * Server action to import local Kometa overlay assets (e.g. from kometa_assets folder) into the custom badge vault.
+ */
+export async function importLocalKometaAssetsAction(folderPath?: string) {
+    await verifyAdmin();
+    try {
+        const targetDir = folderPath && folderPath.trim() 
+            ? folderPath.trim() 
+            : path.join(process.cwd(), "kometa_assets");
+
+        if (!fs.existsSync(targetDir)) {
+            return { success: false, error: `Assets folder "${targetDir}" not found on disk.` };
+        }
+
+        const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+        if (!fs.existsSync(badgeVaultDir)) {
+            fs.mkdirSync(badgeVaultDir, { recursive: true });
+        }
+
+        const files = fs.readdirSync(targetDir);
+        const imageFiles = files.filter(f => /\.(png|jpe?g|webp|svg)$/i.test(f));
+
+        if (imageFiles.length === 0) {
+            return { success: false, error: "No image files (.png, .jpg, .webp, .svg) found in assets folder." };
+        }
+
+        let importedCount = 0;
+        let updatedCount = 0;
+        const installedBadges: any[] = [];
+
+        for (const filename of imageFiles) {
+            try {
+                const srcPath = path.join(targetDir, filename);
+                const fileBuffer = fs.readFileSync(srcPath);
+                const ext = path.extname(filename).toLowerCase();
+                const rawName = path.basename(filename, ext);
+                const fileId = `local_kometa_${rawName.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+                const destPath = path.join(badgeVaultDir, `${fileId}${ext}`);
+
+                fs.writeFileSync(destPath, fileBuffer);
+
+                let measuredWidth = 140;
+                let measuredHeight = 46;
+                let mimeType = `image/${ext.replace(".", "")}`;
+                if (ext === ".jpg") mimeType = "image/jpeg";
+                if (ext === ".svg") mimeType = "image/svg+xml";
+
+                try {
+                    const meta = await sharp(fileBuffer).metadata();
+                    if (meta.width) measuredWidth = meta.width;
+                    if (meta.height) measuredHeight = meta.height;
+                } catch (sErr) {}
+
+                const inferred = inferBadgeCategoryAndRule("kometa_assets", filename);
+
+                const existing = await prisma.customBadge.findUnique({ where: { id: fileId } });
+                let badge;
+
+                if (existing) {
+                    badge = await prisma.customBadge.update({
+                        where: { id: fileId },
+                        data: {
+                            name: rawName,
+                            category: inferred.category || "resolution",
+                            filePath: destPath,
+                            fileType: ext.replace(".", "").toLowerCase(),
+                            mimeType,
+                            position: inferred.suggestedPosition || "top-right",
+                            width: measuredWidth,
+                            height: measuredHeight,
+                            matchRule: inferred.suggestedMatchRule || null,
+                            enabled: true
+                        }
+                    });
+                    updatedCount++;
+                } else {
+                    badge = await prisma.customBadge.create({
+                        data: {
+                            id: fileId,
+                            name: rawName,
+                            category: inferred.category || "resolution",
+                            filePath: destPath,
+                            fileType: ext.replace(".", "").toLowerCase(),
+                            mimeType,
+                            position: inferred.suggestedPosition || "top-right",
+                            width: measuredWidth,
+                            height: measuredHeight,
+                            opacity: 1.0,
+                            matchRule: inferred.suggestedMatchRule || null,
+                            enabled: true
+                        }
+                    });
+                    importedCount++;
+                }
+
+                installedBadges.push(badge);
+            } catch (err: any) {
+                console.warn(`[KOMETA-ASSET-IMPORT] Failed importing ${filename}:`, err.message);
+            }
+        }
+
+        logger.addLog("SUCCESS", "CURATION", `Imported ${importedCount + updatedCount} Kometa overlay badges from local folder (${targetDir}).`);
+
+        return {
+            success: true,
+            importedCount,
+            updatedCount,
+            totalCount: installedBadges.length,
+            badges: installedBadges,
+            message: `Successfully imported ${installedBadges.length} Kometa overlay badges from "${path.basename(targetDir)}" into your vault!`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed importing local Kometa assets." };
+    }
+}
+
+/**
  * Server action to fetch trending media (All, Disney, Disney Kids, Netflix, Netflix Kids, Digital, Theatrical)
  * and compare with the selected Plex library to identify "In Library" vs "Not Requested / Missing".
  */
@@ -3724,15 +3840,26 @@ export async function importKometaConfigAction(yamlContent?: string, targetServe
             }
         }
 
-        logger.addLog("SUCCESS", "CURATION", `Imported Kometa configuration (${appliedRules.length} library rules configured, TMDb: ${tmdbUpdated ? "Saved" : "Preserved"}).`);
+        // 4. Auto-import local kometa_assets folder if present
+        let localBadgesImported = 0;
+        const localAssetsDir = path.join(process.cwd(), "kometa_assets");
+        if (fs.existsSync(localAssetsDir)) {
+            const assetRes = await importLocalKometaAssetsAction(localAssetsDir);
+            if (assetRes.success) {
+                localBadgesImported = assetRes.totalCount || 0;
+            }
+        }
+
+        logger.addLog("SUCCESS", "CURATION", `Imported Kometa configuration (${appliedRules.length} library rules configured, ${localBadgesImported} custom badges imported, TMDb: ${tmdbUpdated ? "Saved" : "Preserved"}).`);
 
         return {
             success: true,
             source,
             tmdbUpdated,
+            localBadgesImported,
             appliedCount: appliedRules.length,
             appliedRules,
-            message: `Successfully imported Kometa configuration! Configured ${appliedRules.length} library rule(s).`
+            message: `Successfully imported Kometa configuration! Configured ${appliedRules.length} library rule(s)${localBadgesImported > 0 ? ` and ${localBadgesImported} custom badge(s) from kometa_assets` : ''}.`
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed importing Kometa configuration." };

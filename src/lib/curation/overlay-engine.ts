@@ -1342,20 +1342,7 @@ export async function applyOverlaysToPoster(
                 const scale = options.badgeScale || 1.0;
                 const rawW = cb.width || 140;
                 const rawH = cb.height || 46;
-                const cbWidth = scale !== 1.0 && scale > 0.1 ? Math.round(rawW * scale) : rawW;
-                const cbHeight = scale !== 1.0 && scale > 0.1 ? Math.round(rawH * scale) : rawH;
-                const cbPos = cb.position || fallbackPos;
-
-                let cbBuffer = await sharp(cb.filePath)
-                    .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-                    .toBuffer();
-
-                if (cb.opacity !== undefined && cb.opacity < 1.0) {
-                    cbBuffer = await sharp(cbBuffer)
-                        .ensureAlpha()
-                        .linear(cb.opacity, 0)
-                        .toBuffer();
-                }
+                const isFullPoster = rawW >= 800 && rawH >= 1200;
 
                 // Register all categories this badge fulfills so no duplicates are added
                 for (const cat of badgeCats) {
@@ -1369,8 +1356,44 @@ export async function applyOverlaysToPoster(
                     if (cat === "contentRating") hasCustomContentRating = true;
                 }
 
-                const primaryLayerKey = badgeCats[0] || "custom";
-                buckets[cbPos]?.push({ buf: cbBuffer, w: cbWidth, h: cbHeight, layerKey: primaryLayerKey });
+                if (isFullPoster) {
+                    // Full-frame poster overlay (e.g. 1000x1500 Kometa template)
+                    let fullBuf = await sharp(cb.filePath)
+                        .resize(1000, 1500, { fit: "cover" })
+                        .toBuffer();
+
+                    if (cb.opacity !== undefined && cb.opacity < 1.0) {
+                        fullBuf = await sharp(fullBuf)
+                            .ensureAlpha()
+                            .linear(cb.opacity, 0)
+                            .toBuffer();
+                    }
+
+                    overlays.push({
+                        input: fullBuf,
+                        top: 0,
+                        left: 0
+                    });
+                } else {
+                    // Corner / positioned badge
+                    const cbWidth = scale !== 1.0 && scale > 0.1 ? Math.round(rawW * scale) : rawW;
+                    const cbHeight = scale !== 1.0 && scale > 0.1 ? Math.round(rawH * scale) : rawH;
+                    const cbPos = cb.position || fallbackPos;
+
+                    let cbBuffer = await sharp(cb.filePath)
+                        .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                        .toBuffer();
+
+                    if (cb.opacity !== undefined && cb.opacity < 1.0) {
+                        cbBuffer = await sharp(cbBuffer)
+                            .ensureAlpha()
+                            .linear(cb.opacity, 0)
+                            .toBuffer();
+                    }
+
+                    const primaryLayerKey = badgeCats[0] || "custom";
+                    buckets[cbPos]?.push({ buf: cbBuffer, w: cbWidth, h: cbHeight, layerKey: primaryLayerKey });
+                }
             } catch (err) {
                 logger.addLog("WARN", "CURATION", `Failed to load custom badge ${cb.name}: ${err}`);
             }

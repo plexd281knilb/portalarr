@@ -2458,7 +2458,8 @@ export default function CurationStudio() {
             "bottom-right": [],
             "bottom-left": [],
             "top-center": [],
-            "bottom-center": []
+            "bottom-center": [],
+            "full-frame": []
         };
 
         const simDetected = {
@@ -2505,8 +2506,9 @@ export default function CurationStudio() {
             });
             if (allDisabled) continue;
 
-            const cbPos = cb.position || "top-right";
-            if (!buckets[cbPos]) buckets[cbPos] = [];
+            const rawW = cb.width || 120;
+            const rawH = cb.height || 40;
+            const isFullPoster = (rawW >= 800 && rawH >= 1200) || cb.position === "full-frame";
 
             // Claim all categories
             for (const cat of badgeCats) {
@@ -2514,20 +2516,45 @@ export default function CurationStudio() {
             }
 
             const primaryLayerKey = badgeCats[0] || "custom";
-            buckets[cbPos].push({
-                key: `custom-${cb.id}`,
-                layerKey: primaryLayerKey,
-                node: (
-                    <div key={`custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105 shrink-0" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
-                        <img 
-                            src={`/api/curation/badges/${cb.id}`} 
-                            alt={cb.name}
-                            style={{ width: Math.min(Math.round((cb.width || 120) * 0.45), 90), height: Math.min(Math.round((cb.height || 40) * 0.45), 26) }} 
-                            className="object-contain drop-shadow"
-                        />
-                    </div>
-                )
-            });
+
+            if (isFullPoster) {
+                buckets["full-frame"].push({
+                    key: `custom-${cb.id}`,
+                    layerKey: primaryLayerKey,
+                    node: (
+                        <div 
+                            key={`custom-${cb.id}`} 
+                            className="absolute inset-0 w-full h-full pointer-events-none z-10" 
+                            style={{ opacity: cb.opacity ?? 1.0 }} 
+                            title={`Priority 1 Full-Frame Template: ${cb.name}`}
+                        >
+                            <img 
+                                src={`/api/curation/badges/${cb.id}`} 
+                                alt={cb.name}
+                                className="w-full h-full object-fill pointer-events-none drop-shadow"
+                            />
+                        </div>
+                    )
+                });
+            } else {
+                const cbPos = cb.position || "top-right";
+                if (!buckets[cbPos]) buckets[cbPos] = [];
+
+                buckets[cbPos].push({
+                    key: `custom-${cb.id}`,
+                    layerKey: primaryLayerKey,
+                    node: (
+                        <div key={`custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105 shrink-0" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
+                            <img 
+                                src={`/api/curation/badges/${cb.id}`} 
+                                alt={cb.name}
+                                style={{ width: Math.min(Math.round((cb.width || 120) * 0.45), 90), height: Math.min(Math.round((cb.height || 40) * 0.45), 26) }} 
+                                className="object-contain drop-shadow"
+                            />
+                        </div>
+                    )
+                });
+            }
         }
 
         // 2. Built-in Fallbacks (Priority 2) - only added if not overridden by a custom badge
@@ -2729,23 +2756,44 @@ export default function CurationStudio() {
         if (simCustomBadgeId !== "none") {
             const cb = customBadges.find(b => b.id === simCustomBadgeId);
             if (cb) {
-                const pos = cb.position || "top-right";
-                if (!buckets[pos]) buckets[pos] = [];
-                if (!buckets[pos].some(b => b.key === `custom-${cb.id}`)) {
-                    buckets[pos].push({
-                        key: `sim-custom-${cb.id}`,
-                        layerKey: "custom",
-                        node: (
-                            <div key={`sim-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg" style={{ opacity: cb.opacity ?? 1.0 }}>
-                                <img 
-                                    src={`/api/curation/badges/${cb.id}`} 
-                                    alt={cb.name}
-                                    style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
-                                    className="object-contain drop-shadow"
-                                />
-                            </div>
-                        )
-                    });
+                const rawW = cb.width || 120;
+                const rawH = cb.height || 40;
+                const isFullPoster = (rawW >= 800 && rawH >= 1200) || cb.position === "full-frame";
+                if (isFullPoster) {
+                    if (!buckets["full-frame"].some(b => b.key === `sim-custom-${cb.id}` || b.key === `custom-${cb.id}`)) {
+                        buckets["full-frame"].push({
+                            key: `sim-custom-${cb.id}`,
+                            layerKey: "custom",
+                            node: (
+                                <div key={`sim-custom-${cb.id}`} className="absolute inset-0 w-full h-full pointer-events-none z-10" style={{ opacity: cb.opacity ?? 1.0 }}>
+                                    <img 
+                                        src={`/api/curation/badges/${cb.id}`} 
+                                        alt={cb.name}
+                                        className="w-full h-full object-fill pointer-events-none drop-shadow"
+                                    />
+                                </div>
+                            )
+                        });
+                    }
+                } else {
+                    const pos = cb.position || "top-right";
+                    if (!buckets[pos]) buckets[pos] = [];
+                    if (!buckets[pos].some(b => b.key === `custom-${cb.id}`)) {
+                        buckets[pos].push({
+                            key: `sim-custom-${cb.id}`,
+                            layerKey: "custom",
+                            node: (
+                                <div key={`sim-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg" style={{ opacity: cb.opacity ?? 1.0 }}>
+                                    <img 
+                                        src={`/api/curation/badges/${cb.id}`} 
+                                        alt={cb.name}
+                                        style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
+                                        className="object-contain drop-shadow"
+                                    />
+                                </div>
+                            )
+                        });
+                    }
                 }
             }
         }
@@ -2776,7 +2824,8 @@ export default function CurationStudio() {
             "bottom-right": [],
             "bottom-left": [],
             "top-center": [],
-            "bottom-center": []
+            "bottom-center": [],
+            "full-frame": []
         };
 
         const detected = item?.detectedBadges || {};
@@ -2811,28 +2860,54 @@ export default function CurationStudio() {
             });
             if (allDisabled) continue;
 
-            const cbPos = cb.position || "top-right";
-            if (!buckets[cbPos]) buckets[cbPos] = [];
+            const rawW = cb.width || 120;
+            const rawH = cb.height || 40;
+            const isFullPoster = (rawW >= 800 && rawH >= 1200) || cb.position === "full-frame";
 
             for (const cat of badgeCats) {
                 appliedCategories.add(cat);
             }
 
             const primaryLayerKey = badgeCats[0] || "custom";
-            buckets[cbPos].push({
-                key: `inspect-custom-${cb.id}`,
-                layerKey: primaryLayerKey,
-                node: (
-                    <div key={`inspect-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105 shrink-0" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
-                        <img 
-                            src={`/api/curation/badges/${cb.id}`} 
-                            alt={cb.name}
-                            style={{ width: Math.min(Math.round((cb.width || 120) * 0.45), 90), height: Math.min(Math.round((cb.height || 40) * 0.45), 26) }} 
-                            className="object-contain drop-shadow"
-                        />
-                    </div>
-                )
-            });
+
+            if (isFullPoster) {
+                buckets["full-frame"].push({
+                    key: `inspect-custom-${cb.id}`,
+                    layerKey: primaryLayerKey,
+                    node: (
+                        <div 
+                            key={`inspect-custom-${cb.id}`} 
+                            className="absolute inset-0 w-full h-full pointer-events-none z-10" 
+                            style={{ opacity: cb.opacity ?? 1.0 }} 
+                            title={`Priority 1 Full-Frame Template: ${cb.name}`}
+                        >
+                            <img 
+                                src={`/api/curation/badges/${cb.id}`} 
+                                alt={cb.name}
+                                className="w-full h-full object-fill pointer-events-none drop-shadow"
+                            />
+                        </div>
+                    )
+                });
+            } else {
+                const cbPos = cb.position || "top-right";
+                if (!buckets[cbPos]) buckets[cbPos] = [];
+
+                buckets[cbPos].push({
+                    key: `inspect-custom-${cb.id}`,
+                    layerKey: primaryLayerKey,
+                    node: (
+                        <div key={`inspect-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105 shrink-0" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
+                            <img 
+                                src={`/api/curation/badges/${cb.id}`} 
+                                alt={cb.name}
+                                style={{ width: Math.min(Math.round((cb.width || 120) * 0.45), 90), height: Math.min(Math.round((cb.height || 40) * 0.45), 26) }} 
+                                className="object-contain drop-shadow"
+                            />
+                        </div>
+                    )
+                });
+            }
         }
 
         // 2. Built-in Fallbacks (Priority 2)
@@ -4616,6 +4691,13 @@ export default function CurationStudio() {
                                                 </svg>
                                             );
                                         })()}
+                                    </div>
+                                )}
+
+                                {/* Full-Frame Template Overlays (e.g. Kometa 1000x1500 templates) */}
+                                {renderBadgesForPosition("full-frame").length > 0 && (
+                                    <div className="absolute inset-0 z-10 pointer-events-none w-full h-full overflow-hidden">
+                                        {renderBadgesForPosition("full-frame")}
                                     </div>
                                 )}
 
@@ -6536,6 +6618,13 @@ export default function CurationStudio() {
                                                                 )}
                                                             </g>
                                                         </svg>
+                                                    </div>
+                                                )}
+
+                                                {/* Full-Frame Template Overlays (e.g. Kometa 1000x1500 templates) */}
+                                                {renderInspectedBadgesForPosition(inspectingItem.item, "full-frame").length > 0 && (
+                                                    <div className="absolute inset-0 z-10 pointer-events-none w-full h-full overflow-hidden">
+                                                        {renderInspectedBadgesForPosition(inspectingItem.item, "full-frame")}
                                                     </div>
                                                 )}
 
