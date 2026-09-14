@@ -179,6 +179,10 @@ export default function CurationStudio() {
     const [kometaInspectionResult, setKometaInspectionResult] = useState<any | null>(null);
     const [kometaYamlInput, setKometaYamlInput] = useState<string>("");
     const [kometaCustomPathInput, setKometaCustomPathInput] = useState<string>("");
+    const [kometaLoadedFileName, setKometaLoadedFileName] = useState<string | null>(null);
+    const [kometaLoadedFileSize, setKometaLoadedFileSize] = useState<string | null>(null);
+    const [kometaUploadingFile, setKometaUploadingFile] = useState<boolean>(false);
+    const [kometaIsDragging, setKometaIsDragging] = useState<boolean>(false);
     const [kometaImportSuccessMsg, setKometaImportSuccessMsg] = useState<string | null>(null);
     const [kometaImportErrorMsg, setKometaImportErrorMsg] = useState<string | null>(null);
     const [kometaImportTmdb, setKometaImportTmdb] = useState<boolean>(true);
@@ -391,87 +395,27 @@ export default function CurationStudio() {
         });
     };
 
-    // Open and inspect Kometa Config
-    const handleOpenKometaModal = async () => {
+    // Open Kometa Config Modal cleanly without auto-running background inspection
+    const handleOpenKometaModal = () => {
         setKometaModalOpen(true);
         setKometaImportSuccessMsg(null);
         setKometaImportErrorMsg(null);
+    };
 
-        // If we already have YAML text loaded in state, inspect it
-        if (kometaYamlInput && kometaYamlInput.trim()) {
-            handleInspectKometaYaml(kometaYamlInput);
-            return;
-        }
-
-        // Otherwise auto-attempt to read local kometaconfig.yml from server disk root
+    // Ingest and process a local uploaded or dropped Kometa file
+    const processKometaFile = (file: File) => {
+        setKometaUploadingFile(true);
         setKometaInspecting(true);
-        try {
-            const diskRes = await readLocalKometaConfigAction();
-            if (diskRes.success && diskRes.content) {
-                setKometaYamlInput(diskRes.content);
-                const inspectRes = await inspectKometaConfigFileAction(diskRes.content);
-                if (inspectRes.success) {
-                    setKometaInspectionResult(inspectRes);
-                    if (inspectRes.parsed?.libraries) {
-                        setKometaLibMappings(initKometaLibraryMappings(inspectRes.parsed.libraries, selectedServerId));
-                    }
-                }
-            } else {
-                setKometaInspectionResult(null);
-            }
-        } catch (e: any) {
-            console.error("Failed inspecting local Kometa config:", e);
-            setKometaInspectionResult(null);
-        } finally {
-            setKometaInspecting(false);
-        }
-    };
-
-    // Load a specific local file from server disk
-    const handleLoadDiskKometaConfig = async (customPath?: string) => {
-        setKometaLoadingDisk(true);
-        setKometaImportSuccessMsg(null);
+        setKometaLoadedFileName(file.name);
+        setKometaLoadedFileSize(`${(file.size / 1024).toFixed(1)} KB`);
+        setKometaImportSuccessMsg(`Ingesting "${file.name}"...`);
         setKometaImportErrorMsg(null);
-        try {
-            const diskRes = await readLocalKometaConfigAction(customPath);
-            if (diskRes.success && diskRes.content) {
-                setKometaYamlInput(diskRes.content);
-                setKometaInspecting(true);
-                const inspectRes = await inspectKometaConfigFileAction(diskRes.content, customPath);
-                if (inspectRes.success) {
-                    setKometaInspectionResult(inspectRes);
-                    if (inspectRes.parsed?.libraries) {
-                        setKometaLibMappings(initKometaLibraryMappings(inspectRes.parsed.libraries, selectedServerId));
-                    }
-                    setKometaImportSuccessMsg(`Loaded "${diskRes.fileName}" (${diskRes.lineCount} lines)!`);
-                    setTimeout(() => setKometaImportSuccessMsg(null), 4000);
-                } else {
-                    setKometaImportErrorMsg(inspectRes.error || "Failed inspecting file.");
-                }
-            } else {
-                setKometaImportErrorMsg(diskRes.error || "File not found on server disk.");
-            }
-        } catch (e: any) {
-            setKometaImportErrorMsg(e.message || "Failed loading file.");
-        } finally {
-            setKometaLoadingDisk(false);
-            setKometaInspecting(false);
-        }
-    };
-
-    // Handle file upload from user's browser / computer
-    const handleFileUploadKometa = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
 
         const reader = new FileReader();
         reader.onload = async (event) => {
             const text = event.target?.result as string;
             if (text) {
                 setKometaYamlInput(text);
-                setKometaInspecting(true);
-                setKometaImportSuccessMsg(null);
-                setKometaImportErrorMsg(null);
                 try {
                     const inspectRes = await inspectKometaConfigFileAction(text);
                     if (inspectRes.success) {
@@ -479,19 +423,97 @@ export default function CurationStudio() {
                         if (inspectRes.parsed?.libraries) {
                             setKometaLibMappings(initKometaLibraryMappings(inspectRes.parsed.libraries, selectedServerId));
                         }
-                        setKometaImportSuccessMsg(`Loaded "${file.name}" (${(file.size / 1024).toFixed(1)} KB)!`);
-                        setTimeout(() => setKometaImportSuccessMsg(null), 4000);
+                        setKometaImportSuccessMsg(`✓ Successfully ingested "${file.name}" (${(file.size / 1024).toFixed(1)} KB) with ${inspectRes.libraryCount || 0} libraries!`);
                     } else {
-                        setKometaImportErrorMsg(inspectRes.error || "Failed parsing YAML.");
+                        setKometaImportErrorMsg(inspectRes.error || "Failed parsing YAML syntax.");
                     }
                 } catch (err: any) {
                     setKometaImportErrorMsg(err.message || "Failed parsing uploaded YAML.");
                 } finally {
                     setKometaInspecting(false);
+                    setKometaUploadingFile(false);
                 }
+            } else {
+                setKometaInspecting(false);
+                setKometaUploadingFile(false);
+                setKometaImportErrorMsg("Uploaded file is empty.");
             }
         };
+        reader.onerror = () => {
+            setKometaInspecting(false);
+            setKometaUploadingFile(false);
+            setKometaImportErrorMsg("Error reading file from disk.");
+        };
         reader.readAsText(file);
+    };
+
+    // Handle file upload from user's browser / computer
+    const handleFileUploadKometa = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        processKometaFile(file);
+        e.target.value = "";
+    };
+
+    // Handle drag and drop for Kometa file
+    const handleDropKometaFile = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setKometaIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) {
+            processKometaFile(file);
+        }
+    };
+
+    // Load a specific local file from server disk
+    const handleLoadDiskKometaConfig = async (customPath?: string) => {
+        const pathName = customPath || "kometaconfig.yml";
+        setKometaLoadingDisk(true);
+        setKometaInspecting(true);
+        setKometaLoadedFileName(pathName);
+        setKometaImportSuccessMsg(`Loading "${pathName}" from server disk...`);
+        setKometaImportErrorMsg(null);
+        try {
+            const diskRes = await readLocalKometaConfigAction(customPath);
+            if (diskRes.success && diskRes.content) {
+                setKometaYamlInput(diskRes.content);
+                setKometaLoadedFileName(diskRes.fileName || pathName);
+                setKometaLoadedFileSize(`${((diskRes.content.length) / 1024).toFixed(1)} KB`);
+                const inspectRes = await inspectKometaConfigFileAction(diskRes.content, customPath);
+                if (inspectRes.success) {
+                    setKometaInspectionResult(inspectRes);
+                    if (inspectRes.parsed?.libraries) {
+                        setKometaLibMappings(initKometaLibraryMappings(inspectRes.parsed.libraries, selectedServerId));
+                    }
+                    setKometaImportSuccessMsg(`✓ Loaded "${diskRes.fileName}" (${diskRes.lineCount} lines, ${inspectRes.libraryCount || 0} libraries detected)!`);
+                } else {
+                    setKometaImportErrorMsg(inspectRes.error || "Failed inspecting file.");
+                }
+            } else {
+                setKometaLoadedFileName(null);
+                setKometaLoadedFileSize(null);
+                setKometaImportErrorMsg(diskRes.error || `File "${pathName}" not found on server disk.`);
+            }
+        } catch (e: any) {
+            setKometaLoadedFileName(null);
+            setKometaLoadedFileSize(null);
+            setKometaImportErrorMsg(e.message || "Failed loading file.");
+        } finally {
+            setKometaLoadingDisk(false);
+            setKometaInspecting(false);
+        }
+    };
+
+    // Clear currently loaded Kometa config
+    const handleClearKometaConfig = () => {
+        setKometaYamlInput("");
+        setKometaLoadedFileName(null);
+        setKometaLoadedFileSize(null);
+        setKometaInspectionResult(null);
+        setKometaLibMappings([]);
+        setKometaImportSuccessMsg(null);
+        setKometaImportErrorMsg(null);
     };
 
     // Re-inspect upon YAML input change or re-scan
@@ -9811,15 +9833,68 @@ export default function CurationStudio() {
                                 <span className="font-bold text-white text-xs flex items-center gap-1.5">
                                     <FolderOpen className="h-4 w-4 text-purple-400" /> Load Configuration Source
                                 </span>
-                                <span className="text-[10px] text-slate-400">Select an import method</span>
+                                {kometaLoadedFileName ? (
+                                    <div className="flex items-center gap-2">
+                                        <Badge className="bg-emerald-950 text-emerald-300 border-emerald-500/40 text-[10px] gap-1 font-mono">
+                                            <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                                            <span>Active: {kometaLoadedFileName}</span>
+                                        </Badge>
+                                        <button
+                                            type="button"
+                                            onClick={handleClearKometaConfig}
+                                            className="text-[10px] text-slate-400 hover:text-rose-300 transition-colors cursor-pointer"
+                                            title="Clear loaded configuration"
+                                        >
+                                            Reset
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <span className="text-[10px] text-slate-400">Select an import method below</span>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {/* Option 1: Browse / Upload File */}
-                                <div className="p-3 bg-slate-900/90 rounded-xl border border-dashed border-slate-700/80 hover:border-amber-500/60 transition-colors flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer relative group">
-                                    <UploadCloud className="h-5 w-5 text-amber-400 group-hover:scale-110 transition-transform" />
-                                    <span className="font-bold text-slate-200 text-xs">Upload config.yml File</span>
-                                    <p className="text-[10px] text-slate-400">Drag &amp; drop or click to browse from your device</p>
+                                <div 
+                                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setKometaIsDragging(true); }}
+                                    onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setKometaIsDragging(false); }}
+                                    onDrop={handleDropKometaFile}
+                                    className={`p-3 rounded-xl border transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer relative group ${
+                                        kometaIsDragging
+                                            ? "border-amber-400 bg-amber-950/40 ring-2 ring-amber-400/40"
+                                            : kometaLoadedFileName
+                                                ? "border-emerald-500/60 bg-emerald-950/20 hover:border-emerald-400"
+                                                : "border-dashed border-slate-700/80 hover:border-amber-500/60 bg-slate-900/90"
+                                    }`}
+                                >
+                                    {kometaUploadingFile || (kometaInspecting && !kometaLoadingDisk) ? (
+                                        <>
+                                            <Loader2 className="h-5 w-5 text-amber-400 animate-spin" />
+                                            <span className="font-bold text-amber-300 text-xs">Ingesting &amp; Parsing File...</span>
+                                            <p className="text-[10px] text-slate-400">{kometaLoadedFileName || "Analyzing YAML structure"}</p>
+                                        </>
+                                    ) : kometaLoadedFileName ? (
+                                        <>
+                                            <div className="flex items-center gap-1.5 text-emerald-400">
+                                                <CheckCircle2 className="h-5 w-5" />
+                                                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px] font-bold">
+                                                    ✓ Ingested
+                                                </Badge>
+                                            </div>
+                                            <span className="font-bold text-white text-xs truncate max-w-[240px]" title={kometaLoadedFileName}>
+                                                {kometaLoadedFileName}
+                                            </span>
+                                            <p className="text-[10px] text-emerald-300/80">
+                                                {kometaLoadedFileSize ? `${kometaLoadedFileSize} • ` : ""}Click or drop to replace
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <UploadCloud className="h-5 w-5 text-amber-400 group-hover:scale-110 transition-transform" />
+                                            <span className="font-bold text-slate-200 text-xs">Upload config.yml File</span>
+                                            <p className="text-[10px] text-slate-400">Drag &amp; drop or click to browse (.yml, .yaml)</p>
+                                        </>
+                                    )}
                                     <input 
                                         type="file" 
                                         accept=".yml,.yaml,.txt" 
@@ -9843,9 +9918,13 @@ export default function CurationStudio() {
                                             variant="outline"
                                             disabled={kometaLoadingDisk}
                                             onClick={() => handleLoadDiskKometaConfig("kometaconfig.yml")}
-                                            className="bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700 text-[11px] h-7 px-2 gap-1 font-mono"
+                                            className={`text-[11px] h-7 px-2 gap-1 font-mono transition-all ${
+                                                kometaLoadedFileName === "kometaconfig.yml"
+                                                    ? "bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold"
+                                                    : "bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700"
+                                            }`}
                                         >
-                                            {kometaLoadingDisk ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileCode className="h-3 w-3" />}
+                                            {kometaLoadingDisk && kometaLoadedFileName === "kometaconfig.yml" ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileCode className="h-3 w-3" />}
                                             kometaconfig.yml
                                         </Button>
                                         <Button
@@ -9854,8 +9933,13 @@ export default function CurationStudio() {
                                             variant="outline"
                                             disabled={kometaLoadingDisk}
                                             onClick={() => handleLoadDiskKometaConfig("config.yml")}
-                                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 text-[11px] h-7 px-2 gap-1 font-mono"
+                                            className={`text-[11px] h-7 px-2 gap-1 font-mono transition-all ${
+                                                kometaLoadedFileName === "config.yml"
+                                                    ? "bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold"
+                                                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
+                                            }`}
                                         >
+                                            {kometaLoadingDisk && kometaLoadedFileName === "config.yml" ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileCode className="h-3 w-3" />}
                                             config.yml
                                         </Button>
                                         <Button
@@ -9864,8 +9948,13 @@ export default function CurationStudio() {
                                             variant="outline"
                                             disabled={kometaLoadingDisk}
                                             onClick={() => handleLoadDiskKometaConfig("config/config.yml")}
-                                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 text-[11px] h-7 px-2 gap-1 font-mono"
+                                            className={`text-[11px] h-7 px-2 gap-1 font-mono transition-all ${
+                                                kometaLoadedFileName === "config/config.yml"
+                                                    ? "bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold"
+                                                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
+                                            }`}
                                         >
+                                            {kometaLoadingDisk && kometaLoadedFileName === "config/config.yml" ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileCode className="h-3 w-3" />}
                                             config/config.yml
                                         </Button>
                                     </div>
@@ -9887,7 +9976,7 @@ export default function CurationStudio() {
                                     onClick={() => handleLoadDiskKometaConfig(kometaCustomPathInput.trim())}
                                     className="bg-slate-800 hover:bg-slate-700 text-white text-xs h-8 px-3 shrink-0"
                                 >
-                                    {kometaLoadingDisk ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <FolderCheck className="h-3.5 w-3.5 mr-1" />}
+                                    {kometaLoadingDisk && kometaLoadedFileName === kometaCustomPathInput.trim() ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <FolderCheck className="h-3.5 w-3.5 mr-1" />}
                                     Load Path
                                 </Button>
                             </div>
@@ -10210,7 +10299,7 @@ export default function CurationStudio() {
                                                     type="button"
                                                     size="sm"
                                                     variant="ghost"
-                                                    onClick={() => setKometaYamlInput("")}
+                                                    onClick={handleClearKometaConfig}
                                                     className="text-[10px] text-slate-400 hover:text-rose-300 h-6 px-2"
                                                 >
                                                     Clear
