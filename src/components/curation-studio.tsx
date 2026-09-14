@@ -3431,8 +3431,8 @@ export default function CurationStudio() {
             simShowHdr && 
             (simResolutionPosition || "top-right") === (simHdrPosition || "top-right");
 
-        const matchingResCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Resolution") && doesCustomBadgeMatchDetected(cb, simDetected));
-        const matchingHdrCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Dynamic Range") && doesCustomBadgeMatchDetected(cb, simDetected));
+        const matchingResCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("resolution") && doesCustomBadgeMatchDetected(cb, simDetected));
+        const matchingHdrCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("hdr") && doesCustomBadgeMatchDetected(cb, simDetected));
 
         if (isDovetailed && !matchingResCustom && !matchingHdrCustom) {
             layers.push({
@@ -3464,7 +3464,7 @@ export default function CurationStudio() {
 
         // Video Codec
         if (simShowCodec) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Video Codec") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("codec") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
                 layers.push({ category: "Video Codec", value: "HEVC (H.265)", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simCodecPosition });
             } else {
@@ -3474,7 +3474,7 @@ export default function CurationStudio() {
 
         // Audio Codec
         if (simShowAudio) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Audio Format") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("audio") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
                 layers.push({ category: "Audio Format", value: "Dolby Atmos", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simAudioPosition });
             } else {
@@ -3489,7 +3489,7 @@ export default function CurationStudio() {
 
         // Edition
         if (simShowEdition) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Edition") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("edition") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
                 layers.push({ category: "Edition / Cut", value: "IMAX Enhanced", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simEditionPosition });
             } else {
@@ -3499,7 +3499,7 @@ export default function CurationStudio() {
 
         // Studio
         if (simShowStudio) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Studio") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("studio") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
                 layers.push({ category: "Studio / Network", value: "HBO Max", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simStudioPosition });
             } else {
@@ -3509,7 +3509,7 @@ export default function CurationStudio() {
 
         // Content Rating
         if (simShowRating) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Age Rating") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("contentRating") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
                 layers.push({ category: "Age Rating", value: "PG-13", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simRatingPosition });
             } else {
@@ -3524,7 +3524,16 @@ export default function CurationStudio() {
 
         // Corner Ribbon
         if (simShowRibbon) {
-            layers.push({ category: "Corner Ribbon", value: getEffectiveRibbonText(), sourceType: "builtin", sourceName: `Gloss Ribbon (${simRibbonTheme})`, position: simRibbonPosition });
+            const activeRibbons = getActiveSimulatorRibbons();
+            const ribbonText = activeRibbons.map(r => r.text).join(" • ");
+            const isMultiTier = activeRibbons.length > 1;
+            layers.push({ 
+                category: "Corner Ribbon", 
+                value: ribbonText || getEffectiveRibbonText(), 
+                sourceType: "builtin", 
+                sourceName: `Gloss Ribbon (${simRibbonTheme}${isMultiTier ? ` • ${activeRibbons.length} Tiers` : ""})`, 
+                position: simRibbonPosition 
+            });
         }
 
         return layers;
@@ -3542,8 +3551,8 @@ export default function CurationStudio() {
             isCustom: boolean;
         }> = [];
 
-        const matchingRes = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Resolution") && doesCustomBadgeMatchDetected(cb, detected));
-        const matchingHdr = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Dynamic Range") && doesCustomBadgeMatchDetected(cb, detected));
+        const matchingRes = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("resolution") && doesCustomBadgeMatchDetected(cb, detected));
+        const matchingHdr = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("hdr") && doesCustomBadgeMatchDetected(cb, detected));
 
         const isDovetailedInspect = simDovetailResolutionHdr &&
             Boolean(detected.resolution) &&
@@ -3586,7 +3595,7 @@ export default function CurationStudio() {
         }
 
         if (detected.audio) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Audio Format") && doesCustomBadgeMatchDetected(cb, detected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("audio") && doesCustomBadgeMatchDetected(cb, detected));
             decisions.push({
                 property: "Audio Format",
                 detectedValue: detected.audio,
@@ -3609,7 +3618,7 @@ export default function CurationStudio() {
         }
 
         if (detected.codec) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Video Codec") && doesCustomBadgeMatchDetected(cb, detected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("codec") && doesCustomBadgeMatchDetected(cb, detected));
             decisions.push({
                 property: "Video Codec",
                 detectedValue: detected.codec,
@@ -3621,7 +3630,7 @@ export default function CurationStudio() {
         }
 
         if (detected.edition) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Edition") && doesCustomBadgeMatchDetected(cb, detected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("edition") && doesCustomBadgeMatchDetected(cb, detected));
             decisions.push({
                 property: "Edition / Cut",
                 detectedValue: detected.edition,
@@ -3633,7 +3642,7 @@ export default function CurationStudio() {
         }
 
         if (detected.studio) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Studio") && doesCustomBadgeMatchDetected(cb, detected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("studio") && doesCustomBadgeMatchDetected(cb, detected));
             decisions.push({
                 property: "Studio / Network",
                 detectedValue: detected.studio,
@@ -3645,7 +3654,7 @@ export default function CurationStudio() {
         }
 
         if (detected.contentRating) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Age Rating") && doesCustomBadgeMatchDetected(cb, detected));
+            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("contentRating") && doesCustomBadgeMatchDetected(cb, detected));
             decisions.push({
                 property: "Age Rating",
                 detectedValue: detected.contentRating,
