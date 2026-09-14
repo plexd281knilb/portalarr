@@ -10,6 +10,8 @@ import {
     Sparkles,
     Calendar,
     Clock,
+    Clock3,
+    Power,
     Plus,
     Trash2,
     RefreshCw,
@@ -79,7 +81,9 @@ import {
     saveComingSoonSharesAction,
     validateDirectoryPathAction,
     getCurationSettingsAction,
-    saveCurationSettingsAction
+    saveCurationSettingsAction,
+    toggleCurationLibrarySectionAction,
+    runFullCurationSyncAction
 } from "@/app/curation-actions";
 import {
     COLLECTION_PRESETS,
@@ -188,6 +192,104 @@ export function AgregarrStudio() {
     const [sharesSavedMsg, setSharesSavedMsg] = useState(false);
     const [pathCheckResults, setPathCheckResults] = useState<Record<string, { checking: boolean; success?: boolean; msg?: string }>>({});
 
+    // Automated Schedule & Enabled Library States
+    const [curationSyncCollections, setCurationSyncCollections] = useState<boolean>(true);
+    const [curationSyncSchedule, setCurationSyncSchedule] = useState<string>("every_6_hours");
+    const [curationLastRunAt, setCurationLastRunAt] = useState<string | null>(null);
+    const [curationLastRunStatus, setCurationLastRunStatus] = useState<any | null>(null);
+    const [enabledServersForCollections, setEnabledServersForCollections] = useState<string[]>([]);
+    const [savingSchedule, setSavingSchedule] = useState(false);
+    const [scheduleSavedMsg, setScheduleSavedMsg] = useState(false);
+    const [runningCollectionSync, setRunningCollectionSync] = useState(false);
+    const [collectionSyncResult, setCollectionSyncResult] = useState<{ success: boolean; text: string; details?: string[] } | null>(null);
+
+    // Check if a section is enabled for collections
+    const isSectionEnabled = (srvId: string, secKey: string): boolean => {
+        if (!enabledServersForCollections || enabledServersForCollections.length === 0) return true;
+        const compoundKey = `${srvId}:${secKey}`;
+        if (enabledServersForCollections.includes(compoundKey)) return true;
+        const hasCompoundForServer = enabledServersForCollections.some(k => k.startsWith(`${srvId}:`));
+        if (!hasCompoundForServer && enabledServersForCollections.includes(srvId)) return true;
+        return false;
+    };
+
+    // Toggle a section enabled/disabled for collections
+    const handleToggleSection = async (secKey: string) => {
+        const currentlyEnabled = isSectionEnabled(selectedServerId, secKey);
+        const nextEnabled = !currentlyEnabled;
+        const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+
+        // Optimistic UI update
+        const compoundKey = `${selectedServerId}:${secKey}`;
+        let nextList = [...enabledServersForCollections];
+        if (nextList.length === 0 && !nextEnabled) {
+            nextList = allSecKeys.filter(k => k !== secKey).map(k => `${selectedServerId}:${k}`);
+        } else if (nextEnabled) {
+            if (!nextList.includes(compoundKey)) nextList.push(compoundKey);
+        } else {
+            nextList = nextList.filter(k => k !== compoundKey && k !== selectedServerId);
+        }
+        setEnabledServersForCollections(nextList);
+
+        try {
+            const res = await toggleCurationLibrarySectionAction("agregarr", selectedServerId, secKey, nextEnabled, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForCollections(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed toggling section collection state:", e);
+        }
+    };
+
+    // Save schedule settings
+    const handleSaveSchedule = async () => {
+        setSavingSchedule(true);
+        setScheduleSavedMsg(false);
+        try {
+            const res = await saveCurationSettingsAction({
+                curationSyncCollections,
+                curationSyncSchedule
+            });
+            if (res.success) {
+                setScheduleSavedMsg(true);
+                setTimeout(() => setScheduleSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving schedule:", e);
+        } finally {
+            setSavingSchedule(false);
+        }
+    };
+
+    // Run collection sync job now
+    const handleRunCollectionSync = async () => {
+        setRunningCollectionSync(true);
+        setCollectionSyncResult(null);
+        try {
+            const res = await syncSeasonalAndScheduledCollectionsAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setCollectionSyncResult({
+                    success: true,
+                    text: `Synced Collections & Hubs successfully: ${res.evaluatedCount ?? 0} rules evaluated.`
+                });
+                loadCollections();
+            } else {
+                setCollectionSyncResult({
+                    success: false,
+                    text: res.error || "Failed running collection sync."
+                });
+            }
+        } catch (e: any) {
+            setCollectionSyncResult({
+                success: false,
+                text: e.message || "An error occurred during sync."
+            });
+        } finally {
+            setRunningCollectionSync(false);
+        }
+    };
+
     // Initial Data Fetch
     useEffect(() => {
         const loadInitialData = async () => {
@@ -207,6 +309,13 @@ export function AgregarrStudio() {
                 const settingsRes = await getCurationSettingsAction();
                 if (settingsRes.success) {
                     if (settingsRes.comingSoonShares) setComingSoonShares(settingsRes.comingSoonShares);
+                    setCurationSyncCollections(settingsRes.curationSyncCollections ?? true);
+                    setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
+                    setCurationLastRunAt(settingsRes.curationLastRunAt || null);
+                    setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
+                    if (settingsRes.enabledServersForCollections) {
+                        setEnabledServersForCollections(settingsRes.enabledServersForCollections);
+                    }
                 }
             } catch (err) {
                 console.error("Failed loading Agregarr studio data:", err);
@@ -702,7 +811,7 @@ export function AgregarrStudio() {
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                             <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
                                 <Film className="h-4 w-4 text-sky-400" />
-                                <span>Library Section:</span>
+                                <span>Library Sections:</span>
                                 {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
@@ -718,13 +827,14 @@ export function AgregarrStudio() {
                                         const isSelected = String(sec.key) === selectedSectionKey;
                                         const isMovie = sec.type === "movie" || sec.title?.toLowerCase().includes("movie");
                                         const isShow = sec.type === "show" || sec.title?.toLowerCase().includes("show") || sec.title?.toLowerCase().includes("tv");
+                                        const isSecEnabled = isSectionEnabled(selectedServerId, String(sec.key));
 
                                         return (
                                             <button
                                                 key={sec.key}
                                                 type="button"
                                                 onClick={() => handleSelectSection(String(sec.key))}
-                                                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                className={`group flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                                     isSelected
                                                         ? 'bg-sky-600 text-white shadow-md shadow-sky-950/60 border border-sky-400/50 ring-1 ring-sky-400/40'
                                                         : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
@@ -737,6 +847,27 @@ export function AgregarrStudio() {
                                                 <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-sky-700/80 text-sky-100' : 'bg-slate-900 text-slate-400'}`}>
                                                     Key: {sec.key}
                                                 </span>
+
+                                                {/* Interactive On/Off Switch Badge */}
+                                                <div
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    title={isSecEnabled ? "Collections ON for this library (Click to disable)" : "Collections OFF for this library (Click to enable)"}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleToggleSection(String(sec.key));
+                                                    }}
+                                                    className={`ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold transition-all cursor-pointer ${
+                                                        isSecEnabled 
+                                                            ? isSelected 
+                                                                ? 'bg-emerald-400 text-emerald-950 shadow-sm' 
+                                                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                                                            : 'bg-slate-900/80 text-slate-500 border border-slate-700 hover:text-slate-300'
+                                                    }`}
+                                                >
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${isSecEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                                                    <span>{isSecEnabled ? 'ON' : 'OFF'}</span>
+                                                </div>
                                             </button>
                                         );
                                     })
@@ -746,6 +877,92 @@ export function AgregarrStudio() {
                     </div>
                 </Card>
             )}
+
+            {/* Automated Collections & Hubs Schedule & Automation Card */}
+            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <CardContent className="p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
+                    <div className="space-y-1 max-w-xl">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Clock className="h-4 w-4 text-amber-400" />
+                            <span className="font-bold text-white text-sm">Collections &amp; Hubs Schedule &amp; Automation</span>
+                            <Badge variant="outline" className={`text-[10px] font-semibold ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                {curationSyncCollections ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
+                            </Badge>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                            Automatically updates TMDb &amp; Trakt dynamic smart collections, promotes seasonal hubs based on active calendar rules, and ranks items on Plex Home across enabled libraries.
+                        </p>
+                        {curationLastRunAt && (
+                            <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                                <Clock3 className="h-3 w-3 text-amber-400" />
+                                Last automated run: <span className="text-slate-300 font-mono">{new Date(curationLastRunAt).toLocaleString()}</span>
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                        <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                            <span className="text-[11px] font-bold text-slate-200">Timer</span>
+                            <Switch 
+                                checked={curationSyncCollections}
+                                onCheckedChange={checked => setCurationSyncCollections(checked)}
+                            />
+                        </div>
+
+                        <div className="space-y-0.5">
+                            <Select 
+                                value={curationSyncSchedule} 
+                                onValueChange={val => setCurationSyncSchedule(val)}
+                            >
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8 w-[155px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
+                                    <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
+                                    <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
+                                    <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                    <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
+                                    <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <Button 
+                            size="sm"
+                            onClick={handleSaveSchedule}
+                            disabled={savingSchedule}
+                            variant="outline"
+                            className="border-slate-700 text-slate-300 hover:text-white text-xs h-8 px-3 cursor-pointer"
+                        >
+                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+                            {scheduleSavedMsg ? "Saved!" : "Save Schedule"}
+                        </Button>
+
+                        <Button 
+                            size="sm"
+                            onClick={handleRunCollectionSync}
+                            disabled={runningCollectionSync}
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer"
+                        >
+                            {runningCollectionSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                            <span>Sync Collections Now</span>
+                        </Button>
+                    </div>
+                </CardContent>
+
+                {collectionSyncResult && (
+                    <div className={`p-3 text-xs border-t ${collectionSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
+                        {collectionSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                        <div className="space-y-0.5">
+                            <span className="font-bold">{collectionSyncResult.text}</span>
+                            {collectionSyncResult.details && collectionSyncResult.details.length > 0 && (
+                                <p className="text-[11px] opacity-80">{collectionSyncResult.details.join(" • ")}</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </Card>
 
             {/* Agregarr Sub-Navigation Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md overflow-x-auto">

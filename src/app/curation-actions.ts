@@ -143,8 +143,88 @@ export async function getCurationSettingsAction() {
         parentalTagTarget: settings?.parentalTagTarget || "labels",
         parentalMinSeverity: settings?.parentalMinSeverity || "Mild",
         parentalCategories: settings?.parentalCategories ? JSON.parse(settings.parentalCategories) : ["nudity", "violence", "profanity", "alcohol", "frightening"],
-        curationSyncParentalTags: settings?.curationSyncParentalTags ?? true
+        curationSyncParentalTags: settings?.curationSyncParentalTags ?? true,
+
+        // Curation Scheduler Timer & Automation Settings
+        curationSyncEnabled: settings?.curationSyncEnabled ?? true,
+        curationSyncSchedule: settings?.curationSyncSchedule || "every_6_hours",
+        curationSyncCron: settings?.curationSyncCron || null,
+        curationSyncOverlays: settings?.curationSyncOverlays ?? true,
+        curationSyncCollections: settings?.curationSyncCollections ?? true,
+        curationSyncReleases: settings?.curationSyncReleases ?? true,
+        curationSyncPruning: settings?.curationSyncPruning ?? true,
+        curationLastRunAt: settings?.curationLastRunAt ? settings.curationLastRunAt.toISOString() : null,
+        curationLastRunStatus: settings?.curationLastRunStatus ? JSON.parse(settings.curationLastRunStatus) : null
     };
+}
+
+/**
+ * Check if a specific library section is enabled in an enabled-list of server/section keys
+ */
+export async function isSectionEnabledInList(list: string[] | undefined | null, serverId: string, sectionKey: string): Promise<boolean> {
+    if (!list || list.length === 0) return true; // Default: enabled
+    const compoundKey = `${serverId}:${sectionKey}`;
+    if (list.includes(compoundKey)) return true;
+    const hasCompoundForServer = list.some(k => k.startsWith(`${serverId}:`));
+    if (!hasCompoundForServer && list.includes(serverId)) return true;
+    return false;
+}
+
+/**
+ * Toggle an individual library section enabled/disabled for Kometa, Agregarr, or Prune
+ */
+export async function toggleCurationLibrarySectionAction(
+    pageType: "kometa" | "agregarr" | "prune",
+    serverId: string,
+    sectionKey: string,
+    enabled: boolean,
+    allServerSections?: string[]
+) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const fieldName = pageType === "kometa"
+            ? "enabledServersForOverlays"
+            : pageType === "agregarr"
+                ? "enabledServersForCollections"
+                : "enabledServersForPruning";
+
+        let currentList: string[] = settings?.[fieldName] ? JSON.parse(settings[fieldName] as string) : [];
+        const compoundKey = `${serverId}:${sectionKey}`;
+
+        if (currentList.length === 0 && !enabled && allServerSections && allServerSections.length > 0) {
+            // Previously unconfigured (meaning all enabled). When turning one off, enable all others explicitly.
+            currentList = allServerSections
+                .filter(k => String(k) !== String(sectionKey))
+                .map(k => `${serverId}:${k}`);
+        } else if (enabled) {
+            if (!currentList.includes(compoundKey)) {
+                currentList.push(compoundKey);
+            }
+        } else {
+            currentList = currentList.filter(k => k !== compoundKey && k !== serverId);
+        }
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { [fieldName]: JSON.stringify(currentList) },
+            create: { id: "global", [fieldName]: JSON.stringify(currentList) }
+        });
+
+        // If Kometa, also sync rule enabled status if rule exists
+        if (pageType === "kometa") {
+            await prisma.mediaOverlayRule.updateMany({
+                where: { serverId, sectionKey: String(sectionKey) },
+                data: { enabled }
+            }).catch(() => {});
+        }
+
+        logger.addLog("INFO", "CURATION", `Toggled library section ${sectionKey} on server ${serverId} for ${pageType}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+        return { success: true, enabledList: currentList };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function saveCurationSettingsAction(data: {
@@ -3288,6 +3368,10 @@ export async function runFullCurationSyncInternal(): Promise<{
                     const srvSections = await getPlexServerSections(resolved.token, srv.clientIdentifier, settings?.mainPlexUrl || undefined);
 
                     for (const sec of srvSections) {
+                        const isSecEnabled = await isSectionEnabledInList(enabledServersForOverlays, srv.clientIdentifier, String(sec.key));
+                        if (!isSecEnabled) {
+                            continue;
+                        }
                         try {
                             const res = await applyOverlaysToLibraryInternal(srv.clientIdentifier, String(sec.key));
                             if (res.success && res.appliedCount) {

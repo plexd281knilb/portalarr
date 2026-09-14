@@ -8,6 +8,7 @@ import {
     Shield,
     ShieldAlert,
     Clock,
+    Clock3,
     Calendar,
     Zap,
     Play,
@@ -18,6 +19,8 @@ import {
     CheckCircle2,
     XCircle,
     RotateCcw,
+    Film,
+    Tv,
     Layers,
     Save,
     RefreshCw,
@@ -42,8 +45,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { CurationNavHeader } from "./curation-nav-header";
 import {
     getPlexServersAndSectionsAction,
+    getPlexServerSectionsAction,
     getCurationSettingsAction,
     saveCurationSettingsAction,
+    toggleCurationLibrarySectionAction,
+    runFullCurationSyncAction,
     getLeavingSoonItemsAction,
     markItemLeavingSoonAction,
     unmarkItemLeavingSoonAction,
@@ -66,14 +72,152 @@ export function PruneStudio() {
     const [subTab, setSubTab] = useState<"leaving_soon" | "simulation" | "execution" | "storage">("leaving_soon");
     const [loading, setLoading] = useState(true);
 
-    // Server Navigation
+    // Server & Section Navigation
     const [servers, setServers] = useState<PlexServerItem[]>([]);
     const [selectedServerId, setSelectedServerId] = useState<string>("");
+    const [selectedSectionKey, setSelectedSectionKey] = useState<string>("");
+    const [serverSectionsLoading, setServerSectionsLoading] = useState(false);
 
     // Global Settings
     const [settings, setSettings] = useState<any>({});
     const [savingSettings, setSavingSettings] = useState(false);
     const [settingsSavedMsg, setSettingsSavedMsg] = useState(false);
+
+    // Automated Schedule & Enabled Library States
+    const [curationSyncPruning, setCurationSyncPruning] = useState<boolean>(true);
+    const [curationSyncSchedule, setCurationSyncSchedule] = useState<string>("daily_5am");
+    const [pruneDryRun, setPruneDryRun] = useState<boolean>(true);
+    const [enableAutoPruneDeletion, setEnableAutoPruneDeletion] = useState<boolean>(false);
+    const [curationLastRunAt, setCurationLastRunAt] = useState<string | null>(null);
+    const [curationLastRunStatus, setCurationLastRunStatus] = useState<any | null>(null);
+    const [enabledServersForPruning, setEnabledServersForPruning] = useState<string[]>([]);
+    const [savingSchedule, setSavingSchedule] = useState(false);
+    const [scheduleSavedMsg, setScheduleSavedMsg] = useState(false);
+    const [runningPruneSync, setRunningPruneSync] = useState(false);
+    const [pruneSyncResult, setPruneSyncResult] = useState<{ success: boolean; text: string; details?: string[] } | null>(null);
+
+    // Check if a section is enabled for pruning
+    const isSectionEnabled = (srvId: string, secKey: string): boolean => {
+        if (!enabledServersForPruning || enabledServersForPruning.length === 0) return true;
+        const compoundKey = `${srvId}:${secKey}`;
+        if (enabledServersForPruning.includes(compoundKey)) return true;
+        const hasCompoundForServer = enabledServersForPruning.some(k => k.startsWith(`${srvId}:`));
+        if (!hasCompoundForServer && enabledServersForPruning.includes(srvId)) return true;
+        return false;
+    };
+
+    // Toggle a section enabled/disabled for pruning
+    const handleToggleSection = async (secKey: string) => {
+        const currentlyEnabled = isSectionEnabled(selectedServerId, secKey);
+        const nextEnabled = !currentlyEnabled;
+        const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+
+        // Optimistic UI update
+        const compoundKey = `${selectedServerId}:${secKey}`;
+        let nextList = [...enabledServersForPruning];
+        if (nextList.length === 0 && !nextEnabled) {
+            nextList = allSecKeys.filter(k => k !== secKey).map(k => `${selectedServerId}:${k}`);
+        } else if (nextEnabled) {
+            if (!nextList.includes(compoundKey)) nextList.push(compoundKey);
+        } else {
+            nextList = nextList.filter(k => k !== compoundKey && k !== selectedServerId);
+        }
+        setEnabledServersForPruning(nextList);
+
+        try {
+            const res = await toggleCurationLibrarySectionAction("prune", selectedServerId, secKey, nextEnabled, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForPruning(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed toggling section prune state:", e);
+        }
+    };
+
+    // Save schedule settings
+    const handleSaveSchedule = async () => {
+        setSavingSchedule(true);
+        setScheduleSavedMsg(false);
+        try {
+            const res = await saveCurationSettingsAction({
+                curationSyncPruning,
+                curationSyncSchedule,
+                pruneDryRun,
+                enableAutoPruneDeletion
+            });
+            if (res.success) {
+                setScheduleSavedMsg(true);
+                setTimeout(() => setScheduleSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving schedule:", e);
+        } finally {
+            setSavingSchedule(false);
+        }
+    };
+
+    // Run prune evaluation job now
+    const handleRunPruneSync = async () => {
+        setRunningPruneSync(true);
+        setPruneSyncResult(null);
+        try {
+            const res = await syncLeavingSoonCollectionHubAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setPruneSyncResult({
+                    success: true,
+                    text: res.message || "Prune evaluation and Leaving Soon hub sync completed."
+                });
+                loadLeavingSoonItems();
+            } else {
+                setPruneSyncResult({
+                    success: false,
+                    text: res.error || "Failed running prune evaluation."
+                });
+            }
+        } catch (e: any) {
+            setPruneSyncResult({
+                success: false,
+                text: e.message || "An error occurred during prune sync."
+            });
+        } finally {
+            setRunningPruneSync(false);
+        }
+    };
+
+    // Server / Section Switch
+    const handleSelectServer = async (srvId: string) => {
+        setSelectedServerId(srvId);
+        const srv = servers.find(s => s.serverId === srvId);
+        let srvSections = srv?.sections || [];
+
+        if (srvSections.length === 0) {
+            setServerSectionsLoading(true);
+            try {
+                const secRes = await getPlexServerSectionsAction(srvId);
+                if (secRes?.success && Array.isArray(secRes.sections) && secRes.sections.length > 0) {
+                    srvSections = secRes.sections as any;
+                    setServers(prev => prev.map(s => s.serverId === srvId ? { ...s, sections: (secRes.sections as any) || [] } : s));
+                }
+            } catch (e) {
+                console.error("Failed loading server sections:", e);
+            } finally {
+                setServerSectionsLoading(false);
+            }
+        }
+
+        if (srvSections.length > 0) {
+            const hasExisting = srvSections.some((sec: any) => String(sec.key) === selectedSectionKey);
+            const nextSecKey = hasExisting ? selectedSectionKey : String(srvSections[0].key);
+            setSelectedSectionKey(nextSecKey);
+        } else {
+            setSelectedSectionKey("");
+        }
+    };
+
+    const handleSelectSection = (secKey: string) => {
+        setSelectedSectionKey(secKey);
+    };
 
     // Leaving Soon Hub States
     const [leavingSoonItems, setLeavingSoonItems] = useState<any[]>([]);
@@ -125,12 +269,24 @@ export function PruneStudio() {
                     setServers(srvRes.servers);
                     const firstServer = srvRes.servers[0];
                     setSelectedServerId(firstServer.serverId);
+                    if (firstServer.sections && firstServer.sections.length > 0) {
+                        setSelectedSectionKey(String(firstServer.sections[0].key));
+                    }
                 }
 
                 const settingsRes = await getCurationSettingsAction();
                 if (settingsRes.success) {
                     setSettings(settingsRes);
                     if (settingsRes.serverStorageConfig) setServerStorageConfig(settingsRes.serverStorageConfig);
+                    setCurationSyncPruning(settingsRes.curationSyncPruning ?? true);
+                    setCurationSyncSchedule(settingsRes.curationSyncSchedule || "daily_5am");
+                    setPruneDryRun(settingsRes.pruneDryRun ?? true);
+                    setEnableAutoPruneDeletion(settingsRes.enableAutoPruneDeletion ?? false);
+                    setCurationLastRunAt(settingsRes.curationLastRunAt || null);
+                    setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
+                    if (settingsRes.enabledServersForPruning) {
+                        setEnabledServersForPruning(settingsRes.enabledServersForPruning);
+                    }
                 }
 
                 const vaultRes = await getArtBackupAndBadgeStatsAction();
@@ -311,6 +467,9 @@ export function PruneStudio() {
         );
     }
 
+    const currentServer = servers.find(s => s.serverId === selectedServerId) || servers[0];
+    const currentSections = currentServer?.sections || [];
+
     return (
         <div className="space-y-6">
             <CurationNavHeader 
@@ -319,37 +478,213 @@ export function PruneStudio() {
                 description="Storage mount thresholds, rule-based media pruning (unwatched, low rating, ended series), pinned 'Leaving Soon' Plex collection, and safe file cleanup."
             />
 
-            {/* Server Selector Bar */}
+            {/* Static Server & Library Section Navigator */}
             {servers.length > 0 && (
                 <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                    <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
-                            <HardDrive className="h-4 w-4 text-rose-400" />
-                            <span>Plex Server:</span>
+                    <div className="p-4 space-y-3.5">
+                        {/* Plex Servers Static Tabs */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
+                                <HardDrive className="h-4 w-4 text-rose-400" />
+                                <span>Plex Server:</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                {servers.map(s => {
+                                    const isSelected = s.serverId === selectedServerId;
+                                    const secCount = s.sections?.length || 0;
+                                    return (
+                                        <button
+                                            key={s.serverId}
+                                            type="button"
+                                            onClick={() => handleSelectServer(s.serverId)}
+                                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/60 border border-rose-400/50 ring-1 ring-rose-400/40 font-black'
+                                                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                            }`}
+                                        >
+                                            <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white shadow-sm' : 'bg-emerald-400'}`} />
+                                            <span>{s.serverName || "Plex Server"}</span>
+                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-rose-300 text-rose-100 bg-rose-700/60' : 'border-slate-700 text-slate-400'}`}>
+                                                {secCount} {secCount === 1 ? 'lib' : 'libs'}
+                                            </Badge>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {servers.map(s => {
-                                const isSelected = s.serverId === selectedServerId;
-                                return (
-                                    <button
-                                        key={s.serverId}
-                                        type="button"
-                                        onClick={() => setSelectedServerId(s.serverId)}
-                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                            isSelected
-                                                ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/60 border border-rose-400/50 ring-1 ring-rose-400/40'
-                                                : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
-                                        }`}
-                                    >
-                                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}`} />
-                                        <span>{s.serverName}</span>
-                                    </button>
-                                );
-                            })}
+
+                        {/* Library Sections Static Tabs */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
+                                <Film className="h-4 w-4 text-sky-400" />
+                                <span>Library Sections:</span>
+                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                {serverSectionsLoading ? (
+                                    <div className="flex items-center gap-2 text-xs text-sky-400 py-1 font-medium">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
+                                    </div>
+                                ) : currentSections.length === 0 ? (
+                                    <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
+                                ) : (
+                                    currentSections.map((sec: any) => {
+                                        const isSelected = String(sec.key) === selectedSectionKey;
+                                        const isMovie = sec.type === "movie" || sec.title?.toLowerCase().includes("movie");
+                                        const isShow = sec.type === "show" || sec.title?.toLowerCase().includes("show") || sec.title?.toLowerCase().includes("tv");
+                                        const isSecEnabled = isSectionEnabled(selectedServerId, String(sec.key));
+
+                                        return (
+                                            <button
+                                                key={sec.key}
+                                                type="button"
+                                                onClick={() => handleSelectSection(String(sec.key))}
+                                                className={`group flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                    isSelected
+                                                        ? 'bg-sky-600 text-white shadow-md shadow-sky-950/60 border border-sky-400/50 ring-1 ring-sky-400/40'
+                                                        : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                                }`}
+                                            >
+                                                {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
+                                                {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
+                                                {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                                                <span>{sec.title}</span>
+                                                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-sky-700/80 text-sky-100' : 'bg-slate-900 text-slate-400'}`}>
+                                                    Key: {sec.key}
+                                                </span>
+
+                                                {/* Interactive On/Off Switch Badge */}
+                                                <div
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    title={isSecEnabled ? "Prune evaluation ON for this library (Click to disable)" : "Prune evaluation OFF for this library (Click to enable)"}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleToggleSection(String(sec.key));
+                                                    }}
+                                                    className={`ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold transition-all cursor-pointer ${
+                                                        isSecEnabled 
+                                                            ? isSelected 
+                                                                ? 'bg-emerald-400 text-emerald-950 shadow-sm' 
+                                                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                                                            : 'bg-slate-900/80 text-slate-500 border border-slate-700 hover:text-slate-300'
+                                                    }`}
+                                                >
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${isSecEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                                                    <span>{isSecEnabled ? 'ON' : 'OFF'}</span>
+                                                </div>
+                                            </button>
+                                        );
+                                    })
+                                )}
+                            </div>
                         </div>
                     </div>
                 </Card>
             )}
+
+            {/* Automated Prune & Leaving Soon Schedule & Automation Card */}
+            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <CardContent className="p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
+                    <div className="space-y-1 max-w-xl">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Clock className="h-4 w-4 text-rose-400" />
+                            <span className="font-bold text-white text-sm">Prune &amp; Leaving Soon Schedule &amp; Automation</span>
+                            <Badge variant="outline" className={`text-[10px] font-semibold ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                {curationSyncPruning ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
+                            </Badge>
+                            {pruneDryRun ? (
+                                <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px]">
+                                    🛡️ Dry-Run Safe
+                                </Badge>
+                            ) : (
+                                <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px]">
+                                    ⚠️ Live Deletion Mode
+                                </Badge>
+                            )}
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                            Evaluates media pruning rules, tags the '⚠️ Leaving Soon' Plex collection and banner overlays, and cleans up unwatched content across enabled libraries.
+                        </p>
+                        {curationLastRunAt && (
+                            <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                                <Clock3 className="h-3 w-3 text-rose-400" />
+                                Last automated run: <span className="text-slate-300 font-mono">{new Date(curationLastRunAt).toLocaleString()}</span>
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                        <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                            <span className="text-[11px] font-bold text-slate-200">Timer</span>
+                            <Switch 
+                                checked={curationSyncPruning}
+                                onCheckedChange={checked => setCurationSyncPruning(checked)}
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                            <span className="text-[11px] font-bold text-slate-200">Dry-Run</span>
+                            <Switch 
+                                checked={pruneDryRun}
+                                onCheckedChange={checked => setPruneDryRun(checked)}
+                            />
+                        </div>
+
+                        <div className="space-y-0.5">
+                            <Select 
+                                value={curationSyncSchedule} 
+                                onValueChange={val => setCurationSyncSchedule(val)}
+                            >
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8 w-[155px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
+                                    <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                    <SelectItem value="daily_5am">🌙 Daily at 5:00 AM</SelectItem>
+                                    <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <Button 
+                            size="sm"
+                            onClick={handleSaveSchedule}
+                            disabled={savingSchedule}
+                            variant="outline"
+                            className="border-slate-700 text-slate-300 hover:text-white text-xs h-8 px-3 cursor-pointer"
+                        >
+                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+                            {scheduleSavedMsg ? "Saved!" : "Save Schedule"}
+                        </Button>
+
+                        <Button 
+                            size="sm"
+                            onClick={handleRunPruneSync}
+                            disabled={runningPruneSync}
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer"
+                        >
+                            {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                            <span>Run Prune Evaluation Now</span>
+                        </Button>
+                    </div>
+                </CardContent>
+
+                {pruneSyncResult && (
+                    <div className={`p-3 text-xs border-t ${pruneSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
+                        {pruneSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                        <div className="space-y-0.5">
+                            <span className="font-bold">{pruneSyncResult.text}</span>
+                            {pruneSyncResult.details && pruneSyncResult.details.length > 0 && (
+                                <p className="text-[11px] opacity-80">{pruneSyncResult.details.join(" • ")}</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </Card>
 
             {/* Sub-Navigation Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md overflow-x-auto">
