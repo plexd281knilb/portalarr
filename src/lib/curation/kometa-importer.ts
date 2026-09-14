@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import yaml from "js-yaml";
 import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { TieredRibbonItem } from "./overlay-engine";
@@ -33,128 +34,88 @@ export interface ParsedKometaConfig {
 }
 
 /**
- * Lightweight & robust YAML parser specialized for Kometa configuration files.
+ * Standard, robust YAML parser for Kometa / Plex-Meta-Manager configuration files using js-yaml.
  */
 export function parseKometaYamlString(yamlText: string): ParsedKometaConfig {
     const config: ParsedKometaConfig = {
         libraries: {}
     };
 
-    const lines = yamlText.split(/\r?\n/);
-    let currentRootSection: string | null = null;
-    let currentLibraryName: string | null = null;
-    let currentOverlayIndex: number = -1;
-    let currentSubSection: string | null = null;
+    if (!yamlText || !yamlText.trim()) return config;
 
-    for (let i = 0; i < lines.length; i++) {
-        const rawLine = lines[i];
-        // Strip comments if line is purely comment
-        const trimmed = rawLine.trim();
-        if (!trimmed || trimmed.startsWith("#")) continue;
+    try {
+        const rawDoc: any = yaml.load(yamlText);
+        if (!rawDoc || typeof rawDoc !== "object") return config;
 
-        const indent = rawLine.search(/\S/);
-
-        // Top level root keys (indent 0)
-        if (indent === 0 && trimmed.endsWith(":")) {
-            const rootKey = trimmed.slice(0, -1).trim().toLowerCase();
-            currentRootSection = rootKey;
-            currentLibraryName = null;
-            currentOverlayIndex = -1;
-            currentSubSection = null;
-            continue;
+        // 1. Plex Connections
+        if (rawDoc.plex && typeof rawDoc.plex === "object") {
+            config.plex = {
+                url: rawDoc.plex.url ? String(rawDoc.plex.url) : undefined,
+                token: rawDoc.plex.token ? String(rawDoc.plex.token) : undefined,
+                timeout: Number(rawDoc.plex.timeout) || 60
+            };
         }
 
-        if (currentRootSection === "plex") {
-            const [k, ...vParts] = trimmed.split(":");
-            const val = vParts.join(":").trim();
-            if (k && val) {
-                if (!config.plex) config.plex = {};
-                const key = k.trim().toLowerCase();
-                if (key === "url") config.plex.url = val;
-                if (key === "token") config.plex.token = val;
-                if (key === "timeout") config.plex.timeout = parseInt(val, 10) || 60;
-            }
-            continue;
+        // 2. TMDb Connections
+        if (rawDoc.tmdb && typeof rawDoc.tmdb === "object") {
+            config.tmdb = {
+                apikey: rawDoc.tmdb.apikey || rawDoc.tmdb.api_key ? String(rawDoc.tmdb.apikey || rawDoc.tmdb.api_key) : undefined,
+                language: rawDoc.tmdb.language ? String(rawDoc.tmdb.language) : "en"
+            };
         }
 
-        if (currentRootSection === "tmdb") {
-            const [k, ...vParts] = trimmed.split(":");
-            const val = vParts.join(":").trim();
-            if (k && val) {
-                if (!config.tmdb) config.tmdb = {};
-                const key = k.trim().toLowerCase();
-                if (key === "apikey" || key === "api_key") config.tmdb.apikey = val;
-                if (key === "language") config.tmdb.language = val;
-            }
-            continue;
+        // 3. Asset directories at root level
+        if (rawDoc.settings?.asset_directory) {
+            const dirs = Array.isArray(rawDoc.settings.asset_directory) 
+                ? rawDoc.settings.asset_directory 
+                : [rawDoc.settings.asset_directory];
+            config.assetDirectories = dirs.map((d: any) => String(d));
         }
 
-        if (currentRootSection === "libraries") {
-            // Library Name (indent 2)
-            if (indent === 2 && trimmed.endsWith(":")) {
-                const libName = trimmed.slice(0, -1).trim();
-                currentLibraryName = libName;
+        // 4. Libraries
+        if (rawDoc.libraries && typeof rawDoc.libraries === "object") {
+            for (const [libName, rawLib] of Object.entries(rawDoc.libraries)) {
+                if (!rawLib || typeof rawLib !== "object") continue;
+
+                const libObj: any = rawLib;
+                const parsedOverlayFiles: ParsedKometaOverlayFile[] = [];
+
+                if (Array.isArray(libObj.overlay_files)) {
+                    for (const item of libObj.overlay_files) {
+                        if (!item || typeof item !== "object") continue;
+
+                        const defaultName = item.default || item.name || item.overlay || "";
+                        const filters = item.filters && typeof item.filters === "object" ? item.filters : {};
+                        const templateVariables = item.template_variables && typeof item.template_variables === "object" ? item.template_variables : {};
+
+                        parsedOverlayFiles.push({
+                            defaultName: String(defaultName),
+                            filters,
+                            templateVariables
+                        });
+                    }
+                }
+
+                // Library specific asset directories
+                const libAssetDirs: string[] = [];
+                if (libObj.settings?.asset_directory) {
+                    const dirs = Array.isArray(libObj.settings.asset_directory) 
+                        ? libObj.settings.asset_directory 
+                        : [libObj.settings.asset_directory];
+                    libAssetDirs.push(...dirs.map((d: any) => String(d)));
+                }
+
                 config.libraries[libName] = {
                     name: libName,
-                    overlayFiles: [],
-                    assetDirectories: []
+                    removeOverlays: Boolean(libObj.remove_overlays),
+                    reapplyOverlays: Boolean(libObj.reapply_overlays),
+                    overlayFiles: parsedOverlayFiles,
+                    assetDirectories: libAssetDirs
                 };
-                currentOverlayIndex = -1;
-                currentSubSection = null;
-                continue;
-            }
-
-            if (!currentLibraryName) continue;
-            const currentLib = config.libraries[currentLibraryName];
-
-            // Sub-sections inside library
-            if (trimmed === "overlay_files:") {
-                currentSubSection = "overlay_files";
-                continue;
-            } else if (trimmed === "asset_directory:" || trimmed === "settings:") {
-                currentSubSection = trimmed.replace(":", "");
-                continue;
-            }
-
-            if (currentSubSection === "overlay_files") {
-                if (trimmed.startsWith("- default:")) {
-                    const defVal = trimmed.replace("- default:", "").trim();
-                    currentLib.overlayFiles.push({
-                        defaultName: defVal,
-                        templateVariables: {},
-                        filters: {}
-                    });
-                    currentOverlayIndex = currentLib.overlayFiles.length - 1;
-                    continue;
-                }
-
-                if (currentOverlayIndex >= 0) {
-                    const activeOverlay = currentLib.overlayFiles[currentOverlayIndex];
-                    if (trimmed.startsWith("default:")) {
-                        activeOverlay.defaultName = trimmed.replace("default:", "").trim();
-                    } else if (trimmed.includes(":")) {
-                        const [tvKey, ...tvValParts] = trimmed.replace(/^[-\s]+/, "").split(":");
-                        const tvVal = tvValParts.join(":").trim();
-                        if (tvKey && activeOverlay.templateVariables) {
-                            let parsedVal: any = tvVal;
-                            if (tvVal === "true") parsedVal = true;
-                            else if (tvVal === "false") parsedVal = false;
-                            else if (!isNaN(Number(tvVal)) && tvVal !== "") parsedVal = Number(tvVal);
-                            activeOverlay.templateVariables[tvKey.trim()] = parsedVal;
-                        }
-                    }
-                }
-            }
-
-            if (currentSubSection === "asset_directory" || (currentSubSection === "settings" && trimmed.startsWith("- config/assets"))) {
-                if (trimmed.startsWith("-")) {
-                    const dirPath = trimmed.replace(/^[-\s]+/, "").trim();
-                    if (dirPath && currentLib.assetDirectories) {
-                        currentLib.assetDirectories.push(dirPath);
-                    }
-                }
             }
         }
+    } catch (e: any) {
+        console.error(`[Kometa YAML Parse Error] ${e.message}`);
     }
 
     return config;
@@ -187,10 +148,19 @@ export function convertKometaLibraryToPortalarrOverlay(
     let showStudio = false;
     let studioPosition = "top-left";
 
-    let showAudio = true;
+    let showAudio = false;
     let audioPosition = "top-left";
 
-    for (const ov of kometaLib.overlayFiles) {
+    let showAudioChannels = false;
+    let channelsPosition = "top-left";
+
+    let showCodec = false;
+    let codecPosition = "bottom-right";
+
+    let showEdition = false;
+    let editionPosition = "top-right";
+
+    for (const ov of kometaLib.overlayFiles || []) {
         const def = (ov.defaultName || "").toLowerCase();
         const vars = ov.templateVariables || {};
 
@@ -201,6 +171,12 @@ export function convertKometaLibraryToPortalarrOverlay(
             dovetailResolutionHdr = true;
             resolutionPosition = "top-right";
             hdrPosition = "top-right";
+
+            if (vars.use_edition === true) {
+                showEdition = true;
+            } else if (vars.use_edition === false) {
+                showEdition = false;
+            }
         }
 
         // 2. Diagonal Ribbons & Weighted Multi-Tier Awards
@@ -210,18 +186,25 @@ export function convertKometaLibraryToPortalarrOverlay(
             ribbonPosition = "top-right";
 
             // Style mapping (yellow in kometa -> gold in portalarr)
-            if (vars.style === "yellow" || vars.style === "gold") {
+            const style = (vars.style || "yellow").toLowerCase();
+            if (style === "yellow" || style === "gold") {
                 ribbonTheme = "gold";
-            } else if (vars.style === "crimson" || vars.style === "red") {
+            } else if (style === "crimson" || style === "red") {
                 ribbonTheme = "crimson";
-            } else if (vars.style === "emerald" || vars.style === "green") {
+            } else if (style === "emerald" || style === "green") {
                 ribbonTheme = "emerald";
+            } else if (style === "purple") {
+                ribbonTheme = "purple";
+            } else if (style === "glass" || style === "frosted") {
+                ribbonTheme = "glass";
+            } else if (style === "orange") {
+                ribbonTheme = "orange";
             }
 
             // Extract weighted tiers
             const candidates: Array<{ id: string; type: any; text: string; theme: any; weight: number; enabled: boolean }> = [];
 
-            if (vars.weight_imdb !== undefined && vars.weight_imdb > 0) {
+            if (vars.weight_imdb !== undefined && vars.weight_imdb > 0 && vars.use_imdb !== false) {
                 const isTv = kometaLib.name.toLowerCase().includes("tv") || kometaLib.name.toLowerCase().includes("show");
                 candidates.push({
                     id: isTv ? "imdb_top_250_tv" : "imdb_top_250",
@@ -278,24 +261,48 @@ export function convertKometaLibraryToPortalarrOverlay(
 
             if (tieredRibbons.length === 0) {
                 tieredRibbons = [
-                    { id: "imdb_top_250", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
-                    { id: "certified_fresh", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "gold", enabled: true }
+                    { id: "imdb_top_250", type: "imdb_top_250", text: "IMDb TOP 250", theme: ribbonTheme, enabled: true },
+                    { id: "certified_fresh", type: "certified_fresh", text: "CERTIFIED FRESH", theme: ribbonTheme, enabled: true }
                 ];
             }
         }
 
         // 3. Content Ratings (US Movies & TV)
-        if (def.includes("content_rating")) {
+        if (def.includes("content_rating") || def.includes("rating")) {
             showContentRating = true;
-            const hPos = vars.horizontal_position || "left";
-            const vPos = vars.vertical_position || "bottom";
-            contentRatingPosition = `${vPos}-${hPos}`;
+            const hPos = String(vars.horizontal_position || "left").toLowerCase();
+            const vPos = String(vars.vertical_position || "bottom").toLowerCase();
+            const cleanH = hPos === "right" ? "right" : hPos === "center" ? "center" : "left";
+            const cleanV = vPos === "top" ? "top" : vPos === "center" ? "center" : "bottom";
+            contentRatingPosition = `${cleanV}-${cleanH}`;
         }
 
-        // 4. TV Network Logos
+        // 4. TV Network Logos / Studio Logos
         if (def.includes("network") || def.includes("studio")) {
             showStudio = true;
             studioPosition = "top-left";
+        }
+
+        // 5. Audio Codecs & Channels
+        if (def.includes("audio")) {
+            showAudio = true;
+            audioPosition = "top-left";
+        }
+        if (def.includes("channel")) {
+            showAudioChannels = true;
+            channelsPosition = "top-left";
+        }
+
+        // 6. Video Codecs
+        if (def.includes("codec")) {
+            showCodec = true;
+            codecPosition = "bottom-right";
+        }
+
+        // 7. Edition
+        if (def.includes("edition")) {
+            showEdition = true;
+            editionPosition = "top-right";
         }
     }
 
@@ -313,6 +320,12 @@ export function convertKometaLibraryToPortalarrOverlay(
         dovetailResolutionHdr,
         showAudio,
         audioPosition,
+        showAudioChannels,
+        channelsPosition,
+        showCodec,
+        codecPosition,
+        showEdition,
+        editionPosition,
         showStudio,
         studioPosition,
         showContentRating,
@@ -325,7 +338,49 @@ export function convertKometaLibraryToPortalarrOverlay(
         maxRibbonTiers: 3,
         theme: "glass" as const,
         badgeStyle: "pill",
-        showLeavingSoon: true,
+        showLeavingSoon: false,
         enabled: true
+    };
+}
+
+/**
+ * Reads and parses a local Kometa config.yml file from disk paths.
+ */
+export async function readLocalKometaConfigFile(
+    customPath?: string
+): Promise<{ success: boolean; content?: string; fileName?: string; error?: string }> {
+    const candidatePaths = [
+        customPath,
+        path.join(process.cwd(), "kometaconfig.yml"),
+        path.join(process.cwd(), "config.yml"),
+        path.join(process.cwd(), "config", "config.yml"),
+        "/config/config.yml",
+        "/mnt/user/appdata/kometa/config.yml",
+        "/mnt/user/appdata/plex-meta-manager/config.yml"
+    ].filter(Boolean) as string[];
+
+    for (const p of candidatePaths) {
+        try {
+            if (fs.existsSync(p)) {
+                const stat = fs.statSync(p);
+                if (stat.isFile()) {
+                    const content = fs.readFileSync(p, "utf-8");
+                    if (content.trim().length > 0) {
+                        return {
+                            success: true,
+                            content,
+                            fileName: path.basename(p)
+                        };
+                    }
+                }
+            }
+        } catch (e: any) {
+            // Continue search
+        }
+    }
+
+    return {
+        success: false,
+        error: `No Kometa configuration file found. Checked: ${candidatePaths.slice(0, 4).join(", ")}`
     };
 }

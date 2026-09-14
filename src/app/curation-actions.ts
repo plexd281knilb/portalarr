@@ -3765,12 +3765,17 @@ export async function inspectKometaConfigFileAction(yamlContent?: string, custom
 
         const parsed = parseKometaYamlString(content);
         const libraryNames = Object.keys(parsed.libraries || {});
+        const convertedLibraries: Record<string, any> = {};
+        for (const [name, lib] of Object.entries(parsed.libraries || {})) {
+            convertedLibraries[name] = convertKometaLibraryToPortalarrOverlay(lib, "main", "1");
+        }
 
         return {
             success: true,
             source,
             rawYaml: content,
             parsed,
+            convertedLibraries,
             libraryCount: libraryNames.length,
             libraryNames,
             hasPlex: Boolean(parsed.plex?.url),

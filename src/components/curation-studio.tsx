@@ -552,33 +552,60 @@ export default function CurationStudio() {
     };
 
     // Apply exact Kometa specs into live simulator
-    const handleApplyKometaToSimulator = () => {
+    const handleApplyKometaToSimulator = async (overrideLibName?: string) => {
         setSimActivePreset("my_kometa_config");
-        setSimShowResolution(true);
-        setSimShowHdr(true);
-        setSimResolutionPosition("top-right");
-        setSimHdrPosition("top-right");
-        setSimDovetailResolutionHdr(true);
-        setSimShowAudio(true);
-        setSimAudioPosition("top-left");
-        setSimShowChannels(false);
-        setSimShowCodec(false);
-        setSimShowEdition(false);
-        setSimShowStudio(false);
-        setSimShowRating(true);
-        setSimRatingPosition("bottom-left");
-        setSimRatings(false);
-        setSimLeavingSoon(false);
-        setSimShowRibbon(true);
-        setSimRibbonPosition("top-right");
-        setSimRibbonMode("tiered");
-        setSimRibbonTheme("gold");
-        setSimMaxRibbonTiers(3);
-        setSimTieredRibbons([
-            { id: "tier-1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
-            { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "gold", enabled: true },
-            { id: "tier-3", type: "rt_fresh", text: "RT FRESH", theme: "gold", enabled: true }
-        ]);
+
+        let converted: any = null;
+
+        // 1. Try from existing inspection result
+        if (kometaInspectionResult?.convertedLibraries) {
+            const keys = Object.keys(kometaInspectionResult.convertedLibraries);
+            const targetKey = overrideLibName || keys.find(k => k.toLowerCase().includes("movie")) || keys[0];
+            converted = kometaInspectionResult.convertedLibraries[targetKey];
+        }
+
+        // 2. If not inspected yet, dynamically load and inspect kometaconfig.yml
+        if (!converted) {
+            try {
+                const inspectRes = await inspectKometaConfigFileAction();
+                if (inspectRes.success && inspectRes.convertedLibraries) {
+                    setKometaInspectionResult(inspectRes);
+                    const keys = Object.keys(inspectRes.convertedLibraries);
+                    const targetKey = overrideLibName || keys.find(k => k.toLowerCase().includes("movie")) || keys[0];
+                    converted = inspectRes.convertedLibraries[targetKey];
+                }
+            } catch (e) {}
+        }
+
+        if (converted) {
+            setSimShowResolution(Boolean(converted.showResolution));
+            setSimShowHdr(Boolean(converted.showHdr));
+            setSimResolutionPosition(converted.resolutionPosition || "top-right");
+            setSimHdrPosition(converted.hdrPosition || "top-right");
+            setSimDovetailResolutionHdr(converted.dovetailResolutionHdr ?? true);
+            setSimShowAudio(Boolean(converted.showAudio));
+            setSimAudioPosition(converted.audioPosition || "top-left");
+            setSimShowChannels(Boolean(converted.showAudioChannels));
+            setSimChannelsPosition(converted.channelsPosition || "top-left");
+            setSimShowCodec(Boolean(converted.showCodec));
+            setSimCodecPosition(converted.codecPosition || "bottom-right");
+            setSimShowEdition(Boolean(converted.showEdition));
+            setSimEditionPosition(converted.editionPosition || "top-right");
+            setSimShowStudio(Boolean(converted.showStudio));
+            setSimStudioPosition(converted.studioPosition || "top-left");
+            setSimShowRating(Boolean(converted.showContentRating));
+            setSimRatingPosition(converted.contentRatingPosition || "bottom-left");
+            setSimRatings(Boolean(converted.showRatings));
+            setSimLeavingSoon(Boolean(converted.showLeavingSoon));
+            setSimShowRibbon(Boolean(converted.showRibbon));
+            setSimRibbonPosition(converted.ribbonPosition || "top-right");
+            setSimRibbonMode(converted.ribbonMode || "tiered");
+            setSimRibbonTheme(converted.ribbonTheme || "gold");
+            setSimMaxRibbonTiers(converted.maxRibbonTiers || 3);
+            if (Array.isArray(converted.tieredRibbons)) {
+                setSimTieredRibbons(converted.tieredRibbons);
+            }
+        }
     };
 
     // Upcoming Releases Calendar & Coming Soon Shares
@@ -2506,13 +2533,20 @@ export default function CurationStudio() {
         if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
 
         // 7. Ratings
-        if (c === "pg-13") return (detected.contentRating || "").toUpperCase() === "PG-13";
-        if (c === "nc-17") return (detected.contentRating || "").toUpperCase() === "NC-17";
-        if (c === "r") return (detected.contentRating || "").toUpperCase() === "R";
-        if (c === "pg") return (detected.contentRating || "").toUpperCase() === "PG";
-        if (c === "g") return (detected.contentRating || "").toUpperCase() === "G";
+        const cr = (detected.contentRating || "").toUpperCase();
+        if (c === "pg-13") return cr === "PG-13" || cr === "US:PG-13";
+        if (c === "nc-17") return cr === "NC-17" || cr === "US:NC-17";
+        if (c === "r") return cr === "R" || cr === "US:R";
+        if (c === "pg") return cr === "PG" || cr === "US:PG";
+        if (c === "g") return cr === "G" || cr === "US:G";
+        if (c === "tv-ma" || c === "tvma") return cr === "TV-MA" || cr === "US:TV-MA";
+        if (c === "tv-14" || c === "tv14") return cr === "TV-14" || cr === "US:TV-14";
+        if (c === "tv-pg" || c === "tvpg") return cr === "TV-PG" || cr === "US:TV-PG";
+        if (c === "tv-g" || c === "tvg") return cr === "TV-G" || cr === "US:TV-G";
+        if (c === "tv-y" || c === "tvy") return cr === "TV-Y" || cr === "US:TV-Y";
+        if (c === "tv-y7" || c === "tvy7") return cr === "TV-Y7" || cr === "US:TV-Y7";
 
-        return true;
+        return false;
     };
 
     // Helper to test if a custom badge matches detected media properties
@@ -2553,9 +2587,10 @@ export default function CurationStudio() {
             if (/7\.1/i.test(baseName)) inferredTokens.push("7.1");
             else if (/5\.1/i.test(baseName)) inferredTokens.push("5.1");
 
-            tokens = inferredTokens.length > 0 ? inferredTokens : [baseName];
+            tokens = inferredTokens;
         }
 
+        if (tokens.length === 0) return false;
         return tokens.every(tok => evaluateBadgeConditionClient(tok, detected));
     };
 
@@ -4600,7 +4635,7 @@ export default function CurationStudio() {
                                         {
                                             id: "my_kometa_config",
                                             label: "⚡ My Kometa Config",
-                                            apply: handleApplyKometaToSimulator
+                                            apply: () => { handleApplyKometaToSimulator(); }
                                         },
                                         {
                                             id: "4k_dv_atmos",

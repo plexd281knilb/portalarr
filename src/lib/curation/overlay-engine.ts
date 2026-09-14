@@ -1186,13 +1186,20 @@ export async function applyOverlaysToPoster(
         if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
 
         // 7. Ratings
-        if (c === "pg-13") return (detected.contentRating || "").toUpperCase() === "PG-13";
-        if (c === "nc-17") return (detected.contentRating || "").toUpperCase() === "NC-17";
-        if (c === "r") return (detected.contentRating || "").toUpperCase() === "R";
-        if (c === "pg") return (detected.contentRating || "").toUpperCase() === "PG";
-        if (c === "g") return (detected.contentRating || "").toUpperCase() === "G";
+        const cr = (detected.contentRating || "").toUpperCase();
+        if (c === "pg-13") return cr === "PG-13" || cr === "US:PG-13";
+        if (c === "nc-17") return cr === "NC-17" || cr === "US:NC-17";
+        if (c === "r") return cr === "R" || cr === "US:R";
+        if (c === "pg") return cr === "PG" || cr === "US:PG";
+        if (c === "g") return cr === "G" || cr === "US:G";
+        if (c === "tv-ma" || c === "tvma") return cr === "TV-MA" || cr === "US:TV-MA";
+        if (c === "tv-14" || c === "tv14") return cr === "TV-14" || cr === "US:TV-14";
+        if (c === "tv-pg" || c === "tvpg") return cr === "TV-PG" || cr === "US:TV-PG";
+        if (c === "tv-g" || c === "tvg") return cr === "TV-G" || cr === "US:TV-G";
+        if (c === "tv-y" || c === "tvy") return cr === "TV-Y" || cr === "US:TV-Y";
+        if (c === "tv-y7" || c === "tvy7") return cr === "TV-Y7" || cr === "US:TV-Y7";
 
-        return true;
+        return false;
     }
 
     // 4. Custom Badge Media Stream Matcher with Dovetail & Compound Support
@@ -1241,8 +1248,10 @@ export async function applyOverlaysToPoster(
             if (/7\.1/i.test(baseName)) inferredTokens.push("7.1");
             else if (/5\.1/i.test(baseName)) inferredTokens.push("5.1");
 
-            tokens = inferredTokens.length > 0 ? inferredTokens : [baseName];
+            tokens = inferredTokens;
         }
+
+        if (tokens.length === 0) return false;
 
         // ALL token conditions must match
         return tokens.every(tok => evaluateBadgeCondition(tok, mInfo.detectedBadges, fullAudioStr));
