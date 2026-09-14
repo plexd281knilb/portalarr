@@ -193,6 +193,7 @@ export default function CurationStudio() {
     // Overlay Rules & Simulator
     const [overlayRules, setOverlayRules] = useState<any[]>([]);
     const [backupsCount, setBackupsCount] = useState(0);
+    const [savingOverlaySettings, setSavingOverlaySettings] = useState(false);
     const [applyingOverlays, setApplyingOverlays] = useState(false);
     const [revertingOverlays, setRevertingOverlays] = useState(false);
     const [overlayMessage, setOverlayMessage] = useState<{ success: boolean; text: string } | null>(null);
@@ -1723,7 +1724,86 @@ export default function CurationStudio() {
         });
     };
 
-    // Handle Apply Overlays to Library
+    // Helper to assemble overlay rule payload from current live simulator state
+    const getOverlayRulePayload = () => {
+        const enabledBadgeIds = customBadges.filter(b => b.enabled).map(b => b.id);
+        return {
+            name: "Library Quality Overlays",
+            serverId: selectedServerId,
+            sectionKey: selectedSectionKey,
+            overlayType: "combined",
+            position: simPosition,
+            videoPosition: simVideoPosition,
+            resolutionPosition: simResolutionPosition,
+            hdrPosition: simHdrPosition,
+            codecPosition: simCodecPosition,
+            audioPosition: simAudioPosition,
+            channelsPosition: simChannelsPosition,
+            editionPosition: simEditionPosition,
+            studioPosition: simStudioPosition,
+            ratingPosition: simRatingPosition,
+            contentRatingPosition: simRatingPosition,
+            ratingsPosition: simRatingsPosition,
+            showRibbon: simShowRibbon,
+            ribbonMode: simRibbonMode,
+            ribbonPosition: simRibbonPosition,
+            ribbonTheme: simRibbonTheme,
+            ribbonText: simRibbonText || undefined,
+            ribbonType: simRibbonType,
+            tieredRibbons: simTieredRibbons,
+            maxRibbonTiers: simMaxRibbonTiers,
+            theme: simTheme,
+            dovetailResolutionHdr: simDovetailResolutionHdr,
+            badgeScale: simBadgeScale,
+            showResolution: simShowResolution,
+            showHdr: simShowHdr,
+            showAudio: simShowAudio,
+            showAudioChannels: simShowChannels,
+            showCodec: simShowCodec,
+            showEdition: simShowEdition,
+            showStudio: simShowStudio,
+            showContentRating: simShowRating,
+            showRatings: simRatings,
+            showLeavingSoon: simLeavingSoon,
+            customBadgeIds: enabledBadgeIds,
+            layerPriorityOrder: layerPriorityOrder,
+            enabled: true
+        };
+    };
+
+    // Handle Save Overlay Settings (saves rule to database without applying to library items in Plex)
+    const handleSaveOverlaySettings = async () => {
+        if (!selectedServerId || !selectedSectionKey) {
+            alert("Please select a Plex Server and Library Section above.");
+            return;
+        }
+
+        setSavingOverlaySettings(true);
+        setOverlayMessage(null);
+
+        try {
+            const saveRuleRes = await saveOverlayRuleAction(getOverlayRulePayload());
+
+            if (saveRuleRes.success) {
+                setOverlayMessage({
+                    success: true,
+                    text: "Overlay settings saved successfully for this library section!"
+                });
+                await loadData();
+            } else {
+                setOverlayMessage({
+                    success: false,
+                    text: saveRuleRes.error || "Failed to save overlay settings."
+                });
+            }
+        } catch (err: any) {
+            setOverlayMessage({ success: false, text: err.message || "Failed to save overlay settings." });
+        } finally {
+            setSavingOverlaySettings(false);
+        }
+    };
+
+    // Handle Apply Overlays to Library (saves settings and applies to all items in Plex)
     const handleApplyOverlays = async () => {
         if (!selectedServerId || !selectedSectionKey) {
             alert("Please select a Plex Server and Library Section above.");
@@ -1734,50 +1814,7 @@ export default function CurationStudio() {
         setOverlayMessage(null);
 
         try {
-            const enabledBadgeIds = customBadges.filter(b => b.enabled).map(b => b.id);
-
-            const saveRuleRes = await saveOverlayRuleAction({
-                name: "Library Quality Overlays",
-                serverId: selectedServerId,
-                sectionKey: selectedSectionKey,
-                overlayType: "combined",
-                position: simPosition,
-                videoPosition: simVideoPosition,
-                resolutionPosition: simResolutionPosition,
-                hdrPosition: simHdrPosition,
-                codecPosition: simCodecPosition,
-                audioPosition: simAudioPosition,
-                channelsPosition: simChannelsPosition,
-                editionPosition: simEditionPosition,
-                studioPosition: simStudioPosition,
-                ratingPosition: simRatingPosition,
-                contentRatingPosition: simRatingPosition,
-                ratingsPosition: simRatingsPosition,
-                showRibbon: simShowRibbon,
-                ribbonMode: simRibbonMode,
-                ribbonPosition: simRibbonPosition,
-                ribbonTheme: simRibbonTheme,
-                ribbonText: simRibbonText || undefined,
-                ribbonType: simRibbonType,
-                tieredRibbons: simTieredRibbons,
-                maxRibbonTiers: simMaxRibbonTiers,
-                theme: simTheme,
-                dovetailResolutionHdr: simDovetailResolutionHdr,
-                badgeScale: simBadgeScale,
-                showResolution: simShowResolution,
-                showHdr: simShowHdr,
-                showAudio: simShowAudio,
-                showAudioChannels: simShowChannels,
-                showCodec: simShowCodec,
-                showEdition: simShowEdition,
-                showStudio: simShowStudio,
-                showContentRating: simShowRating,
-                showRatings: simRatings,
-                showLeavingSoon: simLeavingSoon,
-                customBadgeIds: enabledBadgeIds,
-                layerPriorityOrder: layerPriorityOrder,
-                enabled: true
-            });
+            const saveRuleRes = await saveOverlayRuleAction(getOverlayRulePayload());
 
             const res = await applyOverlaysToLibraryAction(
                 selectedServerId,
@@ -5822,17 +5859,47 @@ export default function CurationStudio() {
                                 </CardContent>
                                 <CardFooter className="p-4 pt-0 flex flex-col gap-2">
                                     {overlayMessage && (
-                                        <div className={`w-full text-xs p-2.5 rounded-lg flex items-center gap-2 ${overlayMessage.success ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-800' : 'bg-rose-950/70 text-rose-300 border border-rose-800'}`}>
-                                            {overlayMessage.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
-                                            <span>{overlayMessage.text}</span>
+                                        <div className={`w-full text-xs p-2.5 rounded-lg flex items-center justify-between gap-2 ${overlayMessage.success ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-800' : 'bg-rose-950/70 text-rose-300 border border-rose-800'}`}>
+                                            <div className="flex items-center gap-2">
+                                                {overlayMessage.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : <XCircle className="h-4 w-4 shrink-0 text-rose-400" />}
+                                                <span>{overlayMessage.text}</span>
+                                            </div>
+                                            <button type="button" onClick={() => setOverlayMessage(null)} className="opacity-70 hover:opacity-100 text-slate-300 p-0.5">
+                                                <X className="h-3.5 w-3.5" />
+                                            </button>
                                         </div>
                                     )}
 
                                     <div className="flex flex-col sm:flex-row items-center gap-2 w-full">
+                                        {/* Save Overlay Settings Button */}
                                         <Button 
-                                            disabled={applyingOverlays} 
+                                            type="button"
+                                            variant="outline"
+                                            disabled={savingOverlaySettings || applyingOverlays} 
+                                            onClick={handleSaveOverlaySettings}
+                                            className="w-full sm:w-auto bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 hover:border-slate-600 font-semibold text-xs h-9 gap-1.5 shadow-sm cursor-pointer"
+                                            title="Save your overlay configuration to the database without modifying Plex posters immediately"
+                                        >
+                                            {savingOverlaySettings ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                                                    <span>Saving Settings...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Bookmark className="h-4 w-4 text-purple-400" />
+                                                    <span>Save Overlay Settings</span>
+                                                </>
+                                            )}
+                                        </Button>
+
+                                        {/* Apply Overlays to Library Button */}
+                                        <Button 
+                                            type="button"
+                                            disabled={applyingOverlays || savingOverlaySettings} 
                                             onClick={handleApplyOverlays}
-                                            className="w-full sm:flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-9 gap-1.5 shadow-lg shadow-purple-950/30"
+                                            className="w-full sm:flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs h-9 gap-1.5 shadow-lg shadow-purple-950/30 cursor-pointer"
+                                            title="Save settings and render/apply overlays to all posters in the selected Plex library section"
                                         >
                                             {applyingOverlays ? (
                                                 <>
@@ -5841,17 +5908,20 @@ export default function CurationStudio() {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <Sparkles className="h-4 w-4" />
+                                                    <Sparkles className="h-4 w-4 text-yellow-300" />
                                                     <span>Apply Overlays to Library</span>
                                                 </>
                                             )}
                                         </Button>
 
+                                        {/* Restore Originals Button */}
                                         <Button 
+                                            type="button"
                                             variant="outline" 
-                                            disabled={revertingOverlays || backupsCount === 0} 
+                                            disabled={revertingOverlays || backupsCount === 0 || applyingOverlays || savingOverlaySettings} 
                                             onClick={handleRevertOverlays}
-                                            className="w-full sm:w-auto border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-semibold text-xs h-9 gap-1.5"
+                                            className="w-full sm:w-auto border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-semibold text-xs h-9 gap-1.5 cursor-pointer"
+                                            title="Restore pristine backup posters from the vault"
                                         >
                                             {revertingOverlays ? (
                                                 <Loader2 className="h-4 w-4 animate-spin" />
