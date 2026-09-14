@@ -53,7 +53,9 @@ import {
     downloadAllKometaPacksAction,
     getTrendingAndPlaceholderMediaAction,
     getPlaceholderPreviewDataUrlAction,
-    createPlaceholderItemAction
+    createPlaceholderItemAction,
+    inspectKometaConfigFileAction,
+    importKometaConfigAction
 } from "@/app/curation-actions";
 import { 
     COLLECTION_PRESETS, 
@@ -168,6 +170,14 @@ export default function CurationStudio() {
     const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
     const [presetPacks] = useState<BadgePresetPack[]>(PRESET_BADGE_PACKS);
 
+    // Kometa Config Importer States
+    const [kometaModalOpen, setKometaModalOpen] = useState(false);
+    const [kometaInspecting, setKometaInspecting] = useState(false);
+    const [kometaImporting, setKometaImporting] = useState(false);
+    const [kometaInspectionResult, setKometaInspectionResult] = useState<any | null>(null);
+    const [kometaYamlInput, setKometaYamlInput] = useState<string>("");
+    const [kometaImportSuccessMsg, setKometaImportSuccessMsg] = useState<string | null>(null);
+
     // Overlay Rules & Simulator
     const [overlayRules, setOverlayRules] = useState<any[]>([]);
     const [backupsCount, setBackupsCount] = useState(0);
@@ -188,6 +198,9 @@ export default function CurationStudio() {
     const [simLeavingSoon, setSimLeavingSoon] = useState(false);
     const [simBadgeScale, setSimBadgeScale] = useState<number>(1.0);
     const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal">("glass");
+    const [simDovetailResolutionHdr, setSimDovetailResolutionHdr] = useState<boolean>(true);
+    const [simPosterImage, setSimPosterImage] = useState<string>("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+    const [simActivePreset, setSimActivePreset] = useState<string>("4k_dv_atmos");
     const [simPosition, setSimPosition] = useState<"top-right" | "top-left" | "bottom-right">("top-right");
     const [simVideoPosition, setSimVideoPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-right");
     const [simResolutionPosition, setSimResolutionPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center">("top-right");
@@ -341,6 +354,96 @@ export default function CurationStudio() {
         } finally {
             setBulkDownloading(false);
         }
+    };
+
+    // Open and inspect Kometa Config
+    const handleOpenKometaModal = async () => {
+        setKometaModalOpen(true);
+        setKometaInspecting(true);
+        setKometaImportSuccessMsg(null);
+        try {
+            const res = await inspectKometaConfigFileAction(kometaYamlInput || undefined);
+            if (res.success) {
+                setKometaInspectionResult(res);
+            } else {
+                setKometaInspectionResult(null);
+            }
+        } catch (e) {
+            setKometaInspectionResult(null);
+        } finally {
+            setKometaInspecting(false);
+        }
+    };
+
+    // Re-inspect upon YAML input change or re-scan
+    const handleInspectKometaYaml = async (yamlText?: string) => {
+        setKometaInspecting(true);
+        setKometaImportSuccessMsg(null);
+        try {
+            const res = await inspectKometaConfigFileAction(yamlText);
+            if (res.success) {
+                setKometaInspectionResult(res);
+            } else {
+                setKometaInspectionResult(null);
+            }
+        } catch (e) {
+            setKometaInspectionResult(null);
+        } finally {
+            setKometaInspecting(false);
+        }
+    };
+
+    // 1-Click Import & Apply Kometa Configuration
+    const handleImportKometaConfig = async () => {
+        setKometaImporting(true);
+        setKometaImportSuccessMsg(null);
+        try {
+            const res = await importKometaConfigAction(kometaYamlInput || undefined, selectedServerId || undefined);
+            if (res.success) {
+                setKometaImportSuccessMsg(res.message || "Successfully imported Kometa configuration!");
+                const rulesRes = await getOverlayRulesAction(selectedServerId || undefined, selectedSectionKey || undefined);
+                if (rulesRes.success && rulesRes.rules) {
+                    setOverlayRules(rulesRes.rules);
+                }
+                handleApplyKometaToSimulator();
+            } else {
+                setKometaImportSuccessMsg(res.error || "Failed importing Kometa configuration.");
+            }
+        } catch (e: any) {
+            setKometaImportSuccessMsg(e.message || "Failed importing Kometa configuration.");
+        } finally {
+            setKometaImporting(false);
+        }
+    };
+
+    // Apply exact Kometa specs into live simulator
+    const handleApplyKometaToSimulator = () => {
+        setSimActivePreset("my_kometa_config");
+        setSimShowResolution(true);
+        setSimShowHdr(true);
+        setSimResolutionPosition("top-right");
+        setSimHdrPosition("top-right");
+        setSimDovetailResolutionHdr(true);
+        setSimShowAudio(true);
+        setSimAudioPosition("top-left");
+        setSimShowChannels(false);
+        setSimShowCodec(false);
+        setSimShowEdition(false);
+        setSimShowStudio(false);
+        setSimShowRating(true);
+        setSimRatingPosition("bottom-left");
+        setSimRatings(false);
+        setSimLeavingSoon(false);
+        setSimShowRibbon(true);
+        setSimRibbonPosition("top-right");
+        setSimRibbonMode("tiered");
+        setSimRibbonTheme("gold");
+        setSimMaxRibbonTiers(3);
+        setSimTieredRibbons([
+            { id: "tier-1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
+            { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "gold", enabled: true },
+            { id: "tier-3", type: "rt_fresh", text: "RT FRESH", theme: "gold", enabled: true }
+        ]);
     };
 
     // Upcoming Releases Calendar & Coming Soon Shares
@@ -1525,6 +1628,7 @@ export default function CurationStudio() {
                 tieredRibbons: simTieredRibbons,
                 maxRibbonTiers: simMaxRibbonTiers,
                 theme: simTheme,
+                dovetailResolutionHdr: simDovetailResolutionHdr,
                 badgeScale: simBadgeScale,
                 showResolution: simShowResolution,
                 showHdr: simShowHdr,
@@ -1837,11 +1941,15 @@ export default function CurationStudio() {
                     contentRatingPosition: simRatingPosition,
                     ratingsPosition: simRatingsPosition,
                     showRibbon: simShowRibbon,
+                    ribbonMode: simRibbonMode,
+                    tieredRibbons: simTieredRibbons,
+                    maxRibbonTiers: simMaxRibbonTiers,
                     ribbonPosition: simRibbonPosition,
                     ribbonTheme: simRibbonTheme,
                     ribbonText: simRibbonText || undefined,
                     ribbonType: simRibbonType,
                     theme: simTheme,
+                    dovetailResolutionHdr: simDovetailResolutionHdr,
                     badgeScale: simBadgeScale,
                     showResolution: simShowResolution,
                     showHdr: simShowHdr,
@@ -2410,11 +2518,11 @@ export default function CurationStudio() {
                 key: `custom-${cb.id}`,
                 layerKey: primaryLayerKey,
                 node: (
-                    <div key={`custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
+                    <div key={`custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105 shrink-0" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
                         <img 
                             src={`/api/curation/badges/${cb.id}`} 
                             alt={cb.name}
-                            style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
+                            style={{ width: Math.min(Math.round((cb.width || 120) * 0.45), 90), height: Math.min(Math.round((cb.height || 40) * 0.45), 26) }} 
                             className="object-contain drop-shadow"
                         />
                     </div>
@@ -2423,42 +2531,81 @@ export default function CurationStudio() {
         }
 
         // 2. Built-in Fallbacks (Priority 2) - only added if not overridden by a custom badge
-        // Resolution (4K UHD)
-        if (simShowResolution && !appliedCategories.has("resolution")) {
+        // Check Dovetailed Resolution + HDR Combo
+        const shouldDovetail = simDovetailResolutionHdr &&
+            simShowResolution &&
+            simShowHdr &&
+            (simResolutionPosition || "top-right") === (simHdrPosition || "top-right") &&
+            !appliedCategories.has("resolution") &&
+            !appliedCategories.has("hdr");
+
+        if (shouldDovetail) {
             const pos = simResolutionPosition || "top-right";
             if (!buckets[pos]) buckets[pos] = [];
+            appliedCategories.add("resolution");
+            appliedCategories.add("hdr");
             buckets[pos].push({
-                key: "res",
+                key: "res-hdr-dovetail",
                 layerKey: "resolution",
                 node: (
-                    <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
-                        simTheme === "gold" 
-                            ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
-                            : 'bg-slate-950/90 text-white border-amber-400/80'
-                    }`}>
+                    <div
+                        key="res-hdr-dovetail"
+                        className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-wider flex items-center gap-1.5 shadow-lg overflow-hidden backdrop-blur-md ${
+                            simTheme === "gold"
+                                ? "bg-gradient-to-r from-amber-950/90 via-slate-950/95 to-slate-950/95 text-white border-amber-400/80"
+                                : "bg-slate-950/95 text-white border-purple-400/80"
+                        }`}
+                        title="Kometa Dovetailed Resolution + HDR Badge"
+                    >
                         <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                        <span>4K</span>
-                        <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>
+                        <span className="text-amber-300 font-black">4K</span>
+                        <span className="text-[7.5px] opacity-75 font-bold tracking-widest text-amber-200/80">UHD</span>
+                        <div className="h-2.5 w-[1px] bg-white/30 mx-0.5 relative flex items-center justify-center">
+                            <div className="w-1 h-1 rounded-full bg-white/50" />
+                        </div>
+                        <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block shrink-0" />
+                        <span className="text-[8px] text-purple-200 tracking-widest font-black">DOLBY VISION</span>
                     </div>
                 )
             });
-        }
+        } else {
+            // Resolution (4K UHD)
+            if (simShowResolution && !appliedCategories.has("resolution")) {
+                const pos = simResolutionPosition || "top-right";
+                if (!buckets[pos]) buckets[pos] = [];
+                buckets[pos].push({
+                    key: "res",
+                    layerKey: "resolution",
+                    node: (
+                        <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
+                            simTheme === "gold" 
+                                ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
+                                : 'bg-slate-950/90 text-white border-amber-400/80'
+                        }`}>
+                            <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                            <span>4K</span>
+                            <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>
+                        </div>
+                    )
+                });
+            }
 
-        // HDR / Dolby Vision
-        if (simShowHdr && !appliedCategories.has("hdr")) {
-            const pos = simHdrPosition || "top-right";
-            if (!buckets[pos]) buckets[pos] = [];
-            buckets[pos].push({
-                key: "hdr",
-                layerKey: "hdr",
-                node: (
-                    <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
-                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                        <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
-                        <span>DOLBY VISION</span>
-                    </div>
-                )
-            });
+            // HDR / Dolby Vision
+            if (simShowHdr && !appliedCategories.has("hdr")) {
+                const pos = simHdrPosition || "top-right";
+                if (!buckets[pos]) buckets[pos] = [];
+                buckets[pos].push({
+                    key: "hdr",
+                    layerKey: "hdr",
+                    node: (
+                        <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
+                            <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                            <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
+                            <span>DOLBY VISION</span>
+                        </div>
+                    )
+                });
+            }
         }
 
         // Video Codec (HEVC)
@@ -2676,11 +2823,11 @@ export default function CurationStudio() {
                 key: `inspect-custom-${cb.id}`,
                 layerKey: primaryLayerKey,
                 node: (
-                    <div key={`inspect-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
+                    <div key={`inspect-custom-${cb.id}`} className="relative rounded overflow-hidden shadow-lg transition-transform hover:scale-105 shrink-0" style={{ opacity: cb.opacity ?? 1.0 }} title={`Priority 1 Override: ${cb.name}`}>
                         <img 
                             src={`/api/curation/badges/${cb.id}`} 
                             alt={cb.name}
-                            style={{ width: Math.min(cb.width || 120, 140), height: Math.min(cb.height || 40, 46) }} 
+                            style={{ width: Math.min(Math.round((cb.width || 120) * 0.45), 90), height: Math.min(Math.round((cb.height || 40) * 0.45), 26) }} 
                             className="object-contain drop-shadow"
                         />
                     </div>
@@ -2689,47 +2836,102 @@ export default function CurationStudio() {
         }
 
         // 2. Built-in Fallbacks (Priority 2)
-        if (detected.resolution && simShowResolution && !appliedCategories.has("resolution")) {
+        // Check Dovetailed Resolution + HDR Combo
+        const shouldDovetailInspect = simDovetailResolutionHdr &&
+            Boolean(detected.resolution) &&
+            Boolean(detected.hdr) &&
+            simShowResolution &&
+            simShowHdr &&
+            (simResolutionPosition || "top-right") === (simHdrPosition || "top-right") &&
+            !appliedCategories.has("resolution") &&
+            !appliedCategories.has("hdr");
+
+        if (shouldDovetailInspect) {
             const pos = simResolutionPosition || "top-right";
             if (!buckets[pos]) buckets[pos] = [];
+            appliedCategories.add("resolution");
+            appliedCategories.add("hdr");
+            const isDv = detected.hdr === "DV" || (typeof detected.hdr === "string" && detected.hdr.toUpperCase().includes("DOLBY"));
+            const isHdr10Plus = typeof detected.hdr === "string" && detected.hdr.includes("+");
+            const hdrLabel = isDv ? "DOLBY VISION" : (isHdr10Plus ? "HDR10+" : (detected.hdr || "HDR"));
+            const is4k = detected.resolution === "4K";
+            const isFhd = detected.resolution === "1080p";
+
             buckets[pos].push({
-                key: "res",
+                key: "inspect-res-hdr-dovetail",
                 layerKey: "resolution",
                 node: (
-                    <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
-                        simTheme === "gold" 
-                            ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
-                            : 'bg-slate-950/90 text-white border-amber-400/80'
-                    }`}>
+                    <div
+                        key="inspect-res-hdr-dovetail"
+                        className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-wider flex items-center gap-1.5 shadow-lg overflow-hidden backdrop-blur-md ${
+                            simTheme === "gold"
+                                ? "bg-gradient-to-r from-amber-950/90 via-slate-950/95 to-slate-950/95 text-white border-amber-400/80"
+                                : "bg-slate-950/95 text-white border-purple-400/80"
+                        }`}
+                        title="Kometa Dovetailed Resolution + HDR Badge"
+                    >
                         <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                        <span>{detected.resolution}</span>
-                        {detected.resolution === "4K" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>}
-                        {detected.resolution === "1080p" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-sky-300">FHD</span>}
-                    </div>
-                )
-            });
-        }
-
-        if (detected.hdr && simShowHdr && !appliedCategories.has("hdr")) {
-            const pos = simHdrPosition || "top-right";
-            if (!buckets[pos]) buckets[pos] = [];
-            buckets[pos].push({
-                key: "hdr",
-                layerKey: "hdr",
-                node: (
-                    <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
-                        <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
-                        {detected.hdr === "DV" ? (
+                        <span className={is4k ? "text-amber-300 font-black" : "text-sky-300 font-black"}>{detected.resolution}</span>
+                        <span className="text-[7.5px] opacity-75 font-bold tracking-widest text-slate-300">
+                            {is4k ? "UHD" : (isFhd ? "FHD" : "HD")}
+                        </span>
+                        <div className="h-2.5 w-[1px] bg-white/30 mx-0.5 relative flex items-center justify-center">
+                            <div className="w-1 h-1 rounded-full bg-white/50" />
+                        </div>
+                        {isDv ? (
                             <>
-                                <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
-                                <span>DOLBY VISION</span>
+                                <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block shrink-0" />
+                                <span className="text-[8px] text-purple-200 tracking-widest font-black">DOLBY VISION</span>
                             </>
                         ) : (
-                            <span>{detected.hdr}</span>
+                            <span className="text-[8px] text-sky-200 tracking-widest font-black">{hdrLabel}</span>
                         )}
                     </div>
                 )
             });
+        } else {
+            if (detected.resolution && simShowResolution && !appliedCategories.has("resolution")) {
+                const pos = simResolutionPosition || "top-right";
+                if (!buckets[pos]) buckets[pos] = [];
+                buckets[pos].push({
+                    key: "res",
+                    layerKey: "resolution",
+                    node: (
+                        <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${
+                            simTheme === "gold" 
+                                ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 text-black border-yellow-200' 
+                                : 'bg-slate-950/90 text-white border-amber-400/80'
+                        }`}>
+                            <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                            <span>{detected.resolution}</span>
+                            {detected.resolution === "4K" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-amber-300">UHD</span>}
+                            {detected.resolution === "1080p" && <span className="text-[8px] opacity-75 border-l border-current pl-1 ml-0.5 tracking-widest text-sky-300">FHD</span>}
+                        </div>
+                    )
+                });
+            }
+
+            if (detected.hdr && simShowHdr && !appliedCategories.has("hdr")) {
+                const pos = simHdrPosition || "top-right";
+                if (!buckets[pos]) buckets[pos] = [];
+                buckets[pos].push({
+                    key: "hdr",
+                    layerKey: "hdr",
+                    node: (
+                        <div key="hdr" className="relative px-2 py-0.5 rounded-md border border-purple-400/80 bg-slate-950/90 text-purple-200 text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1">
+                            <div className="absolute top-0 left-1 right-1 h-[1px] bg-white/40 rounded-full pointer-events-none" />
+                            {detected.hdr === "DV" ? (
+                                <>
+                                    <span className="w-1.5 h-2.5 bg-purple-400 rounded-sm inline-block mr-0.5" />
+                                    <span>DOLBY VISION</span>
+                                </>
+                            ) : (
+                                <span>{detected.hdr}</span>
+                            )}
+                        </div>
+                    )
+                });
+            }
         }
 
         if (detected.codec && simShowCodec && !appliedCategories.has("codec")) {
@@ -2942,23 +3144,40 @@ export default function CurationStudio() {
             contentRating: simShowRating ? "PG-13" : undefined
         };
 
-        // Resolution
-        if (simShowResolution) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Resolution") && doesCustomBadgeMatchDetected(cb, simDetected));
-            if (matchingCustom) {
-                layers.push({ category: "Resolution", value: "4K UHD", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simResolutionPosition });
-            } else {
-                layers.push({ category: "Resolution", value: "4K UHD", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme === "gold" ? "Gold" : "Obsidian"})`, position: simResolutionPosition });
-            }
-        }
+        // Resolution & HDR (Dovetailed or Independent)
+        const isDovetailed = simDovetailResolutionHdr && 
+            simShowResolution && 
+            simShowHdr && 
+            (simResolutionPosition || "top-right") === (simHdrPosition || "top-right");
 
-        // HDR
-        if (simShowHdr) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Dynamic Range") && doesCustomBadgeMatchDetected(cb, simDetected));
-            if (matchingCustom) {
-                layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simHdrPosition });
-            } else {
-                layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "builtin", sourceName: "Kometa SVG", position: simHdrPosition });
+        const matchingResCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Resolution") && doesCustomBadgeMatchDetected(cb, simDetected));
+        const matchingHdrCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Dynamic Range") && doesCustomBadgeMatchDetected(cb, simDetected));
+
+        if (isDovetailed && !matchingResCustom && !matchingHdrCustom) {
+            layers.push({
+                category: "Resolution + HDR (Dovetailed)",
+                value: "4K UHD • DOLBY VISION",
+                sourceType: "builtin",
+                sourceName: `Kometa Dovetail SVG (${simTheme === "gold" ? "Gold" : "Obsidian"})`,
+                position: simResolutionPosition
+            });
+        } else {
+            // Resolution
+            if (simShowResolution) {
+                if (matchingResCustom) {
+                    layers.push({ category: "Resolution", value: "4K UHD", sourceType: "custom", sourceName: matchingResCustom.name, position: matchingResCustom.position || simResolutionPosition });
+                } else {
+                    layers.push({ category: "Resolution", value: "4K UHD", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme === "gold" ? "Gold" : "Obsidian"})`, position: simResolutionPosition });
+                }
+            }
+
+            // HDR
+            if (simShowHdr) {
+                if (matchingHdrCustom) {
+                    layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "custom", sourceName: matchingHdrCustom.name, position: matchingHdrCustom.position || simHdrPosition });
+                } else {
+                    layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "builtin", sourceName: "Kometa SVG", position: simHdrPosition });
+                }
             }
         }
 
@@ -3042,28 +3261,47 @@ export default function CurationStudio() {
             isCustom: boolean;
         }> = [];
 
-        if (detected.resolution) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Resolution") && doesCustomBadgeMatchDetected(cb, detected));
-            decisions.push({
-                property: "Resolution",
-                detectedValue: detected.resolution,
-                priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
-                badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.resolution} SVG`,
-                position: matchingCustom?.position || simResolutionPosition,
-                isCustom: !!matchingCustom
-            });
-        }
+        const matchingRes = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Resolution") && doesCustomBadgeMatchDetected(cb, detected));
+        const matchingHdr = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Dynamic Range") && doesCustomBadgeMatchDetected(cb, detected));
 
-        if (detected.hdr) {
-            const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeOverriddenCategory(cb).includes("Dynamic Range") && doesCustomBadgeMatchDetected(cb, detected));
+        const isDovetailedInspect = simDovetailResolutionHdr &&
+            Boolean(detected.resolution) &&
+            Boolean(detected.hdr) &&
+            (simResolutionPosition || "top-right") === (simHdrPosition || "top-right") &&
+            !matchingRes &&
+            !matchingHdr;
+
+        if (isDovetailedInspect) {
             decisions.push({
-                property: "Dynamic Range / HDR",
-                detectedValue: detected.hdr === "DV" ? "Dolby Vision" : detected.hdr,
-                priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
-                badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.hdr} SVG`,
-                position: matchingCustom?.position || simHdrPosition,
-                isCustom: !!matchingCustom
+                property: "Resolution + HDR (Dovetailed)",
+                detectedValue: `${detected.resolution} + ${detected.hdr === "DV" ? "Dolby Vision" : detected.hdr}`,
+                priority: "Priority 2 (Built-in SVG)",
+                badgeName: `Dovetailed ${detected.resolution} • ${detected.hdr} SVG`,
+                position: simResolutionPosition,
+                isCustom: false
             });
+        } else {
+            if (detected.resolution) {
+                decisions.push({
+                    property: "Resolution",
+                    detectedValue: detected.resolution,
+                    priority: matchingRes ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
+                    badgeName: matchingRes ? matchingRes.name : `Built-in ${detected.resolution} SVG`,
+                    position: matchingRes?.position || simResolutionPosition,
+                    isCustom: !!matchingRes
+                });
+            }
+
+            if (detected.hdr) {
+                decisions.push({
+                    property: "Dynamic Range / HDR",
+                    detectedValue: detected.hdr === "DV" ? "Dolby Vision" : detected.hdr,
+                    priority: matchingHdr ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
+                    badgeName: matchingHdr ? matchingHdr.name : `Built-in ${detected.hdr} SVG`,
+                    position: matchingHdr?.position || simHdrPosition,
+                    isCustom: !!matchingHdr
+                });
+            }
         }
 
         if (detected.audio) {
@@ -3975,7 +4213,7 @@ export default function CurationStudio() {
                 <TabsContent value="overlays" className="space-y-6">
                     {/* Overlay Engine Priority & Resolution Hierarchy Banner */}
                     <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900/90 to-slate-900/70 border border-purple-500/30 shadow-xl space-y-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="flex items-center gap-2.5">
                                 <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
                                     <Layers className="h-5 w-5" />
@@ -3989,6 +4227,17 @@ export default function CurationStudio() {
                                         How Portalarr automatically scans media, prioritizes custom uploads, and composites badges onto Plex posters.
                                     </p>
                                 </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                    type="button"
+                                    onClick={handleOpenKometaModal}
+                                    className="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-black text-xs h-8 px-3 gap-1.5 shadow-lg shadow-amber-950/40 border border-amber-300/40 transition-all hover:scale-[1.02]"
+                                >
+                                    <Zap className="h-3.5 w-3.5 fill-slate-950 text-slate-950" />
+                                    <span>Import Kometa Config</span>
+                                    <Badge className="bg-slate-950/80 text-amber-300 text-[9px] font-mono px-1 py-0 border-0 ml-0.5">.yml</Badge>
+                                </Button>
                             </div>
                         </div>
 
@@ -4068,21 +4317,207 @@ export default function CurationStudio() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Interactive Poster Preview Simulator */}
-                        <div className="lg:col-span-5 flex flex-col items-center justify-center p-6 bg-slate-900/70 border border-slate-800 rounded-2xl shadow-xl space-y-4">
-                            <div className="text-center space-y-1">
-                                <h3 className="text-sm font-bold text-white flex items-center justify-center gap-1.5">
-                                    <Eye className="h-4 w-4 text-purple-400" /> Live Multi-Badge Poster Simulator
-                                </h3>
-                                <p className="text-[11px] text-slate-400">
-                                    Real-time preview of built-in quality badges and custom uploads.
+                        <div className="lg:col-span-5 flex flex-col items-center justify-start p-5 bg-slate-900/70 border border-slate-800 rounded-2xl shadow-xl space-y-3.5">
+                            <div className="text-center space-y-1 w-full">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                                        <Eye className="h-4 w-4 text-purple-400" /> Live Multi-Badge Poster Simulator
+                                    </h3>
+                                    <Badge variant="outline" className="text-[10px] text-purple-300 border-purple-500/30 bg-purple-950/40">
+                                        {simDovetailResolutionHdr ? "🔗 Dovetail Active" : "Separate Badges"}
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-slate-400 text-left">
+                                    Real-time preview of resolution, dynamic range (DV/HDR10+), audio, and multi-tiered ribbons.
                                 </p>
                             </div>
 
+                            {/* Quick Test Specs Presets Bar */}
+                            <div className="w-full space-y-1.5 p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1">
+                                        <Zap className="h-3 w-3 text-amber-400" /> Quick Test Specs Presets
+                                    </span>
+                                    <span className="text-[9px] text-slate-500">1-Click Scenarios</span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1">
+                                    {[
+                                        {
+                                            id: "my_kometa_config",
+                                            label: "⚡ My Kometa Config",
+                                            apply: handleApplyKometaToSimulator
+                                        },
+                                        {
+                                            id: "4k_dv_atmos",
+                                            label: "✨ 4K DV • Atmos",
+                                            apply: () => {
+                                                setSimActivePreset("4k_dv_atmos");
+                                                setSimShowResolution(true);
+                                                setSimShowHdr(true);
+                                                setSimResolutionPosition("top-right");
+                                                setSimHdrPosition("top-right");
+                                                setSimDovetailResolutionHdr(true);
+                                                setSimShowAudio(true);
+                                                setSimAudioPosition("top-left");
+                                                setSimShowChannels(false);
+                                                setSimShowCodec(false);
+                                                setSimShowEdition(false);
+                                                setSimShowRibbon(false);
+                                                setSimLeavingSoon(false);
+                                            }
+                                        },
+                                        {
+                                            id: "4k_hdr10_71",
+                                            label: "💎 4K HDR • 7.1",
+                                            apply: () => {
+                                                setSimActivePreset("4k_hdr10_71");
+                                                setSimShowResolution(true);
+                                                setSimShowHdr(true);
+                                                setSimResolutionPosition("top-right");
+                                                setSimHdrPosition("top-right");
+                                                setSimDovetailResolutionHdr(true);
+                                                setSimShowAudio(true);
+                                                setSimAudioPosition("top-left");
+                                                setSimShowChannels(true);
+                                                setSimChannelsPosition("top-left");
+                                                setSimShowCodec(false);
+                                                setSimShowEdition(false);
+                                                setSimShowRibbon(false);
+                                                setSimLeavingSoon(false);
+                                            }
+                                        },
+                                        {
+                                            id: "1080p_fhd",
+                                            label: "🎬 1080p FHD • 5.1",
+                                            apply: () => {
+                                                setSimActivePreset("1080p_fhd");
+                                                setSimShowResolution(true);
+                                                setSimShowHdr(false);
+                                                setSimResolutionPosition("top-right");
+                                                setSimShowAudio(true);
+                                                setSimAudioPosition("top-left");
+                                                setSimShowChannels(true);
+                                                setSimChannelsPosition("top-left");
+                                                setSimShowCodec(true);
+                                                setSimCodecPosition("bottom-right");
+                                                setSimShowEdition(false);
+                                                setSimShowRibbon(false);
+                                                setSimLeavingSoon(false);
+                                            }
+                                        },
+                                        {
+                                            id: "top_250_stack",
+                                            label: "⭐ 4K DV + Top 250",
+                                            apply: () => {
+                                                setSimActivePreset("top_250_stack");
+                                                setSimShowResolution(true);
+                                                setSimShowHdr(true);
+                                                setSimResolutionPosition("top-right");
+                                                setSimHdrPosition("top-right");
+                                                setSimDovetailResolutionHdr(true);
+                                                setSimShowAudio(true);
+                                                setSimAudioPosition("top-left");
+                                                setSimShowRibbon(true);
+                                                setSimRibbonPosition("top-right");
+                                                setSimRibbonMode("tiered");
+                                                setSimTieredRibbons([
+                                                    { id: "t1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
+                                                    { id: "t2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson", enabled: true }
+                                                ]);
+                                                setSimLeavingSoon(false);
+                                            }
+                                        },
+                                        {
+                                            id: "lotr_4k",
+                                            label: "👑 LOTR 4K Master",
+                                            apply: () => {
+                                                setSimActivePreset("lotr_4k");
+                                                setSimShowResolution(true);
+                                                setSimShowHdr(true);
+                                                setSimResolutionPosition("top-right");
+                                                setSimHdrPosition("top-right");
+                                                setSimDovetailResolutionHdr(true);
+                                                setSimShowAudio(true);
+                                                setSimAudioPosition("top-left");
+                                                setSimShowChannels(true);
+                                                setSimChannelsPosition("top-left");
+                                                setSimShowEdition(true);
+                                                setSimEditionPosition("bottom-right");
+                                                setSimShowRibbon(true);
+                                                setSimRibbonPosition("top-right");
+                                                setSimRibbonMode("tiered");
+                                                setSimTieredRibbons([
+                                                    { id: "t1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
+                                                    { id: "t2", type: "oscar_winner", text: "11 OSCARS", theme: "gold", enabled: true }
+                                                ]);
+                                                setSimLeavingSoon(false);
+                                                setSimPosterImage("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80");
+                                            }
+                                        },
+                                        {
+                                            id: "leaving_soon_4k",
+                                            label: "⚠️ Leaving Soon 4K",
+                                            apply: () => {
+                                                setSimActivePreset("leaving_soon_4k");
+                                                setSimShowResolution(true);
+                                                setSimShowHdr(true);
+                                                setSimResolutionPosition("top-right");
+                                                setSimHdrPosition("top-right");
+                                                setSimDovetailResolutionHdr(true);
+                                                setSimShowAudio(true);
+                                                setSimAudioPosition("top-left");
+                                                setSimLeavingSoon(true);
+                                                setSimShowRibbon(false);
+                                            }
+                                        }
+                                    ].map(p => (
+                                        <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={p.apply}
+                                            className={`text-[10px] px-2 py-0.5 rounded-md font-semibold transition-all ${
+                                                simActivePreset === p.id 
+                                                    ? "bg-purple-600 text-white shadow-sm ring-1 ring-purple-400/50" 
+                                                    : "bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60"
+                                            }`}
+                                        >
+                                            {p.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Poster Backdrop Selector Bar */}
+                            <div className="w-full flex items-center justify-between gap-1 text-[10px] text-slate-400 px-1">
+                                <span className="font-semibold text-slate-300">Backdrop:</span>
+                                <div className="flex items-center gap-1">
+                                    {[
+                                        { label: "🌌 Sci-Fi", url: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80" },
+                                        { label: "🏰 Fantasy", url: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80" },
+                                        { label: "🦸 Action", url: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80" },
+                                        { label: "🎭 Drama", url: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80" }
+                                    ].map(b => (
+                                        <button
+                                            key={b.label}
+                                            type="button"
+                                            onClick={() => setSimPosterImage(b.url)}
+                                            className={`px-1.5 py-0.5 rounded transition-all ${
+                                                simPosterImage === b.url 
+                                                    ? "bg-slate-800 text-purple-300 font-bold border border-purple-500/40" 
+                                                    : "text-slate-400 hover:text-white"
+                                            }`}
+                                        >
+                                            {b.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             {/* Simulated Poster Card */}
-                            <div className="relative w-[240px] h-[360px] rounded-xl overflow-hidden shadow-2xl border-2 border-slate-700/80 bg-slate-950 group">
+                            <div className="relative w-[240px] h-[360px] rounded-xl overflow-hidden shadow-2xl border-2 border-slate-700/80 bg-slate-950 group select-none">
                                 {/* Sample Backdrop Image */}
                                 <img 
-                                    src="https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80" 
+                                    src={simPosterImage} 
                                     alt="Poster Preview" 
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                 />
@@ -4187,7 +4622,7 @@ export default function CurationStudio() {
                                 {/* Top-Left Bucket */}
                                 {renderBadgesForPosition("top-left").length > 0 && (
                                     <div 
-                                        className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} left-2.5 flex flex-col gap-1.5 items-start z-10`}
+                                        className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2'} left-2 flex flex-col gap-1 items-start z-10 max-w-[48%]`}
                                         style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'top left' }}
                                     >
                                         {renderBadgesForPosition("top-left")}
@@ -4197,7 +4632,7 @@ export default function CurationStudio() {
                                 {/* Top-Right Bucket */}
                                 {renderBadgesForPosition("top-right").length > 0 && (
                                     <div 
-                                        className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} right-2.5 flex flex-col gap-1.5 items-end z-10`}
+                                        className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2'} right-2 flex flex-col gap-1 items-end z-10 max-w-[48%]`}
                                         style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'top right' }}
                                     >
                                         {renderBadgesForPosition("top-right")}
@@ -4207,7 +4642,7 @@ export default function CurationStudio() {
                                 {/* Top-Center Bucket */}
                                 {renderBadgesForPosition("top-center").length > 0 && (
                                     <div 
-                                        className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2.5'} left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]`}
+                                        className={`absolute ${simLeavingSoon ? 'top-8' : 'top-2'} left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1 justify-center items-center z-10 max-w-[80%]`}
                                         style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'top center' }}
                                     >
                                         {renderBadgesForPosition("top-center")}
@@ -4217,7 +4652,7 @@ export default function CurationStudio() {
                                 {/* Bottom-Left Bucket */}
                                 {renderBadgesForPosition("bottom-left").length > 0 && (
                                     <div 
-                                        className="absolute bottom-2.5 left-2.5 flex flex-col gap-1.5 items-start z-10"
+                                        className="absolute bottom-2 left-2 flex flex-col gap-1 items-start z-10 max-w-[48%]"
                                         style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'bottom left' }}
                                     >
                                         {renderBadgesForPosition("bottom-left")}
@@ -4227,7 +4662,7 @@ export default function CurationStudio() {
                                 {/* Bottom-Right Bucket */}
                                 {renderBadgesForPosition("bottom-right").length > 0 && (
                                     <div 
-                                        className="absolute bottom-2.5 right-2.5 flex flex-col gap-1.5 items-end z-10"
+                                        className="absolute bottom-2 right-2 flex flex-col gap-1 items-end z-10 max-w-[48%]"
                                         style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'bottom right' }}
                                     >
                                         {renderBadgesForPosition("bottom-right")}
@@ -4237,7 +4672,7 @@ export default function CurationStudio() {
                                 {/* Bottom-Center Bucket */}
                                 {renderBadgesForPosition("bottom-center").length > 0 && (
                                     <div 
-                                        className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1.5 justify-center items-center z-10 max-w-[85%]"
+                                        className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-row flex-wrap gap-1 justify-center items-center z-10 max-w-[80%]"
                                         style={{ transform: `scale(${simBadgeScale})`, transformOrigin: 'bottom center' }}
                                     >
                                         {renderBadgesForPosition("bottom-center")}
@@ -4300,8 +4735,8 @@ export default function CurationStudio() {
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="p-4 space-y-3.5 text-xs">
-                                    {/* Global Style Theme & Badge Scale Bar */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {/* Global Style Theme, Badge Scale & Dovetail Bar */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         {/* Style Theme Selector */}
                                         <div className="flex flex-col justify-between gap-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
                                             <div className="space-y-0.5">
@@ -4367,6 +4802,28 @@ export default function CurationStudio() {
                                                         </button>
                                                     ))}
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Dovetail Resolution + HDR Toggle */}
+                                        <div className="flex flex-col justify-between gap-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                                                        <Zap className="h-3.5 w-3.5 text-amber-400" /> Dovetail Res + HDR
+                                                    </span>
+                                                    <p className="text-[11px] text-slate-400">Combine 4K + DV/HDR into 1 badge</p>
+                                                </div>
+                                                <Switch 
+                                                    checked={simDovetailResolutionHdr} 
+                                                    onCheckedChange={setSimDovetailResolutionHdr}
+                                                />
+                                            </div>
+                                            <div className="p-1.5 bg-slate-900/90 rounded-lg border border-slate-800/90 text-[10px] text-slate-300 flex items-center justify-between">
+                                                <span className="text-slate-400 font-medium">Style Output:</span>
+                                                <span className="font-bold text-purple-300 font-mono">
+                                                    {simDovetailResolutionHdr ? "4K • DOLBY VISION" : "4K UHD | DV"}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -8970,6 +9427,194 @@ export default function CurationStudio() {
                             </DialogFooter>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Kometa Configuration Importer & Migration Modal */}
+            <Dialog open={kometaModalOpen} onOpenChange={setKometaModalOpen}>
+                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-bold flex items-center gap-2">
+                            <Zap className="h-4 w-4 text-amber-400" />
+                            <span>Kometa Configuration Importer (`kometaconfig.yml`)</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Seamlessly import your existing Kometa YAML config into Portalarr. Automatically configures resolution overlays, tiered ribbon priorities, content ratings, network logos, TMDb API key, and asset paths.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        {/* Inspection Status & Detected Config */}
+                        {kometaInspecting ? (
+                            <div className="p-6 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col items-center justify-center gap-2 text-slate-400">
+                                <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+                                <span className="text-xs">Inspecting Kometa configuration...</span>
+                            </div>
+                        ) : kometaInspectionResult ? (
+                            <div className="space-y-3">
+                                <div className="p-3 bg-gradient-to-r from-amber-950/40 via-slate-950/70 to-slate-950/70 rounded-xl border border-amber-500/40 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px]">
+                                                {kometaInspectionResult.source}
+                                            </Badge>
+                                            <span className="text-xs font-bold text-white">Kometa Config Detected</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400">
+                                            Found {kometaInspectionResult.libraryCount} configured library sections ({kometaInspectionResult.libraryNames?.join(", ")}).
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {kometaInspectionResult.hasTmdb && (
+                                            <Badge className="bg-sky-500/20 text-sky-300 border-sky-500/30 text-[10px]">
+                                                ✓ TMDb Key
+                                            </Badge>
+                                        )}
+                                        {kometaInspectionResult.hasPlex && (
+                                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px]">
+                                                ✓ PMS URL
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Libraries Breakdown */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {Object.entries(kometaInspectionResult.parsed?.libraries || {}).map(([name, lib]: [string, any]) => (
+                                        <div key={name} className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                                    {name.toLowerCase().includes("tv") ? <Tv className="h-3.5 w-3.5 text-sky-400" /> : <Film className="h-3.5 w-3.5 text-purple-400" />}
+                                                    {name}
+                                                </span>
+                                                <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-300">
+                                                    {lib.overlayFiles?.length || 0} Overlays
+                                                </Badge>
+                                            </div>
+                                            <ul className="space-y-1 text-[11px] text-slate-300">
+                                                {lib.overlayFiles?.map((ov: any, idx: number) => {
+                                                    const def = (ov.defaultName || "").toLowerCase();
+                                                    if (def.includes("resolution")) {
+                                                        return (
+                                                            <li key={idx} className="flex items-center gap-1.5 text-amber-300">
+                                                                <Check className="h-3 w-3" />
+                                                                <span>4K Resolution + Dovetailed HDR</span>
+                                                            </li>
+                                                        );
+                                                    }
+                                                    if (def.includes("ribbon")) {
+                                                        return (
+                                                            <li key={idx} className="flex items-center gap-1.5 text-yellow-400">
+                                                                <Check className="h-3 w-3" />
+                                                                <span>Ranked Ribbons (IMDb Top 250 &gt; RT Fresh &gt; MC)</span>
+                                                            </li>
+                                                        );
+                                                    }
+                                                    if (def.includes("content_rating")) {
+                                                        return (
+                                                            <li key={idx} className="flex items-center gap-1.5 text-rose-300">
+                                                                <Check className="h-3 w-3" />
+                                                                <span>US Content Rating (Bottom-Left)</span>
+                                                            </li>
+                                                        );
+                                                    }
+                                                    if (def.includes("network")) {
+                                                        return (
+                                                            <li key={idx} className="flex items-center gap-1.5 text-sky-300">
+                                                                <Check className="h-3 w-3" />
+                                                                <span>TV Network / Studio Logos (Top-Left)</span>
+                                                            </li>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <li key={idx} className="flex items-center gap-1.5 text-slate-400">
+                                                            <Check className="h-3 w-3" />
+                                                            <span>{ov.defaultName}</span>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 text-center space-y-2">
+                                <p className="text-xs text-slate-400">No `kometaconfig.yml` file found on server disk. You can paste your YAML content below.</p>
+                            </div>
+                        )}
+
+                        {/* Optional Custom YAML Textarea */}
+                        <div className="space-y-1.5 pt-2">
+                            <Label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                                <span>Paste or Edit Kometa YAML (Optional)</span>
+                                {kometaYamlInput && (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleInspectKometaYaml(kometaYamlInput)}
+                                        className="text-[10px] text-amber-400 hover:underline"
+                                    >
+                                        Re-analyze YAML
+                                    </button>
+                                )}
+                            </Label>
+                            <Textarea
+                                value={kometaYamlInput}
+                                onChange={e => {
+                                    setKometaYamlInput(e.target.value);
+                                    if (e.target.value.trim().length > 20) {
+                                        handleInspectKometaYaml(e.target.value);
+                                    }
+                                }}
+                                placeholder="libraries:&#10;  Movies:&#10;    overlay_files:&#10;    - default: resolution&#10;    - default: ribbon..."
+                                className="bg-slate-950 border-slate-800 font-mono text-xs h-28"
+                            />
+                        </div>
+
+                        {kometaImportSuccessMsg && (
+                            <div className="p-3 bg-emerald-950/80 border border-emerald-800 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                <span>{kometaImportSuccessMsg}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                handleApplyKometaToSimulator();
+                                setKometaModalOpen(false);
+                            }}
+                            className="text-xs border-slate-700 hover:bg-slate-800"
+                        >
+                            🎨 Preview in Simulator
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setKometaModalOpen(false)}>Close</Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={kometaImporting || (!kometaInspectionResult && !kometaYamlInput)}
+                                onClick={handleImportKometaConfig}
+                                className="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-black text-xs gap-1.5 shadow-md"
+                            >
+                                {kometaImporting ? (
+                                    <>
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        <span>Importing &amp; Configuring...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Zap className="h-3.5 w-3.5 fill-slate-950" />
+                                        <span>Apply Kometa Configuration</span>
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

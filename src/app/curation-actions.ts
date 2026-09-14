@@ -76,6 +76,11 @@ import {
     ParentalCategoryKey,
     ParentalSeverity
 } from "@/lib/curation/parental-guide";
+import {
+    parseKometaYamlString,
+    convertKometaLibraryToPortalarrOverlay,
+    ParsedKometaConfig
+} from "@/lib/curation/kometa-importer";
 
 // Verify admin permissions
 async function verifyAdmin() {
@@ -1475,6 +1480,7 @@ export async function saveOverlayRuleAction(data: {
     ribbonTheme?: string;
     ribbonText?: string;
     ribbonType?: string;
+    dovetailResolutionHdr?: boolean;
     tieredRibbons?: any[];
     maxRibbonTiers?: number;
     theme?: string;
@@ -1497,7 +1503,7 @@ export async function saveOverlayRuleAction(data: {
     await verifyAdmin();
     try {
         let serializedLayerOrder: string | null = null;
-        if (data.layerPriorityOrder || data.ribbonMode || data.tieredRibbons) {
+        if (data.layerPriorityOrder || data.ribbonMode || data.tieredRibbons || data.dovetailResolutionHdr !== undefined) {
             const rawOrder = Array.isArray(data.layerPriorityOrder) 
                 ? data.layerPriorityOrder 
                 : (typeof data.layerPriorityOrder === "object" && data.layerPriorityOrder?.order) 
@@ -1510,7 +1516,8 @@ export async function saveOverlayRuleAction(data: {
                 order: rawOrder,
                 ribbonMode: data.ribbonMode || "single",
                 tieredRibbons: data.tieredRibbons || null,
-                maxRibbonTiers: data.maxRibbonTiers || 3
+                maxRibbonTiers: data.maxRibbonTiers || 3,
+                dovetailResolutionHdr: data.dovetailResolutionHdr ?? true
             });
         }
 
@@ -1625,6 +1632,7 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
                 let ruleRibbonMode: "single" | "tiered" | "auto_stack" = "single";
                 let ruleTieredRibbons: any[] | undefined;
                 let ruleMaxRibbonTiers = 3;
+                let ruleDovetail = true;
 
                 if (rule.layerPriorityOrder) {
                     try {
@@ -1633,6 +1641,7 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
                             if (parsed.ribbonMode) ruleRibbonMode = parsed.ribbonMode;
                             if (parsed.tieredRibbons) ruleTieredRibbons = parsed.tieredRibbons;
                             if (parsed.maxRibbonTiers) ruleMaxRibbonTiers = parsed.maxRibbonTiers;
+                            if (parsed.dovetailResolutionHdr !== undefined) ruleDovetail = parsed.dovetailResolutionHdr;
                         }
                     } catch (e) {}
                 }
@@ -1669,6 +1678,7 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
                     ribbonText: rule.ribbonText || undefined,
                     ribbonType: (rule.ribbonType as any) || "auto_quality",
                     theme: (rule.theme as any) || "glass",
+                    dovetailResolutionHdr: ruleDovetail,
                     badgeScale: (rule.badgeScale as number) || 1.0,
                     customBadges: activeCustomBadges.map(cb => ({
                         id: cb.id,
@@ -2379,6 +2389,7 @@ export async function applyOverlayToSingleItemAction(
         ribbonText?: string;
         ribbonType?: string;
         theme?: string;
+        dovetailResolutionHdr?: boolean;
         showResolution?: boolean;
         showHdr?: boolean;
         showAudio?: boolean;
@@ -2445,6 +2456,7 @@ export async function applyOverlayToSingleItemAction(
                 ribbonText: options?.ribbonText || undefined,
                 ribbonType: (options?.ribbonType as any) || "auto_quality",
                 theme: (options?.theme as any) || "glass",
+                dovetailResolutionHdr: options?.dovetailResolutionHdr ?? true,
                 badgeScale: options?.badgeScale ?? 1.0,
                 showResolution: options?.showResolution ?? true,
                 showHdr: options?.showHdr ?? true,
@@ -3558,7 +3570,171 @@ export async function createPlaceholderItemAction(
     }
 }
 
+/**
+ * Inspects and parses a Kometa YAML configuration file (from disk or string).
+ */
+export async function inspectKometaConfigFileAction(yamlContent?: string) {
+    await verifyAdmin();
+    try {
+        let content = yamlContent;
+        let source = "uploaded_content";
 
+        if (!content || !content.trim()) {
+            const diskPath = path.join(process.cwd(), "kometaconfig.yml");
+            if (fs.existsSync(diskPath)) {
+                content = fs.readFileSync(diskPath, "utf-8");
+                source = "kometaconfig.yml (disk root)";
+            }
+        }
 
+        if (!content || !content.trim()) {
+            return { success: false, error: "No Kometa configuration YAML found." };
+        }
 
+        const parsed = parseKometaYamlString(content);
+        const libraryNames = Object.keys(parsed.libraries || {});
 
+        return {
+            success: true,
+            source,
+            parsed,
+            libraryCount: libraryNames.length,
+            libraryNames,
+            hasPlex: Boolean(parsed.plex?.url),
+            hasTmdb: Boolean(parsed.tmdb?.apikey)
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed inspecting Kometa configuration." };
+    }
+}
+
+/**
+ * Imports a Kometa YAML configuration, creates/updates corresponding Portalarr overlay rules,
+ * and configures connections (TMDb / Plex) seamlessly.
+ */
+export async function importKometaConfigAction(yamlContent?: string, targetServerId?: string) {
+    await verifyAdmin();
+    try {
+        let content = yamlContent;
+        let source = "uploaded_content";
+
+        if (!content || !content.trim()) {
+            const diskPath = path.join(process.cwd(), "kometaconfig.yml");
+            if (fs.existsSync(diskPath)) {
+                content = fs.readFileSync(diskPath, "utf-8");
+                source = "kometaconfig.yml (disk root)";
+            }
+        }
+
+        if (!content || !content.trim()) {
+            return { success: false, error: "No Kometa configuration YAML found to import." };
+        }
+
+        const parsed = parseKometaYamlString(content);
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        let tmdbUpdated = false;
+
+        // 1. Auto-save TMDb API Key if provided and missing
+        if (parsed.tmdb?.apikey) {
+            if (!settings?.tmdbApiKey || settings.tmdbApiKey.trim().length === 0) {
+                await prisma.settings.upsert({
+                    where: { id: "global" },
+                    update: { tmdbApiKey: parsed.tmdb.apikey },
+                    create: { id: "global", tmdbApiKey: parsed.tmdb.apikey }
+                });
+                tmdbUpdated = true;
+            }
+        }
+
+        // 2. Resolve target server and library sections
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        let plexSections: any[] = [];
+        let serverId = targetServerId || "main";
+
+        if (token) {
+            try {
+                const servers = await getPlexServers(token);
+                if (servers && servers.length > 0) {
+                    serverId = targetServerId || servers[0].clientIdentifier;
+                    const resolved = await resolveWorkingPlexServerConnection(serverId);
+                    if (resolved && resolved.serverUrl) {
+                        plexSections = await getPlexServerSections(resolved.token, serverId, resolved.serverUrl);
+                    }
+                }
+            } catch (pErr) {}
+        }
+
+        const appliedRules: any[] = [];
+
+        // 3. Map each Kometa library to Portalarr overlay rule
+        for (const [libName, kometaLib] of Object.entries(parsed.libraries)) {
+            // Find matching Plex section key if available
+            let sectionKey = "1";
+            const cleanName = libName.toLowerCase().trim();
+            const matchedSection = plexSections.find(s => 
+                s.title?.toLowerCase().trim() === cleanName || 
+                (cleanName.includes("movie") && s.type === "movie") ||
+                ((cleanName.includes("tv") || cleanName.includes("show")) && s.type === "show")
+            );
+
+            if (matchedSection) {
+                sectionKey = String(matchedSection.key);
+            }
+
+            const rulePayload = convertKometaLibraryToPortalarrOverlay(kometaLib, serverId, sectionKey);
+
+            // Save or update overlay rule
+            const saveRes = await saveOverlayRuleAction({
+                name: rulePayload.name,
+                serverId: rulePayload.serverId,
+                sectionKey: rulePayload.sectionKey,
+                overlayType: rulePayload.overlayType,
+                position: rulePayload.position,
+                videoPosition: rulePayload.videoPosition,
+                resolutionPosition: rulePayload.resolutionPosition,
+                hdrPosition: rulePayload.hdrPosition,
+                showResolution: rulePayload.showResolution,
+                showHdr: rulePayload.showHdr,
+                dovetailResolutionHdr: rulePayload.dovetailResolutionHdr,
+                showAudio: rulePayload.showAudio,
+                audioPosition: rulePayload.audioPosition,
+                showStudio: rulePayload.showStudio,
+                studioPosition: rulePayload.studioPosition,
+                showContentRating: rulePayload.showContentRating,
+                contentRatingPosition: rulePayload.contentRatingPosition,
+                showRibbon: rulePayload.showRibbon,
+                ribbonMode: rulePayload.ribbonMode,
+                ribbonPosition: rulePayload.ribbonPosition,
+                ribbonTheme: rulePayload.ribbonTheme,
+                tieredRibbons: rulePayload.tieredRibbons,
+                maxRibbonTiers: rulePayload.maxRibbonTiers,
+                theme: rulePayload.theme,
+                badgeStyle: rulePayload.badgeStyle,
+                showLeavingSoon: rulePayload.showLeavingSoon,
+                enabled: rulePayload.enabled
+            });
+
+            if (saveRes.success && saveRes.rule) {
+                appliedRules.push({
+                    library: libName,
+                    sectionKey,
+                    ruleId: saveRes.rule.id,
+                    rule: rulePayload
+                });
+            }
+        }
+
+        logger.addLog("SUCCESS", "CURATION", `Imported Kometa configuration (${appliedRules.length} library rules configured, TMDb: ${tmdbUpdated ? "Saved" : "Preserved"}).`);
+
+        return {
+            success: true,
+            source,
+            tmdbUpdated,
+            appliedCount: appliedRules.length,
+            appliedRules,
+            message: `Successfully imported Kometa configuration! Configured ${appliedRules.length} library rule(s).`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed importing Kometa configuration." };
+    }
+}

@@ -60,6 +60,7 @@ export interface OverlayOptions {
     tieredRibbons?: TieredRibbonItem[];
     maxRibbonTiers?: number;
     theme?: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson";
+    dovetailResolutionHdr?: boolean;
     ratingsSource?: {
         imdb?: number;
         rtCritics?: number;
@@ -90,6 +91,97 @@ function ensureBackupDir() {
     if (!fs.existsSync(CUSTOM_BADGES_DIR)) {
         fs.mkdirSync(CUSTOM_BADGES_DIR, { recursive: true });
     }
+}
+
+/**
+ * Creates Kometa-Style Dovetailed Composite SVG combining Resolution (4K, 1080p, 720p, SD) and HDR (Dolby Vision, HDR10+, HDR, SDR)
+ * into a single interlocking horizontal pill badge.
+ */
+export function generateDovetailedResolutionHdrBadgeSvg(
+    resolution: "4K" | "1080p" | "720p" | "SD" | string = "4K",
+    hdr?: "DV" | "HDR10+" | "HDR10" | "HDR" | "SDR" | string | null,
+    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
+): string {
+    const is4k = resolution.toUpperCase().includes("4K") || resolution.includes("2160");
+    const isFhd = resolution.toUpperCase().includes("1080");
+    const isHd = resolution.toUpperCase().includes("720");
+    const resText = is4k ? "4K" : isFhd ? "1080p" : isHd ? "720p" : resolution.toUpperCase();
+    const resSub = is4k ? "UHD" : isFhd ? "FHD" : isHd ? "HD" : "SD";
+
+    const hdrType = (hdr || (is4k ? "HDR" : "SDR")).toUpperCase();
+    const isDv = hdrType === "DV" || hdrType.includes("DOLBY") || hdrType.includes("VISION");
+    const isHdr10Plus = hdrType.includes("HDR10+") || hdrType.includes("PLUS");
+    const isHdr = !isDv && (hdrType.includes("HDR") || hdrType === "HDR10");
+
+    const width = isDv ? 245 : (isHdr10Plus ? 230 : 210);
+    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" : "rgba(8, 12, 22, 0.94)";
+
+    let strokeGrad = "url(#dtGoldGrad)";
+    if (isDv) strokeGrad = "url(#dtDvGrad)";
+    else if (isHdr10Plus) strokeGrad = "url(#dtPlusGrad)";
+    else if (isHdr) strokeGrad = "url(#dtHdrGrad)";
+    else if (isFhd) strokeGrad = "url(#dtFhdGrad)";
+
+    return `
+    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="dtGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#fef08a" />
+                <stop offset="50%" stop-color="#eab308" />
+                <stop offset="100%" stop-color="#ca8a04" />
+            </linearGradient>
+            <linearGradient id="dtDvGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#fbbf24" />
+                <stop offset="40%" stop-color="#c084fc" />
+                <stop offset="100%" stop-color="#818cf8" />
+            </linearGradient>
+            <linearGradient id="dtPlusGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#fbbf24" />
+                <stop offset="50%" stop-color="#38bdf8" />
+                <stop offset="100%" stop-color="#06b6d4" />
+            </linearGradient>
+            <linearGradient id="dtHdrGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#facc15" />
+                <stop offset="100%" stop-color="#38bdf8" />
+            </linearGradient>
+            <linearGradient id="dtFhdGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#38bdf8" />
+                <stop offset="100%" stop-color="#0284c7" />
+            </linearGradient>
+            <filter id="dtShadow" x="-15%" y="-15%" width="130%" height="130%">
+                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.85"/>
+            </filter>
+        </defs>
+        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="1.8" filter="url(#dtShadow)"/>
+        <!-- Specular Top Highlight -->
+        <line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>
+        
+        <!-- Left: Resolution -->
+        <text x="36" y="29" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="18.5" fill="${is4k ? '#facc15' : '#38bdf8'}" text-anchor="middle" letter-spacing="0.5">${resText}</text>
+        <text x="70" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.6)" text-anchor="middle" letter-spacing="1.5">${resSub}</text>
+        
+        <!-- Dovetail Interlocking Notch / Vertical Divider -->
+        <line x1="90" y1="10" x2="90" y2="36" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+        <circle cx="90" cy="23" r="2.5" fill="rgba(255,255,255,0.4)"/>
+
+        <!-- Right: HDR / Dolby Vision / SDR -->
+        ${isDv ? `
+            <!-- Dolby double-D iconic mark -->
+            <g transform="translate(104, 15)">
+                <rect x="0" y="0" width="4" height="16" rx="1.2" fill="#c084fc"/>
+                <path d="M 5 0 A 8 8 0 0 1 5 16 Z" fill="#c084fc"/>
+                <path d="M 18 0 A 8 8 0 0 0 18 16 Z" fill="#818cf8"/>
+                <rect x="19" y="0" width="4" height="16" rx="1.2" fill="#818cf8"/>
+            </g>
+            <text x="180" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="12.5" fill="#f8fafc" text-anchor="middle" letter-spacing="1.5">DOLBY VISION</text>
+        ` : isHdr10Plus ? `
+            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14.5" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">HDR10+</text>
+        ` : isHdr ? `
+            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14.5" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">${hdrType === "HDR10" ? "HDR10" : "HDR"}</text>
+        ` : `
+            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="13" fill="rgba(255,255,255,0.7)" text-anchor="middle" letter-spacing="1.5">SDR</text>
+        `}
+    </svg>`;
 }
 
 /**
@@ -1311,11 +1403,29 @@ export async function applyOverlaysToPoster(
         });
     };
 
-    if (options.showResolution !== false && mediaInfo.detectedBadges.resolution && !hasCustomResolution) {
-        await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme), "resolution");
-    }
-    if (options.showHdr !== false && mediaInfo.detectedBadges.hdr && !hasCustomHdr) {
-        await pushSvgToBucket(hdrPos, generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme), "hdr");
+    // Dovetailed Resolution & HDR Combination
+    const shouldDovetail = (options.dovetailResolutionHdr !== false) &&
+        options.showResolution !== false &&
+        options.showHdr !== false &&
+        resPos === hdrPos &&
+        !hasCustomResolution &&
+        !hasCustomHdr &&
+        Boolean(mediaInfo.detectedBadges.resolution);
+
+    if (shouldDovetail) {
+        const dtSvg = generateDovetailedResolutionHdrBadgeSvg(
+            mediaInfo.detectedBadges.resolution!,
+            mediaInfo.detectedBadges.hdr,
+            options.theme
+        );
+        await pushSvgToBucket(resPos, dtSvg, "resolution");
+    } else {
+        if (options.showResolution !== false && mediaInfo.detectedBadges.resolution && !hasCustomResolution) {
+            await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme), "resolution");
+        }
+        if (options.showHdr !== false && mediaInfo.detectedBadges.hdr && !hasCustomHdr) {
+            await pushSvgToBucket(hdrPos, generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme), "hdr");
+        }
     }
     if (options.showCodec && mediaInfo.detectedBadges.codec && !hasCustomCodec) {
         await pushSvgToBucket(codecPos, generateCodecBadgeSvg(mediaInfo.detectedBadges.codec), "codec");
