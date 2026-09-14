@@ -852,6 +852,8 @@ export function AgregarrStudio() {
                 serversCount={servers.length}
                 title="Agregarr Collections & Coming Soon Hub"
                 description="Automated TMDb/Trakt/MDBList collections, Plex Home screen ranking (#1-#99), seasonal schedules, upcoming releases, and coming soon banners."
+                servers={servers}
+                selectedServerId={selectedServerId}
             />
 
             {/* Static Server & Library Section Navigator */}

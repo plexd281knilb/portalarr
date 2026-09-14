@@ -1953,6 +1953,8 @@ export function KometaStudio() {
                 serversCount={servers.length}
                 title="Kometa Overlays & Badge Studio"
                 description="4K UHD, HDR, Dolby Vision dovetailing, studio audio codecs, US age ratings, network logos, and tiered gloss ribbons."
+                servers={servers}
+                selectedServerId={selectedServerId}
             />
 
             {/* Static Server & Library Section Navigator */}

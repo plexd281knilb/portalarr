@@ -72,6 +72,12 @@ import {
     clearParentalTagsFromLibrary,
     resolveParentalAdvisory,
     saveParentalAdvisory,
+    getServerGuardRailsMap,
+    getServerGuardRailConfig,
+    saveServerGuardRailConfig,
+    saveAllServerGuardRails,
+    isMediaAllowedByServerGuardRail,
+    ServerGuardRailConfig,
     ParentalTaggingOptions,
     ParentalCategoryKey,
     ParentalSeverity
@@ -3092,8 +3098,15 @@ export async function getArtBackupAndBadgeStatsAction() {
 
 /**
  * Fetches recent items from a Plex library section with stream metadata for live simulation.
+ * Applies Server Guard Rails policy to filter disallowed/inappropriate content for the target server.
  */
-export async function getPlexRecentLibraryItemsAction(serverId: string, sectionKey?: string, limit = 50, sort = "addedAt:desc") {
+export async function getPlexRecentLibraryItemsAction(
+    serverId: string, 
+    sectionKey?: string, 
+    limit = 50, 
+    sort = "addedAt:desc",
+    includeBlocked = false
+) {
     await verifyAdmin();
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
@@ -3101,16 +3114,46 @@ export async function getPlexRecentLibraryItemsAction(serverId: string, sectionK
 
         const secKey = sectionKey || "1";
         const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-        let items: PlexMediaStreamInfo[] = [];
+        let rawItems: PlexMediaStreamInfo[] = [];
 
         for (const url of urlsToTry) {
             try {
-                items = await getPlexLibraryMediaItems(url, resolved.token, secKey, limit, sort);
-                if (items.length > 0) break;
+                rawItems = await getPlexLibraryMediaItems(url, resolved.token, secKey, limit, sort);
+                if (rawItems.length > 0) break;
             } catch (e) {}
         }
 
-        return { success: true, items, serverId: resolved.serverId };
+        // Evaluate server guard rails
+        const guardRail = await getServerGuardRailConfig(resolved.serverId, resolved.serverName);
+
+        const evaluatedItems = rawItems.map(it => {
+            const check = isMediaAllowedByServerGuardRail({
+                contentRating: it.contentRating || it.detectedBadges?.contentRating,
+                title: it.title,
+                genre: it.genre
+            }, guardRail);
+
+            return {
+                ...it,
+                isBlockedByGuardRail: !check.allowed,
+                guardRailBlockReason: check.reason,
+                serverGuardRailActive: guardRail.enabled
+            };
+        });
+
+        const items = (guardRail.enabled && guardRail.enforceInSearch && !includeBlocked)
+            ? evaluatedItems.filter(it => !it.isBlockedByGuardRail)
+            : evaluatedItems;
+
+        return { 
+            success: true, 
+            items, 
+            serverId: resolved.serverId,
+            serverName: resolved.serverName,
+            guardRail,
+            totalFound: rawItems.length,
+            blockedCount: evaluatedItems.filter(it => it.isBlockedByGuardRail).length
+        };
     } catch (e: any) {
         return { success: false, error: e.message, items: [] };
     }
@@ -3118,8 +3161,14 @@ export async function getPlexRecentLibraryItemsAction(serverId: string, sectionK
 
 /**
  * Searches Plex library items across hubs or a specific library section.
+ * Applies Server Guard Rails policy to filter disallowed/inappropriate content for the target server.
  */
-export async function searchPlexLibraryItemsAction(serverId: string, query: string, sectionKey?: string) {
+export async function searchPlexLibraryItemsAction(
+    serverId: string, 
+    query: string, 
+    sectionKey?: string,
+    includeBlocked = false
+) {
     await verifyAdmin();
     try {
         if (!query || query.trim().length === 0) return { success: true, items: [] };
@@ -3127,21 +3176,103 @@ export async function searchPlexLibraryItemsAction(serverId: string, query: stri
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured.", items: [] };
 
-        let items: PlexMediaStreamInfo[] = [];
+        let rawItems: PlexMediaStreamInfo[] = [];
         const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
 
         for (const url of urlsToTry) {
             try {
-                items = await searchPlexLibraryItems(url, resolved.token, query.trim(), sectionKey);
-                if (items.length > 0) break;
+                rawItems = await searchPlexLibraryItems(url, resolved.token, query.trim(), sectionKey);
+                if (rawItems.length > 0) break;
             } catch (e) {
                 // try next candidate URL
             }
         }
 
-        return { success: true, items };
+        // Evaluate server guard rails
+        const guardRail = await getServerGuardRailConfig(resolved.serverId, resolved.serverName);
+
+        const evaluatedItems = rawItems.map(it => {
+            const check = isMediaAllowedByServerGuardRail({
+                contentRating: it.contentRating || it.detectedBadges?.contentRating,
+                title: it.title,
+                genre: it.genre
+            }, guardRail);
+
+            return {
+                ...it,
+                isBlockedByGuardRail: !check.allowed,
+                guardRailBlockReason: check.reason,
+                serverGuardRailActive: guardRail.enabled
+            };
+        });
+
+        const items = (guardRail.enabled && guardRail.enforceInSearch && !includeBlocked)
+            ? evaluatedItems.filter(it => !it.isBlockedByGuardRail)
+            : evaluatedItems;
+
+        return { 
+            success: true, 
+            items,
+            serverId: resolved.serverId,
+            serverName: resolved.serverName,
+            guardRail,
+            totalFound: rawItems.length,
+            blockedCount: evaluatedItems.filter(it => it.isBlockedByGuardRail).length
+        };
     } catch (e: any) {
         return { success: false, error: e.message, items: [] };
+    }
+}
+
+/**
+ * Retrieves all Server Guard Rail configurations.
+ */
+export async function getServerGuardRailsAction() {
+    await verifyAdmin();
+    try {
+        const guardRails = await getServerGuardRailsMap();
+        return { success: true, guardRails };
+    } catch (e: any) {
+        return { success: false, error: e.message, guardRails: {} };
+    }
+}
+
+/**
+ * Retrieves the Server Guard Rail configuration for a specific server.
+ */
+export async function getServerGuardRailConfigAction(serverId: string, fallbackServerName?: string) {
+    await verifyAdmin();
+    try {
+        const config = await getServerGuardRailConfig(serverId, fallbackServerName);
+        return { success: true, config };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Saves a Server Guard Rail configuration for a specific server.
+ */
+export async function saveServerGuardRailConfigAction(config: ServerGuardRailConfig) {
+    await verifyAdmin();
+    try {
+        const res = await saveServerGuardRailConfig(config);
+        return res;
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Saves all Server Guard Rail configurations across all servers.
+ */
+export async function saveAllServerGuardRailsAction(configs: Record<string, ServerGuardRailConfig>) {
+    await verifyAdmin();
+    try {
+        const res = await saveAllServerGuardRails(configs);
+        return res;
+    } catch (e: any) {
+        return { success: false, error: e.message };
     }
 }
 

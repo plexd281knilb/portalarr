@@ -1,26 +1,47 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles, Film, Trash2 } from "lucide-react";
+import { Sparkles, Film, Trash2, ShieldCheck, ShieldAlert, Sliders } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ServerGuardRailsModal } from "@/components/curation/server-guard-rails-modal";
+import { getServerGuardRailsAction } from "@/app/curation-actions";
+import { ServerGuardRailConfig } from "@/lib/curation/parental-guide-types";
 
 interface CurationNavHeaderProps {
     serversCount?: number;
     title?: string;
     description?: string;
+    servers?: Array<{ serverId: string; serverName: string }>;
+    selectedServerId?: string;
 }
 
 export function CurationNavHeader({
     serversCount = 1,
     title,
-    description
+    description,
+    servers = [],
+    selectedServerId
 }: CurationNavHeaderProps) {
     const pathname = usePathname();
+    const [guardRailsModalOpen, setGuardRailsModalOpen] = useState(false);
+    const [guardRailsMap, setGuardRailsMap] = useState<Record<string, ServerGuardRailConfig>>({});
 
     const isKometa = pathname === "/curation" || pathname.startsWith("/curation/kometa");
     const isAgregarr = pathname.startsWith("/curation/agregarr");
     const isPrune = pathname.startsWith("/curation/prune");
+
+    useEffect(() => {
+        getServerGuardRailsAction().then(res => {
+            if (res.success && res.guardRails) {
+                setGuardRailsMap(res.guardRails);
+            }
+        }).catch(() => {});
+    }, [guardRailsModalOpen]);
+
+    const guardedServersCount = Object.values(guardRailsMap).filter(g => g.enabled).length;
 
     return (
         <div className="space-y-4">
@@ -64,12 +85,48 @@ export function CurationNavHeader({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Guard Rails Quick Access Action */}
+                    <Button
+                        type="button"
+                        onClick={() => setGuardRailsModalOpen(true)}
+                        className={`h-9 text-xs font-bold px-3 rounded-xl border shadow-lg transition-all flex items-center gap-2 ${
+                            guardedServersCount > 0
+                                ? "bg-emerald-950/80 text-emerald-200 border-emerald-500/50 hover:bg-emerald-900 shadow-emerald-950/40"
+                                : "bg-slate-900/90 text-purple-300 border-purple-500/40 hover:bg-purple-950/50 shadow-purple-950/40"
+                        }`}
+                    >
+                        <ShieldCheck className={`h-4 w-4 ${guardedServersCount > 0 ? "text-emerald-400" : "text-purple-400"}`} />
+                        <span>Server Guard Rails</span>
+                        {guardedServersCount > 0 ? (
+                            <Badge className="bg-emerald-600 text-white font-black text-[10px] px-1.5 py-0 rounded-full">
+                                {guardedServersCount} Guarded
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="border-purple-500/40 text-purple-300 text-[10px] px-1.5 py-0">
+                                Configure
+                            </Badge>
+                        )}
+                    </Button>
+
                     <Badge variant="outline" className="bg-slate-900/80 border-slate-800 text-slate-300 px-3 py-2 text-xs font-semibold flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                         <span>{serversCount} Connected {serversCount === 1 ? 'Server' : 'Servers'}</span>
                     </Badge>
                 </div>
             </div>
+
+            {/* Server Guard Rails Modal */}
+            <ServerGuardRailsModal
+                open={guardRailsModalOpen}
+                onOpenChange={setGuardRailsModalOpen}
+                servers={servers}
+                initialServerId={selectedServerId}
+                onSaved={() => {
+                    getServerGuardRailsAction().then(res => {
+                        if (res.success && res.guardRails) setGuardRailsMap(res.guardRails);
+                    }).catch(() => {});
+                }}
+            />
 
             {/* 3-Way Mode Switcher Navigation Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-lg backdrop-blur-md overflow-x-auto">

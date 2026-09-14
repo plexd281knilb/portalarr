@@ -20,6 +20,8 @@ export interface PlexMediaStreamInfo {
     summary?: string;
     studio?: string;
     contentRating?: string;
+    genres?: string[];
+    genre?: string[];
     rating?: number;
     audienceRating?: number;
     imdbRating?: number;
@@ -64,6 +66,9 @@ export interface PlexMediaStreamInfo {
         videoFormatLabel?: string;
     };
     isLeavingSoon?: boolean;
+    isBlockedByGuardRail?: boolean;
+    guardRailBlockReason?: string;
+    serverGuardRailActive?: boolean;
 }
 
 /**
@@ -90,6 +95,20 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
 
     const rawMediaList = Array.isArray(metadata.Media) ? metadata.Media : metadata.Media ? [metadata.Media] : [];
     const mediaList: PlexMediaStreamInfo["media"] = [];
+
+    // Extract Genres
+    const extractedGenres: string[] = [];
+    if (Array.isArray(metadata.Genre)) {
+        for (const g of metadata.Genre) {
+            if (typeof g === "string") extractedGenres.push(g);
+            else if (g?.tag) extractedGenres.push(g.tag);
+        }
+    } else if (metadata.genre) {
+        if (Array.isArray(metadata.genre)) extractedGenres.push(...metadata.genre);
+        else if (typeof metadata.genre === "string") extractedGenres.push(metadata.genre);
+    } else if (Array.isArray(metadata.genres)) {
+        extractedGenres.push(...metadata.genres);
+    }
 
     let detectedRes: "4K" | "1080p" | "720p" | "SD" | undefined;
     let detectedHdr: "DV" | "HDR10+" | "HDR10" | "HDR" | undefined;
@@ -304,6 +323,8 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         summary: metadata.summary,
         studio: metadata.studio,
         contentRating: metadata.contentRating,
+        genres: extractedGenres.length > 0 ? extractedGenres : undefined,
+        genre: extractedGenres.length > 0 ? extractedGenres : undefined,
         rating: metadata.rating ? parseFloat(metadata.rating) : undefined,
         audienceRating: metadata.audienceRating ? parseFloat(metadata.audienceRating) : undefined,
         addedAt: metadata.addedAt ? parseInt(metadata.addedAt, 10) * 1000 : undefined,
@@ -424,6 +445,14 @@ function parsePlexXmlMetadata(xml: string): any[] {
             if (gId) guids.push({ id: gId });
         }
 
+        const genres: string[] = [];
+        const genreMatches = inner.matchAll(/<Genre\b([^>]*?)(?:\/>|>.*?<\/Genre>)/gi);
+        for (const genm of genreMatches) {
+            const genAttrs = genm[1] || "";
+            const genTag = genAttrs.match(/\btag=["']([^"']*)["']/i)?.[1];
+            if (genTag) genres.push(genTag);
+        }
+
         const mediaList: any[] = [];
         const mediaMatches = inner.matchAll(/<Media\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Media>)/gi);
         for (const mm of mediaMatches) {
@@ -506,6 +535,8 @@ function parsePlexXmlMetadata(xml: string): any[] {
             summary: getAttr("summary"),
             studio: getAttr("studio"),
             contentRating: getAttr("contentRating"),
+            genres: genres.length > 0 ? genres : undefined,
+            genre: genres.length > 0 ? genres : undefined,
             rating: getAttr("rating"),
             audienceRating: getAttr("audienceRating"),
             addedAt: getAttr("addedAt"),

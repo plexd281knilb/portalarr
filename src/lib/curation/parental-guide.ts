@@ -8,106 +8,110 @@ import { logger } from "@/lib/logger";
 import { getPlexServers, getPlexCloudServersMap, resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { getPlexLibraryMediaItems, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 
-export type ParentalCategoryKey = "nudity" | "violence" | "profanity" | "alcohol" | "frightening";
-export type ParentalSeverity = "None" | "Mild" | "Moderate" | "Severe";
-
-export interface ImdbParentalAdvisory {
-    nudity: ParentalSeverity;
-    violence: ParentalSeverity;
-    profanity: ParentalSeverity;
-    alcohol: ParentalSeverity;
-    frightening: ParentalSeverity;
-    certificate?: string;
-    summary?: string;
-    source: "ai" | "tmdb" | "cache" | "manual";
-}
-
-export interface ParentalTaggingOptions {
-    enabled?: boolean;
-    format?: "prefix_category_severity" | "severity_category" | "category_severity_paren" | "custom";
-    prefix?: string; // e.g. "IMDb"
-    target?: "labels" | "genres" | "both"; // Plex Labels (for sharing restrictions), Plex Genres, or both
-    minSeverity?: ParentalSeverity; // "Severe", "Moderate", "Mild", "None"
-    categories?: ParentalCategoryKey[]; // Which categories to tag
-    dryRun?: boolean;
-}
-
-export const PARENTAL_CATEGORY_INFO: Record<ParentalCategoryKey, { label: string; short: string; icon: string }> = {
-    nudity: { label: "Sex & Nudity", short: "Nudity", icon: "🔞" },
-    violence: { label: "Violence & Gore", short: "Violence", icon: "🩸" },
-    profanity: { label: "Profanity", short: "Profanity", icon: "🤬" },
-    alcohol: { label: "Alcohol, Drugs & Smoking", short: "Alcohol", icon: "🍷" },
-    frightening: { label: "Frightening & Intense Scenes", short: "Frightening", icon: "😱" }
-};
-
-export const SEVERITY_LEVELS: Record<ParentalSeverity, number> = {
-    None: 0,
-    Mild: 1,
-    Moderate: 2,
-    Severe: 3
-};
+export * from "./parental-guide-types";
+import {
+    ParentalCategoryKey,
+    ParentalSeverity,
+    ImdbParentalAdvisory,
+    ParentalTaggingOptions,
+    PARENTAL_CATEGORY_INFO,
+    SEVERITY_LEVELS,
+    meetsSeverityThreshold,
+    formatParentalTag,
+    isParentalTag,
+    GuardRailPresetKey,
+    ServerGuardRailConfig,
+    KID_SAFE_GUARD_RAIL_PRESET,
+    FAMILY_GUARD_RAIL_PRESET,
+    TEEN_GUARD_RAIL_PRESET,
+    UNRESTRICTED_GUARD_RAIL_PRESET,
+    normalizeContentRating,
+    getContentRatingRank,
+    isRatingAllowedByGuardRail,
+    isMediaAllowedByServerGuardRail
+} from "./parental-guide-types";
 
 /**
- * Checks if a given severity meets or exceeds the minimum severity threshold.
+ * Retrieves the full map of Server Guard Rail configurations from SQLite.
  */
-export function meetsSeverityThreshold(severity: ParentalSeverity, minThreshold: ParentalSeverity = "Mild"): boolean {
-    const sVal = SEVERITY_LEVELS[severity] ?? 0;
-    const tVal = SEVERITY_LEVELS[minThreshold] ?? 1;
-    return sVal >= tVal;
-}
-
-/**
- * Formats a tag string according to the configured format template.
- * Examples:
- * - "prefix_category_severity": "IMDb-Violence: Severe"
- * - "severity_category": "Severe Violence"
- * - "category_severity_paren": "Violence (Severe)"
- */
-export function formatParentalTag(
-    categoryKey: ParentalCategoryKey, 
-    severity: ParentalSeverity, 
-    format: string = "prefix_category_severity", 
-    prefix: string = "IMDb"
-): string {
-    const shortName = PARENTAL_CATEGORY_INFO[categoryKey]?.short || categoryKey;
-    const cleanPrefix = (prefix || "IMDb").trim();
-
-    switch (format) {
-        case "severity_category":
-            return `${severity} ${shortName}`;
-        case "category_severity_paren":
-            return `${shortName} (${severity})`;
-        case "custom":
-            return `${cleanPrefix}: ${shortName} - ${severity}`;
-        case "prefix_category_severity":
-        default:
-            return `${cleanPrefix}-${shortName}: ${severity}`;
-    }
-}
-
-/**
- * Parses whether a tag string is an existing parental rating tag created by Portalarr.
- */
-export function isParentalTag(tag: string, prefix = "IMDb"): boolean {
-    if (!tag) return false;
-    const cleanPrefix = (prefix || "IMDb").trim().toLowerCase();
-    const tLower = tag.toLowerCase();
-
-    if (tLower.startsWith(`${cleanPrefix}-`) || tLower.startsWith(`${cleanPrefix}:`)) return true;
-
-    // Check for "Severe Violence", "Mild Nudity", "Violence (Severe)", etc.
-    const categories = ["nudity", "violence", "profanity", "alcohol", "frightening", "sex & nudity", "violence & gore", "drugs"];
-    const severities = ["none", "mild", "moderate", "severe"];
-
-    for (const sev of severities) {
-        for (const cat of categories) {
-            if (tLower === `${sev} ${cat}` || tLower === `${cat} (${sev})` || tLower === `${cat}: ${sev}`) {
-                return true;
+export async function getServerGuardRailsMap(): Promise<Record<string, ServerGuardRailConfig>> {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (settings?.serverGuardRails) {
+            const parsed = JSON.parse(settings.serverGuardRails);
+            if (typeof parsed === "object" && parsed !== null) {
+                return parsed;
             }
         }
+    } catch (e) {}
+    return {};
+}
+
+/**
+ * Retrieves the Server Guard Rail configuration for a specific Plex Server.
+ * Automatically defaults Kids-themed servers (e.g. 'KidsPlexServer', 'Kids') to Kid-Safe preset if unconfigured.
+ */
+export async function getServerGuardRailConfig(serverId: string, fallbackServerName?: string): Promise<ServerGuardRailConfig> {
+    const map = await getServerGuardRailsMap();
+    if (map[serverId]) {
+        return map[serverId];
     }
 
-    return false;
+    const srvNameLower = (fallbackServerName || "").toLowerCase();
+    const isKidsServer = serverId.toLowerCase().includes("kid") || srvNameLower.includes("kid");
+
+    if (isKidsServer) {
+        return {
+            ...KID_SAFE_GUARD_RAIL_PRESET,
+            serverId,
+            serverName: fallbackServerName || "Kids Plex Server"
+        };
+    }
+
+    return {
+        ...UNRESTRICTED_GUARD_RAIL_PRESET,
+        serverId,
+        serverName: fallbackServerName || "Plex Server"
+    };
+}
+
+/**
+ * Persists a Server Guard Rail configuration for a specific Plex Server.
+ */
+export async function saveServerGuardRailConfig(config: ServerGuardRailConfig): Promise<{ success: boolean; error?: string }> {
+    try {
+        const map = await getServerGuardRailsMap();
+        map[config.serverId] = config;
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { serverGuardRails: JSON.stringify(map) },
+            create: { id: "global", serverGuardRails: JSON.stringify(map) }
+        });
+
+        logger.addLog("INFO", "CURATION", `Updated Server Guard Rails for "${config.serverName || config.serverId}": ${config.enabled ? `ENABLED (${config.maxRating})` : 'DISABLED'}`);
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Persists multiple Server Guard Rail configurations at once.
+ */
+export async function saveAllServerGuardRails(configs: Record<string, ServerGuardRailConfig>): Promise<{ success: boolean; error?: string }> {
+    try {
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { serverGuardRails: JSON.stringify(configs) },
+            create: { id: "global", serverGuardRails: JSON.stringify(configs) }
+        });
+
+        logger.addLog("INFO", "CURATION", `Saved Server Guard Rails configurations across ${Object.keys(configs).length} server(s).`);
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 /**

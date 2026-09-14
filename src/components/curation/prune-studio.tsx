@@ -573,6 +573,8 @@ export function PruneStudio() {
                 serversCount={servers.length}
                 title="Maintainerr Storage & Auto-Prune Studio"
                 description="Storage mount thresholds, rule-based media pruning (unwatched, low rating, ended series), pinned 'Leaving Soon' Plex collection, and safe file cleanup."
+                servers={servers}
+                selectedServerId={selectedServerId}
             />
 
             {/* Static Server & Library Section Navigator */}

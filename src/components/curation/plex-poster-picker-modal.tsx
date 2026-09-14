@@ -32,13 +32,19 @@ import {
     X,
     Disc,
     Tag,
-    Volume2
+    Volume2,
+    ShieldCheck,
+    ShieldAlert,
+    Lock,
+    Eye,
+    EyeOff
 } from "lucide-react";
 import {
     searchPlexLibraryItemsAction,
     getPlexRecentLibraryItemsAction
 } from "@/app/curation-actions";
 import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
+import { ServerGuardRailConfig } from "@/lib/curation/parental-guide-types";
 
 export interface PlexServerOption {
     serverId: string;
@@ -77,6 +83,9 @@ export function PlexPosterPickerModal({
     const [loading, setLoading] = useState(false);
     const [items, setItems] = useState<PlexMediaStreamInfo[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
+    const [guardRail, setGuardRail] = useState<ServerGuardRailConfig | null>(null);
+    const [blockedCount, setBlockedCount] = useState<number>(0);
+    const [showBlockedPreview, setShowBlockedPreview] = useState<boolean>(false);
 
     // Sync initial props when opened
     useEffect(() => {
@@ -106,7 +115,7 @@ export function PlexPosterPickerModal({
         return availableSections.find(s => String(s.key) === currentSectionKey);
     }, [availableSections, currentSectionKey]);
 
-    // Fetch recent items from the library when server, section, sort, or open changes
+    // Fetch recent items from the library when server, section, sort, showBlockedPreview, or open changes
     useEffect(() => {
         if (!open || !currentServerId) return;
         if (searchQuery.trim().length > 0) return; // let search effect handle it
@@ -119,10 +128,17 @@ export function PlexPosterPickerModal({
                     currentServerId,
                     currentSectionKey || undefined,
                     60,
-                    selectedSort
+                    selectedSort,
+                    showBlockedPreview
                 );
                 if (isMounted && res.success && res.items) {
                     setItems(res.items);
+                    if (res.guardRail) {
+                        setGuardRail(res.guardRail);
+                    }
+                    if (typeof res.blockedCount === "number") {
+                        setBlockedCount(res.blockedCount);
+                    }
                 }
             } catch (err) {
                 console.error("Failed loading Plex library items:", err);
@@ -136,7 +152,7 @@ export function PlexPosterPickerModal({
         return () => {
             isMounted = false;
         };
-    }, [open, currentServerId, currentSectionKey, selectedSort, searchQuery]);
+    }, [open, currentServerId, currentSectionKey, selectedSort, searchQuery, showBlockedPreview]);
 
     // Handle Search with debounce
     useEffect(() => {
@@ -149,10 +165,17 @@ export function PlexPosterPickerModal({
                 const res = await searchPlexLibraryItemsAction(
                     currentServerId,
                     searchQuery.trim(),
-                    currentSectionKey || undefined
+                    currentSectionKey || undefined,
+                    showBlockedPreview
                 );
                 if (res.success && res.items) {
                     setItems(res.items);
+                    if (res.guardRail) {
+                        setGuardRail(res.guardRail);
+                    }
+                    if (typeof res.blockedCount === "number") {
+                        setBlockedCount(res.blockedCount);
+                    }
                 }
             } catch (e) {
                 console.error("Failed searching Plex:", e);
@@ -162,7 +185,7 @@ export function PlexPosterPickerModal({
         }, 350);
 
         return () => clearTimeout(timer);
-    }, [searchQuery, open, currentServerId, currentSectionKey]);
+    }, [searchQuery, open, currentServerId, currentSectionKey, showBlockedPreview]);
 
     const handleServerChange = (newSrvId: string) => {
         setCurrentServerId(newSrvId);
@@ -267,6 +290,40 @@ export function PlexPosterPickerModal({
                         )}
                     </div>
                 </DialogHeader>
+
+                {/* Server Guard Rail Status Banner */}
+                {guardRail?.enabled && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-purple-950/40 border border-purple-500/30 text-xs my-1 shrink-0">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                            <span className="font-bold text-white">
+                                {guardRail.customBadgeLabel || `🛡️ Guard Rails Active: Max ${guardRail.maxRating}`}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-300 bg-emerald-950/60 font-bold px-1.5 py-0">
+                                {guardRail.preset === 'kid_safe' ? '👶 Kid-Safe' : guardRail.preset === 'family' ? '👨‍👩‍👧‍👦 Family-Safe' : guardRail.preset === 'teen' ? '🧑‍🎤 Teen' : 'Strict Policy'}
+                            </Badge>
+                        </div>
+                        {blockedCount > 0 && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-[11px] text-slate-400">
+                                    Filtered <strong className="text-rose-300">{blockedCount}</strong> adult/inappropriate {blockedCount === 1 ? 'title' : 'titles'}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowBlockedPreview(!showBlockedPreview)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all flex items-center gap-1 ${
+                                        showBlockedPreview
+                                            ? "bg-rose-950 text-rose-300 border-rose-500 shadow-sm"
+                                            : "bg-slate-900 text-slate-300 border-slate-700 hover:text-white"
+                                    }`}
+                                >
+                                    {showBlockedPreview ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                    <span>{showBlockedPreview ? "Hide Blocked" : "Preview Blocked"}</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Search & Filter Toolbar */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 my-3">
@@ -421,11 +478,17 @@ export function PlexPosterPickerModal({
                                         key={it.ratingKey}
                                         role="button"
                                         tabIndex={0}
-                                        onClick={() => handleItemClick(it)}
-                                        className={`group relative flex flex-col rounded-xl overflow-hidden border transition-all cursor-pointer bg-slate-900/90 hover:bg-slate-800/90 text-left ${
-                                            isSelected 
-                                                ? 'border-purple-500 ring-2 ring-purple-500/60 shadow-xl shadow-purple-950/70' 
-                                                : 'border-slate-800/90 hover:border-purple-500/50 hover:shadow-lg hover:shadow-black/50'
+                                        onClick={() => {
+                                            if (!it.isBlockedByGuardRail) {
+                                                handleItemClick(it);
+                                            }
+                                        }}
+                                        className={`group relative flex flex-col rounded-xl overflow-hidden border transition-all text-left ${
+                                            it.isBlockedByGuardRail
+                                                ? 'border-rose-900/60 bg-slate-950/80 opacity-70 cursor-not-allowed'
+                                                : isSelected 
+                                                    ? 'border-purple-500 ring-2 ring-purple-500/60 shadow-xl shadow-purple-950/70 cursor-pointer bg-slate-900/90' 
+                                                    : 'border-slate-800/90 hover:border-purple-500/50 hover:shadow-lg hover:shadow-black/50 cursor-pointer bg-slate-900/90 hover:bg-slate-800/90'
                                         }`}
                                     >
                                         {/* Poster Container */}
@@ -433,12 +496,27 @@ export function PlexPosterPickerModal({
                                             <img
                                                 src={posterSrc}
                                                 alt={it.title}
-                                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                className={`w-full h-full object-cover transition-transform duration-300 ${it.isBlockedByGuardRail ? 'grayscale' : 'group-hover:scale-105'}`}
                                                 loading="lazy"
                                             />
 
                                             {/* Gradient shading for badge legibility */}
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 pointer-events-none" />
+
+                                            {/* Guard Rail Block Overlay */}
+                                            {it.isBlockedByGuardRail && (
+                                                <div className="absolute inset-0 bg-black/75 backdrop-blur-[2px] flex flex-col items-center justify-center p-2 text-center z-20 pointer-events-none">
+                                                    <div className="p-1.5 rounded-full bg-rose-600/30 text-rose-400 border border-rose-500/50 mb-1">
+                                                        <Lock className="h-4 w-4" />
+                                                    </div>
+                                                    <span className="text-[10px] font-black text-rose-300 uppercase tracking-wider">
+                                                        Guard Rail Blocked
+                                                    </span>
+                                                    <span className="text-[9px] text-slate-300 line-clamp-2 mt-0.5 font-medium">
+                                                        {it.guardRailBlockReason || `Rated ${it.contentRating || 'R'}`}
+                                                    </span>
+                                                </div>
+                                            )}
 
                                             {/* Top-Left: Edition Badge */}
                                             {edition && (

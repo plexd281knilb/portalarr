@@ -76,6 +76,7 @@ model Settings {
   enabledServersForPruning    String?   // JSON array of server clientIdentifiers
   comingSoonShares            String?   // JSON map of serverId -> share path e.g. {"main":"/mnt/user/coming_soon_main"}
   serverStorageConfig         String?   // JSON map of serverId -> { glancesUrl, shares, radarrId, sonarrId }
+  serverGuardRails            String?   // JSON map of serverId -> ServerGuardRailConfig
 
   // Agregarr Placeholder Overlay & Timing Controls
   placeholderTheatricalNoticeDays  Int?      @default(60) // Days before theatrical release to generate placeholder
