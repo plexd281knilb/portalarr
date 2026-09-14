@@ -1470,10 +1470,13 @@ export async function saveOverlayRuleAction(data: {
     contentRatingPosition?: string;
     ratingsPosition?: string;
     showRibbon?: boolean;
+    ribbonMode?: "single" | "tiered" | "auto_stack" | string;
     ribbonPosition?: string;
     ribbonTheme?: string;
     ribbonText?: string;
     ribbonType?: string;
+    tieredRibbons?: any[];
+    maxRibbonTiers?: number;
     theme?: string;
     badgeStyle?: string;
     showResolution?: boolean;
@@ -1488,11 +1491,29 @@ export async function saveOverlayRuleAction(data: {
     showLeavingSoon?: boolean;
     badgeScale?: number;
     customBadgeIds?: string[];
-    layerPriorityOrder?: string[] | string;
+    layerPriorityOrder?: string[] | string | any;
     enabled?: boolean;
 }) {
     await verifyAdmin();
     try {
+        let serializedLayerOrder: string | null = null;
+        if (data.layerPriorityOrder || data.ribbonMode || data.tieredRibbons) {
+            const rawOrder = Array.isArray(data.layerPriorityOrder) 
+                ? data.layerPriorityOrder 
+                : (typeof data.layerPriorityOrder === "object" && data.layerPriorityOrder?.order) 
+                    ? data.layerPriorityOrder.order 
+                    : typeof data.layerPriorityOrder === "string" 
+                        ? JSON.parse(data.layerPriorityOrder) 
+                        : undefined;
+            
+            serializedLayerOrder = JSON.stringify({
+                order: rawOrder,
+                ribbonMode: data.ribbonMode || "single",
+                tieredRibbons: data.tieredRibbons || null,
+                maxRibbonTiers: data.maxRibbonTiers || 3
+            });
+        }
+
         const ruleData = {
             name: data.name,
             serverId: data.serverId,
@@ -1529,7 +1550,7 @@ export async function saveOverlayRuleAction(data: {
             showLeavingSoon: data.showLeavingSoon ?? true,
             badgeScale: data.badgeScale ?? 1.0,
             customBadgeIds: data.customBadgeIds ? JSON.stringify(data.customBadgeIds) : null,
-            layerPriorityOrder: data.layerPriorityOrder ? (typeof data.layerPriorityOrder === "string" ? data.layerPriorityOrder : JSON.stringify(data.layerPriorityOrder)) : null,
+            layerPriorityOrder: serializedLayerOrder,
             enabled: data.enabled ?? true
         };
 
@@ -1601,6 +1622,21 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
         if (ruleId) {
             const rule = await prisma.mediaOverlayRule.findUnique({ where: { id: ruleId } });
             if (rule) {
+                let ruleRibbonMode: "single" | "tiered" | "auto_stack" = "single";
+                let ruleTieredRibbons: any[] | undefined;
+                let ruleMaxRibbonTiers = 3;
+
+                if (rule.layerPriorityOrder) {
+                    try {
+                        const parsed = JSON.parse(rule.layerPriorityOrder);
+                        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                            if (parsed.ribbonMode) ruleRibbonMode = parsed.ribbonMode;
+                            if (parsed.tieredRibbons) ruleTieredRibbons = parsed.tieredRibbons;
+                            if (parsed.maxRibbonTiers) ruleMaxRibbonTiers = parsed.maxRibbonTiers;
+                        }
+                    } catch (e) {}
+                }
+
                 overlayOpts = {
                     showResolution: rule.showResolution,
                     showHdr: rule.showHdr,
@@ -1625,6 +1661,9 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
                     contentRatingPosition: (rule.contentRatingPosition as any) || (rule.ratingPosition as any) || "bottom-left",
                     ratingsPosition: (rule.ratingsPosition as any) || (rule.ratingPosition as any) || "bottom-left",
                     showRibbon: rule.showRibbon ?? false,
+                    ribbonMode: ruleRibbonMode,
+                    tieredRibbons: ruleTieredRibbons,
+                    maxRibbonTiers: ruleMaxRibbonTiers,
                     ribbonPosition: (rule.ribbonPosition as any) || "top-right",
                     ribbonTheme: (rule.ribbonTheme as any) || "purple",
                     ribbonText: rule.ribbonText || undefined,
@@ -2332,6 +2371,9 @@ export async function applyOverlayToSingleItemAction(
         contentRatingPosition?: string;
         ratingsPosition?: string;
         showRibbon?: boolean;
+        ribbonMode?: "single" | "tiered" | "auto_stack";
+        tieredRibbons?: any[];
+        maxRibbonTiers?: number;
         ribbonPosition?: string;
         ribbonTheme?: string;
         ribbonText?: string;
@@ -2395,6 +2437,9 @@ export async function applyOverlayToSingleItemAction(
                 contentRatingPosition: (options?.contentRatingPosition as any) || (options?.ratingPosition as any) || "bottom-left",
                 ratingsPosition: (options?.ratingsPosition as any) || (options?.ratingPosition as any) || "bottom-left",
                 showRibbon: options?.showRibbon ?? false,
+                ribbonMode: (options?.ribbonMode as any) || "single",
+                tieredRibbons: options?.tieredRibbons,
+                maxRibbonTiers: options?.maxRibbonTiers || 3,
                 ribbonPosition: (options?.ribbonPosition as any) || "top-right",
                 ribbonTheme: (options?.ribbonTheme as any) || "purple",
                 ribbonText: options?.ribbonText || undefined,

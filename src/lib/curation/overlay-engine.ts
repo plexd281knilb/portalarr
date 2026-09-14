@@ -5,6 +5,15 @@ import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { fetchPlexPosterBuffer, uploadPlexItemPoster, PlexMediaStreamInfo } from "./plex-analyzer";
 
+export interface TieredRibbonItem {
+    id?: string;
+    text?: string;
+    theme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange";
+    type?: "imdb_top_250" | "imdb_top_250_tv" | "certified_fresh" | "rt_fresh" | "oscar_winner" | "academy_award" | "emmy_winner" | "golden_globe" | "critics_choice" | "bafta_winner" | "cannes_winner" | "metacritic_must_see" | "auto_quality" | "auto_edition" | "leaving_soon" | "custom";
+    condition?: string;
+    enabled?: boolean;
+}
+
 export interface OverlayOptions {
     showResolution?: boolean;
     showHdr?: boolean;
@@ -43,10 +52,13 @@ export interface OverlayOptions {
     badgeScale?: number;
     
     showRibbon?: boolean;
+    ribbonMode?: "single" | "tiered" | "auto_stack";
     ribbonPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
     ribbonTheme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange";
     ribbonText?: string;
     ribbonType?: "auto_quality" | "auto_edition" | "leaving_soon" | "custom" | "imdb_top_250" | "imdb_top_250_tv" | "certified_fresh" | "rt_fresh" | "oscar_winner" | "academy_award" | "emmy_winner" | "golden_globe" | "critics_choice" | "bafta_winner" | "cannes_winner" | "metacritic_must_see";
+    tieredRibbons?: TieredRibbonItem[];
+    maxRibbonTiers?: number;
     theme?: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson";
     ratingsSource?: {
         imdb?: number;
@@ -676,16 +688,62 @@ export async function generatePlaceholderPosterBuffer(
 }
 
 /**
- * Generates Kometa-Style 45-degree diagonal corner ribbon (Top-Right, Top-Left, Bottom-Right, Bottom-Left).
+ * Helper to resolve text and color theme for ribbon presets.
  */
-export function generateCornerRibbonSvg(
-    text: string,
-    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right",
-    theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "purple"
+export function resolveRibbonPresetTextAndTheme(
+    type: string,
+    mediaInfo?: PlexMediaStreamInfo,
+    leavingSoonDays?: number
+): { text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" } {
+    switch (type) {
+        case "imdb_top_250":
+            return { text: "IMDb TOP 250", theme: "gold" };
+        case "imdb_top_250_tv":
+            return { text: "IMDb TOP TV", theme: "gold" };
+        case "certified_fresh":
+            return { text: "CERTIFIED FRESH", theme: "crimson" };
+        case "rt_fresh":
+            return { text: "RT FRESH", theme: "crimson" };
+        case "oscar_winner":
+            return { text: "OSCAR WINNER", theme: "gold" };
+        case "academy_award":
+            return { text: "BEST PICTURE", theme: "gold" };
+        case "emmy_winner":
+            return { text: "EMMY WINNER", theme: "purple" };
+        case "golden_globe":
+            return { text: "GOLDEN GLOBE", theme: "gold" };
+        case "critics_choice":
+            return { text: "CRITICS' CHOICE", theme: "cyan" };
+        case "bafta_winner":
+            return { text: "BAFTA WINNER", theme: "gold" };
+        case "cannes_winner":
+            return { text: "PALME D'OR", theme: "gold" };
+        case "metacritic_must_see":
+            return { text: "MUST-SEE", theme: "emerald" };
+        case "auto_edition":
+            return { text: mediaInfo?.detectedBadges?.edition || "SPECIAL EDITION", theme: "cyan" };
+        case "leaving_soon":
+            return { text: leavingSoonDays ? `LEAVING IN ${leavingSoonDays}D` : "LEAVING SOON", theme: "crimson" };
+        case "auto_quality":
+            if (mediaInfo?.detectedBadges?.hdr === "DV") return { text: "DOLBY VISION", theme: "purple" };
+            if (mediaInfo?.detectedBadges?.resolution === "4K") return { text: "4K UHD", theme: "purple" };
+            if (mediaInfo?.detectedBadges?.hdr) return { text: String(mediaInfo.detectedBadges.hdr).toUpperCase(), theme: "cyan" };
+            return { text: "1080P FHD", theme: "cyan" };
+        default:
+            return { text: type ? type.toUpperCase() : "FEATURED", theme: "purple" };
+    }
+}
+
+/**
+ * Generates Kometa-Style multi-tiered 45-degree diagonal corner ribbons.
+ * Supports 1, 2, 3, or 4 concentric tiered stripes in the same corner (e.g., Top 250 + Certified Fresh + Oscar Winner).
+ */
+export function generateTieredCornerRibbonSvg(
+    ribbons: Array<{ text: string; theme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" }>,
+    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right"
 ): string {
     const isTop = position.startsWith("top");
     const isRight = position.endsWith("right");
-
     const rotation = (isTop && isRight) || (!isTop && !isRight) ? 45 : -45;
 
     const gradients: Record<string, { start: string; mid: string; end: string; border: string; text: string }> = {
@@ -699,32 +757,90 @@ export function generateCornerRibbonSvg(
         orange: { start: "#fb923c", mid: "#ea580c", end: "#c2410c", border: "#ffedd5", text: "#ffffff" }
     };
 
-    const g = gradients[theme] || gradients.purple;
-    const cleanText = text.toUpperCase().slice(0, 26);
+    const activeRibbons = (ribbons || []).filter(r => r && r.text && r.text.trim().length > 0).slice(0, 4);
+    if (activeRibbons.length === 0) return `<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"></svg>`;
 
-    return `
-    <svg width="340" height="340" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="ribbonGrad_${theme}_${position}" x1="0%" y1="0%" x2="0%" y2="100%">
+    const N = activeRibbons.length;
+    
+    // Calculate Y offsets, height, and font size based on number of tiers
+    let stripeH = 48;
+    let fontSize = 18;
+    let yOffsets: number[] = [0];
+
+    if (N === 2) {
+        stripeH = 40;
+        fontSize = 15;
+        yOffsets = [-28, 30];
+    } else if (N === 3) {
+        stripeH = 34;
+        fontSize = 13.5;
+        yOffsets = [-54, 0, 54];
+    } else if (N === 4) {
+        stripeH = 30;
+        fontSize = 11.5;
+        yOffsets = [-76, -26, 26, 76];
+    }
+
+    const defs: string[] = [];
+    const stripes: string[] = [];
+
+    defs.push(`
+        <filter id="ribbonShadow_${position}" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.85"/>
+        </filter>
+    `);
+
+    activeRibbons.forEach((r, idx) => {
+        const theme = r.theme || "purple";
+        const g = gradients[theme] || gradients.purple;
+        const gradId = `ribbonGrad_${theme}_${position}_tier${idx}`;
+        const cleanText = r.text.toUpperCase().slice(0, N >= 3 ? 24 : 28);
+
+        // Direction adjustment: for top corners, index 0 is outer (negative Y); for bottom corners, index 0 is outer (positive Y)
+        const tierY = isTop ? yOffsets[idx] : -yOffsets[idx];
+
+        defs.push(`
+            <linearGradient id="${gradId}" x1="0%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stop-color="${g.start}" />
                 <stop offset="35%" stop-color="${g.mid}" />
                 <stop offset="100%" stop-color="${g.end}" />
             </linearGradient>
-            <filter id="ribbonShadow_${theme}_${position}" x="-25%" y="-25%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
+        `);
+
+        stripes.push(`
+            <!-- Tier ${idx + 1}: ${cleanText} -->
+            <g>
+                <rect x="-350" y="${tierY - stripeH / 2}" width="700" height="${stripeH}" fill="url(#${gradId})" filter="url(#ribbonShadow_${position})"/>
+                <!-- Specular Highlight Line -->
+                <line x1="-350" y1="${tierY - stripeH / 2 + 1.5}" x2="350" y2="${tierY - stripeH / 2 + 1.5}" stroke="${g.border}" stroke-width="1.3" opacity="0.85"/>
+                <!-- Bottom Border Line -->
+                <line x1="-350" y1="${tierY + stripeH / 2 - 1.5}" x2="350" y2="${tierY + stripeH / 2 - 1.5}" stroke="${g.border}" stroke-width="1.3" opacity="0.6"/>
+                <!-- Ribbon Text -->
+                <text x="0" y="${tierY + fontSize * 0.35}" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle" letter-spacing="${N >= 3 ? '1.6' : '2.2'}">${cleanText}</text>
+            </g>
+        `);
+    });
+
+    return `
+    <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            ${defs.join("\n")}
         </defs>
-        <g transform="translate(170, 170) rotate(${rotation})">
-            <!-- Ribbon Background -->
-            <rect x="-260" y="-25" width="520" height="50" fill="url(#ribbonGrad_${theme}_${position})" filter="url(#ribbonShadow_${theme}_${position})"/>
-            <!-- Top Highlight Line -->
-            <line x1="-260" y1="-23" x2="260" y2="-23" stroke="${g.border}" stroke-width="1.6" opacity="0.75"/>
-            <!-- Bottom Border Stripe -->
-            <line x1="-260" y1="23" x2="260" y2="23" stroke="${g.border}" stroke-width="1.6" opacity="0.55"/>
-            <!-- Ribbon Text -->
-            <text x="0" y="8" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="19" fill="${g.text}" text-anchor="middle" letter-spacing="2.2">${cleanText}</text>
+        <g transform="translate(200, 200) rotate(${rotation})">
+            ${stripes.join("\n")}
         </g>
     </svg>`;
+}
+
+/**
+ * Generates Kometa-Style 45-degree single diagonal corner ribbon (backwards-compatibility wrapper).
+ */
+export function generateCornerRibbonSvg(
+    text: string,
+    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right",
+    theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "purple"
+): string {
+    return generateTieredCornerRibbonSvg([{ text, theme }], position);
 }
 
 /**
@@ -770,74 +886,110 @@ export async function applyOverlaysToPoster(
         });
     }
 
-    // 3. Diagonal Corner Ribbon
-    if (options.showRibbon || options.ribbonText) {
-        let rText = options.ribbonText;
-        let rTheme = options.ribbonTheme || "purple";
+    // 3. Diagonal Corner Ribbons (Single or Multi-Tiered Kometa Stack)
+    if (options.showRibbon || options.ribbonText || (options.tieredRibbons && options.tieredRibbons.length > 0) || options.ribbonMode === "auto_stack" || options.ribbonMode === "tiered") {
+        const rPos = options.ribbonPosition || "top-right";
+        const maxTiers = options.maxRibbonTiers || 3;
+        const resolvedTiers: Array<{ text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" }> = [];
 
-        if (!rText) {
-            if (options.ribbonType === "imdb_top_250") {
-                rText = "IMDb TOP 250";
-                if (!options.ribbonTheme) rTheme = "gold";
-            } else if (options.ribbonType === "imdb_top_250_tv") {
-                rText = "IMDb TOP TV";
-                if (!options.ribbonTheme) rTheme = "gold";
-            } else if (options.ribbonType === "certified_fresh") {
-                rText = "CERTIFIED FRESH";
-                if (!options.ribbonTheme) rTheme = "crimson";
-            } else if (options.ribbonType === "rt_fresh") {
-                rText = "RT FRESH";
-                if (!options.ribbonTheme) rTheme = "crimson";
-            } else if (options.ribbonType === "oscar_winner") {
-                rText = "OSCAR WINNER";
-                if (!options.ribbonTheme) rTheme = "gold";
-            } else if (options.ribbonType === "academy_award") {
-                rText = "BEST PICTURE";
-                if (!options.ribbonTheme) rTheme = "gold";
-            } else if (options.ribbonType === "emmy_winner") {
-                rText = "EMMY WINNER";
-                if (!options.ribbonTheme) rTheme = "purple";
-            } else if (options.ribbonType === "golden_globe") {
-                rText = "GOLDEN GLOBE";
-                if (!options.ribbonTheme) rTheme = "gold";
-            } else if (options.ribbonType === "critics_choice") {
-                rText = "CRITICS' CHOICE";
-                if (!options.ribbonTheme) rTheme = "cyan";
-            } else if (options.ribbonType === "bafta_winner") {
-                rText = "BAFTA WINNER";
-                if (!options.ribbonTheme) rTheme = "gold";
-            } else if (options.ribbonType === "cannes_winner") {
-                rText = "PALME D'OR";
-                if (!options.ribbonTheme) rTheme = "gold";
-            } else if (options.ribbonType === "metacritic_must_see") {
-                rText = "MUST-SEE";
-                if (!options.ribbonTheme) rTheme = "emerald";
-            } else if (options.ribbonType === "auto_edition" && mediaInfo.detectedBadges.edition) {
-                rText = mediaInfo.detectedBadges.edition;
-            } else if (options.ribbonType === "leaving_soon" || mediaInfo.isLeavingSoon) {
-                rText = options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays}D` : "LEAVING SOON";
-                if (!options.ribbonTheme) rTheme = "crimson";
-            } else if (mediaInfo.detectedBadges.resolution === "4K") {
-                rText = "4K UHD";
-            } else if (mediaInfo.detectedBadges.hdr) {
-                rText = String(mediaInfo.detectedBadges.hdr).toUpperCase();
-            } else {
-                rText = "FEATURED";
+        if (options.ribbonMode === "tiered" && options.tieredRibbons && options.tieredRibbons.length > 0) {
+            // User configured explicit tiered ribbons
+            for (const tier of options.tieredRibbons) {
+                if (tier.enabled === false) continue;
+                let text = tier.text;
+                let theme = tier.theme || "purple";
+
+                if (!text && tier.type) {
+                    const mapped = resolveRibbonPresetTextAndTheme(tier.type, mediaInfo, options.leavingSoonDays);
+                    text = mapped.text;
+                    if (!tier.theme) theme = mapped.theme;
+                }
+
+                if (text) {
+                    resolvedTiers.push({ text, theme });
+                }
             }
+        } else if (options.ribbonMode === "auto_stack") {
+            // Smart Auto-Qualification Stack: Checks all awards, ratings, quality qualifiers
+            // 1. IMDb Top 250 (movies or TV)
+            const imdbScore = mediaInfo.imdbRating ?? mediaInfo.rating;
+            if ((imdbScore && imdbScore >= 8.0) || mediaInfo.guids?.imdb) {
+                if (mediaInfo.type === "show") {
+                    resolvedTiers.push({ text: "IMDb TOP TV", theme: "gold" });
+                } else if (imdbScore && imdbScore >= 8.0) {
+                    resolvedTiers.push({ text: "IMDb TOP 250", theme: "gold" });
+                }
+            }
+
+            // 2. Rotten Tomatoes Certified Fresh / Fresh
+            const rtCrit = mediaInfo.rtCriticsRating ?? (options.ratingsSource?.rtCritics);
+            const rtAud = mediaInfo.rtAudienceRating ?? (options.ratingsSource?.rtAudience);
+            if ((rtCrit && rtCrit >= 75) || (rtAud && rtAud >= 80)) {
+                resolvedTiers.push({ text: "CERTIFIED FRESH", theme: "crimson" });
+            } else if (rtCrit && rtCrit >= 60) {
+                resolvedTiers.push({ text: "RT FRESH", theme: "crimson" });
+            }
+
+            // 3. Metacritic Must-See
+            const metaScore = options.ratingsSource?.metacritic;
+            if (metaScore && metaScore >= 81) {
+                resolvedTiers.push({ text: "MUST-SEE", theme: "emerald" });
+            }
+
+            // 4. Quality (4K UHD / Dolby Vision)
+            if (mediaInfo.detectedBadges.hdr === "DV") {
+                resolvedTiers.push({ text: "DOLBY VISION", theme: "purple" });
+            } else if (mediaInfo.detectedBadges.resolution === "4K") {
+                resolvedTiers.push({ text: "4K UHD", theme: "purple" });
+            }
+
+            // 5. Special Edition
+            if (mediaInfo.detectedBadges.edition) {
+                resolvedTiers.push({ text: mediaInfo.detectedBadges.edition, theme: "cyan" });
+            }
+
+            // 6. Leaving Soon
+            if (mediaInfo.isLeavingSoon) {
+                resolvedTiers.push({ text: options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays}D` : "LEAVING SOON", theme: "crimson" });
+            }
+        } else {
+            // Single Ribbon Mode
+            let rText = options.ribbonText;
+            let rTheme = options.ribbonTheme || "purple";
+
+            if (!rText && options.ribbonType) {
+                const mapped = resolveRibbonPresetTextAndTheme(options.ribbonType, mediaInfo, options.leavingSoonDays);
+                rText = mapped.text;
+                if (!options.ribbonTheme) rTheme = mapped.theme;
+            }
+
+            if (!rText) {
+                if (mediaInfo.detectedBadges.resolution === "4K") {
+                    rText = "4K UHD";
+                } else if (mediaInfo.detectedBadges.hdr) {
+                    rText = String(mediaInfo.detectedBadges.hdr).toUpperCase();
+                } else {
+                    rText = "FEATURED";
+                }
+            }
+
+            resolvedTiers.push({ text: rText, theme: rTheme });
         }
 
-        const rPos = options.ribbonPosition || "top-right";
-        const cornerRibbonSvg = generateCornerRibbonSvg(rText, rPos, rTheme);
-        const ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(340, 340).toBuffer();
+        const finalTiers = resolvedTiers.slice(0, maxTiers);
+        if (finalTiers.length > 0) {
+            const cornerRibbonSvg = generateTieredCornerRibbonSvg(finalTiers, rPos);
+            const ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(380, 380).toBuffer();
 
-        const rTop = rPos.startsWith("top") ? (options.showLeavingSoon ? 78 : 0) : 1500 - 340;
-        const rLeft = rPos.endsWith("right") ? 1000 - 340 : 0;
+            const rTop = rPos.startsWith("top") ? (options.showLeavingSoon ? 78 : 0) : 1500 - 380;
+            const rLeft = rPos.endsWith("right") ? 1000 - 380 : 0;
 
-        overlays.push({
-            input: ribbonBuf,
-            top: rTop,
-            left: rLeft
-        });
+            overlays.push({
+                input: ribbonBuf,
+                top: rTop,
+                left: rLeft
+            });
+        }
     }
 
     // 4. Custom Badge Media Stream Matcher
@@ -1033,6 +1185,31 @@ export async function applyOverlaysToPoster(
     let hasCustomStudio = false;
     let hasCustomContentRating = false;
 
+    // Helper to determine all categories fulfilled by a custom badge
+    function getCustomBadgeCategories(cb: { category?: string; matchRule?: string | null; name?: string; filePath?: string }): string[] {
+        const cat = (cb.category || "").toLowerCase();
+        const rule = (cb.matchRule || "").toLowerCase();
+        const name = (cb.name || "").toLowerCase();
+        const fName = path.basename(cb.filePath || "").toLowerCase();
+        const combined = `${cat} ${rule} ${name} ${fName}`;
+
+        const categories: string[] = [];
+        if (cat === "resolution" || /4k|2160|1080|720|480|576|sd|uhd|fhd/i.test(combined)) categories.push("resolution");
+        if (cat === "hdr" || /dv|hdr|dolby.*vision|plus/i.test(combined)) categories.push("hdr");
+        if (cat === "codec" || /hevc|av1|prores|avc|h264|h265|x264|x265/i.test(combined)) categories.push("codec");
+        if (cat === "audio" || /atmos|truehd|dts|flac|aac|eac3|ac3/i.test(combined)) categories.push("audio");
+        if (/7\.1|5\.1|2\.0|channels|surround/i.test(combined)) categories.push("channels");
+        if (cat === "edition" || /imax|criterion|director|extended|remux|theatrical|remaster/i.test(combined)) categories.push("edition");
+        if (cat === "studio" || /netflix|disney|hbo|apple|prime|paramount|marvel|dc|a24/i.test(combined)) categories.push("studio");
+        if (cat === "ratings" || /pg-13|nc-17|tv-ma|rated|pg|r|g/i.test(combined)) categories.push("contentRating");
+        if (cat === "ribbon") categories.push("ribbon");
+
+        if (categories.length === 0 && cat && cat !== "custom") categories.push(cat);
+        return categories;
+    }
+
+    const appliedCategories = new Set<string>();
+
     // First, process active Custom Badges (from GitHub / Uploads) matching this specific media item
     if (options.customBadges && Array.isArray(options.customBadges)) {
         // Sort custom badges so more specific compound badges (e.g. "4k + dv + hdr10+" with 3 tokens) apply first
@@ -1047,6 +1224,27 @@ export async function applyOverlaysToPoster(
             
             // Only apply if the custom badge matches the media stream telemetry
             if (!doesCustomBadgeMatchMedia(cb, mediaInfo)) continue;
+
+            const badgeCats = getCustomBadgeCategories(cb);
+
+            // Deduplication: If all categories provided by this custom badge have ALREADY been fulfilled, skip it
+            if (badgeCats.length > 0 && badgeCats.every(c => appliedCategories.has(c))) {
+                continue;
+            }
+
+            // Check if all its categories are explicitly disabled in options
+            const allDisabled = badgeCats.length > 0 && badgeCats.every(c => {
+                if (c === "resolution" && options.showResolution === false) return true;
+                if (c === "hdr" && options.showHdr === false) return true;
+                if (c === "codec" && !options.showCodec) return true;
+                if (c === "audio" && options.showAudio === false) return true;
+                if (c === "channels" && !options.showAudioChannels) return true;
+                if (c === "edition" && !options.showEdition) return true;
+                if (c === "studio" && !options.showStudio) return true;
+                if (c === "contentRating" && !options.showContentRating) return true;
+                return false;
+            });
+            if (allDisabled) continue;
 
             try {
                 const scale = options.badgeScale || 1.0;
@@ -1067,43 +1265,20 @@ export async function applyOverlaysToPoster(
                         .toBuffer();
                 }
 
-                // Check category to avoid duplicate default SVGs
-                const cat = (cb.category || "").toLowerCase();
-                const rule = (cb.matchRule || "").toLowerCase();
-                const fName = (cb.name || "").toLowerCase();
-                const combinedCheck = `${cat} ${rule} ${fName}`;
-
-                let detectedLayerKey = "custom";
-                if (cat === "resolution" || /4k|1080|720|sd|uhd|fhd|480|576/i.test(combinedCheck)) {
-                    hasCustomResolution = true;
-                    detectedLayerKey = "resolution";
-                }
-                if (cat === "hdr" || /dv|hdr|dolby.*vision|plus/i.test(combinedCheck)) {
-                    hasCustomHdr = true;
-                    detectedLayerKey = "hdr";
-                }
-                if (cat === "codec" || /hevc|av1|prores|avc/i.test(combinedCheck)) {
-                    hasCustomCodec = true;
-                    detectedLayerKey = "codec";
-                }
-                if (cat === "audio" || /atmos|truehd|dts|flac|aac|eac3|ac3/i.test(combinedCheck)) {
-                    hasCustomAudio = true;
-                    detectedLayerKey = "audio";
-                }
-                if (cat === "edition" || /imax|criterion|director|extended/i.test(combinedCheck)) {
-                    hasCustomEdition = true;
-                    detectedLayerKey = "edition";
-                }
-                if (cat === "studio") {
-                    hasCustomStudio = true;
-                    detectedLayerKey = "studio";
-                }
-                if (cat === "ratings") {
-                    hasCustomContentRating = true;
-                    detectedLayerKey = "contentRating";
+                // Register all categories this badge fulfills so no duplicates are added
+                for (const cat of badgeCats) {
+                    appliedCategories.add(cat);
+                    if (cat === "resolution") hasCustomResolution = true;
+                    if (cat === "hdr") hasCustomHdr = true;
+                    if (cat === "codec") hasCustomCodec = true;
+                    if (cat === "audio") hasCustomAudio = true;
+                    if (cat === "edition") hasCustomEdition = true;
+                    if (cat === "studio") hasCustomStudio = true;
+                    if (cat === "contentRating") hasCustomContentRating = true;
                 }
 
-                buckets[cbPos]?.push({ buf: cbBuffer, w: cbWidth, h: cbHeight, layerKey: detectedLayerKey });
+                const primaryLayerKey = badgeCats[0] || "custom";
+                buckets[cbPos]?.push({ buf: cbBuffer, w: cbWidth, h: cbHeight, layerKey: primaryLayerKey });
             } catch (err) {
                 logger.addLog("WARN", "CURATION", `Failed to load custom badge ${cb.name}: ${err}`);
             }
