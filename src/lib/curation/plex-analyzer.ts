@@ -1642,6 +1642,8 @@ export async function evaluatePruneCandidatesForServer(
         unwatchedOnly?: boolean;
         targetFreeGb?: number;
         maxCandidates?: number;
+        sectionKeys?: string[];
+        enabledSectionKeys?: string[];
     } = {}
 ): Promise<{
     candidates: PruneCandidateItem[];
@@ -1669,6 +1671,13 @@ export async function evaluatePruneCandidatesForServer(
                 .map((d: any) => ({ key: String(d.key), title: d.title, type: d.type }));
         }
     } catch (e) {}
+
+    // Filter to requested or enabled sections if specified
+    if (options.sectionKeys && options.sectionKeys.length > 0) {
+        sections = sections.filter(s => options.sectionKeys!.includes(String(s.key)));
+    } else if (options.enabledSectionKeys && options.enabledSectionKeys.length > 0) {
+        sections = sections.filter(s => options.enabledSectionKeys!.includes(String(s.key)));
+    }
 
     const allCandidates: PruneCandidateItem[] = [];
     let totalEvaluated = 0;

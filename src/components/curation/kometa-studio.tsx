@@ -35,7 +35,10 @@ import {
     Clock3,
     Calendar,
     Power,
-    ImageIcon
+    ImageIcon,
+    Shield,
+    ShieldCheck,
+    ShieldAlert
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,6 +80,7 @@ import {
     getCurationSettingsAction,
     saveCurationSettingsAction,
     toggleCurationLibrarySectionAction,
+    toggleAllCurationServerSectionsAction,
     runFullCurationSyncAction,
     runServerCurationSyncAction
 } from "@/app/curation-actions";
@@ -374,11 +378,16 @@ export function KometaStudio() {
     // Check if a section is enabled for overlays
     const isSectionEnabled = (srvId: string, secKey: string): boolean => {
         if (!enabledServersForOverlays || enabledServersForOverlays.length === 0) return true;
+        if (enabledServersForOverlays.includes(`disabled:${srvId}`) || enabledServersForOverlays.includes(`${srvId}:none`)) return false;
+        if (enabledServersForOverlays.includes(`disabled:${srvId}:${secKey}`)) return false;
         const compoundKey = `${srvId}:${secKey}`;
         if (enabledServersForOverlays.includes(compoundKey)) return true;
-        const hasCompoundForServer = enabledServersForOverlays.some(k => k.startsWith(`${srvId}:`));
-        if (!hasCompoundForServer && enabledServersForOverlays.includes(srvId)) return true;
-        return false;
+        const hasServerEntries = enabledServersForOverlays.some(k => k === srvId || k.startsWith(`${srvId}:`) || k.startsWith(`disabled:${srvId}`));
+        if (hasServerEntries) {
+            if (enabledServersForOverlays.includes(srvId) && !enabledServersForOverlays.some(k => k.startsWith(`${srvId}:`))) return true;
+            return false;
+        }
+        return true;
     };
 
     // Toggle a section enabled/disabled for overlays
@@ -388,18 +397,6 @@ export function KometaStudio() {
         const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
         const allSecKeys = currentSections.map(s => String(s.key));
 
-        // Optimistic UI update
-        const compoundKey = `${selectedServerId}:${secKey}`;
-        let nextList = [...enabledServersForOverlays];
-        if (nextList.length === 0 && !nextEnabled) {
-            nextList = allSecKeys.filter(k => k !== secKey).map(k => `${selectedServerId}:${k}`);
-        } else if (nextEnabled) {
-            if (!nextList.includes(compoundKey)) nextList.push(compoundKey);
-        } else {
-            nextList = nextList.filter(k => k !== compoundKey && k !== selectedServerId);
-        }
-        setEnabledServersForOverlays(nextList);
-
         try {
             const res = await toggleCurationLibrarySectionAction("kometa", selectedServerId, secKey, nextEnabled, allSecKeys);
             if (res.success && res.enabledList) {
@@ -407,6 +404,20 @@ export function KometaStudio() {
             }
         } catch (e) {
             console.error("Failed toggling section overlay state:", e);
+        }
+    };
+
+    // Toggle ALL sections on the selected server (Enable All / Disable All)
+    const handleToggleAllSectionsOnServer = async (enableAll: boolean) => {
+        const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+        try {
+            const res = await toggleAllCurationServerSectionsAction("kometa", selectedServerId, enableAll, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForOverlays(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed toggling all server sections:", e);
         }
     };
 
@@ -2228,50 +2239,138 @@ export function KometaStudio() {
                                         const isSecEnabled = isSectionEnabled(selectedServerId, String(sec.key));
 
                                         return (
-                                            <button
+                                            <div
                                                 key={sec.key}
-                                                type="button"
-                                                onClick={() => handleSelectSection(String(sec.key))}
-                                                className={`group flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                className={`flex items-center rounded-xl transition-all border shadow-sm ${
                                                     isSelected
-                                                        ? 'bg-sky-600 text-white shadow-md shadow-sky-950/60 border border-sky-400/50 ring-1 ring-sky-400/40'
-                                                        : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                                        ? 'bg-sky-600/20 border-sky-400/60 ring-1 ring-sky-400/40'
+                                                        : 'bg-slate-800/80 border-slate-700/70 hover:border-slate-600'
                                                 }`}
                                             >
-                                                {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
-                                                {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
-                                                {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
-                                                <span>{sec.title}</span>
-                                                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-sky-700/80 text-sky-100' : 'bg-slate-900 text-slate-400'}`}>
-                                                    Key: {sec.key}
-                                                </span>
-                                                
-                                                {/* Interactive On/Off Switch Badge */}
-                                                <div
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    title={isSecEnabled ? "Overlays ON for this library (Click to disable)" : "Overlays OFF for this library (Click to enable)"}
+                                                {/* Library Tab Selector Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSelectSection(String(sec.key))}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-l-xl transition-all cursor-pointer ${
+                                                        isSelected
+                                                            ? 'text-sky-200'
+                                                            : 'text-slate-300 hover:text-white'
+                                                    }`}
+                                                >
+                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
+                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
+                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                                                    <span>{sec.title}</span>
+                                                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${isSelected ? 'bg-sky-500/30 text-sky-100' : 'bg-slate-900 text-slate-400'}`}>
+                                                        #{sec.key}
+                                                    </span>
+                                                </button>
+
+                                                {/* Independent ON / OFF Toggle Button */}
+                                                <button
+                                                    type="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleToggleSection(String(sec.key));
                                                     }}
-                                                    className={`ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold transition-all cursor-pointer ${
+                                                    title={isSecEnabled ? `Overlays ACTIVE on "${sec.title}" (Click to exclude)` : `Overlays EXCLUDED on "${sec.title}" (Click to enable)`}
+                                                    className={`px-2 py-1 text-[10px] font-extrabold transition-all border-l flex items-center gap-1 rounded-r-xl cursor-pointer ${
                                                         isSecEnabled 
-                                                            ? isSelected 
-                                                                ? 'bg-emerald-400 text-emerald-950 shadow-sm' 
-                                                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
-                                                            : 'bg-slate-900/80 text-slate-500 border border-slate-700 hover:text-slate-300'
+                                                            ? isSelected
+                                                                ? 'bg-emerald-500/30 text-emerald-200 border-sky-400/40 hover:bg-emerald-500/40'
+                                                                : 'bg-emerald-500/20 text-emerald-300 border-slate-700 hover:bg-emerald-500/30'
+                                                            : 'bg-slate-900/90 text-slate-500 border-slate-700 hover:text-slate-300 hover:bg-slate-800'
                                                     }`}
                                                 >
                                                     <span className={`w-1.5 h-1.5 rounded-full ${isSecEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
                                                     <span>{isSecEnabled ? 'ON' : 'OFF'}</span>
-                                                </div>
-                                            </button>
+                                                </button>
+                                            </div>
                                         );
                                     })
                                 )}
                             </div>
                         </div>
+
+                        {/* Active Library Control Bar */}
+                        {currentSections.length > 0 && selectedSectionKey && (
+                            <div className="mt-2 pt-3 border-t border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-slate-950/70 p-3 rounded-xl border border-slate-800/90">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-lg border shrink-0 ${
+                                        isSectionEnabled(selectedServerId, selectedSectionKey)
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                                    }`}>
+                                        {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-xs font-black text-white">
+                                                {currentServer?.serverName} &rarr; {currentSections.find(s => String(s.key) === selectedSectionKey)?.title || `Library #${selectedSectionKey}`}
+                                            </span>
+                                            <Badge className={`text-[10px] font-bold ${
+                                                isSectionEnabled(selectedServerId, selectedSectionKey)
+                                                    ? 'bg-emerald-600 text-white'
+                                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                            }`}>
+                                                {isSectionEnabled(selectedServerId, selectedSectionKey) ? '🟢 OVERLAYS ACTIVE' : '⚪ EXCLUDED / DISABLED'}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                            {isSectionEnabled(selectedServerId, selectedSectionKey)
+                                                ? 'This library section will receive automated badge & overlay updates during sync.'
+                                                : 'This library section is excluded and will be skipped during all overlay sync operations.'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-wrap shrink-0 w-full md:w-auto justify-end">
+                                    {/* Primary Switch */}
+                                    <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+                                        <Label htmlFor="sec-master-toggle-kometa" className="text-xs font-bold text-slate-300 cursor-pointer">
+                                            {isSectionEnabled(selectedServerId, selectedSectionKey) ? 'Enabled' : 'Disabled'}
+                                        </Label>
+                                        <Switch
+                                            id="sec-master-toggle-kometa"
+                                            checked={isSectionEnabled(selectedServerId, selectedSectionKey)}
+                                            onCheckedChange={() => handleToggleSection(selectedSectionKey)}
+                                        />
+                                    </div>
+
+                                    {/* Batch Server Controls */}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleToggleAllSectionsOnServer(true)}
+                                        className="h-8 text-xs border-slate-800 bg-slate-900 text-slate-300 hover:text-white"
+                                    >
+                                        Enable All
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleToggleAllSectionsOnServer(false)}
+                                        className="h-8 text-xs border-slate-800 bg-slate-900 text-slate-400 hover:text-rose-300"
+                                    >
+                                        Disable All
+                                    </Button>
+
+                                    {/* Scoped Runner for Selected Library */}
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={applyingOverlays || runningOverlaySync}
+                                        onClick={handleRunOverlaySync}
+                                        className="h-8 text-xs bg-sky-600 hover:bg-sky-500 text-white font-bold shadow-md shadow-sky-950/40"
+                                    >
+                                        {runningOverlaySync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Zap className="h-3.5 w-3.5 mr-1.5" />}
+                                        <span>Run on Library #{selectedSectionKey}</span>
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </Card>
             )}

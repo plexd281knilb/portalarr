@@ -165,19 +165,49 @@ export async function getCurationSettingsAction() {
 }
 
 /**
- * Check if a specific library section is enabled in an enabled-list of server/section keys
+ * Check if a specific library section is enabled in an enabled-list of server/section keys.
+ * Uses strict per-server isolation so configuring one server NEVER breaks or disables other servers.
  */
 export async function isSectionEnabledInList(list: string[] | undefined | null, serverId: string, sectionKey: string): Promise<boolean> {
-    if (!list || list.length === 0) return true; // Default: enabled
+    if (!list || list.length === 0) return true; // Default: all servers & sections enabled
+
+    // 1. Explicit server-level or section-level disabled flags
+    if (list.includes(`disabled:${serverId}`) || list.includes(`${serverId}:none`)) {
+        return false;
+    }
+    if (list.includes(`disabled:${serverId}:${sectionKey}`)) {
+        return false;
+    }
+
+    // 2. Check if this exact server:section is listed
     const compoundKey = `${serverId}:${sectionKey}`;
-    if (list.includes(compoundKey)) return true;
-    const hasCompoundForServer = list.some(k => k.startsWith(`${serverId}:`));
-    if (!hasCompoundForServer && list.includes(serverId)) return true;
-    return false;
+    if (list.includes(compoundKey)) {
+        return true;
+    }
+
+    // 3. Check if there are any specific entries for this server in the list
+    const hasServerEntries = list.some(k => 
+        k === serverId || 
+        k.startsWith(`${serverId}:`) || 
+        k.startsWith(`disabled:${serverId}`)
+    );
+
+    // If there are explicit entries configured for this server, and compoundKey is NOT among them:
+    if (hasServerEntries) {
+        // If the entire server is explicitly enabled without section restrictions:
+        if (list.includes(serverId) && !list.some(k => k.startsWith(`${serverId}:`))) {
+            return true;
+        }
+        return false;
+    }
+
+    // 4. If this server has NO entries configured in the list, it defaults to ENABLED (unrestricted)
+    return true;
 }
 
 /**
- * Toggle an individual library section enabled/disabled for Kometa, Agregarr, or Prune
+ * Toggle an individual library section enabled/disabled for Kometa, Agregarr, or Prune.
+ * Strictly scopes modifications to the specified server without altering any other servers.
  */
 export async function toggleCurationLibrarySectionAction(
     pageType: "kometa" | "agregarr" | "prune",
@@ -197,37 +227,129 @@ export async function toggleCurationLibrarySectionAction(
                 : "enabledServersForPruning";
 
         let currentList: string[] = settings?.[fieldName] ? JSON.parse(settings[fieldName] as string) : [];
-        const compoundKey = `${serverId}:${sectionKey}`;
+        const strSecKey = String(sectionKey);
 
-        if (currentList.length === 0 && !enabled && allServerSections && allServerSections.length > 0) {
-            // Previously unconfigured (meaning all enabled). When turning one off, enable all others explicitly.
-            currentList = allServerSections
-                .filter(k => String(k) !== String(sectionKey))
-                .map(k => `${serverId}:${k}`);
-        } else if (enabled) {
-            if (!currentList.includes(compoundKey)) {
-                currentList.push(compoundKey);
+        // Keep all entries for OTHER servers intact
+        const otherServerEntries = currentList.filter(k => 
+            !k.startsWith(`${serverId}:`) && 
+            k !== serverId && 
+            !k.startsWith(`disabled:${serverId}`)
+        );
+
+        // Known sections for this server
+        const allSecs = (allServerSections && allServerSections.length > 0)
+            ? allServerSections.map(s => String(s))
+            : [strSecKey];
+
+        // Determine existing configured sections for this server
+        const hasExistingEntries = currentList.some(k => k.startsWith(`${serverId}:`) || k === serverId || k.startsWith(`disabled:${serverId}`));
+        
+        let currentEnabledSections: string[];
+
+        if (!hasExistingEntries) {
+            // Server was previously unconfigured (all sections were enabled)
+            if (enabled) {
+                currentEnabledSections = allSecs;
+            } else {
+                currentEnabledSections = allSecs.filter(s => s !== strSecKey);
             }
         } else {
-            currentList = currentList.filter(k => k !== compoundKey && k !== serverId);
+            const explicitSections = currentList
+                .filter(k => k.startsWith(`${serverId}:`) && k !== `${serverId}:none`)
+                .map(k => k.substring(`${serverId}:`.length));
+
+            if (enabled) {
+                currentEnabledSections = Array.from(new Set([...explicitSections, strSecKey]));
+            } else {
+                currentEnabledSections = explicitSections.filter(s => s !== strSecKey);
+            }
         }
+
+        // Build new entries for this server
+        let thisServerEntries: string[];
+        if (currentEnabledSections.length === 0) {
+            thisServerEntries = [`${serverId}:none`];
+        } else {
+            thisServerEntries = currentEnabledSections.map(sec => `${serverId}:${sec}`);
+        }
+
+        const nextList = [...otherServerEntries, ...thisServerEntries];
 
         await prisma.settings.upsert({
             where: { id: "global" },
-            update: { [fieldName]: JSON.stringify(currentList) },
-            create: { id: "global", [fieldName]: JSON.stringify(currentList) }
+            update: { [fieldName]: JSON.stringify(nextList) },
+            create: { id: "global", [fieldName]: JSON.stringify(nextList) }
         });
 
         // If Kometa, also sync rule enabled status if rule exists
         if (pageType === "kometa") {
             await prisma.mediaOverlayRule.updateMany({
-                where: { serverId, sectionKey: String(sectionKey) },
+                where: { serverId, sectionKey: strSecKey },
                 data: { enabled }
             }).catch(() => {});
         }
 
-        logger.addLog("INFO", "CURATION", `Toggled library section ${sectionKey} on server ${serverId} for ${pageType}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
-        return { success: true, enabledList: currentList };
+        logger.addLog("INFO", "CURATION", `Toggled library section ${strSecKey} on server ${serverId} for ${pageType}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+        return { success: true, enabledList: nextList };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Toggle ALL library sections for a specific server (Enable All / Disable All).
+ */
+export async function toggleAllCurationServerSectionsAction(
+    pageType: "kometa" | "agregarr" | "prune",
+    serverId: string,
+    enableAll: boolean,
+    allServerSections: string[]
+) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const fieldName = pageType === "kometa"
+            ? "enabledServersForOverlays"
+            : pageType === "agregarr"
+                ? "enabledServersForCollections"
+                : "enabledServersForPruning";
+
+        let currentList: string[] = settings?.[fieldName] ? JSON.parse(settings[fieldName] as string) : [];
+
+        // Keep all entries for OTHER servers intact
+        const otherServerEntries = currentList.filter(k => 
+            !k.startsWith(`${serverId}:`) && 
+            k !== serverId && 
+            !k.startsWith(`disabled:${serverId}`)
+        );
+
+        let thisServerEntries: string[];
+        if (enableAll) {
+            thisServerEntries = (allServerSections && allServerSections.length > 0)
+                ? allServerSections.map(s => `${serverId}:${String(s)}`)
+                : [`${serverId}`];
+        } else {
+            thisServerEntries = [`${serverId}:none`];
+        }
+
+        const nextList = [...otherServerEntries, ...thisServerEntries];
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { [fieldName]: JSON.stringify(nextList) },
+            create: { id: "global", [fieldName]: JSON.stringify(nextList) }
+        });
+
+        if (pageType === "kometa" && allServerSections && allServerSections.length > 0) {
+            await prisma.mediaOverlayRule.updateMany({
+                where: { serverId, sectionKey: { in: allServerSections.map(s => String(s)) } },
+                data: { enabled: enableAll }
+            }).catch(() => {});
+        }
+
+        logger.addLog("INFO", "CURATION", `${enableAll ? 'Enabled' : 'Disabled'} all library sections on server ${serverId} for ${pageType}`);
+        return { success: true, enabledList: nextList };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -2744,10 +2866,14 @@ export async function testCurationApiKeysAction(tmdbKey?: string, traktKey?: str
     };
 }
 
-export async function runPruneSimulationAction(targetServerId?: string, criteria?: {
-    minAgeDays?: number;
-    unwatchedOnly?: boolean;
-    maxCandidates?: number;
+export async function getPrunePreviewAction(options?: {
+    targetServerId?: string;
+    targetSectionKey?: string;
+    criteria?: {
+        minAgeDays?: number;
+        unwatchedOnly?: boolean;
+        maxCandidates?: number;
+    };
 }) {
     await verifyAdmin();
     try {
@@ -2760,11 +2886,15 @@ export async function runPruneSimulationAction(targetServerId?: string, criteria
             ? JSON.parse(settings.enabledServersForPruning) 
             : [];
 
+        const targetServerId = options?.targetServerId;
+        const targetSectionKey = options?.targetSectionKey;
+        const criteria = options?.criteria;
+
         // If targetServerId specified, evaluate only that server; otherwise evaluate enabled servers or all servers
         const targetServers = targetServerId 
             ? servers.filter(s => s.clientIdentifier === targetServerId)
             : enabledPruneServers.length > 0
-                ? servers.filter(s => enabledPruneServers.includes(s.clientIdentifier))
+                ? servers.filter(s => enabledPruneServers.includes(s.clientIdentifier) || enabledPruneServers.some(k => k.startsWith(`${s.clientIdentifier}:`)))
                 : servers;
 
         if (targetServers.length === 0) {
@@ -2785,10 +2915,30 @@ export async function runPruneSimulationAction(targetServerId?: string, criteria
             const resolved = await resolveWorkingPlexServerConnection(s.clientIdentifier);
             if (!resolved || !resolved.serverUrl) continue;
 
+            // Fetch sections for this server to filter by enabled status
+            const srvSections = await getPlexServerSections(resolved.token, s.clientIdentifier);
+            const eligibleSectionKeys: string[] = [];
+
+            for (const sec of srvSections) {
+                if (targetSectionKey) {
+                    if (String(sec.key) === String(targetSectionKey)) {
+                        eligibleSectionKeys.push(String(sec.key));
+                    }
+                } else {
+                    const isSecEnabled = await isSectionEnabledInList(enabledPruneServers, s.clientIdentifier, String(sec.key));
+                    if (isSecEnabled) {
+                        eligibleSectionKeys.push(String(sec.key));
+                    }
+                }
+            }
+
+            if (eligibleSectionKeys.length === 0) continue;
+
             const res = await evaluatePruneCandidatesForServer(resolved.serverUrl, resolved.token, s.clientIdentifier, s.name, {
                 minAgeDays: criteria?.minAgeDays ?? settings?.pruneMinAgeDays ?? 90,
                 unwatchedOnly: criteria?.unwatchedOnly ?? settings?.pruneUnwatchedOnly ?? true,
-                maxCandidates: criteria?.maxCandidates ?? 50
+                maxCandidates: criteria?.maxCandidates ?? 50,
+                sectionKeys: eligibleSectionKeys
             });
 
             allCandidates.push(...res.candidates);
@@ -2811,6 +2961,22 @@ export async function runPruneSimulationAction(targetServerId?: string, criteria
     } catch (e: any) {
         return { success: false, error: e.message };
     }
+}
+
+export async function runPruneSimulationAction(
+    targetServerId?: string,
+    criteria?: {
+        minAgeDays?: number;
+        unwatchedOnly?: boolean;
+        maxCandidates?: number;
+    },
+    targetSectionKey?: string
+) {
+    return await getPrunePreviewAction({
+        targetServerId,
+        targetSectionKey,
+        criteria
+    });
 }
 
 export async function executePruneAction(
@@ -3683,8 +3849,18 @@ export async function runServerCurationSyncAction(serverId: string, sectionKey?:
                 details.push(`Library ${sectionKey} error: ${res.error || "Failed applying overlays"}`);
             }
         } else {
+            const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+            const enabledServersForOverlays: string[] = settings?.enabledServersForOverlays 
+                ? JSON.parse(settings.enabledServersForOverlays) 
+                : [];
+
             const sections = await getPlexServerSections(resolved.token, serverId);
             for (const sec of sections) {
+                const isSecEnabled = await isSectionEnabledInList(enabledServersForOverlays, serverId, String(sec.key));
+                if (!isSecEnabled) {
+                    details.push(`Skipped "${sec.title}" (Section is DISABLED for overlays).`);
+                    continue;
+                }
                 try {
                     const res = await applyOverlaysToLibraryInternal(serverId, String(sec.key));
                     if (res.success && res.appliedCount) {
