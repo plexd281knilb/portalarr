@@ -487,7 +487,10 @@ export async function saveMediaCollectionAction(data: {
     promotedToHome?: boolean;
     promotedToRecommended?: boolean;
     promotedToSharedHome?: boolean;
+    collectionMode?: string;
     sortPrefix?: string;
+    activeDays?: string;
+    activeTimeRange?: string;
     isSeasonal?: boolean;
     scheduleStartMonth?: number | null;
     scheduleStartDay?: number | null;
@@ -515,7 +518,10 @@ export async function saveMediaCollectionAction(data: {
             promotedToHome: data.promotedToHome ?? true,
             promotedToRecommended: data.promotedToRecommended ?? true,
             promotedToSharedHome: data.promotedToSharedHome ?? true,
+            collectionMode: data.collectionMode || "default",
             sortPrefix: data.sortPrefix || "!00_",
+            activeDays: data.activeDays || "all",
+            activeTimeRange: data.activeTimeRange || "all_day",
             isSeasonal: data.isSeasonal ?? false,
             scheduleStartMonth: data.scheduleStartMonth,
             scheduleStartDay: data.scheduleStartDay,
@@ -614,7 +620,8 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                             sortTitle,
                             promotedToHome: collection.promotedToHome ?? true,
                             promotedToRecommended: collection.promotedToRecommended ?? true,
-                            promotedToSharedHome: collection.promotedToSharedHome ?? true
+                            promotedToSharedHome: collection.promotedToSharedHome ?? true,
+                            collectionMode: collection.collectionMode || "default"
                         }
                     );
                 }
@@ -784,6 +791,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 promotedToHome: collection.promotedToHome ?? true,
                 promotedToRecommended: collection.promotedToRecommended ?? true,
                 promotedToSharedHome: collection.promotedToSharedHome ?? true,
+                collectionMode: collection.collectionMode || "default",
                 posterUrl: collection.posterUrl || undefined
             }
         );
@@ -989,6 +997,7 @@ export async function reorderPlexCollectionsAction(
         promotedToHome?: boolean;
         promotedToRecommended?: boolean;
         promotedToSharedHome?: boolean;
+        collectionMode?: string;
     }>
 ) {
     await verifyAdmin();
@@ -1011,7 +1020,8 @@ export async function reorderPlexCollectionsAction(
                     sortPrefix: prefix,
                     promotedToHome: item.promotedToHome ?? true,
                     promotedToRecommended: item.promotedToRecommended ?? true,
-                    promotedToSharedHome: item.promotedToSharedHome ?? true
+                    promotedToSharedHome: item.promotedToSharedHome ?? true,
+                    collectionMode: item.collectionMode || "default"
                 }
             });
 
@@ -1026,7 +1036,8 @@ export async function reorderPlexCollectionsAction(
                         sortTitle: effectiveSortTitle,
                         promotedToHome: item.promotedToHome ?? true,
                         promotedToRecommended: item.promotedToRecommended ?? true,
-                        promotedToSharedHome: item.promotedToSharedHome ?? true
+                        promotedToSharedHome: item.promotedToSharedHome ?? true,
+                        collectionMode: item.collectionMode || "default"
                     }
                 );
                 updatedCount++;
@@ -1043,6 +1054,136 @@ export async function reorderPlexCollectionsAction(
     }
 }
 
+/**
+ * Fast 1-click toggle for Home, Shared Home, Recommended, or Collection Mode
+ */
+export async function toggleCollectionVisibilityAction(
+    collectionId: string,
+    target: "home" | "shared" | "recommended" | "mode",
+    value: boolean | string
+) {
+    await verifyAdmin();
+    try {
+        const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
+        if (!collection) return { success: false, error: "Collection not found." };
+
+        const updateData: any = {};
+        if (target === "home") updateData.promotedToHome = Boolean(value);
+        else if (target === "shared") updateData.promotedToSharedHome = Boolean(value);
+        else if (target === "recommended") updateData.promotedToRecommended = Boolean(value);
+        else if (target === "mode") updateData.collectionMode = String(value);
+
+        const updated = await prisma.mediaCollection.update({
+            where: { id: collectionId },
+            data: updateData
+        });
+
+        // Sync change immediately to Plex server if ratingKey and server are available
+        if (updated.serverId && updated.sectionKey && updated.ratingKey) {
+            const resolved = await resolveWorkingPlexServerConnection(updated.serverId);
+            if (resolved?.serverUrl) {
+                const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                const prefix = updated.sortPrefix || `!${String(updated.orderIndex || 0).padStart(2, '0')}_`;
+                const sortTitle = `${prefix}${updated.sortTitle || updated.title}`;
+
+                await updatePlexCollectionPromotionAndOrder(
+                    urlsToTry,
+                    resolved.token,
+                    updated.sectionKey,
+                    updated.ratingKey,
+                    {
+                        sortTitle,
+                        promotedToHome: updated.promotedToHome,
+                        promotedToRecommended: updated.promotedToRecommended,
+                        promotedToSharedHome: updated.promotedToSharedHome,
+                        collectionMode: updated.collectionMode || "default"
+                    }
+                );
+            }
+        }
+
+        return { success: true, collection: updated };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Full placement, visibility & scheduling configuration update for a collection
+ */
+export async function updateCollectionPlacementAction(data: {
+    id: string;
+    promotedToHome?: boolean;
+    promotedToSharedHome?: boolean;
+    promotedToRecommended?: boolean;
+    collectionMode?: string;
+    orderIndex?: number;
+    sortPrefix?: string;
+    activeDays?: string;
+    activeTimeRange?: string;
+    isSeasonal?: boolean;
+    scheduleStartMonth?: number | null;
+    scheduleStartDay?: number | null;
+    scheduleEndMonth?: number | null;
+    scheduleEndDay?: number | null;
+    seasonalAction?: string | null;
+}) {
+    await verifyAdmin();
+    try {
+        const collection = await prisma.mediaCollection.findUnique({ where: { id: data.id } });
+        if (!collection) return { success: false, error: "Collection not found." };
+
+        const prefix = data.sortPrefix !== undefined ? data.sortPrefix : (data.orderIndex !== undefined ? `!${String(data.orderIndex).padStart(2, '0')}_` : collection.sortPrefix);
+
+        const updated = await prisma.mediaCollection.update({
+            where: { id: data.id },
+            data: {
+                promotedToHome: data.promotedToHome ?? collection.promotedToHome,
+                promotedToSharedHome: data.promotedToSharedHome ?? collection.promotedToSharedHome,
+                promotedToRecommended: data.promotedToRecommended ?? collection.promotedToRecommended,
+                collectionMode: data.collectionMode ?? collection.collectionMode,
+                orderIndex: data.orderIndex ?? collection.orderIndex,
+                sortPrefix: prefix,
+                activeDays: data.activeDays ?? collection.activeDays,
+                activeTimeRange: data.activeTimeRange ?? collection.activeTimeRange,
+                isSeasonal: data.isSeasonal ?? collection.isSeasonal,
+                scheduleStartMonth: data.scheduleStartMonth !== undefined ? data.scheduleStartMonth : collection.scheduleStartMonth,
+                scheduleStartDay: data.scheduleStartDay !== undefined ? data.scheduleStartDay : collection.scheduleStartDay,
+                scheduleEndMonth: data.scheduleEndMonth !== undefined ? data.scheduleEndMonth : collection.scheduleEndMonth,
+                scheduleEndDay: data.scheduleEndDay !== undefined ? data.scheduleEndDay : collection.scheduleEndDay,
+                seasonalAction: data.seasonalAction !== undefined ? data.seasonalAction : collection.seasonalAction,
+            }
+        });
+
+        // Push directly to Plex
+        if (updated.serverId && updated.sectionKey && updated.ratingKey) {
+            const resolved = await resolveWorkingPlexServerConnection(updated.serverId);
+            if (resolved?.serverUrl) {
+                const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                const sortTitle = `${prefix}${updated.sortTitle || updated.title}`;
+
+                await updatePlexCollectionPromotionAndOrder(
+                    urlsToTry,
+                    resolved.token,
+                    updated.sectionKey,
+                    updated.ratingKey,
+                    {
+                        sortTitle,
+                        promotedToHome: updated.promotedToHome,
+                        promotedToRecommended: updated.promotedToRecommended,
+                        promotedToSharedHome: updated.promotedToSharedHome,
+                        collectionMode: updated.collectionMode || "default"
+                    }
+                );
+            }
+        }
+
+        return { success: true, collection: updated, message: `Placement settings for "${updated.title}" saved and synced to Plex.` };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: string, sectionKey?: string) {
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
@@ -1050,9 +1191,13 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
 
-        const seasonalCollections = await prisma.mediaCollection.findMany({
+        const scheduledCollections = await prisma.mediaCollection.findMany({
             where: {
-                isSeasonal: true,
+                OR: [
+                    { isSeasonal: true },
+                    { activeDays: { not: "all" } },
+                    { activeTimeRange: { not: "all_day" } }
+                ],
                 ...(serverId ? { serverId } : {}),
                 ...(sectionKey ? { sectionKey } : {})
             }
@@ -1062,35 +1207,66 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
         const curMonth = now.getMonth() + 1; // 1-12
         const curDay = now.getDate();        // 1-31
         const curVal = curMonth * 100 + curDay;
+        const curHour = now.getHours();      // 0-23
+        const daysMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+        const curDayCode = daysMap[now.getDay()];
 
         const results: Array<{ title: string; active: boolean; action: string }> = [];
 
-        for (const coll of seasonalCollections) {
-            const startM = coll.scheduleStartMonth || 1;
-            const startD = coll.scheduleStartDay || 1;
-            const endM = coll.scheduleEndMonth || 12;
-            const endD = coll.scheduleEndDay || 31;
+        for (const coll of scheduledCollections) {
+            let isScheduleActive = true;
 
-            const startVal = startM * 100 + startD;
-            const endVal = endM * 100 + endD;
-
-            let isInSeason = false;
-            if (startVal <= endVal) {
-                isInSeason = curVal >= startVal && curVal <= endVal;
-            } else {
-                // Wrap around year end (e.g. Nov 20 to Jan 6)
-                isInSeason = curVal >= startVal || curVal <= endVal;
+            // 1. Day of Week Check
+            if (coll.activeDays && coll.activeDays !== "all") {
+                const allowedDays = coll.activeDays.toLowerCase().split(",").map(d => d.trim());
+                if (!allowedDays.includes(curDayCode)) {
+                    isScheduleActive = false;
+                }
             }
 
-            if (isInSeason) {
-                // Promote active seasonal collection
+            // 2. Time of Day Check
+            if (isScheduleActive && coll.activeTimeRange && coll.activeTimeRange !== "all_day") {
+                if (coll.activeTimeRange === "evening") {
+                    // 6:00 PM (18) to 11:59 PM (23)
+                    if (curHour < 18 || curHour > 23) isScheduleActive = false;
+                } else if (coll.activeTimeRange === "late_night") {
+                    // 11:00 PM (23) to 4:00 AM (4)
+                    if (curHour < 23 && curHour > 4) isScheduleActive = false;
+                } else if (coll.activeTimeRange === "daytime") {
+                    // 8:00 AM (8) to 5:00 PM (17)
+                    if (curHour < 8 || curHour > 17) isScheduleActive = false;
+                }
+            }
+
+            // 3. Seasonal Calendar Range Check
+            if (isScheduleActive && coll.isSeasonal) {
+                const startM = coll.scheduleStartMonth || 1;
+                const startD = coll.scheduleStartDay || 1;
+                const endM = coll.scheduleEndMonth || 12;
+                const endD = coll.scheduleEndDay || 31;
+
+                const startVal = startM * 100 + startD;
+                const endVal = endM * 100 + endD;
+
+                let isInSeason = false;
+                if (startVal <= endVal) {
+                    isInSeason = curVal >= startVal && curVal <= endVal;
+                } else {
+                    // Wrap around year end (e.g. Nov 20 to Jan 6)
+                    isInSeason = curVal >= startVal || curVal <= endVal;
+                }
+                if (!isInSeason) isScheduleActive = false;
+            }
+
+            if (isScheduleActive) {
+                // Promote active scheduled collection
                 await prisma.mediaCollection.update({
                     where: { id: coll.id },
                     data: { promotedToHome: true, promotedToRecommended: true }
                 });
 
                 if (serverUrl && coll.ratingKey && coll.sectionKey) {
-                    const prefix = coll.sortPrefix || `!02_Seasonal_`;
+                    const prefix = coll.sortPrefix || `!02_Schedule_`;
                     const effectiveSort = `${prefix}${coll.sortTitle || coll.title}`;
                     await updatePlexCollectionPromotionAndOrder(
                         serverUrl,
@@ -1101,7 +1277,8 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                             sortTitle: effectiveSort,
                             promotedToHome: true,
                             promotedToRecommended: true,
-                            promotedToSharedHome: coll.promotedToSharedHome
+                            promotedToSharedHome: coll.promotedToSharedHome,
+                            collectionMode: coll.collectionMode || "default"
                         }
                     );
                 } else if (!coll.ratingKey) {
@@ -1109,9 +1286,9 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                     await syncCollectionToPlexAction(coll.id).catch(() => {});
                 }
 
-                results.push({ title: coll.title, active: true, action: "Promoted to Plex Home & Recommended" });
+                results.push({ title: coll.title, active: true, action: "Promoted to Plex Home & Recommended (Schedule Active)" });
             } else {
-                // Demote / hide inactive seasonal collection
+                // Demote / hide inactive scheduled collection
                 const shouldHide = coll.seasonalAction === "promote_hide" || coll.seasonalAction === "create_delete";
 
                 await prisma.mediaCollection.update({
@@ -1127,21 +1304,22 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                         coll.ratingKey,
                         {
                             promotedToHome: !shouldHide,
-                            promotedToRecommended: !shouldHide
+                            promotedToRecommended: !shouldHide,
+                            collectionMode: coll.collectionMode || "default"
                         }
                     );
                 }
 
-                results.push({ title: coll.title, active: false, action: shouldHide ? "Hidden from Plex Home (Out of season)" : "Demoted" });
+                results.push({ title: coll.title, active: false, action: shouldHide ? "Hidden from Plex Home (Out of Schedule/Season)" : "Demoted" });
             }
         }
 
-        logger.addLog("INFO", "CURATION", `Evaluated ${seasonalCollections.length} seasonal collections schedules.`);
+        logger.addLog("INFO", "CURATION", `Evaluated ${scheduledCollections.length} scheduled & seasonal collections.`);
         return {
             success: true,
-            evaluatedCount: seasonalCollections.length,
+            evaluatedCount: scheduledCollections.length,
             results,
-            message: `Evaluated ${seasonalCollections.length} seasonal collection schedules.`
+            message: `Evaluated ${scheduledCollections.length} scheduled & seasonal collection schedules.`
         };
     } catch (e: any) {
         return { success: false, error: e.message };

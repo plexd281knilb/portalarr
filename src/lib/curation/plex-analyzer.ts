@@ -1177,6 +1177,7 @@ export async function syncPlexCollection(
         promotedToHome?: boolean;
         promotedToRecommended?: boolean;
         promotedToSharedHome?: boolean;
+        collectionMode?: string;
         orderIndex?: number;
     }
 ): Promise<{ success: boolean; collectionRatingKey?: string; message?: string }> {
@@ -1238,7 +1239,7 @@ export async function syncPlexCollection(
         }
     }
 
-    // 3. Update collection summary, sort title, and Home Promotion if rating key resolved
+    // 3. Update collection summary, sort title, collectionMode, and Home Promotion if rating key resolved
     if (collectionRatingKey) {
         for (const cleanBase of urlsToTry) {
             try {
@@ -1264,6 +1265,15 @@ export async function syncPlexCollection(
                 if (options?.promotedToSharedHome !== undefined) {
                     params.set("promotedToSharedHome.value", options.promotedToSharedHome ? "1" : "0");
                     params.set("promotedToSharedHome.locked", "1");
+                }
+                if (options?.collectionMode !== undefined) {
+                    let modeVal = "-1";
+                    if (options.collectionMode === "hide" || options.collectionMode === "1") modeVal = "1";
+                    else if (options.collectionMode === "hideItems" || options.collectionMode === "2") modeVal = "2";
+                    else if (options.collectionMode === "showItems" || options.collectionMode === "3") modeVal = "3";
+                    else if (options.collectionMode === "default" || options.collectionMode === "-1" || options.collectionMode === "0") modeVal = "-1";
+                    params.set("collectionMode.value", modeVal);
+                    params.set("collectionMode.locked", "1");
                 }
                 params.set("X-Plex-Token", token);
 
@@ -1313,7 +1323,7 @@ export async function syncPlexCollection(
 }
 
 /**
- * Updates a Plex collection's sort title and Home / Recommended / Shared Home visibility flags.
+ * Updates a Plex collection's sort title, collectionMode, and Home / Recommended / Shared Home visibility flags.
  */
 export async function updatePlexCollectionPromotionAndOrder(
     serverUrlOrCandidates: string | string[],
@@ -1325,6 +1335,7 @@ export async function updatePlexCollectionPromotionAndOrder(
         promotedToHome?: boolean;
         promotedToRecommended?: boolean;
         promotedToSharedHome?: boolean;
+        collectionMode?: string;
     }
 ): Promise<{ success: boolean; message?: string }> {
     if (collectionRatingKey.startsWith("hub:")) {
@@ -1356,6 +1367,15 @@ export async function updatePlexCollectionPromotionAndOrder(
                 params.set("promotedToSharedHome.value", options.promotedToSharedHome ? "1" : "0");
                 params.set("promotedToSharedHome.locked", "1");
             }
+            if (options.collectionMode !== undefined) {
+                let modeVal = "-1";
+                if (options.collectionMode === "hide" || options.collectionMode === "1") modeVal = "1";
+                else if (options.collectionMode === "hideItems" || options.collectionMode === "2") modeVal = "2";
+                else if (options.collectionMode === "showItems" || options.collectionMode === "3") modeVal = "3";
+                else if (options.collectionMode === "default" || options.collectionMode === "-1" || options.collectionMode === "0") modeVal = "-1";
+                params.set("collectionMode.value", modeVal);
+                params.set("collectionMode.locked", "1");
+            }
             params.set("X-Plex-Token", token);
 
             const res = await fetch(`${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}`, {
@@ -1365,6 +1385,29 @@ export async function updatePlexCollectionPromotionAndOrder(
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 }
             });
+
+            // Also send direct metadata update to ensure Plex persists collectionMode and sortTitle
+            await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}?${params.toString()}`, {
+                method: "PUT",
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            }).catch(() => {});
+
+            // Also update home promotion prefs
+            if (options.promotedToHome !== undefined || options.promotedToRecommended !== undefined || options.promotedToSharedHome !== undefined) {
+                const prefsParams = new URLSearchParams();
+                if (options.promotedToHome !== undefined) prefsParams.set("promotedToHome", options.promotedToHome ? "1" : "0");
+                if (options.promotedToRecommended !== undefined) prefsParams.set("promotedToRecommended", options.promotedToRecommended ? "1" : "0");
+                if (options.promotedToSharedHome !== undefined) prefsParams.set("promotedToSharedHome", options.promotedToSharedHome ? "1" : "0");
+                prefsParams.set("X-Plex-Token", token);
+
+                await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}/prefs?${prefsParams.toString()}`, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                }).catch(() => {});
+            }
 
             if (res.ok) return { success: true };
         } catch (e: any) {

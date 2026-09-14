@@ -44,6 +44,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { CurationNavHeader } from "./curation-nav-header";
 import {
     getPlexServersAndSectionsAction,
+    getPlexServerSectionsAction,
     getOverlayRulesAction,
     saveOverlayRuleAction,
     applyOverlaysToLibraryAction,
@@ -66,7 +67,7 @@ import {
 interface PlexServerItem {
     serverId: string;
     serverName: string;
-    sections: Array<{ key: string | number; title: string; type: string }>;
+    sections?: Array<{ key: string | number; title: string; type: string }>;
 }
 
 interface CustomBadgeItem {
@@ -322,10 +323,31 @@ export function KometaStudio() {
     const handleSelectServer = async (srvId: string) => {
         setSelectedServerId(srvId);
         const srv = servers.find(s => s.serverId === srvId);
-        if (srv && srv.sections && srv.sections.length > 0) {
-            const firstSecKey = String(srv.sections[0].key);
-            setSelectedSectionKey(firstSecKey);
-            loadRulesForSection(srvId, firstSecKey);
+        let srvSections = srv?.sections || [];
+
+        if (srvSections.length === 0) {
+            setServerSectionsLoading(true);
+            try {
+                const secRes = await getPlexServerSectionsAction(srvId);
+                if (secRes?.success && Array.isArray(secRes.sections) && secRes.sections.length > 0) {
+                    srvSections = secRes.sections as any;
+                    setServers(prev => prev.map(s => s.serverId === srvId ? { ...s, sections: (secRes.sections as any) || [] } : s));
+                }
+            } catch (e) {
+                console.error("Failed loading server sections:", e);
+            } finally {
+                setServerSectionsLoading(false);
+            }
+        }
+
+        if (srvSections.length > 0) {
+            const hasExisting = srvSections.some((sec: any) => String(sec.key) === selectedSectionKey);
+            const nextSecKey = hasExisting ? selectedSectionKey : String(srvSections[0].key);
+            setSelectedSectionKey(nextSecKey);
+            loadRulesForSection(srvId, nextSecKey);
+        } else {
+            setSelectedSectionKey("");
+            setOverlayRules([]);
         }
     };
 
@@ -1132,7 +1154,12 @@ export function KometaStudio() {
                                 {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                                {currentSections.length === 0 ? (
+                                {serverSectionsLoading ? (
+                                    <div className="flex items-center gap-2 text-xs text-sky-400 py-1 font-medium">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
+                                    </div>
+                                ) : currentSections.length === 0 ? (
                                     <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {

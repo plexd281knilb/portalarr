@@ -38,7 +38,17 @@ import {
     Edit2,
     Compass,
     Info,
-    RotateCcw
+    RotateCcw,
+    Home,
+    Users,
+    Settings2,
+    SlidersHorizontal,
+    SunMedium,
+    MoonStar,
+    CheckSquare,
+    Square,
+    Bookmark,
+    Monitor
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,12 +62,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { CurationNavHeader } from "./curation-nav-header";
 import {
     getPlexServersAndSectionsAction,
+    getPlexServerSectionsAction,
     getMediaCollectionsAction,
     importPlexLibraryCollectionsAction,
     saveMediaCollectionAction,
     syncCollectionToPlexAction,
     deleteMediaCollectionAction,
     reorderPlexCollectionsAction,
+    toggleCollectionVisibilityAction,
+    updateCollectionPlacementAction,
     syncSeasonalAndScheduledCollectionsAction,
     previewCollectionMatchingAction,
     getTrendingAndPlaceholderMediaAction,
@@ -76,7 +89,7 @@ import {
 interface PlexServerItem {
     serverId: string;
     serverName: string;
-    sections: Array<{ key: string | number; title: string; type: string }>;
+    sections?: Array<{ key: string | number; title: string; type: string }>;
 }
 
 export function AgregarrStudio() {
@@ -120,6 +133,38 @@ export function AgregarrStudio() {
     const [inspectingPreset, setInspectingPreset] = useState<CollectionPreset | null>(null);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewData, setPreviewData] = useState<{ totalEvaluated: number; matchCount: number; executionMethod: string; sampleMatches: any[] } | null>(null);
+    const [inspectHome, setInspectHome] = useState(true);
+    const [inspectShared, setInspectShared] = useState(true);
+    const [inspectRecommended, setInspectRecommended] = useState(true);
+    const [inspectMode, setInspectMode] = useState<string>("default");
+
+    // Comprehensive Placement & Visibility Modal States (Where collections show up in Plex)
+    const [placementModalOpen, setPlacementModalOpen] = useState(false);
+    const [editingCollection, setEditingCollection] = useState<any | null>(null);
+    const [placementHome, setPlacementHome] = useState(true);
+    const [placementShared, setPlacementShared] = useState(true);
+    const [placementRecommended, setPlacementRecommended] = useState(true);
+    const [placementMode, setPlacementMode] = useState<string>("default");
+    const [placementOrderIndex, setPlacementOrderIndex] = useState<number>(1);
+    const [placementSortPrefix, setPlacementSortPrefix] = useState<string>("!01_");
+    const [placementActiveDays, setPlacementActiveDays] = useState<string>("all");
+    const [placementActiveTimeRange, setPlacementActiveTimeRange] = useState<string>("all_day");
+    const [placementIsSeasonal, setPlacementIsSeasonal] = useState(false);
+    const [placementStartMonth, setPlacementStartMonth] = useState(10);
+    const [placementStartDay, setPlacementStartDay] = useState(1);
+    const [placementEndMonth, setPlacementEndMonth] = useState(11);
+    const [placementEndDay, setPlacementEndDay] = useState(5);
+    const [placementSeasonalAction, setPlacementSeasonalAction] = useState<string>("promote_hide");
+    const [savingPlacement, setSavingPlacement] = useState(false);
+    const [placementSavedMsg, setPlacementSavedMsg] = useState<string | null>(null);
+
+    // Create Modal Placement Controls
+    const [newCollPromotedHome, setNewCollPromotedHome] = useState(true);
+    const [newCollPromotedShared, setNewCollPromotedShared] = useState(true);
+    const [newCollPromotedRecommended, setNewCollPromotedRecommended] = useState(true);
+    const [newCollMode, setNewCollMode] = useState<string>("default");
+    const [newCollActiveDays, setNewCollActiveDays] = useState<string>("all");
+    const [newCollActiveTimeRange, setNewCollActiveTimeRange] = useState<string>("all_day");
 
     // Trending Media & Placeholder Hub States
     const [trendingCategory, setTrendingCategory] = useState<"all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "digital" | "theatrical">("all");
@@ -192,10 +237,31 @@ export function AgregarrStudio() {
     const handleSelectServer = async (srvId: string) => {
         setSelectedServerId(srvId);
         const srv = servers.find(s => s.serverId === srvId);
-        if (srv && srv.sections && srv.sections.length > 0) {
-            const firstSecKey = String(srv.sections[0].key);
-            setSelectedSectionKey(firstSecKey);
-            loadCollections(srvId, firstSecKey);
+        let srvSections = srv?.sections || [];
+
+        if (srvSections.length === 0) {
+            setServerSectionsLoading(true);
+            try {
+                const secRes = await getPlexServerSectionsAction(srvId);
+                if (secRes?.success && Array.isArray(secRes.sections) && secRes.sections.length > 0) {
+                    srvSections = secRes.sections as any;
+                    setServers(prev => prev.map(s => s.serverId === srvId ? { ...s, sections: (secRes.sections as any) || [] } : s));
+                }
+            } catch (e) {
+                console.error("Failed loading server sections:", e);
+            } finally {
+                setServerSectionsLoading(false);
+            }
+        }
+
+        if (srvSections.length > 0) {
+            const hasExisting = srvSections.some((sec: any) => String(sec.key) === selectedSectionKey);
+            const nextSecKey = hasExisting ? selectedSectionKey : String(srvSections[0].key);
+            setSelectedSectionKey(nextSecKey);
+            loadCollections(srvId, nextSecKey);
+        } else {
+            setSelectedSectionKey("");
+            setCollections([]);
         }
     };
 
@@ -256,7 +322,8 @@ export function AgregarrStudio() {
                 sortPrefix: `!${String(i + 1).padStart(2, '0')}_`,
                 promotedToHome: c.promotedToHome ?? true,
                 promotedToRecommended: c.promotedToRecommended ?? true,
-                promotedToSharedHome: c.promotedToSharedHome ?? true
+                promotedToSharedHome: c.promotedToSharedHome ?? true,
+                collectionMode: c.collectionMode || "default"
             }));
 
             const res = await reorderPlexCollectionsAction(selectedServerId, selectedSectionKey, orderedPayload);
@@ -270,6 +337,109 @@ export function AgregarrStudio() {
             setOrderSavedMsg(e.message || "Failed saving order.");
         } finally {
             setSavingOrder(false);
+        }
+    };
+
+    // 1-Click Visibility Toggle for Table Rows (Home / Shared / Recommended)
+    const handleToggleVisibility = async (collId: string, target: "home" | "shared" | "recommended", currentVal: boolean) => {
+        setCollections(prev => prev.map(c => {
+            if (c.id !== collId) return c;
+            if (target === "home") return { ...c, promotedToHome: !currentVal };
+            if (target === "shared") return { ...c, promotedToSharedHome: !currentVal };
+            if (target === "recommended") return { ...c, promotedToRecommended: !currentVal };
+            return c;
+        }));
+
+        try {
+            await toggleCollectionVisibilityAction(collId, target, !currentVal);
+        } catch (err) {
+            console.error("Failed toggling visibility:", err);
+            loadCollections();
+        }
+    };
+
+    // 1-Click Collection Mode Dropdown update (Library Tab Display)
+    const handleUpdateCollectionMode = async (collId: string, mode: string) => {
+        setCollections(prev => prev.map(c => c.id === collId ? { ...c, collectionMode: mode } : c));
+        try {
+            await toggleCollectionVisibilityAction(collId, "mode", mode);
+        } catch (err) {
+            console.error("Failed updating collection mode:", err);
+            loadCollections();
+        }
+    };
+
+    // Open Comprehensive Placement Modal
+    const handleOpenPlacementModal = (coll: any) => {
+        setEditingCollection(coll);
+        setPlacementHome(coll.promotedToHome ?? true);
+        setPlacementShared(coll.promotedToSharedHome ?? true);
+        setPlacementRecommended(coll.promotedToRecommended ?? true);
+        setPlacementMode(coll.collectionMode || "default");
+        setPlacementOrderIndex(coll.orderIndex ?? 1);
+        setPlacementSortPrefix(coll.sortPrefix || `!${String(coll.orderIndex || 1).padStart(2, '0')}_`);
+        setPlacementActiveDays(coll.activeDays || "all");
+        setPlacementActiveTimeRange(coll.activeTimeRange || "all_day");
+        setPlacementIsSeasonal(coll.isSeasonal ?? false);
+        setPlacementStartMonth(coll.scheduleStartMonth || 10);
+        setPlacementStartDay(coll.scheduleStartDay || 1);
+        setPlacementEndMonth(coll.scheduleEndMonth || 11);
+        setPlacementEndDay(coll.scheduleEndDay || 5);
+        setPlacementSeasonalAction(coll.seasonalAction || "promote_hide");
+        setPlacementSavedMsg(null);
+        setPlacementModalOpen(true);
+    };
+
+    // Save Placement Modal Settings
+    const handleSavePlacement = async () => {
+        if (!editingCollection) return;
+        setSavingPlacement(true);
+        setPlacementSavedMsg(null);
+        try {
+            const res = await updateCollectionPlacementAction({
+                id: editingCollection.id,
+                promotedToHome: placementHome,
+                promotedToSharedHome: placementShared,
+                promotedToRecommended: placementRecommended,
+                collectionMode: placementMode,
+                orderIndex: Number(placementOrderIndex),
+                sortPrefix: placementSortPrefix,
+                activeDays: placementActiveDays,
+                activeTimeRange: placementActiveTimeRange,
+                isSeasonal: placementIsSeasonal,
+                scheduleStartMonth: placementIsSeasonal ? Number(placementStartMonth) : null,
+                scheduleStartDay: placementIsSeasonal ? Number(placementStartDay) : null,
+                scheduleEndMonth: placementIsSeasonal ? Number(placementEndMonth) : null,
+                scheduleEndDay: placementIsSeasonal ? Number(placementEndDay) : null,
+                seasonalAction: placementSeasonalAction
+            });
+
+            if (res.success) {
+                setPlacementSavedMsg("✓ Placement & Visibility updated and synced to Plex!");
+                setTimeout(() => {
+                    setPlacementModalOpen(false);
+                    loadCollections();
+                }, 1000);
+            }
+        } catch (err: any) {
+            console.error("Failed saving placement:", err);
+        } finally {
+            setSavingPlacement(false);
+        }
+    };
+
+    // Toggle specific day in activeDays list
+    const handleToggleDay = (dayCode: string) => {
+        let currentDays = placementActiveDays === "all" ? ["mon","tue","wed","thu","fri","sat","sun"] : placementActiveDays.split(",").map(d => d.trim());
+        if (currentDays.includes(dayCode)) {
+            currentDays = currentDays.filter(d => d !== dayCode);
+        } else {
+            currentDays.push(dayCode);
+        }
+        if (currentDays.length === 7 || currentDays.length === 0) {
+            setPlacementActiveDays("all");
+        } else {
+            setPlacementActiveDays(currentDays.join(","));
         }
     };
 
@@ -335,6 +505,10 @@ export function AgregarrStudio() {
     // Inspect Preset Blueprint & Matcher
     const handleInspectPreset = async (preset: CollectionPreset) => {
         setInspectingPreset(preset);
+        setInspectHome(true);
+        setInspectShared(true);
+        setInspectRecommended(true);
+        setInspectMode(preset.defaultCollectionMode || "default");
         setInspectModalOpen(true);
         setPreviewLoading(true);
         setPreviewData(null);
@@ -375,9 +549,12 @@ export function AgregarrStudio() {
                 posterUrl: preset.defaultPosterUrl,
                 orderIndex: nextOrder,
                 sortPrefix,
-                promotedToHome: true,
-                promotedToRecommended: true,
-                promotedToSharedHome: true,
+                promotedToHome: inspectHome,
+                promotedToRecommended: inspectRecommended,
+                promotedToSharedHome: inspectShared,
+                collectionMode: inspectMode,
+                activeDays: preset.defaultActiveDays || "all",
+                activeTimeRange: preset.defaultActiveTimeRange || "all_day",
                 isSeasonal: preset.isSeasonal,
                 scheduleStartMonth: preset.scheduleStartMonth,
                 scheduleStartDay: preset.scheduleStartDay,
@@ -529,7 +706,12 @@ export function AgregarrStudio() {
                                 {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                                {currentSections.length === 0 ? (
+                                {serverSectionsLoading ? (
+                                    <div className="flex items-center gap-2 text-xs text-sky-400 py-1 font-medium">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
+                                    </div>
+                                ) : currentSections.length === 0 ? (
                                     <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {
@@ -717,20 +899,25 @@ export function AgregarrStudio() {
                             ) : (
                                 collections.map((coll, idx) => {
                                     const isSyncing = syncingCollId === coll.id;
+                                    const isHomeActive = coll.promotedToHome ?? true;
+                                    const isSharedActive = coll.promotedToSharedHome ?? true;
+                                    const isRecsActive = coll.promotedToRecommended ?? true;
+                                    const currentMode = coll.collectionMode || "default";
+
                                     return (
                                         <div
                                             key={coll.id}
-                                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors"
+                                            className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors shadow-sm"
                                         >
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 {/* Reorder Buttons */}
-                                                <div className="flex flex-col gap-0.5">
+                                                <div className="flex flex-col gap-0.5 shrink-0">
                                                     <button
                                                         type="button"
                                                         disabled={idx === 0}
                                                         onClick={() => handleMoveCollection(idx, "up")}
                                                         className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
-                                                        title="Move Up"
+                                                        title="Move Up on Home Screen"
                                                     >
                                                         <ChevronUp className="h-3.5 w-3.5" />
                                                     </button>
@@ -739,52 +926,149 @@ export function AgregarrStudio() {
                                                         disabled={idx === collections.length - 1}
                                                         onClick={() => handleMoveCollection(idx, "down")}
                                                         className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
-                                                        title="Move Down"
+                                                        title="Move Down on Home Screen"
                                                     >
                                                         <ChevronDown className="h-3.5 w-3.5" />
                                                     </button>
                                                 </div>
 
                                                 {/* Position Ranking Pill */}
-                                                <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-mono font-bold px-2 py-0.5">
+                                                <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-mono font-bold px-2 py-0.5 shrink-0">
                                                     #{idx + 1}
                                                 </Badge>
 
                                                 {/* Collection Details */}
-                                                <div className="space-y-0.5">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-bold text-white text-xs">{coll.title}</span>
-                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400">
+                                                <div className="space-y-1 min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="font-bold text-white text-xs truncate max-w-[280px]" title={coll.title}>
+                                                            {coll.title}
+                                                        </span>
+                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400 shrink-0">
                                                             {coll.category || coll.sourceType || "Curated"}
                                                         </Badge>
                                                         {coll.isSeasonal && (
-                                                            <Badge className="text-[9px] px-1.5 py-0 bg-amber-950 text-amber-300 border-amber-500/40 gap-1">
+                                                            <Badge className="text-[9px] px-1.5 py-0 bg-amber-950 text-amber-300 border-amber-500/40 gap-1 shrink-0">
                                                                 <Calendar className="h-2.5 w-2.5" />
-                                                                <span>Seasonal</span>
+                                                                <span>Seasonal ({coll.scheduleStartMonth || 10}/{coll.scheduleStartDay || 1} - {coll.scheduleEndMonth || 11}/{coll.scheduleEndDay || 5})</span>
+                                                            </Badge>
+                                                        )}
+                                                        {coll.activeDays && coll.activeDays !== "all" && (
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-900/60 bg-amber-950/40 text-amber-300 gap-1 font-mono shrink-0">
+                                                                <CalendarClock className="h-2.5 w-2.5" />
+                                                                <span>{coll.activeDays.toUpperCase()}</span>
+                                                            </Badge>
+                                                        )}
+                                                        {coll.activeTimeRange && coll.activeTimeRange !== "all_day" && (
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-indigo-900/60 bg-indigo-950/40 text-indigo-300 gap-1 font-mono shrink-0">
+                                                                <Clock className="h-2.5 w-2.5" />
+                                                                <span className="capitalize">{coll.activeTimeRange.replace("_", " ")}</span>
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <p className="text-[11px] text-slate-400 truncate max-w-[400px]">
-                                                        {coll.summary || coll.sourceQuery || "No summary"}
+                                                    <p className="text-[11px] text-slate-400 truncate max-w-[420px]">
+                                                        {coll.summary || coll.sourceQuery || "No summary configured."}
                                                     </p>
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <Badge variant="outline" className="text-[10px] font-mono border-slate-800 text-slate-400">
+                                            {/* Agregarr Placement & Visibility Matrix */}
+                                            <div className="flex flex-wrap items-center gap-2 self-end lg:self-center shrink-0">
+                                                {/* Screen Visibility Targets */}
+                                                <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+                                                    {/* Home Screen Toggle */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleVisibility(coll.id, "home", isHomeActive)}
+                                                        title={isHomeActive ? "Visible on Server Owner's Home Screen (Click to hide)" : "Hidden from Server Owner's Home Screen (Click to show)"}
+                                                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
+                                                            isHomeActive
+                                                                ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm"
+                                                                : "bg-slate-950/60 text-slate-500 border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-300"
+                                                        }`}
+                                                    >
+                                                        <Home className="h-3 w-3" />
+                                                        <span>Home</span>
+                                                    </button>
+
+                                                    {/* Shared Users' Home Toggle */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleVisibility(coll.id, "shared", isSharedActive)}
+                                                        title={isSharedActive ? "Visible on Shared Friends & Users' Home Screens (Click to hide)" : "Hidden from Shared Users' Home Screens (Click to show)"}
+                                                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
+                                                            isSharedActive
+                                                                ? "bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm"
+                                                                : "bg-slate-950/60 text-slate-500 border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-300"
+                                                        }`}
+                                                    >
+                                                        <Users className="h-3 w-3" />
+                                                        <span>Shared</span>
+                                                    </button>
+
+                                                    {/* Library Recommended Toggle */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleVisibility(coll.id, "recommended", isRecsActive)}
+                                                        title={isRecsActive ? "Visible on Library Recommended Page (Click to hide)" : "Hidden from Library Recommended Page (Click to show)"}
+                                                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
+                                                            isRecsActive
+                                                                ? "bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm"
+                                                                : "bg-slate-950/60 text-slate-500 border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-300"
+                                                        }`}
+                                                    >
+                                                        <Star className="h-3 w-3" />
+                                                        <span>Recs</span>
+                                                    </button>
+
+                                                    {/* Library Browsing Mode Selector */}
+                                                    <div className="flex items-center gap-1 pl-1 border-l border-slate-800" title="Library Tab Display Mode">
+                                                        <span className="text-[10px] text-slate-400 font-semibold px-1">Lib:</span>
+                                                        <Select
+                                                            value={currentMode}
+                                                            onValueChange={(val) => handleUpdateCollectionMode(coll.id, val)}
+                                                        >
+                                                            <SelectTrigger className="h-6 text-[10px] font-medium bg-slate-950 border-slate-800 px-2 py-0 w-24 text-slate-200">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="default">Default</SelectItem>
+                                                                <SelectItem value="hide">Hide Coll</SelectItem>
+                                                                <SelectItem value="hideItems">Hide Items</SelectItem>
+                                                                <SelectItem value="showItems">Show Both</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                </div>
+
+                                                {/* Placement Details & Actions */}
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleOpenPlacementModal(coll)}
+                                                    className="text-[11px] h-8 px-2.5 gap-1 border-slate-700 hover:bg-slate-800 text-amber-300 hover:text-amber-200"
+                                                    title="Configure full placement, day schedule, and time rules"
+                                                >
+                                                    <Settings2 className="h-3.5 w-3.5 text-amber-400" />
+                                                    <span>Placement</span>
+                                                </Button>
+
+                                                <Badge variant="outline" className="text-[10px] font-mono border-slate-800 text-slate-400 h-8 px-2 flex items-center">
                                                     {coll.itemCount || 0} items
                                                 </Badge>
+
                                                 <Button
                                                     type="button"
                                                     size="sm"
                                                     variant="outline"
                                                     disabled={isSyncing}
                                                     onClick={() => handleSyncCollection(coll.id)}
-                                                    className="text-[11px] h-7 px-2.5 gap-1 border-slate-700 hover:bg-slate-800 text-slate-200"
+                                                    className="text-[11px] h-8 px-2.5 gap-1 border-slate-700 hover:bg-slate-800 text-slate-200"
                                                 >
                                                     {isSyncing ? <Loader2 className="h-3 w-3 animate-spin text-amber-400" /> : <RefreshCw className="h-3 w-3 text-amber-400" />}
                                                     <span>Sync</span>
                                                 </Button>
+
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -795,7 +1079,7 @@ export function AgregarrStudio() {
                                                             loadCollections();
                                                         }
                                                     }}
-                                                    className="text-slate-500 hover:text-rose-400 h-7 w-7 p-0"
+                                                    className="text-slate-500 hover:text-rose-400 h-8 w-8 p-0 cursor-pointer"
                                                     title="Delete Collection"
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -1205,6 +1489,55 @@ export function AgregarrStudio() {
                                 <p className="text-xs text-slate-500 italic">No media items in this library matched the preset criteria.</p>
                             )}
                         </div>
+
+                        {/* Where It Shows Up: Preset Placement Configuration */}
+                        <div className="space-y-3 p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                                    <Monitor className="h-4 w-4 text-amber-400" /> Choose Where It Shows Up (Plex Hubs)
+                                </span>
+                                <span className="text-[10px] text-slate-400">Target Screens</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                                    <div className="flex items-center gap-1.5">
+                                        <Home className="h-3.5 w-3.5 text-amber-400" />
+                                        <span className="text-xs text-slate-200">Owner Home</span>
+                                    </div>
+                                    <Switch checked={inspectHome} onCheckedChange={setInspectHome} />
+                                </div>
+                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                                    <div className="flex items-center gap-1.5">
+                                        <Users className="h-3.5 w-3.5 text-purple-400" />
+                                        <span className="text-xs text-slate-200">Shared Home</span>
+                                    </div>
+                                    <Switch checked={inspectShared} onCheckedChange={setInspectShared} />
+                                </div>
+                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                                    <div className="flex items-center gap-1.5">
+                                        <Star className="h-3.5 w-3.5 text-sky-400" />
+                                        <span className="text-xs text-slate-200">Library Recs</span>
+                                    </div>
+                                    <Switch checked={inspectRecommended} onCheckedChange={setInspectRecommended} />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-1">
+                                <span className="text-xs text-slate-400">Library Browsing Tab Display:</span>
+                                <Select value={inspectMode} onValueChange={setInspectMode}>
+                                    <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-7 w-48">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="default">📂 Library Default</SelectItem>
+                                        <SelectItem value="hide">🚫 Hide Collection</SelectItem>
+                                        <SelectItem value="hideItems">📁 Hide Items in Collection</SelectItem>
+                                        <SelectItem value="showItems">🗂️ Show Collection &amp; Items</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                     </div>
 
                     <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
@@ -1219,6 +1552,331 @@ export function AgregarrStudio() {
                         >
                             <Trophy className="h-3.5 w-3.5" />
                             <span>Install &amp; Sync Collection to Plex</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Agregarr Collection Placement & Visibility Modal */}
+            <Dialog open={placementModalOpen} onOpenChange={setPlacementModalOpen}>
+                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800">
+                        <div className="flex items-center justify-between">
+                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <Settings2 className="h-5 w-5 text-amber-400" />
+                                <span>Plex Placement &amp; Visibility: {editingCollection?.title}</span>
+                            </DialogTitle>
+                            <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-xs">
+                                Rank #{placementOrderIndex}
+                            </Badge>
+                        </div>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Configure where and when this collection appears across your Plex Media Server clients.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto space-y-4 py-3 text-xs pr-1">
+                        {/* Section 1: Plex Screen Visibility Targets */}
+                        <div className="space-y-3 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                                    <Monitor className="h-4 w-4 text-amber-400" /> Plex Client Screen Targets
+                                </span>
+                                <span className="text-[10px] text-slate-400">Where will this collection show up?</span>
+                            </div>
+
+                            <div className="space-y-2.5 pt-1">
+                                {/* Owner Home Screen */}
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-1.5 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                            <Home className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-white text-xs">Server Owner Home Screen</h4>
+                                            <p className="text-[10px] text-slate-400">Display collection as a dedicated carousel row on your primary Plex Home screen.</p>
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={placementHome}
+                                        onCheckedChange={setPlacementHome}
+                                    />
+                                </div>
+
+                                {/* Shared Users' Home */}
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-1.5 rounded-md bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                            <Users className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-white text-xs">Shared Friends &amp; Managed Users' Home</h4>
+                                            <p className="text-[10px] text-slate-400">Promote on the Home screen for everyone with shared access to this library.</p>
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={placementShared}
+                                        onCheckedChange={setPlacementShared}
+                                    />
+                                </div>
+
+                                {/* Library Recommended */}
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-1.5 rounded-md bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                                            <Star className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-white text-xs">Library Recommended Tab</h4>
+                                            <p className="text-[10px] text-slate-400">Display collection row inside the Recommended tab of this specific library.</p>
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={placementRecommended}
+                                        onCheckedChange={setPlacementRecommended}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 2: Library Browsing Mode & Home Screen Ranking */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Library Browsing Display Mode */}
+                            <div className="p-3.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-2">
+                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <Layers className="h-3.5 w-3.5 text-sky-400" /> Library Browsing Display Mode
+                                </Label>
+                                <p className="text-[10px] text-slate-400">
+                                    Controls how this collection appears inline in the main Library grid.
+                                </p>
+                                <Select
+                                    value={placementMode}
+                                    onValueChange={setPlacementMode}
+                                >
+                                    <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="default">📂 Library Default (Inherit)</SelectItem>
+                                        <SelectItem value="hide">🚫 Hide Collection (Show items only)</SelectItem>
+                                        <SelectItem value="hideItems">📁 Hide Items in Collection (Collapse)</SelectItem>
+                                        <SelectItem value="showItems">🗂️ Show Collection &amp; Items</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Home Screen Ranking Position */}
+                            <div className="p-3.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-2">
+                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <Trophy className="h-3.5 w-3.5 text-amber-400" /> Home Screen Ranking (#1 - #99)
+                                </Label>
+                                <p className="text-[10px] text-slate-400">
+                                    Numerical position of this row on the Plex Home &amp; Recommended hubs.
+                                </p>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={99}
+                                        value={placementOrderIndex}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value, 10) || 1;
+                                            setPlacementOrderIndex(val);
+                                            setPlacementSortPrefix(`!${String(val).padStart(2, '0')}_`);
+                                        }}
+                                        className="h-8 text-xs bg-slate-900 border-slate-700 w-20 font-bold font-mono"
+                                    />
+                                    <Input
+                                        value={placementSortPrefix}
+                                        onChange={(e) => setPlacementSortPrefix(e.target.value)}
+                                        placeholder="!01_"
+                                        className="h-8 text-xs bg-slate-900 border-slate-700 flex-1 font-mono text-slate-300"
+                                        title="Plex Sort Prefix"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 3: Day of the Week Scheduling (Agregarr Day Rules) */}
+                        <div className="space-y-2.5 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <Calendar className="h-3.5 w-3.5 text-amber-400" /> Day of Week Visibility
+                                </Label>
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPlacementActiveDays("all")}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                            placementActiveDays === "all" ? "bg-amber-500 text-slate-950" : "bg-slate-800 text-slate-300 hover:text-white"
+                                        }`}
+                                    >
+                                        Every Day
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPlacementActiveDays("sat,sun")}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                            placementActiveDays === "sat,sun" ? "bg-amber-500 text-slate-950" : "bg-slate-800 text-slate-300 hover:text-white"
+                                        }`}
+                                    >
+                                        Weekends
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPlacementActiveDays("mon,tue,wed,thu,fri")}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                            placementActiveDays === "mon,tue,wed,thu,fri" ? "bg-amber-500 text-slate-950" : "bg-slate-800 text-slate-300 hover:text-white"
+                                        }`}
+                                    >
+                                        Weekdays
+                                    </button>
+                                </div>
+                            </div>
+
+                            <p className="text-[10px] text-slate-400">
+                                Limit collection promotion on Home/Recommended to specific days of the week:
+                            </p>
+
+                            <div className="grid grid-cols-7 gap-1.5 pt-1">
+                                {[
+                                    { code: "mon", label: "Mon" },
+                                    { code: "tue", label: "Tue" },
+                                    { code: "wed", label: "Wed" },
+                                    { code: "thu", label: "Thu" },
+                                    { code: "fri", label: "Fri" },
+                                    { code: "sat", label: "Sat" },
+                                    { code: "sun", label: "Sun" }
+                                ].map(day => {
+                                    const isSelected = placementActiveDays === "all" || placementActiveDays.toLowerCase().includes(day.code);
+                                    return (
+                                        <button
+                                            key={day.code}
+                                            type="button"
+                                            onClick={() => handleToggleDay(day.code)}
+                                            className={`py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? "bg-amber-500 text-slate-950 border-amber-400 shadow-sm"
+                                                    : "bg-slate-900 text-slate-500 border-slate-800 hover:border-slate-700"
+                                            }`}
+                                        >
+                                            {day.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Section 4: Time of Day Scheduling (Agregarr Time Rules) */}
+                        <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                            <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                <Clock className="h-3.5 w-3.5 text-indigo-400" /> Time of Day Scheduling
+                            </Label>
+                            <p className="text-[10px] text-slate-400">
+                                Automatically rotate collection visibility on Home based on the hour of the day:
+                            </p>
+                            <Select
+                                value={placementActiveTimeRange}
+                                onValueChange={setPlacementActiveTimeRange}
+                            >
+                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all_day">🕒 All Day (24/7 Always Active)</SelectItem>
+                                    <SelectItem value="evening">🌙 Prime Time / Evening (6:00 PM – 11:59 PM)</SelectItem>
+                                    <SelectItem value="late_night">🦉 Late Night (11:00 PM – 4:00 AM)</SelectItem>
+                                    <SelectItem value="daytime">☀️ Daytime (8:00 AM – 5:00 PM)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Section 5: Seasonal Calendar Scheduling */}
+                        <div className="space-y-3 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+                                        <CalendarClock className="h-3.5 w-3.5 text-amber-400" /> Seasonal Date Window
+                                    </h4>
+                                    <p className="text-[10px] text-slate-400">Enable automatic promotion only during specific months of the year (e.g. Halloween or Holiday seasons).</p>
+                                </div>
+                                <Switch
+                                    checked={placementIsSeasonal}
+                                    onCheckedChange={setPlacementIsSeasonal}
+                                />
+                            </div>
+
+                            {placementIsSeasonal && (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-slate-400">Start Month:</Label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={12}
+                                            value={placementStartMonth}
+                                            onChange={(e) => setPlacementStartMonth(parseInt(e.target.value, 10) || 1)}
+                                            className="h-8 text-xs bg-slate-900 border-slate-700"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-slate-400">Start Day:</Label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={31}
+                                            value={placementStartDay}
+                                            onChange={(e) => setPlacementStartDay(parseInt(e.target.value, 10) || 1)}
+                                            className="h-8 text-xs bg-slate-900 border-slate-700"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-slate-400">End Month:</Label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={12}
+                                            value={placementEndMonth}
+                                            onChange={(e) => setPlacementEndMonth(parseInt(e.target.value, 10) || 12)}
+                                            className="h-8 text-xs bg-slate-900 border-slate-700"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-slate-400">End Day:</Label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={31}
+                                            value={placementEndDay}
+                                            onChange={(e) => setPlacementEndDay(parseInt(e.target.value, 10) || 31)}
+                                            className="h-8 text-xs bg-slate-900 border-slate-700"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {placementSavedMsg && (
+                            <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                <span>{placementSavedMsg}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setPlacementModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={savingPlacement}
+                            onClick={handleSavePlacement}
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                        >
+                            {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                            <span>Save &amp; Sync Placement to Plex</span>
                         </Button>
                     </DialogFooter>
                 </DialogContent>

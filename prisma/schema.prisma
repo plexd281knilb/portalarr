@@ -336,7 +336,11 @@ model MediaCollection {
   promotedToHome       Boolean   @default(true)
   promotedToRecommended Boolean  @default(true)
   promotedToSharedHome Boolean   @default(true)
+  collectionMode       String?   @default("default") // "default", "hide", "hideItems", "showItems"
   sortPrefix           String?   @default("!00_")
+  // Day & Time Scheduling Controls (Agregarr Day/Time Filters)
+  activeDays           String?   @default("all") // "all" or comma-separated "mon,tue,wed,thu,fri,sat,sun"
+  activeTimeRange      String?   @default("all_day") // "all_day", "evening", "late_night", "daytime", or "HH:mm-HH:mm"
   // Seasonal Scheduling Controls
   isSeasonal           Boolean   @default(false)
   scheduleStartMonth   Int?      // 1-12 (e.g. 10 for October)

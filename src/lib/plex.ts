@@ -903,15 +903,16 @@ export async function getPlexServerLibrarySections(
         }));
     }
 
-    // If no targetServerId specified, resolve sections for the first server to keep it ultra-fast
-    const firstServerId = serverList[0].serverId;
-    const firstSections = await getPlexServerSections(adminToken, firstServerId, customPlexUrl);
+    // Resolve sections for all servers in parallel so switching servers is instantaneous and accurate
+    const sectionsResults = await Promise.allSettled(
+        serverList.map(srv => getPlexServerSections(adminToken, srv.serverId, customPlexUrl))
+    );
     
-    return serverList.map(srv => ({
+    return serverList.map((srv, idx) => ({
         serverId: srv.serverId,
         serverName: srv.serverName,
         serverUrl: srv.serverUrl || "",
-        sections: srv.serverId === firstServerId ? firstSections : []
+        sections: sectionsResults[idx].status === "fulfilled" ? sectionsResults[idx].value : []
     }));
 }
 

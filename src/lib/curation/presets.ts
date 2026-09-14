@@ -12,6 +12,9 @@ export interface CollectionPreset {
     defaultSort?: "release" | "rating" | "title" | "random" | "custom";
     defaultHomeOrder?: number;
     defaultSortPrefix?: string;
+    defaultCollectionMode?: "default" | "hide" | "hideItems" | "showItems";
+    defaultActiveDays?: string;
+    defaultActiveTimeRange?: string;
     isSeasonal?: boolean;
     scheduleStartMonth?: number; // 1-12
     scheduleStartDay?: number;   // 1-31
