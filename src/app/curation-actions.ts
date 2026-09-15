@@ -1797,12 +1797,16 @@ export async function syncOfficialKometaBadgesAction() {
 
         const corePrefixes = [
             "defaults/overlays/images/resolution",
-            "defaults/overlays/images/audio_codec/standard",
+            "defaults/overlays/images/audio_codec",
             "defaults/overlays/images/edition",
-            "defaults/overlays/images/streaming/color",
-            "defaults/overlays/images/ribbon/red",
+            "defaults/overlays/images/streaming",
+            "defaults/overlays/images/ribbon",
             "defaults/overlays/images/rating",
-            "defaults/overlays/images/cr/us"
+            "defaults/overlays/images/cr",
+            "defaults/overlays/images/content_rating",
+            "defaults/overlays/images/video_codec",
+            "defaults/overlays/images/status",
+            "defaults/overlays/images/network"
         ];
 
         // 1. Fetch official Git tree from master branch

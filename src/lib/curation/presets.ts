@@ -982,5 +982,109 @@ export const DEFAULT_BUILTIN_BADGE_DEFINITIONS: BuiltinBadgeDefinition[] = [
         width: 150,
         height: 46,
         svgContent: `<svg width="150" height="46" viewBox="0 0 150 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="goscar" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fef08a"/><stop offset="50%" stop-color="#eab308"/><stop offset="100%" stop-color="#ca8a04"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="146" height="42" rx="8" fill="rgba(20, 15, 5, 0.95)" stroke="url(#goscar)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="142" y2="5" stroke="rgba(254,240,138,0.5)" stroke-width="1.2" stroke-linecap="round"/><text x="24" y="28" font-size="15">🏆</text><text x="86" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="12" fill="#facc15" text-anchor="middle" letter-spacing="1.5">BEST PICTURE</text></svg>`
+    },
+
+    // 9. Authentic Kometa Diagonal Ribbons & Banners
+    {
+        id: "builtin_badge_ribbon_oscars",
+        name: "Academy Award Winner (Ribbon)",
+        category: "ribbon",
+        position: "top-right",
+        matchRule: "oscars",
+        width: 180,
+        height: 180,
+        svgContent: `<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ribbonGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fef08a"/><stop offset="40%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient><filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity="0.9"/></filter></defs><g filter="url(#ribbonShadow)"><polygon points="45,0 180,135 180,180 0,0" fill="url(#ribbonGoldGrad)"/><polygon points="45,0 180,135 180,180 0,0" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/><line x1="50" y1="0" x2="180" y2="130" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/><line x1="10" y1="0" x2="180" y2="170" stroke="rgba(0,0,0,0.4)" stroke-width="2"/><g transform="translate(100, 75) rotate(45)"><text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="11" fill="#0f172a" text-anchor="middle" letter-spacing="2.5">OSCAR WINNER</text><text x="0" y="11" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="7.5" fill="#1e293b" text-anchor="middle" letter-spacing="1">🌿 ACADEMY AWARDS 🌿</text></g></g></svg>`
+    },
+    {
+        id: "builtin_badge_ribbon_top250",
+        name: "IMDb Top 250 (Ribbon)",
+        category: "ribbon",
+        position: "top-right",
+        matchRule: "imdb_top_250",
+        width: 180,
+        height: 180,
+        svgContent: `<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ribbonTop250Grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fde047"/><stop offset="50%" stop-color="#eab308"/><stop offset="100%" stop-color="#a16207"/></linearGradient><filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity="0.9"/></filter></defs><g filter="url(#ribbonShadow)"><polygon points="45,0 180,135 180,180 0,0" fill="url(#ribbonTop250Grad)"/><line x1="50" y1="0" x2="180" y2="130" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/><line x1="10" y1="0" x2="180" y2="170" stroke="rgba(0,0,0,0.4)" stroke-width="2"/><g transform="translate(100, 75) rotate(45)"><text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="11" fill="#000000" text-anchor="middle" letter-spacing="2.5">IMDb TOP 250</text><text x="0" y="11" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="7.5" fill="#1c1917" text-anchor="middle" letter-spacing="1">⭐ ALL-TIME BEST ⭐</text></g></g></svg>`
+    },
+    {
+        id: "builtin_badge_ribbon_cannes",
+        name: "Cannes Film Festival (Ribbon)",
+        category: "ribbon",
+        position: "top-right",
+        matchRule: "cannes",
+        width: 180,
+        height: 180,
+        svgContent: `<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ribbonCannesGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fb7185"/><stop offset="50%" stop-color="#e11d48"/><stop offset="100%" stop-color="#881337"/></linearGradient><filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity="0.9"/></filter></defs><g filter="url(#ribbonShadow)"><polygon points="45,0 180,135 180,180 0,0" fill="url(#ribbonCannesGrad)"/><line x1="50" y1="0" x2="180" y2="130" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/><line x1="10" y1="0" x2="180" y2="170" stroke="rgba(0,0,0,0.4)" stroke-width="2"/><g transform="translate(100, 75) rotate(45)"><text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="10.5" fill="#ffffff" text-anchor="middle" letter-spacing="2">PALME D'OR</text><text x="0" y="11" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="7.5" fill="#ffe4e6" text-anchor="middle" letter-spacing="1">🌿 CANNES WINNER 🌿</text></g></g></svg>`
+    },
+    {
+        id: "builtin_badge_ribbon_criterion",
+        name: "Criterion Collection (Ribbon)",
+        category: "ribbon",
+        position: "top-right",
+        matchRule: "criterion",
+        width: 180,
+        height: 180,
+        svgContent: `<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ribbonCritGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e293b"/><stop offset="50%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020617"/></linearGradient><filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity="0.9"/></filter></defs><g filter="url(#ribbonShadow)"><polygon points="45,0 180,135 180,180 0,0" fill="url(#ribbonCritGrad)"/><line x1="50" y1="0" x2="180" y2="130" stroke="#facc15" stroke-width="2"/><line x1="10" y1="0" x2="180" y2="170" stroke="#facc15" stroke-width="2"/><g transform="translate(100, 75) rotate(45)"><text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="10" fill="#facc15" text-anchor="middle" letter-spacing="2">CRITERION</text><text x="0" y="11" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="7" fill="#ffffff" text-anchor="middle" letter-spacing="1">SPECIAL EDITION</text></g></g></svg>`
+    },
+    {
+        id: "builtin_badge_ribbon_leaving_soon",
+        name: "Leaving Soon Warning Banner",
+        category: "ribbon",
+        position: "top-center",
+        matchRule: "leaving_soon",
+        width: 600,
+        height: 56,
+        svgContent: `<svg width="600" height="56" viewBox="0 0 600 56" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="leaveWarnGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#991b1b"/><stop offset="50%" stop-color="#dc2626"/><stop offset="100%" stop-color="#991b1b"/></linearGradient><filter id="bannerShadow" x="-5%" y="-10%" width="110%" height="130%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.85"/></filter></defs><rect x="0" y="0" width="600" height="56" fill="url(#leaveWarnGrad)" filter="url(#bannerShadow)"/><line x1="0" y1="2" x2="600" y2="2" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/><line x1="0" y1="54" x2="600" y2="54" stroke="#fca5a5" stroke-width="2"/><text x="300" y="36" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="20" fill="#ffffff" text-anchor="middle" letter-spacing="2.5">⚠️ LEAVING SOON</text></svg>`
+    },
+    {
+        id: "builtin_badge_ribbon_digital_release",
+        name: "Digital Release / Now Streaming Banner",
+        category: "ribbon",
+        position: "top-center",
+        matchRule: "digital_release",
+        width: 600,
+        height: 52,
+        svgContent: `<svg width="600" height="52" viewBox="0 0 600 52" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="streamGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="50%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#1e1b4b"/></linearGradient><filter id="bannerShadow" x="-5%" y="-10%" width="110%" height="130%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.75"/></filter></defs><rect x="0" y="0" width="600" height="52" fill="url(#streamGrad)" filter="url(#bannerShadow)"/><line x1="0" y1="2" x2="600" y2="2" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/><line x1="0" y1="50" x2="600" y2="50" stroke="#a5b4fc" stroke-width="2"/><text x="300" y="33" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="16.5" fill="#e0e7ff" text-anchor="middle" letter-spacing="2">✨ AVAILABLE ON DIGITAL</text></svg>`
+    },
+
+    // 10. Authentic MPAA & TV Content Ratings
+    {
+        id: "builtin_badge_cr_us_r",
+        name: "Rated R",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "r",
+        width: 100,
+        height: 46,
+        svgContent: `<svg width="100" height="46" viewBox="0 0 100 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="96" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#ef4444" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="92" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="50" y="29" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="18" fill="#f87171" text-anchor="middle" letter-spacing="2">R</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_pg13",
+        name: "Rated PG-13",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "pg-13",
+        width: 120,
+        height: 46,
+        svgContent: `<svg width="120" height="46" viewBox="0 0 120 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="116" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#f59e0b" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="112" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="60" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="14" fill="#fbbf24" text-anchor="middle" letter-spacing="1.5">PG-13</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_pg",
+        name: "Rated PG",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "pg",
+        width: 100,
+        height: 46,
+        svgContent: `<svg width="100" height="46" viewBox="0 0 100 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="96" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#38bdf8" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="92" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="50" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="15" fill="#7dd3fc" text-anchor="middle" letter-spacing="1.5">PG</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_tv_ma",
+        name: "TV-MA",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "tv-ma",
+        width: 120,
+        height: 46,
+        svgContent: `<svg width="120" height="46" viewBox="0 0 120 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="116" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#dc2626" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="112" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="60" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="13.5" fill="#fca5a5" text-anchor="middle" letter-spacing="1.5">TV-MA</text></svg>`
     }
 ];
