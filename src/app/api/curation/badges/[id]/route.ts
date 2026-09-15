@@ -13,23 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             return new NextResponse("Badge not found", { status: 404 });
         }
 
-        // 1. Direct match with built-in badge definitions
-        const directBuiltin = DEFAULT_BUILTIN_BADGE_DEFINITIONS.find(b => 
-            b.id === decodedId || 
-            b.id.toLowerCase() === decodedId.toLowerCase() ||
-            b.name.toLowerCase() === decodedId.toLowerCase() ||
-            b.matchRule === decodedId
-        );
-        if (directBuiltin && directBuiltin.svgContent) {
-            return new NextResponse(directBuiltin.svgContent, {
-                headers: {
-                    "Content-Type": "image/svg+xml; charset=utf-8",
-                    "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
-                }
-            });
-        }
-
-        // 2. Query database for CustomBadge record
+        // 1. Query database for CustomBadge record
         const badge = await prisma.customBadge.findFirst({
             where: {
                 OR: [
@@ -42,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         const targetFilePath = badge?.filePath || "";
         let mimeType = badge?.mimeType || "image/png";
 
-        // 3. Resolve candidate file paths across data/custom_badges and public/kometa_stock
+        // 2. Resolve candidate file paths across data/custom_badges and public/kometa_stock
         const candidatePaths: string[] = [];
         if (targetFilePath) {
             candidatePaths.push(targetFilePath);
@@ -53,11 +37,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }
 
         // Also check decodedId in common folders
-        candidatePaths.push(path.join(process.cwd(), "data", "custom_badges", `${decodedId}.svg`));
         candidatePaths.push(path.join(process.cwd(), "data", "custom_badges", `${decodedId}.png`));
+        candidatePaths.push(path.join(process.cwd(), "data", "custom_badges", `${decodedId}.svg`));
         candidatePaths.push(path.join(process.cwd(), "data", "custom_badges", decodedId));
-        candidatePaths.push(path.join(process.cwd(), "public", "kometa_stock", `${decodedId}.svg`));
         candidatePaths.push(path.join(process.cwd(), "public", "kometa_stock", `${decodedId}.png`));
+        candidatePaths.push(path.join(process.cwd(), "public", "kometa_stock", `${decodedId}.svg`));
         candidatePaths.push(path.join(process.cwd(), "public", "kometa_stock", decodedId));
 
         for (const cand of candidatePaths) {
@@ -81,6 +65,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                     }
                 } catch (readErr) {}
             }
+        }
+
+        // 3. Fallback to built-in badge definitions if no disk file exists
+        const directBuiltin = DEFAULT_BUILTIN_BADGE_DEFINITIONS.find(b => 
+            b.id === decodedId || 
+            b.id.toLowerCase() === decodedId.toLowerCase() ||
+            b.name.toLowerCase() === decodedId.toLowerCase() ||
+            b.matchRule === decodedId
+        );
+        if (directBuiltin && directBuiltin.svgContent) {
+            return new NextResponse(directBuiltin.svgContent, {
+                headers: {
+                    "Content-Type": "image/svg+xml; charset=utf-8",
+                    "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                }
+            });
         }
 
         // 4. Built-in badge fallback & auto-repair if DB record exists

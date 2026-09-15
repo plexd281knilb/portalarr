@@ -76,6 +76,7 @@ import {
     toggleMultipleCustomBadgesAction,
     toggleCustomBadgeAction,
     seedDefaultCustomBadgesAction,
+    syncOfficialKometaBadgesAction,
     uploadCustomBadgeAction,
     downloadAllKometaPacksAction,
     readLocalKometaConfigAction,
@@ -210,6 +211,7 @@ export function KometaStudio() {
     const [simBadgeScale, setSimBadgeScale] = useState<number>(1.0);
     const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson">("glass");
     const [seedingBadges, setSeedingBadges] = useState(false);
+    const [syncingOfficialBadges, setSyncingOfficialBadges] = useState(false);
     const [simDovetailResolutionHdr, setSimDovetailResolutionHdr] = useState<boolean>(true);
     const [simPosterImage, setSimPosterImage] = useState<string>("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
     const [posterPickerModalOpen, setPosterPickerModalOpen] = useState(false);
@@ -1896,13 +1898,30 @@ export function KometaStudio() {
     };
 
     // Custom Badge Handlers
+    const handleSyncOfficialKometaBadges = async () => {
+        setSyncingOfficialBadges(true);
+        try {
+            const res = await syncOfficialKometaBadgesAction();
+            if (res.success && res.badges) {
+                setCustomBadges(res.badges);
+                setOverlayMessage({ success: true, text: res.message || "Synced official Kometa overlays!" });
+            } else {
+                setOverlayMessage({ success: false, text: res.error || "Failed syncing official Kometa overlays." });
+            }
+        } catch (e: any) {
+            setOverlayMessage({ success: false, text: e.message || "Failed syncing official Kometa overlays." });
+        } finally {
+            setSyncingOfficialBadges(false);
+        }
+    };
+
     const handleSeedDefaultBadges = async () => {
         setSeedingBadges(true);
         try {
             const res = await seedDefaultCustomBadgesAction();
             if (res.success && res.badges) {
                 setCustomBadges(res.badges);
-                setOverlayMessage({ success: true, text: res.message || "Installed 35+ default badges!" });
+                setOverlayMessage({ success: true, text: res.message || "Installed default badges!" });
             } else {
                 setOverlayMessage({ success: false, text: res.error || "Failed installing default badges." });
             }
@@ -3486,13 +3505,13 @@ export function KometaStudio() {
                                     <Button
                                         type="button"
                                         size="sm"
-                                        disabled={seedingBadges}
-                                        onClick={handleSeedDefaultBadges}
-                                        className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer"
-                                        title="Seed or reset 35+ essential high-DPI SVGs (4K UHD, DV, HDR10+, Atmos, IMAX, Netflix, HBO Max, etc.)"
+                                        disabled={syncingOfficialBadges}
+                                        onClick={handleSyncOfficialKometaBadges}
+                                        className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer"
+                                        title="Sync 190+ authentic official transparent PNG badges directly from the Kometa GitHub repository (Resolutions, HDR, Dolby Atmos, IMAX, Criterion, Streaming, Ribbons, Ratings)"
                                     >
-                                        {seedingBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 fill-slate-950" />}
-                                        <span>⚡ Install / Reset 35+ Essential Badges</span>
+                                        {syncingOfficialBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 fill-slate-950" />}
+                                        <span>✨ Sync Official Kometa Overlays (190+ PNGs)</span>
                                     </Button>
                                     <Button
                                         type="button"
@@ -3699,16 +3718,20 @@ export function KometaStudio() {
                             {/* Custom Badges Grid */}
                             {filteredCustomBadges.length === 0 ? (
                                 <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 space-y-3">
-                                    <Zap className="h-8 w-8 text-amber-400/50 mx-auto" />
-                                    <p className="text-xs text-slate-400">No custom badges found matching your filter.</p>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        onClick={handleSeedDefaultBadges}
-                                        className="bg-purple-600 hover:bg-purple-500 text-white text-xs h-8 px-3"
-                                    >
-                                        ⚡ Install 35+ Essential High-DPI Badges
-                                    </Button>
+                                    <Sparkles className="h-8 w-8 text-amber-400/80 mx-auto animate-pulse" />
+                                    <p className="text-xs text-slate-400">No custom badges found in vault.</p>
+                                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            disabled={syncingOfficialBadges}
+                                            onClick={handleSyncOfficialKometaBadges}
+                                            className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer"
+                                        >
+                                            {syncingOfficialBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 fill-slate-950" />}
+                                            <span>✨ Sync Official Kometa Overlays (190+ PNGs)</span>
+                                        </Button>
+                                    </div>
                                 </div>
                             ) : (
                                 <>
