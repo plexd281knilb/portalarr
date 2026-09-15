@@ -51,7 +51,7 @@ import {
     PARENTAL_CATEGORY_INFO,
     SEVERITY_LEVELS,
     CustomTagRule
-} from "@/lib/curation/parental-guide";
+} from "@/lib/curation/parental-guide-types";
 
 interface PlexServerItem {
     serverId: string;

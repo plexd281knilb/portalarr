@@ -22,6 +22,13 @@ export interface ParentalTaggingOptions {
     dryRun?: boolean;
 }
 
+export interface CustomTagRule {
+    tagName: string;
+    field: "label" | "genre" | "collection";
+    filterType: "all" | "resolution" | "hdr" | "audio" | "studio" | "decade" | "contentRating" | "rating_above" | "rating_below";
+    filterValue?: string;
+}
+
 export const PARENTAL_CATEGORY_INFO: Record<ParentalCategoryKey, { label: string; short: string; icon: string; description: string }> = {
     nudity: { label: "Sex & Nudity", short: "Nudity", icon: "🔞", description: "Sexual content, nudity, and suggestive scenes" },
     violence: { label: "Violence & Gore", short: "Violence", icon: "🩸", description: "Graphic combat, bloodshed, injuries, and weapons" },

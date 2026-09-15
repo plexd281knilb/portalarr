@@ -28,7 +28,8 @@ import {
     normalizeContentRating,
     getContentRatingRank,
     isRatingAllowedByGuardRail,
-    isMediaAllowedByServerGuardRail
+    isMediaAllowedByServerGuardRail,
+    CustomTagRule
 } from "./parental-guide-types";
 
 /**
@@ -820,13 +821,6 @@ export async function getStoredParentalAdvisoriesForLibrary(
     } catch (e) {
         return { items: [] };
     }
-}
-
-export interface CustomTagRule {
-    tagName: string;
-    field: "label" | "genre" | "collection";
-    filterType: "all" | "resolution" | "hdr" | "audio" | "studio" | "decade" | "contentRating" | "rating_above" | "rating_below";
-    filterValue?: string;
 }
 
 /**
