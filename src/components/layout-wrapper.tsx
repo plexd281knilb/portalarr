@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Sidebar, MobileSidebar } from "@/components/sidebar";
-import { LogOut, Settings, LayoutDashboard, Server, BookOpen, User } from "lucide-react";
+import { LogOut, LogIn, Settings, LayoutDashboard, Server, BookOpen, User } from "lucide-react";
 import { logout, getSession } from "@/app/auth-actions";
 import { checkUserLibraryAccess } from "@/app/actions";
 import { useState, useEffect } from "react";
@@ -14,14 +14,18 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const [hasLibraryAccess, setHasLibraryAccess] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState("");
 
   useEffect(() => {
     async function checkAccess() {
       try {
         const session = await getSession();
         if (session) {
+          setIsLoggedIn(true);
           const isAdm = session.role === "ADMIN";
           setIsAdmin(isAdm);
+          setUsername((session.username as string) || "");
           if (isAdm) {
             setHasLibraryAccess(true);
           } else {
@@ -29,7 +33,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
             setHasLibraryAccess(hasAcc);
           }
         } else {
+          setIsLoggedIn(false);
           setIsAdmin(false);
+          setUsername("");
           setHasLibraryAccess(false);
         }
       } catch (e) {
@@ -47,52 +53,75 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         <ImpersonationBanner />
         {/* --- GLOBAL USER HEADER --- */}
         {pathname !== "/login" && (
-          <header className="flex items-center justify-between px-6 h-16 border-b bg-muted/20 shrink-0">
+          <header className="flex items-center justify-between px-4 sm:px-6 h-16 border-b bg-muted/20 shrink-0">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 <Server className="h-6 w-6 text-primary" />
                 <span className="font-bold text-xl tracking-tight">Portalarr</span>
             </Link>
             
-            <div className="flex items-center gap-3">
-                {hasLibraryAccess && (
-                    <Button asChild variant="ghost" size="sm" className="flex gap-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">
-                        <Link href="/library" title="Book Library">
-                            <BookOpen className="h-4 w-4" /> 
-                            <span className="hidden sm:inline font-semibold">Book Library</span>
-                        </Link>
-                    </Button>
-                )}
+            <div className="flex items-center gap-2 sm:gap-3">
+                {isLoggedIn ? (
+                  <>
+                    {hasLibraryAccess && (
+                        <Button asChild variant="ghost" size="sm" className="flex gap-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">
+                            <Link href="/library" title="Book Library">
+                                <BookOpen className="h-4 w-4" /> 
+                                <span className="hidden sm:inline font-semibold">Book Library</span>
+                            </Link>
+                        </Button>
+                    )}
 
-                {pathname === "/beta" ? (
-                    <Button asChild variant="ghost" size="sm" className="flex gap-2 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
-                        <Link href="/" title="Dashboard">
-                            <LayoutDashboard className="h-4 w-4" /> 
-                            <span className="hidden sm:inline font-semibold">Dashboard</span>
-                        </Link>
-                    </Button>
-                ) : isAdmin ? (
-                    <Button asChild variant="ghost" size="sm" className="flex gap-2 text-primary hover:text-primary hover:bg-primary/10 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
-                        <Link href="/settings" title="System Settings">
-                            <Settings className="h-4 w-4" /> 
-                            <span className="hidden sm:inline font-semibold">Settings</span>
-                        </Link>
-                    </Button>
-                ) : (
+                    {pathname === "/beta" ? (
+                        <Button asChild variant="ghost" size="sm" className="flex gap-2 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
+                            <Link href="/" title="Dashboard">
+                                <LayoutDashboard className="h-4 w-4" /> 
+                                <span className="hidden sm:inline font-semibold">Dashboard</span>
+                            </Link>
+                        </Button>
+                    ) : (
+                        <Button asChild variant="ghost" size="sm" className="flex gap-2 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all">
+                            <Link href="/beta" title="Beta Portal">
+                                <LayoutDashboard className="h-4 w-4" /> 
+                                <span className="hidden md:inline font-semibold">Beta</span>
+                            </Link>
+                        </Button>
+                    )}
+
+                    {/* Account Settings Button - Visible for ALL logged in users (Admins and Users alike) */}
                     <Button asChild variant="ghost" size="sm" className="flex gap-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-400/40 active:scale-95 transition-all">
-                        <Link href="/settings/profile" title="Account Settings">
+                        <Link href="/settings/profile" title="Account & Password Settings">
                             <User className="h-4 w-4" /> 
                             <span className="hidden sm:inline font-semibold">Account</span>
                         </Link>
                     </Button>
-                )}
 
-                <button 
-                  onClick={() => logout()} 
-                  className="flex items-center gap-1.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 hover:ring-2 hover:ring-red-500/40 px-3 py-1.5 rounded-lg active:scale-95 transition-all ml-1"
-                >
-                  <LogOut className="w-3.5 h-3.5" /> 
-                  <span className="hidden sm:inline">Sign Out</span>
-                </button>
+                    {/* System Settings Button - Visible for Admins */}
+                    {isAdmin && (
+                        <Button asChild variant="ghost" size="sm" className="flex gap-2 text-primary hover:text-primary hover:bg-primary/10 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
+                            <Link href="/settings" title="System Settings">
+                                <Settings className="h-4 w-4" /> 
+                                <span className="hidden sm:inline font-semibold">Settings</span>
+                            </Link>
+                        </Button>
+                    )}
+
+                    <button 
+                      onClick={() => logout()} 
+                      className="flex items-center gap-1.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 hover:ring-2 hover:ring-red-500/40 px-2.5 sm:px-3 py-1.5 rounded-lg active:scale-95 transition-all ml-0.5 sm:ml-1 cursor-pointer"
+                      title="Sign Out"
+                    >
+                      <LogOut className="w-3.5 h-3.5" /> 
+                      <span className="hidden sm:inline">Sign Out</span>
+                    </button>
+                  </>
+                ) : (
+                  <Button asChild size="sm" className="font-semibold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-sm">
+                    <Link href="/login">
+                      <LogIn className="h-4 w-4" />
+                      <span>Sign In</span>
+                    </Link>
+                  </Button>
+                )}
             </div>
           </header>
         )}

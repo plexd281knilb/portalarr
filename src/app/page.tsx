@@ -1,4 +1,12 @@
-import { getPublicMediaApps, getBetaDashboardText, getRoadmapText, getAlertBanner, checkUserLibraryAccess } from "@/app/actions";
+import { 
+    getPublicMediaApps, 
+    getBetaDashboardText, 
+    getRoadmapText, 
+    getAlertBanner, 
+    checkUserLibraryAccess,
+    getUserReferralInfo,
+    getPublicJoinConfig
+} from "@/app/actions";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm'; 
 import remarkBreaks from 'remark-breaks';
@@ -10,6 +18,8 @@ import ActiveDownloads from "@/components/active-downloads";
 import RequestLibraryAccess from "@/components/request-library-access";
 import FeatureVotingPoll from "@/components/feature-voting-poll";
 import MyPlexHub from "@/components/my-plex-hub";
+import PlexInviteBanner from "@/components/plex-invite-banner";
+import DashboardQuickActions from "@/components/dashboard-quick-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -31,20 +41,27 @@ export default async function UserLandingPage() {
   const sessionVal = cookieStore.get("session")?.value;
   const isLoggedIn = !!sessionVal;
   let isAdmin = false;
+  let isSuperUser = false;
+  let userSession: any = null;
+
   if (sessionVal) {
     try {
       const { payload } = await jwtVerify(sessionVal, getJwtSecret());
+      userSession = payload;
       isAdmin = payload.role === "ADMIN";
+      isSuperUser = payload.role === "SUPER_USER" || isAdmin;
     } catch (e) {}
   }
 
   // Fetch all dynamic content safely
-  const [apps, betaText, roadmapText, alertBanner, hasAccess] = await Promise.all([
+  const [apps, betaText, roadmapText, alertBanner, hasAccess, referralInfo, joinConfig] = await Promise.all([
       getPublicMediaApps().catch(() => []),
       getBetaDashboardText().catch(() => ""),
       getRoadmapText().catch(() => ""),
       getAlertBanner().catch(() => ({ enabled: false, text: "" })),
-      isLoggedIn ? checkUserLibraryAccess().catch(() => false) : Promise.resolve(false)
+      isLoggedIn ? checkUserLibraryAccess().catch(() => false) : Promise.resolve(false),
+      isLoggedIn ? getUserReferralInfo().catch(() => null) : Promise.resolve(null),
+      getPublicJoinConfig().catch(() => null)
   ]);
 
   const requestApps = apps.filter(app => 
@@ -77,6 +94,27 @@ export default async function UserLandingPage() {
                 Real-time status, active downloads, content requests, and support.
             </p>
         </section>
+
+        {/* --- DASHBOARD QUICK ACTIONS & USER NAVIGATION TABS --- */}
+        <DashboardQuickActions 
+            isLoggedIn={isLoggedIn}
+            isAdmin={isAdmin}
+            isSuperUser={isSuperUser}
+            hasLibraryAccess={hasAccess}
+            username={userSession?.username}
+        />
+
+        {/* --- PLEX INVITE & FREE TRIAL BANNER --- */}
+        {isLoggedIn && (
+            <PlexInviteBanner 
+                referralCode={referralInfo?.referralCode || userSession?.username}
+                trialDays={joinConfig?.config?.defaultTrialDays || 14}
+                username={userSession?.username}
+                totalReferrals={referralInfo?.totalReferrals || 0}
+                activeTrials={referralInfo?.activeTrials || 0}
+                conversions={referralInfo?.conversions || 0}
+            />
+        )}
 
         <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
             <SystemStatus />
@@ -136,7 +174,7 @@ export default async function UserLandingPage() {
 
         {/* --- MY PLEX HUB (PERSONAL STREAMS, WATCH HISTORY & DIAGNOSTICS) --- */}
         {isLoggedIn && (
-            <div className="w-full">
+            <div id="my-plex-hub" className="w-full scroll-mt-6">
                 <MyPlexHub />
             </div>
         )}
@@ -146,7 +184,7 @@ export default async function UserLandingPage() {
         </div>
 
         {/* ROADMAP CARD */}
-        <div className="w-full">
+        <div id="roadmap" className="w-full scroll-mt-6">
             <Card className="bg-[#121218]/80 border-primary/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
                 <CardHeader className="pb-3 border-b border-border/40">
                     <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-primary">
@@ -206,12 +244,12 @@ export default async function UserLandingPage() {
         </div>
 
         {/* COMMUNITY FEATURE SUGGESTIONS & VOTING POLL */}
-        <div className="w-full">
+        <div id="voting" className="w-full scroll-mt-6">
             <FeatureVotingPoll isAdmin={isAdmin} />
         </div>
 
         {/* BETA TESTING CARD */}
-        <div className="w-full">
+        <div id="beta" className="w-full scroll-mt-6">
             <Card className="bg-[#121218]/80 border-purple-500/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
                 <CardHeader className="pb-3 border-b border-border/40">
                     <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-purple-400">

@@ -173,7 +173,7 @@ export default function UserProfilePage() {
             </div>
 
             {/* REFERRAL & INVITE LINK CARD */}
-            <Card className="border-purple-500/30 bg-purple-950/10 backdrop-blur-md shadow-sm relative overflow-hidden">
+            <Card id="referral" className="border-purple-500/30 bg-purple-950/10 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -381,7 +381,7 @@ export default function UserProfilePage() {
             </Card>
 
             {/* SEND-TO-KINDLE DELIVERY CARD */}
-            <Card className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden">
+            <Card id="kindle" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -533,7 +533,7 @@ export default function UserProfilePage() {
 
             <div className="grid gap-6 md:grid-cols-2">
                 {/* ACCOUNT INFORMATION CARD */}
-                <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
+                <Card id="details" className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
                     <CardHeader>
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <ShieldCheck className="h-5 w-5 text-primary" /> Account Details
@@ -604,7 +604,7 @@ export default function UserProfilePage() {
                 </Card>
 
                 {/* CHANGE PASSWORD CARD */}
-                <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
+                <Card id="password" className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
                     <CardHeader>
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <KeyRound className="h-5 w-5 text-primary" /> Change Password
