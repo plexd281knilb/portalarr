@@ -95,72 +95,6 @@ function ensureBackupDir() {
     }
 }
 
-let cachedFontBase64 = "";
-
-/**
- * Returns embedded @font-face CSS style block with bundled Base64 TrueType font.
- * Ensures 100% reliable SVG typography rendering in Docker, Linux, Alpine, and headless environments.
- */
-export function getEmbeddedFontStyle(): string {
-    if (!cachedFontBase64) {
-        try {
-            const candidatePaths = [
-                path.join(process.cwd(), "public", "fonts", "arialbd.ttf"),
-                path.join(process.cwd(), "public", "fonts", "DejaVuSans-Bold.ttf"),
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-                "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-                "C:\\Windows\\Fonts\\arialbd.ttf",
-                "C:\\Windows\\Fonts\\arial.ttf"
-            ];
-            for (const p of candidatePaths) {
-                if (fs.existsSync(p)) {
-                    cachedFontBase64 = fs.readFileSync(p).toString("base64");
-                    break;
-                }
-            }
-        } catch (e) {}
-    }
-    if (cachedFontBase64) {
-        return `<style>
-            @font-face {
-                font-family: 'KometaSans';
-                src: url('data:font/ttf;base64,${cachedFontBase64}');
-                font-weight: 900;
-                font-style: normal;
-            }
-            text {
-                font-family: 'KometaSans', 'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif !important;
-            }
-        </style>`;
-    }
-    return `<style>
-        text {
-            font-family: 'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif !important;
-        }
-    </style>`;
-}
-
-/**
- * Injects embedded TrueType font @font-face into SVG payload before passing to Sharp / librsvg.
- */
-export function injectEmbeddedFontIntoSvg(svg: string): string {
-    if (!svg || typeof svg !== "string") return svg;
-    const fontStyle = getEmbeddedFontStyle();
-    if (!fontStyle) return svg;
-    if (svg.includes("KometaSans")) return svg;
-    if (svg.includes("<defs>")) {
-        return svg.replace("<defs>", `<defs>${fontStyle}`);
-    }
-    if (svg.includes("<defs/>")) {
-        return svg.replace("<defs/>", `<defs>${fontStyle}</defs>`);
-    }
-    if (svg.includes("<svg")) {
-        return svg.replace(/<svg([^>]*)>/, `<svg$1><defs>${fontStyle}</defs>`);
-    }
-    return svg;
-}
-
 /**
  * Reads an official Kometa stock asset buffer from public/kometa_stock.
  */
@@ -182,14 +116,13 @@ export function resolveStockResolutionBadgePath(
     hdr?: string | null
 ): string | null {
     const resUpper = (resolution || "").toUpperCase();
-    const is4k = resUpper.includes("4K") || resUpper.includes("2160");
-    const is1080 = resUpper.includes("1080");
-    const is720 = resUpper.includes("720");
+    const is4k = resUpper.includes("4K") || resUpper.includes("2160") || resUpper.includes("UHD");
+    const is1080 = resUpper.includes("1080") || resUpper.includes("FHD");
+    const is720 = resUpper.includes("720") || resUpper.includes("HD");
     const is576 = resUpper.includes("576");
     const is480 = resUpper.includes("480") || resUpper.includes("SD");
 
-    const basePrefix = is4k ? "4k" : is1080 ? "1080p" : is720 ? "720p" : is576 ? "576p" : is480 ? "480p" : "";
-    if (!basePrefix) return null;
+    const basePrefix = is4k ? "4k" : is1080 ? "1080p" : is720 ? "720p" : is576 ? "576p" : is480 ? "480p" : "1080p";
 
     const hdrUpper = (hdr || "").toUpperCase();
     const isDv = hdrUpper.includes("DV") || hdrUpper.includes("DOLBY") || hdrUpper.includes("VISION");
@@ -209,6 +142,11 @@ export function resolveStockResolutionBadgePath(
     if (fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
         return candidate;
     }
+
+    // Fallback candidates
+    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, `resolution/${basePrefix}.png`))) {
+        return `resolution/${basePrefix}.png`;
+    }
     return null;
 }
 
@@ -217,17 +155,17 @@ export function resolveStockResolutionBadgePath(
  */
 export function resolveStockRibbonPath(
     ribbonName: string,
-    theme: string = "crimson"
+    theme: string = "gold"
 ): string | null {
-    const color = (theme === "gold" || theme === "amber-gold") ? "yellow"
-        : (theme === "glass" || theme === "minimal") ? "black"
-        : (theme === "classic") ? "gray"
+    const color = (theme === "gold" || theme === "amber-gold" || theme === "yellow") ? "yellow"
+        : (theme === "glass" || theme === "minimal" || theme === "black") ? "black"
+        : (theme === "classic" || theme === "gray") ? "gray"
         : "red";
 
-    const nameLower = ribbonName.toLowerCase().replace(/[^a-z0-9_]/g, "");
+    const nameLower = (ribbonName || "").toLowerCase().replace(/[^a-z0-9_]/g, "");
 
     let assetName = `blank-${color}`;
-    if (nameLower.includes("oscar") || nameLower.includes("academy")) assetName = "oscars";
+    if (nameLower.includes("oscar") || nameLower.includes("academy") || nameLower.includes("bestpicture")) assetName = "oscars";
     else if (nameLower.includes("bafta")) assetName = "bafta";
     else if (nameLower.includes("cannes") || nameLower.includes("palme")) assetName = "cannes";
     else if (nameLower.includes("emmy")) assetName = "emmys";
@@ -245,10 +183,17 @@ export function resolveStockRibbonPath(
     else if (nameLower.includes("spirit")) assetName = "spirit";
     else if (nameLower.includes("cesar")) assetName = "cesar";
     else if (nameLower.includes("berlinale")) assetName = "berlinale";
+    else if (nameLower.includes("common")) assetName = "common";
 
     const candidate = `ribbon/${color}/${assetName}.png`;
     if (fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
         return candidate;
+    }
+
+    // Color fallback to yellow or red
+    const yellowCandidate = `ribbon/yellow/${assetName}.png`;
+    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, yellowCandidate))) {
+        return yellowCandidate;
     }
 
     const redCandidate = `ribbon/red/${assetName}.png`;
@@ -256,22 +201,51 @@ export function resolveStockRibbonPath(
         return redCandidate;
     }
 
-    return null;
+    // Default blank ribbon in theme color
+    const blankCandidate = `ribbon/${color}/blank-${color}.png`;
+    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, blankCandidate))) {
+        return blankCandidate;
+    }
+
+    return `ribbon/yellow/blank-yellow.png`;
 }
 
 /**
  * Resolves stock Kometa edition badge PNG.
  */
 export function resolveStockEditionBadgePath(edition: string): string | null {
-    const nameLower = (edition || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const candidates = [
-        `edition/${nameLower}.png`,
-        `edition/${nameLower.replace(/edition$/, "")}.png`,
-        `edition/${nameLower.replace(/cut$/, "")}.png`
-    ];
+    const raw = (edition || "").toLowerCase();
+    let nameKey = raw.replace(/[^a-z0-9]/g, "");
 
-    for (const c of candidates) {
-        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, c))) return c;
+    if (nameKey.includes("director")) nameKey = "directors";
+    else if (nameKey.includes("extended")) nameKey = "extended";
+    else if (nameKey.includes("imax")) nameKey = "imax";
+    else if (nameKey.includes("criterion")) nameKey = "criterion";
+    else if (nameKey.includes("theatrical")) nameKey = "theatrical";
+    else if (nameKey.includes("unrated")) nameKey = "unrated";
+    else if (nameKey.includes("uncut")) nameKey = "uncut";
+    else if (nameKey.includes("remaster")) nameKey = "remastered";
+    else if (nameKey.includes("special")) nameKey = "special";
+    else if (nameKey.includes("collector")) nameKey = "collector";
+    else if (nameKey.includes("ultimate")) nameKey = "ultimate";
+    else if (nameKey.includes("anniversary")) nameKey = "anniversary";
+    else if (nameKey.includes("definitive")) nameKey = "definitive";
+    else if (nameKey.includes("openmatte") || nameKey.includes("open_matte")) nameKey = "openmatte";
+    else if (nameKey.includes("blackchrome") || nameKey.includes("black_and_chrome")) nameKey = "blackchrome";
+    else if (nameKey.includes("coda")) nameKey = "coda";
+    else if (nameKey.includes("diamond")) nameKey = "diamond";
+    else if (nameKey.includes("enhanced")) nameKey = "enhanced";
+    else if (nameKey.includes("final")) nameKey = "final";
+    else if (nameKey.includes("international")) nameKey = "international";
+    else if (nameKey.includes("platinum")) nameKey = "platinum";
+    else if (nameKey.includes("producer")) nameKey = "producers";
+    else if (nameKey.includes("donner")) nameKey = "richarddonner";
+    else if (nameKey.includes("ulysses")) nameKey = "ulysses";
+    else if (nameKey.includes("alternate")) nameKey = "alternate";
+
+    const candidate = `edition/${nameKey}.png`;
+    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
+        return candidate;
     }
     return null;
 }
@@ -279,19 +253,23 @@ export function resolveStockEditionBadgePath(edition: string): string | null {
 /**
  * Resolves stock Kometa audio codec badge PNG.
  */
-export function resolveStockAudioCodecBadgePath(codec: string): string | null {
+export function resolveStockAudioCodecBadgePath(codec: string, channels?: string | null): string | null {
     const nameLower = (codec || "").toLowerCase();
     let filename = "";
+
     if (nameLower.includes("atmos")) filename = "atmos.png";
     else if (nameLower.includes("truehd")) filename = "truehd.png";
-    else if (nameLower.includes("dts-hd") || nameLower.includes("dtshd")) filename = "dts-hd.png";
-    else if (nameLower.includes("dts-x") || nameLower.includes("dtsx")) filename = "dts-x.png";
+    else if (nameLower.includes("dts:x") || nameLower.includes("dtsx") || nameLower.includes("dts-x")) filename = "dtsx.png";
+    else if (nameLower.includes("dts-hd") || nameLower.includes("dtshd") || nameLower.includes("dtsma") || nameLower.includes("ma")) filename = "ma.png";
+    else if (nameLower.includes("dts-es") || nameLower.includes("dtses")) filename = "dtses.png";
     else if (nameLower.includes("dts")) filename = "dts.png";
     else if (nameLower.includes("flac")) filename = "flac.png";
-    else if (nameLower.includes("eac3") || nameLower.includes("ddp") || nameLower.includes("plus")) filename = "eac3.png";
-    else if (nameLower.includes("ac3") || nameLower.includes("dolby digital")) filename = "ac3.png";
+    else if (nameLower.includes("eac3") || nameLower.includes("ddp") || nameLower.includes("digital+")) filename = "plus.png";
+    else if (nameLower.includes("ac3") || nameLower.includes("dolby digital") || nameLower.includes("digital")) filename = "digital.png";
     else if (nameLower.includes("aac")) filename = "aac.png";
     else if (nameLower.includes("opus")) filename = "opus.png";
+    else if (nameLower.includes("pcm")) filename = "pcm.png";
+    else if (nameLower.includes("mp3")) filename = "mp3.png";
 
     if (filename) {
         const p = `audio_codec/standard/${filename}`;
@@ -301,1208 +279,144 @@ export function resolveStockAudioCodecBadgePath(codec: string): string | null {
 }
 
 /**
- * Creates Kometa-Style Dovetailed Composite SVG combining Resolution (4K, 1080p, 720p, SD) and HDR (Dolby Vision, HDR10+, HDR, SDR)
- * into a single interlocking horizontal pill badge.
+ * Resolves stock Kometa content rating badge PNG.
  */
-export function generateDovetailedResolutionHdrBadgeSvg(
-    resolution: "4K" | "1080p" | "720p" | "SD" | string = "4K",
-    hdr?: "DV" | "HDR10+" | "HDR10" | "HDR" | "SDR" | string | null,
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const is4k = resolution.toUpperCase().includes("4K") || resolution.includes("2160");
-    const isFhd = resolution.toUpperCase().includes("1080");
-    const isHd = resolution.toUpperCase().includes("720");
-    const resText = is4k ? "4K" : isFhd ? "1080p" : isHd ? "720p" : resolution.toUpperCase();
-    const resSub = is4k ? "UHD" : isFhd ? "FHD" : isHd ? "HD" : "SD";
+export function resolveStockContentRatingBadgePath(rating: string): string | null {
+    const raw = (rating || "").toUpperCase().trim();
+    let filename = "";
 
-    const hdrType = (hdr || (is4k ? "HDR" : "SDR")).toUpperCase();
-    const isDv = hdrType === "DV" || hdrType.includes("DOLBY") || hdrType.includes("VISION");
-    const isHdr10Plus = hdrType.includes("HDR10+") || hdrType.includes("PLUS");
-    const isHdr = !isDv && (hdrType.includes("HDR") || hdrType === "HDR10");
+    if (raw === "PG-13" || raw.includes("PG-13") || raw === "US:PG-13" || raw === "PG13") filename = "uspg-13.png";
+    else if (raw === "R" || raw === "US:R" || raw === "RESTRICTED") filename = "usr.png";
+    else if (raw === "PG" || raw === "US:PG") filename = "uspg.png";
+    else if (raw === "G" || raw === "US:G") filename = "usg.png";
+    else if (raw === "NC-17" || raw === "US:NC-17" || raw === "NC17") filename = "usnc-17.png";
+    else if (raw === "TV-MA" || raw === "US:TV-MA" || raw === "TVMA") filename = "ustv-ma.png";
+    else if (raw === "TV-14" || raw === "US:TV-14" || raw === "TV14") filename = "ustv-14.png";
+    else if (raw === "TV-PG" || raw === "US:TV-PG" || raw === "TVPG") filename = "ustv-pg.png";
+    else if (raw === "TV-G" || raw === "US:TV-G" || raw === "TVG") filename = "ustv-g.png";
+    else if (raw === "TV-Y" || raw === "US:TV-Y" || raw === "TVY") filename = "ustv-y.png";
+    else if (raw === "TV-Y7" || raw === "US:TV-Y7" || raw === "TVY7") filename = "ustv-y.png";
+    else if (raw === "NR" || raw === "UNRATED" || raw === "NOT RATED") filename = "usnr.png";
+    else if (raw === "12" || raw === "12A" || raw.includes("12")) filename = "uk12.png";
+    else if (raw === "15" || raw.includes("15")) filename = "uk15.png";
+    else if (raw === "18" || raw.includes("18")) filename = "uk18.png";
+    else if (raw === "U") filename = "uku.png";
+    else if (raw === "DE:0" || raw === "0") filename = "de0.png";
+    else if (raw === "DE:6" || raw === "6") filename = "de6.png";
+    else if (raw === "DE:12") filename = "de12.png";
+    else if (raw === "DE:16") filename = "de16.png";
+    else if (raw === "DE:18") filename = "de18.png";
+    else if (raw.includes("AU_M") || raw === "AU:M" || raw === "M") filename = "au_m.png";
+    else if (raw.includes("AU_MA") || raw === "AU:MA15+" || raw === "MA15+") filename = "au_ma.png";
+    else if (raw.includes("AU_PG") || raw === "AU:PG") filename = "au_pg.png";
+    else if (raw.includes("AU_G") || raw === "AU:G") filename = "au_g.png";
+    else if (raw.includes("AU_R") || raw === "AU:R") filename = "au_r.png";
 
-    const width = isDv ? 245 : (isHdr10Plus ? 230 : 210);
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" : 
-                   theme === "classic" ? "rgba(15, 23, 42, 0.96)" :
-                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
-                   theme === "cyber" ? "rgba(2, 6, 23, 0.95)" :
-                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
-                   "rgba(8, 12, 22, 0.94)";
-
-    let strokeGrad = "url(#dtGoldGrad)";
-    if (theme === "cyber") strokeGrad = "url(#dtCyberGrad)";
-    else if (theme === "crimson") strokeGrad = "url(#dtCrimsonGrad)";
-    else if (theme === "classic") strokeGrad = "#94a3b8";
-    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
-    else if (isDv) strokeGrad = "url(#dtDvGrad)";
-    else if (isHdr10Plus) strokeGrad = "url(#dtPlusGrad)";
-    else if (isHdr) strokeGrad = "url(#dtHdrGrad)";
-    else if (isFhd) strokeGrad = "url(#dtFhdGrad)";
-
-    return `
-    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="dtGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#fef08a" />
-                <stop offset="50%" stop-color="#eab308" />
-                <stop offset="100%" stop-color="#ca8a04" />
-            </linearGradient>
-            <linearGradient id="dtDvGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#fbbf24" />
-                <stop offset="40%" stop-color="#c084fc" />
-                <stop offset="100%" stop-color="#818cf8" />
-            </linearGradient>
-            <linearGradient id="dtPlusGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#fbbf24" />
-                <stop offset="50%" stop-color="#38bdf8" />
-                <stop offset="100%" stop-color="#06b6d4" />
-            </linearGradient>
-            <linearGradient id="dtHdrGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#facc15" />
-                <stop offset="100%" stop-color="#38bdf8" />
-            </linearGradient>
-            <linearGradient id="dtFhdGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#38bdf8" />
-                <stop offset="100%" stop-color="#0284c7" />
-            </linearGradient>
-            <linearGradient id="dtCyberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#22d3ee" />
-                <stop offset="50%" stop-color="#a855f7" />
-                <stop offset="100%" stop-color="#ec4899" />
-            </linearGradient>
-            <linearGradient id="dtCrimsonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#f43f5e" />
-                <stop offset="50%" stop-color="#be123c" />
-                <stop offset="100%" stop-color="#881337" />
-            </linearGradient>
-            <filter id="dtShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.85"/>
-            </filter>
-        </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#dtShadow)"/>
-        <!-- Specular Top Highlight -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="${theme === 'gold' ? 'rgba(254,240,138,0.5)' : theme === 'crimson' ? 'rgba(253,164,175,0.6)' : theme === 'cyber' ? 'rgba(34,211,238,0.6)' : 'rgba(255,255,255,0.4)'}" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        
-        <!-- Left: Resolution -->
-        <text x="36" y="29" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="18.5" fill="${theme === 'gold' || is4k ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle">${resText}</text>
-        <text x="70" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle">${resSub}</text>
-        
-        <!-- Dovetail Interlocking Notch / Vertical Divider -->
-        <line x1="90" y1="10" x2="90" y2="36" stroke="${theme === 'gold' ? 'rgba(250,204,21,0.4)' : theme === 'cyber' ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.25)'}" stroke-width="1.5"/>
-        <circle cx="90" cy="23" r="2.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : 'rgba(255,255,255,0.4)'}"/>
-
-        <!-- Right: HDR / Dolby Vision / SDR -->
-        ${isDv ? `
-            <!-- Dolby double-D iconic mark -->
-            <g transform="translate(104, 15)">
-                <rect x="0" y="0" width="4" height="16" rx="1.2" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#f43f5e' : '#c084fc'}"/>
-                <path d="M 5 0 A 8 8 0 0 1 5 16 Z" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#f43f5e' : '#c084fc'}"/>
-                <path d="M 18 0 A 8 8 0 0 0 18 16 Z" fill="${theme === 'cyber' ? '#a855f7' : theme === 'gold' ? '#eab308' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
-                <rect x="19" y="0" width="4" height="16" rx="1.2" fill="${theme === 'cyber' ? '#a855f7' : theme === 'gold' ? '#eab308' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
-            </g>
-            <text x="180" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="12.5" fill="#f8fafc" text-anchor="middle">DOLBY VISION</text>
-        ` : isHdr10Plus ? `
-            <text x="${90 + (width - 90) / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14.5" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle">HDR10+</text>
-        ` : isHdr ? `
-            <text x="${90 + (width - 90) / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14.5" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle">${hdrType === "HDR10" ? "HDR10" : "HDR"}</text>
-        ` : `
-            <text x="${90 + (width - 90) / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13" fill="rgba(255,255,255,0.7)" text-anchor="middle">SDR</text>
-        `}
-    </svg>`;
+    if (filename) {
+        const p = `cr/${filename}`;
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+    }
+    return null;
 }
 
 /**
- * Creates Kometa-Style SVG for a resolution badge (4K UHD, 1080p FHD, 720p HD, SD).
- * Features specular top highlight, metallic border gradients, and deep obsidian glass backdrop.
+ * Resolves stock Kometa studio or streaming service badge PNG.
  */
-export function generateResolutionBadgeSvg(
-    resolution: "4K" | "1080p" | "720p" | "SD",
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const is4k = resolution === "4K";
-    const bgFill = theme === "gold" && is4k 
-        ? "url(#goldBgGrad)" 
-        : theme === "gold"
-            ? "rgba(20, 15, 5, 0.95)"
-            : theme === "cyber"
-                ? "rgba(2, 6, 23, 0.94)"
-                : theme === "crimson"
-                    ? "rgba(20, 5, 10, 0.95)"
-                    : theme === "classic"
-                        ? "rgba(15, 23, 42, 0.94)"
-                        : theme === "minimal"
-                            ? "rgba(0, 0, 0, 0.85)"
-                            : "rgba(8, 12, 22, 0.92)";
-    
-    let strokeGrad = is4k 
-        ? (theme === "cyber" ? "url(#cyberStrokeGrad)" : theme === "crimson" ? "url(#crimsonStrokeGrad)" : "url(#goldStrokeGrad)")
-        : resolution === "1080p"
-            ? (theme === "cyber" ? "url(#cyberStrokeGrad)" : theme === "crimson" ? "url(#crimsonStrokeGrad)" : "url(#fhdStrokeGrad)")
-            : "url(#hdStrokeGrad)";
+export function resolveStockStudioBadgePath(studio: string): string | null {
+    const sLower = (studio || "").toLowerCase();
 
-    if (theme === "classic") strokeGrad = "#94a3b8";
-    if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
-
-    const textColor = is4k && theme === "gold" ? "#000000" : theme === "cyber" ? "#22d3ee" : theme === "crimson" ? "#fda4af" : "#ffffff";
-    const subColor = is4k && theme === "gold" ? "#1e293b" : is4k ? "#fef08a" : theme === "cyber" ? "#a855f7" : theme === "crimson" ? "#f43f5e" : "#93c5fd";
-    const textLabel = is4k ? "4K" : resolution;
-    const subLabel = is4k ? "UHD" : resolution === "1080p" ? "FHD" : "HD";
-    const dividerColor = is4k ? (theme === "gold" ? "rgba(0,0,0,0.3)" : "rgba(234,179,8,0.5)") : "rgba(148,163,184,0.4)";
-
-    return `
-    <svg width="140" height="46" viewBox="0 0 140 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="goldStrokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#fef08a" />
-                <stop offset="50%" stop-color="#eab308" />
-                <stop offset="100%" stop-color="#ca8a04" />
-            </linearGradient>
-            <linearGradient id="goldBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#fef9c3" />
-                <stop offset="50%" stop-color="#facc15" />
-                <stop offset="100%" stop-color="#eab308" />
-            </linearGradient>
-            <linearGradient id="fhdStrokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#38bdf8" />
-                <stop offset="100%" stop-color="#0284c7" />
-            </linearGradient>
-            <linearGradient id="hdStrokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#94a3b8" />
-                <stop offset="100%" stop-color="#64748b" />
-            </linearGradient>
-            <linearGradient id="cyberStrokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#22d3ee" />
-                <stop offset="100%" stop-color="#a855f7" />
-            </linearGradient>
-            <linearGradient id="crimsonStrokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#f43f5e" />
-                <stop offset="100%" stop-color="#be123c" />
-            </linearGradient>
-            <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <!-- Outer Glassmorphism Base -->
-        <rect x="2" y="2" width="136" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
-        <!-- Specular Top Highlight (Kometa Gloss Effect) -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="132" y2="5" stroke="${theme === 'gold' && is4k ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.4)'}" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <!-- Main Resolution Text -->
-        <text x="40" y="29" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="20" fill="${textColor}" text-anchor="middle">${textLabel}</text>
-        <!-- Center Divider Line -->
-        <line x1="72" y1="10" x2="72" y2="36" stroke="${dividerColor}" stroke-width="1.5"/>
-        <!-- Sub-Label (UHD / FHD / HD) -->
-        <text x="105" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14" fill="${subColor}" text-anchor="middle">${subLabel}</text>
-    </svg>`;
-}
-
-/**
- * Creates Kometa-Style SVG for HDR / Dolby Vision badge.
- * Features iconic Dolby double-D emblem or electric HDR glow.
- */
-export function generateHdrBadgeSvg(
-    hdrType: "DV" | "HDR10+" | "HDR10" | "HDR",
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const isDv = hdrType === "DV";
-    const width = isDv ? 175 : 140;
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
-                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
-                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
-                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
-                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
-                   "rgba(8, 12, 22, 0.92)";
-
-    let strokeGrad = isDv ? "url(#dvGrad)" : "url(#hdrGrad)";
-    if (theme === "gold") strokeGrad = "url(#hdrGoldGrad)";
-    else if (theme === "cyber") strokeGrad = "url(#hdrCyberGrad)";
-    else if (theme === "crimson") strokeGrad = "url(#hdrCrimsonGrad)";
-    else if (theme === "classic") strokeGrad = "#94a3b8";
-    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
-
-    if (isDv) {
-        return `
-        <svg width="175" height="46" viewBox="0 0 175 46" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-                <linearGradient id="dvGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#c084fc" />
-                    <stop offset="50%" stop-color="#818cf8" />
-                    <stop offset="100%" stop-color="#6366f1" />
-                </linearGradient>
-                <linearGradient id="hdrGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#fef08a" /><stop offset="100%" stop-color="#eab308" />
-                </linearGradient>
-                <linearGradient id="hdrCyberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#22d3ee" /><stop offset="100%" stop-color="#a855f7" />
-                </linearGradient>
-                <linearGradient id="hdrCrimsonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#f43f5e" /><stop offset="100%" stop-color="#be123c" />
-                </linearGradient>
-                <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                    <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-                </filter>
-            </defs>
-            <rect x="2" y="2" width="171" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
-            <!-- Specular Top Highlight -->
-            ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="167" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-            <!-- Dolby double-D iconic mark -->
-            <g transform="translate(14, 15)">
-                <rect x="0" y="0" width="4.5" height="16" rx="1.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#f43f5e' : '#c084fc'}"/>
-                <path d="M 6 0 A 8 8 0 0 1 6 16 Z" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#f43f5e' : '#c084fc'}"/>
-                <path d="M 21 0 A 8 8 0 0 0 21 16 Z" fill="${theme === 'gold' ? '#eab308' : theme === 'cyber' ? '#a855f7' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
-                <rect x="22.5" y="0" width="4.5" height="16" rx="1.5" fill="${theme === 'gold' ? '#eab308' : theme === 'cyber' ? '#a855f7' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
-            </g>
-            <!-- Dolby Vision Text -->
-            <text x="106" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="#f8fafc" text-anchor="middle">DOLBY VISION</text>
-        </svg>`;
+    // 1. Check streaming logos first
+    if (sLower.includes("netflix")) {
+        const p = "streaming/color/Netflix.png";
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+    }
+    if (sLower.includes("disney")) {
+        const p = "streaming/color/Disney+.png";
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+    }
+    if (sLower.includes("hbo") || sLower.includes("max")) {
+        const p = "streaming/color/HBO Max.png";
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+    }
+    if (sLower.includes("apple")) {
+        const p = "streaming/color/AppleTV+.png";
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+    }
+    if (sLower.includes("prime") || sLower.includes("amazon")) {
+        const p = "streaming/color/Prime Video.png";
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+    }
+    if (sLower.includes("paramount")) {
+        const p = "streaming/color/Paramount+.png";
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+    }
+    if (sLower.includes("hulu")) {
+        const p = "streaming/color/Hulu.png";
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+    }
+    if (sLower.includes("peacock")) {
+        const p = "streaming/color/Peacock.png";
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
     }
 
-    return `
-    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="hdrGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#38bdf8" />
-                <stop offset="100%" stop-color="#0284c7" />
-            </linearGradient>
-            <linearGradient id="hdrGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#fef08a" /><stop offset="100%" stop-color="#eab308" />
-            </linearGradient>
-            <linearGradient id="hdrCyberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#22d3ee" /><stop offset="100%" stop-color="#a855f7" />
-            </linearGradient>
-            <linearGradient id="hdrCrimsonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#f43f5e" /><stop offset="100%" stop-color="#be123c" />
-            </linearGradient>
-            <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
-        <!-- Specular Top Highlight -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="29" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="16" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#f8fafc'}" text-anchor="middle">${hdrType}</text>
-    </svg>`;
-}
+    // 2. Check movie studio standard directories
+    const studioDirs = ["studio/standard", "studio/bigger"];
+    for (const dir of studioDirs) {
+        const fullDir = path.join(STOCK_KOMETA_DIR, dir);
+        if (!fs.existsSync(fullDir)) continue;
 
-/**
- * Creates Kometa-Style SVG for Audio codec badge (Dolby Atmos, TrueHD, DTS:X, DTS-HD MA, 5.1/7.1).
- */
-export function generateAudioBadgeSvg(
-    audio: "ATMOS" | "TRUEHD" | "DTS:X" | "DTS-HD" | "5.1" | "7.1" | string,
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const isAtmos = audio === "ATMOS";
-    const isDts = audio.startsWith("DTS");
-    const isTrueHd = audio === "TRUEHD";
-    const width = isAtmos ? 170 : isDts ? 155 : isTrueHd ? 145 : 135;
-    const label = isAtmos ? "DOLBY ATMOS" : isTrueHd ? "TRUEHD 7.1" : audio === "DTS:X" ? "DTS:X" : audio === "DTS-HD" ? "DTS-HD MA" : `${audio} AUDIO`;
-    
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
-                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
-                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
-                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
-                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
-                   "rgba(8, 12, 22, 0.92)";
+        const files = fs.readdirSync(fullDir);
+        // Exact match
+        const exact = files.find(f => f.toLowerCase().replace(/\.png$/i, "") === sLower);
+        if (exact) return `${dir}/${exact}`;
 
-    let strokeGrad = `url(#audioStroke_${audio.replace(/[^a-zA-Z0-9]/g, '')})`;
-    if (theme === "gold") strokeGrad = "#eab308";
-    else if (theme === "cyber") strokeGrad = "#22d3ee";
-    else if (theme === "crimson") strokeGrad = "#f43f5e";
-    else if (theme === "classic") strokeGrad = "#94a3b8";
-    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
-
-    return `
-    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="audioStroke_${audio.replace(/[^a-zA-Z0-9]/g, '')}" x1="0%" y1="0%" x2="100%" y2="100%">
-                ${isAtmos ? '<stop offset="0%" stop-color="#38bdf8" /><stop offset="100%" stop-color="#0ea5e9" />' : ''}
-                ${isTrueHd ? '<stop offset="0%" stop-color="#c084fc" /><stop offset="100%" stop-color="#a855f7" />' : ''}
-                ${isDts ? '<stop offset="0%" stop-color="#f59e0b" /><stop offset="100%" stop-color="#ea580c" />' : ''}
-                ${!isAtmos && !isTrueHd && !isDts ? '<stop offset="0%" stop-color="#38bdf8" /><stop offset="100%" stop-color="#0284c7" />' : ''}
-            </linearGradient>
-            <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
-        <!-- Specular Top Highlight -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#f8fafc'}" text-anchor="middle">${label}</text>
-    </svg>`;
-}
-
-/**
- * Creates Kometa-Style SVG for Audio Channels badge (7.1, 5.1, 2.0).
- */
-export function generateAudioChannelBadgeSvg(
-    channels: string,
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const width = 115;
-    const label = `${channels} CH`;
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
-                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
-                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
-                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
-                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
-                   "rgba(8, 12, 22, 0.92)";
-
-    let strokeGrad = "url(#chGrad)";
-    if (theme === "gold") strokeGrad = "#eab308";
-    else if (theme === "cyber") strokeGrad = "#22d3ee";
-    else if (theme === "crimson") strokeGrad = "#f43f5e";
-    else if (theme === "classic") strokeGrad = "#94a3b8";
-    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
-
-    return `
-    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="chGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#38bdf8" />
-                <stop offset="100%" stop-color="#06b6d4" />
-            </linearGradient>
-            <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
-        <!-- Specular Top Highlight -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle">${label}</text>
-    </svg>`;
-}
-
-/**
- * Creates Kometa-Style SVG for Video Codec badge (HEVC, AVC, AV1, ProRes).
- */
-export function generateCodecBadgeSvg(
-    codec: string,
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const width = 125;
-    const cUpper = codec.toUpperCase();
-    const label = cUpper.includes("HEVC") ? "HEVC • 10b" : cUpper.includes("AV1") ? "AV1 • HDR" : cUpper.includes("AVC") ? "AVC • x264" : cUpper;
-    
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
-                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
-                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
-                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
-                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
-                   "rgba(8, 12, 22, 0.92)";
-
-    let strokeGrad = "url(#codecGrad)";
-    if (theme === "gold") strokeGrad = "#eab308";
-    else if (theme === "cyber") strokeGrad = "#a855f7";
-    else if (theme === "crimson") strokeGrad = "#f43f5e";
-    else if (theme === "classic") strokeGrad = "#94a3b8";
-    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
-
-    return `
-    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="codecGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#818cf8" />
-                <stop offset="100%" stop-color="#6366f1" />
-            </linearGradient>
-            <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
-        <!-- Specular Top Highlight -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#c084fc' : theme === 'crimson' ? '#fda4af' : '#c7d2fe'}" text-anchor="middle">${label}</text>
-    </svg>`;
-}
-
-/**
- * Creates Kometa-Style SVG for Movie Edition / Cut badge (IMAX Enhanced, Criterion, Director's Cut, Extended, Remux).
- */
-export function generateEditionBadgeSvg(
-    edition: string,
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const isImax = edition.toUpperCase().includes("IMAX");
-    const isCriterion = edition.toUpperCase().includes("CRITERION");
-    const isRemux = edition.toUpperCase().includes("REMUX");
-    const width = isImax ? 165 : isCriterion ? 175 : isRemux ? 160 : 180;
-    
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
-                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
-                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
-                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
-                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
-                   "rgba(8, 12, 22, 0.94)";
-
-    let strokeGrad = isImax 
-        ? "url(#imaxGrad)" 
-        : isCriterion 
-            ? "url(#critGrad)" 
-            : isRemux
-                ? "url(#remuxGrad)"
-                : "url(#editGrad)";
-
-    if (theme === "gold") strokeGrad = "url(#critGrad)";
-    else if (theme === "cyber") strokeGrad = "url(#imaxGrad)";
-    else if (theme === "crimson") strokeGrad = "#f43f5e";
-    else if (theme === "classic") strokeGrad = "#94a3b8";
-    else if (theme === "minimal") strokeGrad = "rgba(255,255,255,0.25)";
-
-    const label = isImax ? "IMAX ENHANCED" : isCriterion ? "CRITERION" : isRemux ? "REMUX • LOSSLESS" : edition.toUpperCase();
-
-    return `
-    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="imaxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#38bdf8" />
-                <stop offset="100%" stop-color="#0284c7" />
-            </linearGradient>
-            <linearGradient id="critGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#fef08a" />
-                <stop offset="50%" stop-color="#f59e0b" />
-                <stop offset="100%" stop-color="#d97706" />
-            </linearGradient>
-            <linearGradient id="remuxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#34d399" />
-                <stop offset="100%" stop-color="#059669" />
-            </linearGradient>
-            <linearGradient id="editGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#f472b6" />
-                <stop offset="100%" stop-color="#db2777" />
-            </linearGradient>
-            <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
-        <!-- Specular Top Highlight -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="12.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#38bdf8' : theme === 'crimson' ? '#fda4af' : '#fdf4ff'}" text-anchor="middle">${label}</text>
-    </svg>`;
-}
-
-/**
- * Creates Kometa-Style SVG for Studio / Network badge (HBO, Netflix, Disney+, Apple TV+, Prime, Marvel, DC, A24, Paramount+).
- */
-export function generateStudioLogoBadgeSvg(
-    studio: string,
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const s = studio.toUpperCase();
-    const width = 145;
-    let strokeColor = "#a855f7";
-    let textColor = "#ffffff";
-
-    if (s.includes("NETFLIX")) strokeColor = "#ef4444";
-    else if (s.includes("DISNEY")) strokeColor = "#38bdf8";
-    else if (s.includes("APPLE")) strokeColor = "#e2e8f0";
-    else if (s.includes("PRIME") || s.includes("AMAZON")) strokeColor = "#00a8e1";
-    else if (s.includes("MARVEL")) strokeColor = "#dc2626";
-    else if (s.includes("DC")) strokeColor = "#2563eb";
-    else if (s.includes("A24")) strokeColor = "#f59e0b";
-    else if (s.includes("PARAMOUNT")) strokeColor = "#0064ff";
-    else if (s.includes("HBO") || s.includes("MAX")) strokeColor = "#9333ea";
-
-    if (theme === "gold") strokeColor = "#eab308";
-    else if (theme === "cyber") strokeColor = "#22d3ee";
-    else if (theme === "crimson") strokeColor = "#f43f5e";
-    else if (theme === "classic") strokeColor = "#94a3b8";
-    else if (theme === "minimal") strokeColor = "rgba(255,255,255,0.25)";
-
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
-                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
-                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
-                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
-                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
-                   "rgba(8, 12, 22, 0.94)";
-
-    return `
-    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeColor}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
-        <!-- Specular Top Highlight -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : textColor}" text-anchor="middle">${s}</text>
-    </svg>`;
-}
-
-/**
- * Creates Kometa-Style SVG for Content Rating badge (G, PG, PG-13, R, NC-17, TV-MA, TV-14, TV-PG, TV-G).
- */
-export function generateContentRatingBadgeSvg(
-    rating: string,
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const r = rating.toUpperCase();
-    const isMature = r.includes("R") || r.includes("TV-MA") || r.includes("NC-17");
-    const isTeen = r.includes("PG-13") || r.includes("TV-14");
-    const width = 95;
-    let strokeColor = isMature ? "#f43f5e" : isTeen ? "#fb923c" : "#10b981";
-
-    if (theme === "gold") strokeColor = "#eab308";
-    else if (theme === "cyber") strokeColor = isMature ? "#f43f5e" : "#22d3ee";
-    else if (theme === "crimson") strokeColor = "#f43f5e";
-    else if (theme === "classic") strokeColor = "#94a3b8";
-    else if (theme === "minimal") strokeColor = "rgba(255,255,255,0.25)";
-
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
-                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
-                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
-                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
-                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
-                   "rgba(8, 12, 22, 0.92)";
-
-    return `
-    <svg width="${width}" height="46" viewBox="0 0 ${width} 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeColor}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
-        <!-- Specular Top Highlight -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : '#f8fafc'}" text-anchor="middle">${r}</text>
-    </svg>`;
-}
-
-/**
- * Creates Kometa-Style SVG for Community Ratings badge (IMDb, RT Critics, RT Audience, Metacritic).
- * Uses pure SVG vector icons for 100% reliable rendering without emoji glyph dependencies.
- */
-export function generateRatingsBadgeSvg(
-    ratings: {
-        imdb?: number;
-        rtCritics?: number;
-        rtAudience?: number;
-        metacritic?: number;
-    },
-    theme: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson" = "glass"
-): string {
-    const segments: string[] = [];
-    let curX = 12;
-
-    if (ratings.imdb) {
-        segments.push(`
-            <rect x="${curX}" y="11" width="34" height="22" rx="4" fill="#f5c518"/>
-            <text x="${curX + 17}" y="26" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="10.5" fill="#000" text-anchor="middle">IMDb</text>
-            <text x="${curX + 44}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="15" fill="#fff">${ratings.imdb.toFixed(1)}</text>
-        `);
-        curX += 78;
-    }
-
-    if (ratings.rtCritics) {
-        const isFresh = ratings.rtCritics >= 60;
-        segments.push(`
-            <!-- RT Tomato Vector Icon -->
-            <g transform="translate(${curX}, 13)">
-                <circle cx="8" cy="9" r="8" fill="${isFresh ? '#f93a1e' : '#16a34a'}"/>
-                <polygon points="5,3 8,5 11,3 9,1 7,1" fill="#15803d"/>
-            </g>
-            <text x="${curX + 26}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14.5" fill="#fff">${ratings.rtCritics}%</text>
-        `);
-        curX += 72;
-    }
-
-    if (ratings.rtAudience) {
-        segments.push(`
-            <!-- RT Audience Popcorn Vector Icon -->
-            <g transform="translate(${curX}, 13)">
-                <polygon points="2,7 14,7 12,18 4,18" fill="#dc2626"/>
-                <polygon points="5,7 7,7 6,18 4,18" fill="#ffffff"/>
-                <polygon points="9,7 11,7 10,18 8,18" fill="#ffffff"/>
-                <circle cx="5" cy="5" r="2.5" fill="#facc15"/>
-                <circle cx="8" cy="3.5" r="3" fill="#fde047"/>
-                <circle cx="11" cy="5" r="2.5" fill="#facc15"/>
-            </g>
-            <text x="${curX + 26}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14.5" fill="#fff">${ratings.rtAudience}%</text>
-        `);
-        curX += 72;
-    }
-
-    if (ratings.metacritic) {
-        segments.push(`
-            <rect x="${curX}" y="11" width="24" height="22" rx="4" fill="#66cc33"/>
-            <text x="${curX + 12}" y="26" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="10.5" fill="#fff" text-anchor="middle">MC</text>
-            <text x="${curX + 34}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="15" fill="#fff">${ratings.metacritic}</text>
-        `);
-        curX += 68;
-    }
-
-    if (segments.length === 0) return "";
-
-    const totalWidth = curX + 6;
-    const bgFill = theme === "gold" ? "rgba(20, 15, 5, 0.95)" :
-                   theme === "classic" ? "rgba(15, 23, 42, 0.94)" :
-                   theme === "minimal" ? "rgba(0, 0, 0, 0.85)" :
-                   theme === "cyber" ? "rgba(2, 6, 23, 0.94)" :
-                   theme === "crimson" ? "rgba(20, 5, 10, 0.95)" :
-                   "rgba(8, 12, 22, 0.94)";
-
-    const strokeColor = theme === "gold" ? "#eab308" :
-                        theme === "cyber" ? "#22d3ee" :
-                        theme === "crimson" ? "#f43f5e" :
-                        theme === "classic" ? "#94a3b8" :
-                        theme === "minimal" ? "rgba(255,255,255,0.25)" :
-                        "rgba(255, 255, 255, 0.25)";
-
-    return `
-    <svg width="${totalWidth}" height="46" viewBox="0 0 ${totalWidth} 46" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <filter id="kometaShadow" x="-15%" y="-15%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="2" y="2" width="${totalWidth - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeColor}" stroke-width="${theme === 'minimal' ? 1.2 : 1.5}" filter="url(#kometaShadow)"/>
-        <!-- Specular Top Highlight -->
-        ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${totalWidth - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        ${segments.join("")}
-    </svg>`;
-}
-
-/**
- * Creates Kometa-Style SVG for "LEAVING SOON" warning banner.
- */
-export function generateLeavingSoonRibbonSvg(daysRemaining?: number): string {
-    const text = daysRemaining !== undefined && daysRemaining > 0 
-        ? `LEAVING SOON • ${daysRemaining} DAYS LEFT` 
-        : `LEAVING SOON`;
-
-    return `
-    <svg width="600" height="56" viewBox="0 0 600 56" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="warnGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="#991b1b" />
-                <stop offset="50%" stop-color="#dc2626" />
-                <stop offset="100%" stop-color="#991b1b" />
-            </linearGradient>
-            <filter id="bannerShadow" x="-5%" y="-10%" width="110%" height="130%">
-                <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="0" y="0" width="600" height="56" fill="url(#warnGrad)" filter="url(#bannerShadow)"/>
-        <!-- Top Highlight Line -->
-        <line x1="0" y1="2" x2="600" y2="2" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
-        <!-- Bottom Neon Line -->
-        <line x1="0" y1="54" x2="600" y2="54" stroke="#fca5a5" stroke-width="2"/>
-        <text x="300" y="36" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="20" fill="#ffffff" text-anchor="middle">${text}</text>
-    </svg>`;
-}
-
-/**
- * Creates Kometa-Style SVG for Digital Release countdown ribbon.
- */
-export function generateDigitalReleaseRibbonSvg(daysRemaining: number, formattedDate?: string): string {
-    const text = daysRemaining === 0 
-        ? `NOW STREAMING ON DIGITAL` 
-        : daysRemaining > 0 
-            ? `STREAMING ON DIGITAL IN ${daysRemaining} DAYS${formattedDate ? ` (${formattedDate})` : ''}`
-            : `AVAILABLE ON DIGITAL`;
-
-    return `
-    <svg width="600" height="52" viewBox="0 0 600 52" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="streamGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="#1e1b4b" />
-                <stop offset="50%" stop-color="#4f46e5" />
-                <stop offset="100%" stop-color="#1e1b4b" />
-            </linearGradient>
-            <filter id="bannerShadow" x="-5%" y="-10%" width="110%" height="130%">
-                <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.75"/>
-            </filter>
-        </defs>
-        <rect x="0" y="0" width="600" height="52" fill="url(#streamGrad)" filter="url(#bannerShadow)"/>
-        <line x1="0" y1="2" x2="600" y2="2" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
-        <line x1="0" y1="50" x2="600" y2="50" stroke="#a5b4fc" stroke-width="2"/>
-        <text x="300" y="33" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="16.5" fill="#e0e7ff" text-anchor="middle">${text}</text>
-    </svg>`;
-}
-
-/**
- * Interpolates dynamic template variables for Agregarr/Kometa style banners:
- * {date}, {days}, {title}, {source}, {status}, {reason}, {quality}
- */
-export function interpolateBannerText(
-    template: string,
-    variables: {
-        title?: string;
-        date?: string;
-        formattedDate?: string;
-        days?: number | string;
-        daysRemaining?: number | string;
-        source?: string;
-        status?: string;
-        reason?: string;
-        quality?: string;
-    } = {}
-): string {
-    if (!template) return "";
-    let result = template;
-    const dateVal = variables.formattedDate || variables.date || "";
-    const daysVal = String(variables.daysRemaining ?? variables.days ?? "7");
-    const titleVal = variables.title || "";
-    const sourceVal = variables.source || "Radarr";
-    const statusVal = variables.status || "Downloading Soon";
-    const reasonVal = variables.reason || "Storage Threshold";
-    const qualityVal = variables.quality || "4K UHD";
-
-    result = result
-        .replace(/\{date\}/gi, dateVal)
-        .replace(/\{formattedDate\}/gi, dateVal)
-        .replace(/\{days\}/gi, daysVal)
-        .replace(/\{daysRemaining\}/gi, daysVal)
-        .replace(/\{title\}/gi, titleVal)
-        .replace(/\{source\}/gi, sourceVal)
-        .replace(/\{status\}/gi, statusVal)
-        .replace(/\{reason\}/gi, reasonVal)
-        .replace(/\{quality\}/gi, qualityVal);
-
-    return result;
-}
-
-/**
- * Creates Kometa/Agregarr-Style SVG for Placeholder & Status Banners with customizable themes, templates & variables.
- */
-export function generatePlaceholderRibbonSvg(
-    type: string,
-    options: {
-        daysRemaining?: number | string;
-        formattedDate?: string;
-        date?: string;
-        customText?: string;
-        title?: string;
-        source?: string;
-        status?: string;
-        reason?: string;
-        quality?: string;
-        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted" | "cyber-neon" | string;
-    } = {}
-): string {
-    const theme = options.theme || "indigo-purple";
-    const dateStr = options.formattedDate || options.date || "";
-    const daysStr = String(options.daysRemaining ?? "7");
-
-    let label = "🚀 COMING SOON";
-
-    switch (type) {
-        case "in_theaters":
-            label = dateStr ? `🎬 IN THEATERS (${dateStr})` : "🎬 IN THEATERS NOW";
-            break;
-        case "now_streaming":
-            label = "🔥 NOW STREAMING ON DIGITAL";
-            break;
-        case "countdown":
-            label = daysStr === "0" ? "✨ STREAMING TODAY" : `✨ STREAMING IN ${daysStr} DAYS${dateStr ? ` (${dateStr})` : ''}`;
-            break;
-        case "releasing_date":
-        case "digital_release":
-            label = dateStr ? `📅 DIGITAL RELEASE ON ${dateStr}` : "📅 DIGITAL RELEASE ANNOUNCED";
-            break;
-        case "downloading_soon":
-            label = "⬇️ DOWNLOADING SOON";
-            break;
-        case "in_radarr":
-            label = "🎬 MONITORED IN RADARR";
-            break;
-        case "in_sonarr":
-            label = "📺 MONITORED IN SONARR";
-            break;
-        case "leaving_date":
-            label = dateStr ? `⚠️ LEAVING ON ${dateStr}` : "⚠️ LEAVING SOON";
-            break;
-        case "leaving_days":
-        case "leaving_soon":
-            label = daysStr && daysStr !== "0" ? `⚠️ LEAVING IN ${daysStr} DAYS` : "⚠️ LEAVING SOON";
-            break;
-        case "trending_not_requested":
-            label = "🔥 TRENDING • NOT REQUESTED";
-            break;
-        case "popular_streaming":
-            label = `👑 POPULAR ON ${options.source || "STREAMING"}`.toUpperCase();
-            break;
-        case "missing_library":
-            label = "🚫 NOT IN PLEX LIBRARY";
-            break;
-        case "not_requested":
-            label = options.customText ? options.customText.toUpperCase() : "🚫 NOT REQUESTED";
-            break;
-        case "custom":
-        default:
-            if (options.customText) {
-                label = interpolateBannerText(options.customText, options).toUpperCase();
-            }
-            break;
-    }
-
-    // Apply template interpolation if custom text contains braces
-    if (options.customText && options.customText.includes("{")) {
-        label = interpolateBannerText(options.customText, options).toUpperCase();
-    }
-
-    let gradStops = `<stop offset="0%" stop-color="#1e1b4b" /><stop offset="50%" stop-color="#6366f1" /><stop offset="100%" stop-color="#1e1b4b" />`;
-    let lineStroke = "#a5b4fc";
-
-    if (theme === "crimson-red" || theme === "netflix-red") {
-        gradStops = `<stop offset="0%" stop-color="#881337" /><stop offset="50%" stop-color="#e11d48" /><stop offset="100%" stop-color="#881337" />`;
-        lineStroke = "#fda4af";
-    } else if (theme === "emerald-green") {
-        gradStops = `<stop offset="0%" stop-color="#064e3b" /><stop offset="50%" stop-color="#059669" /><stop offset="100%" stop-color="#064e3b" />`;
-        lineStroke = "#6ee7b7";
-    } else if (theme === "amber-gold") {
-        gradStops = `<stop offset="0%" stop-color="#78350f" /><stop offset="50%" stop-color="#d97706" /><stop offset="100%" stop-color="#78350f" />`;
-        lineStroke = "#fde68a";
-    } else if (theme === "cinematic-blue") {
-        gradStops = `<stop offset="0%" stop-color="#082f49" /><stop offset="50%" stop-color="#0284c7" /><stop offset="100%" stop-color="#082f49" />`;
-        lineStroke = "#7dd3fc";
-    } else if (theme === "cyber-neon") {
-        gradStops = `<stop offset="0%" stop-color="#4c0519" /><stop offset="50%" stop-color="#06b6d4" /><stop offset="100%" stop-color="#4c0519" />`;
-        lineStroke = "#22d3ee";
-    } else if (theme === "glass" || theme === "slate-frosted") {
-        gradStops = `<stop offset="0%" stop-color="rgba(8,12,22,0.94)" /><stop offset="100%" stop-color="rgba(8,12,22,0.94)" />`;
-        lineStroke = "rgba(255,255,255,0.4)";
-    }
-
-    const safeLabel = (label || "COMING SOON")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-
-    return `
-    <svg width="600" height="54" viewBox="0 0 600 54" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="phGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                ${gradStops}
-            </linearGradient>
-            <filter id="phShadow" x="-5%" y="-10%" width="110%" height="130%">
-                <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
-        </defs>
-        <rect x="0" y="0" width="600" height="54" fill="url(#phGrad)" filter="url(#phShadow)"/>
-        <line x1="0" y1="2" x2="600" y2="2" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
-        <line x1="0" y1="52" x2="600" y2="52" stroke="${lineStroke}" stroke-width="2"/>
-        <text x="300" y="34" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="16.5" fill="#ffffff" text-anchor="middle">${safeLabel}</text>
-    </svg>`;
-}
-
-async function resolvePosterBuffer(posterUrl: string | null | undefined, title?: string): Promise<Buffer | null> {
-    if (!posterUrl) return null;
-
-    // 0. Base64 Data URL
-    if (posterUrl.startsWith("data:image/")) {
-        try {
-            const base64Data = posterUrl.split(",")[1];
-            if (base64Data) {
-                return Buffer.from(base64Data, "base64");
-            }
-        } catch (e) {}
-    }
-
-    // 1. Full HTTP URL
-    if (posterUrl.startsWith("http://") || posterUrl.startsWith("https://")) {
-        try {
-            const res = await fetch(posterUrl, { signal: AbortSignal.timeout(3000) });
-            if (res.ok) {
-                const arrayBuf = await res.arrayBuffer();
-                if (arrayBuf.byteLength > 200) return Buffer.from(arrayBuf);
-            }
-        } catch (e) {}
-    }
-
-    // 2. Relative /api/media/image URL or PMS proxy URL
-    if (posterUrl.startsWith("/api/media/image") || posterUrl.includes("thumb=") || posterUrl.includes("serverId=")) {
-        try {
-            const dummyUrl = new URL(posterUrl, "http://localhost:3000");
-            const serverId = dummyUrl.searchParams.get("serverId") || dummyUrl.searchParams.get("instanceId") || "";
-            const thumb = dummyUrl.searchParams.get("thumb") || dummyUrl.searchParams.get("url") || "";
-
-            if (serverId && thumb) {
-                const { resolveWorkingPlexServerConnection } = await import("@/lib/plex");
-                const resolved = await resolveWorkingPlexServerConnection(serverId);
-                if (resolved && resolved.serverUrl) {
-                    const candidateUrls = [resolved.serverUrl, ...resolved.allCandidateUrls];
-                    for (const baseUrl of candidateUrls) {
-                        const cleanBase = baseUrl.replace(/\/+$/, "");
-                        const sep = thumb.includes("?") ? "&" : "?";
-                        const directUrl = `${cleanBase}${thumb}${sep}X-Plex-Token=${encodeURIComponent(resolved.token)}`;
-                        try {
-                            const res = await fetch(directUrl, { headers: { "X-Plex-Token": resolved.token }, signal: AbortSignal.timeout(3000) });
-                            if (res.ok) {
-                                const arrayBuf = await res.arrayBuffer();
-                                if (arrayBuf.byteLength > 200) {
-                                    return Buffer.from(arrayBuf);
-                                }
-                            }
-                        } catch (e) {}
-                    }
-                }
-            }
-        } catch (e) {}
+        // Partial match
+        const partial = files.find(f => {
+            const clean = f.toLowerCase().replace(/\.png$/i, "");
+            return clean.includes(sLower) || sLower.includes(clean);
+        });
+        if (partial) return `${dir}/${partial}`;
     }
 
     return null;
 }
 
 /**
- * Generates a full high-resolution composited placeholder poster with custom banner / ribbon.
+ * Resolves stock Kometa rating / community score badge PNG.
  */
-export async function generatePlaceholderPosterBuffer(
-    posterUrl: string | null | undefined,
-    title: string,
-    options: {
-        type?: string;
-        customText?: string;
-        daysRemaining?: number | string;
-        formattedDate?: string;
-        date?: string;
-        source?: string;
-        status?: string;
-        reason?: string;
-        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted" | "cyber-neon" | string;
-        position?: "top" | "bottom" | "corner";
-    } = {}
-): Promise<Buffer> {
-    const width = 600;
-    const height = 900;
-    const baseBuffer: Buffer | null = await resolvePosterBuffer(posterUrl, title);
+export function resolveStockRatingBadgePath(source: string, score?: number): string | null {
+    const sLower = (source || "").toLowerCase();
+    let filename = "";
 
-    let pipeline: ReturnType<typeof sharp>;
-    if (baseBuffer) {
-        pipeline = sharp(baseBuffer).resize(width, height, { fit: "cover" });
-    } else {
-        // Fallback stylish dark poster
-        const safeTitle = (title || "Placeholder Media").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        const fallbackSvg = `
-        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-                <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#090d16" />
-                    <stop offset="50%" stop-color="#111827" />
-                    <stop offset="100%" stop-color="#030712" />
-                </linearGradient>
-            </defs>
-            <rect width="${width}" height="${height}" fill="url(#bgGrad)" />
-            <circle cx="300" cy="400" r="80" fill="rgba(99,102,241,0.1)" stroke="rgba(99,102,241,0.3)" stroke-width="2"/>
-            <text x="300" y="420" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="48" fill="#6366f1" text-anchor="middle">★</text>
-            <text x="300" y="540" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="800" font-size="28" fill="#f8fafc" text-anchor="middle">${safeTitle}</text>
-        </svg>`;
-        pipeline = sharp(Buffer.from(fallbackSvg)).png();
-    }
-
-    const type = options.type || "not_requested";
-    const position = options.position || "bottom";
-    const theme = (options.theme as any) || (type === "not_requested" ? "crimson-red" : "indigo-purple");
-
-    const composites: any[] = [];
-
-    if (position === "corner") {
-        let ribbonTheme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "purple";
-        if (theme === "crimson-red" || theme === "netflix-red") ribbonTheme = "crimson";
-        else if (theme === "emerald-green") ribbonTheme = "emerald";
-        else if (theme === "amber-gold") ribbonTheme = "gold";
-        else if (theme === "cinematic-blue" || theme === "cyber-neon") ribbonTheme = "cyan";
-        else if (theme === "glass" || theme === "slate-frosted") ribbonTheme = "glass";
-
-        let text = options.customText || (type === "not_requested" ? "NOT REQUESTED" : type.toUpperCase().replace(/_/g, ' '));
-        if (options.customText && options.customText.includes("{")) {
-            text = interpolateBannerText(options.customText, { title, ...options });
+    if (sLower.includes("imdb")) {
+        filename = (score && score >= 8.3) ? "IMDbTop250.png" : "IMDb.png";
+    } else if (sLower.includes("rt") || sLower.includes("rotten") || sLower.includes("critic")) {
+        if (score !== undefined) {
+            filename = score >= 75 ? "RT-Crit-Top.png" : score >= 60 ? "RT-Crit-Fresh.png" : "RT-Crit-Rotten.png";
+        } else {
+            filename = "RottenTomatoes.png";
         }
-        const cornerSvg = generateCornerRibbonSvg(text, "top-right", ribbonTheme);
-        composites.push({
-            input: Buffer.from(cornerSvg),
-            top: 0,
-            left: width - 160
-        });
-    } else {
-        const bannerSvg = generatePlaceholderRibbonSvg(type, {
-            title,
-            ...options,
-            theme
-        });
-        const topPos = position === "top" ? 0 : height - 54;
-        composites.push({
-            input: Buffer.from(bannerSvg),
-            top: topPos,
-            left: 0
-        });
+    } else if (sLower.includes("audience") || sLower.includes("popcorn")) {
+        if (score !== undefined) {
+            filename = score >= 60 ? "RT-Aud-Fresh.png" : "RT-Aud-Rotten.png";
+        } else {
+            filename = "Audience.png";
+        }
+    } else if (sLower.includes("meta") || sLower.includes("metacritic")) {
+        filename = (score && score >= 81) ? "MetacriticTop.png" : "Metacritic.png";
+    } else if (sLower.includes("letterboxd")) {
+        filename = "Letterboxd.png";
+    } else if (sLower.includes("tmdb")) {
+        filename = "TMDb.png";
+    } else if (sLower.includes("trakt")) {
+        filename = "Trakt.png";
     }
 
-    return await pipeline.composite(composites).png().toBuffer();
-}
-
-/**
- * Helper to resolve text and color theme for ribbon presets.
- */
-export function resolveRibbonPresetTextAndTheme(
-    type: string,
-    mediaInfo?: PlexMediaStreamInfo,
-    leavingSoonDays?: number
-): { text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" } {
-    switch (type) {
-        case "imdb_top_250":
-            return { text: "IMDb TOP 250", theme: "gold" };
-        case "imdb_top_250_tv":
-            return { text: "IMDb TOP TV", theme: "gold" };
-        case "certified_fresh":
-            return { text: "CERTIFIED FRESH", theme: "crimson" };
-        case "rt_fresh":
-            return { text: "RT FRESH", theme: "crimson" };
-        case "oscar_winner":
-            return { text: "OSCAR WINNER", theme: "gold" };
-        case "academy_award":
-            return { text: "BEST PICTURE", theme: "gold" };
-        case "emmy_winner":
-            return { text: "EMMY WINNER", theme: "purple" };
-        case "golden_globe":
-            return { text: "GOLDEN GLOBE", theme: "gold" };
-        case "critics_choice":
-            return { text: "CRITICS' CHOICE", theme: "cyan" };
-        case "bafta_winner":
-            return { text: "BAFTA WINNER", theme: "gold" };
-        case "cannes_winner":
-            return { text: "PALME D'OR", theme: "gold" };
-        case "metacritic_must_see":
-            return { text: "MUST-SEE", theme: "emerald" };
-        case "auto_edition":
-            return { text: mediaInfo?.detectedBadges?.edition || "SPECIAL EDITION", theme: "cyan" };
-        case "leaving_soon":
-            return { text: leavingSoonDays ? `LEAVING IN ${leavingSoonDays}D` : "LEAVING SOON", theme: "crimson" };
-        case "auto_quality":
-            if (mediaInfo?.detectedBadges?.hdr === "DV") return { text: "DOLBY VISION", theme: "purple" };
-            if (mediaInfo?.detectedBadges?.resolution === "4K") return { text: "4K UHD", theme: "purple" };
-            if (mediaInfo?.detectedBadges?.hdr) return { text: String(mediaInfo.detectedBadges.hdr).toUpperCase(), theme: "cyan" };
-            return { text: "1080P FHD", theme: "cyan" };
-        default:
-            return { text: type ? type.toUpperCase() : "FEATURED", theme: "purple" };
+    if (filename) {
+        const p = `rating/${filename}`;
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
     }
-}
-
-/**
- * Generates an authentic Kometa-Style 45-degree diagonal corner ribbon.
- * Renders a crisp single angled ribbon with rich gradients, specular highlight line, 
- * fold accent border, drop shadow, and bold typography matching Kometa's official ribbon design.
- */
-export function generateKometaCornerRibbonSvg(
-    text: string,
-    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right",
-    theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "purple"
-): string {
-    const isTop = position.startsWith("top");
-    const isRight = position.endsWith("right");
-    const isTopRight = isTop && isRight;
-    const isTopLeft = isTop && !isRight;
-    const isBottomRight = !isTop && isRight;
-    const isBottomLeft = !isTop && !isRight;
-
-    const cleanText = (text || "FEATURED").trim().toUpperCase().slice(0, 30);
-    const isOscar = cleanText.includes("OSCAR") || cleanText.includes("ACADEMY");
-    const isTop250 = cleanText.includes("250") || cleanText.includes("IMDB");
-    const isCannes = cleanText.includes("CANNES") || cleanText.includes("PALME");
-    const isCriterion = cleanText.includes("CRITERION");
-    const isLeaving = cleanText.includes("LEAVING");
-
-    const subLabel = isOscar 
-        ? "- ACADEMY AWARDS -" 
-        : isTop250 
-            ? "- ALL-TIME BEST -" 
-            : isCannes 
-                ? "- CANNES WINNER -" 
-                : isCriterion 
-                    ? "- SPECIAL EDITION -" 
-                    : isLeaving 
-                        ? "- SOON -" 
-                        : "- OFFICIAL SELECTION -";
-
-    const gradientThemeMap: Record<string, { start: string; mid: string; end: string; border: string; highlight: string; text: string; subText: string; shadow: string }> = {
-        gold: { start: "#fef08a", mid: "#f59e0b", end: "#b45309", border: "#fef9c3", highlight: "rgba(255,255,255,0.9)", text: "#000000", subText: "#1c1917", shadow: "rgba(0,0,0,0.6)" },
-        crimson: { start: "#fb7185", mid: "#e11d48", end: "#881337", border: "#fda4af", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#ffe4e6", shadow: "rgba(0,0,0,0.5)" },
-        emerald: { start: "#6ee7b7", mid: "#059669", end: "#064e3b", border: "#a7f3d0", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#d1fae5", shadow: "rgba(0,0,0,0.5)" },
-        purple: { start: "#c7d2fe", mid: "#6366f1", end: "#3730a3", border: "#e0e7ff", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#e0e7ff", shadow: "rgba(0,0,0,0.5)" },
-        cyan: { start: "#7dd3fc", mid: "#0284c7", end: "#075985", border: "#bae6fd", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#e0f2fe", shadow: "rgba(0,0,0,0.5)" },
-        pink: { start: "#fbcfe8", mid: "#db2777", end: "#831843", border: "#fce7f3", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#fdf2f8", shadow: "rgba(0,0,0,0.5)" },
-        glass: { start: "#94a3b8", mid: "#1e293b", end: "#020617", border: "#cbd5e1", highlight: "rgba(255,255,255,0.7)", text: "#f8fafc", subText: "#cbd5e1", shadow: "rgba(0,0,0,0.6)" },
-        orange: { start: "#fed7aa", mid: "#ea580c", end: "#9a3412", border: "#ffedd5", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#ffedd5", shadow: "rgba(0,0,0,0.5)" }
-    };
-
-    const g = gradientThemeMap[theme] || gradientThemeMap.purple;
-    const gradId = `kometaRibbonGrad_${theme}_${position}`;
-
-    let polygonPoints = "110,0 260,0 380,120 380,270";
-    let highlightLine = { x1: "110", y1: "0", x2: "380", y2: "270" };
-    let shadowLine = { x1: "260", y1: "0", x2: "380", y2: "120" };
-    let textTransform = "translate(282.5, 97.5) rotate(45)";
-
-    if (isTopLeft) {
-        polygonPoints = "120,0 270,0 0,270 0,120";
-        highlightLine = { x1: "270", y1: "0", x2: "0", y2: "270" };
-        shadowLine = { x1: "120", y1: "0", x2: "0", y2: "120" };
-        textTransform = "translate(97.5, 97.5) rotate(-45)";
-    } else if (isBottomRight) {
-        polygonPoints = "380,110 380,260 260,380 110,380";
-        highlightLine = { x1: "380", y1: "110", x2: "110", y2: "380" };
-        shadowLine = { x1: "380", y1: "260", x2: "260", y2: "380" };
-        textTransform = "translate(282.5, 282.5) rotate(-45)";
-    } else if (isBottomLeft) {
-        polygonPoints = "0,110 0,260 120,380 270,380";
-        highlightLine = { x1: "0", y1: "110", x2: "270", y2: "380" };
-        shadowLine = { x1: "0", y1: "260", x2: "120", y2: "380" };
-        textTransform = "translate(97.5, 282.5) rotate(45)";
-    }
-
-    const fontSize = cleanText.length > 20 ? 19 : cleanText.length > 14 ? 22 : 25;
-    const subFontSize = 13;
-
-    return `
-    <svg width="380" height="380" viewBox="0 0 380 380" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="${g.start}" />
-                <stop offset="45%" stop-color="${g.mid}" />
-                <stop offset="100%" stop-color="${g.end}" />
-            </linearGradient>
-            <filter id="ribbonDropShadow_${position}" x="-25%" y="-25%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000000" flood-opacity="0.9"/>
-            </filter>
-        </defs>
-        <g filter="url(#ribbonDropShadow_${position})">
-            <!-- Ribbon Solid Body -->
-            <polygon points="${polygonPoints}" fill="url(#${gradId})" />
-            <!-- Top Specular Highlight Line -->
-            <line x1="${highlightLine.x1}" y1="${highlightLine.y1}" x2="${highlightLine.x2}" y2="${highlightLine.y2}" stroke="${g.highlight}" stroke-width="3" />
-            <!-- Bottom Fold Shadow Line -->
-            <line x1="${shadowLine.x1}" y1="${shadowLine.y1}" x2="${shadowLine.x2}" y2="${shadowLine.y2}" stroke="${g.shadow}" stroke-width="3.5" />
-            
-            <!-- Crisp Typography -->
-            <g transform="${textTransform}">
-                <text x="0" y="-4" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle">${cleanText}</text>
-                <text x="0" y="16" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="800" font-size="${subFontSize}" fill="${g.subText}" text-anchor="middle">${subLabel}</text>
-            </g>
-        </g>
-    </svg>`;
-}
-
-/**
- * Generates Kometa-Style 45-degree single diagonal corner ribbon.
- */
-export function generateCornerRibbonSvg(
-    text: string,
-    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right",
-    theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "purple"
-): string {
-    return generateKometaCornerRibbonSvg(text, position, theme);
-}
-
-/**
- * Generates Kometa-Style diagonal corner ribbon. In Waterfall mode, evaluates list and outputs winning single ribbon.
- */
-export function generateTieredCornerRibbonSvg(
-    ribbons: Array<{ text: string; theme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" }>,
-    position: "top-right" | "top-left" | "bottom-right" | "bottom-left" = "top-right"
-): string {
-    const first = ribbons && ribbons.length > 0 ? ribbons[0] : { text: "FEATURED", theme: "purple" as const };
-    return generateKometaCornerRibbonSvg(first.text, position, first.theme || "purple");
+    return null;
 }
 
 /**
@@ -1717,6 +631,53 @@ export function isRibbonTypeMatching(
 }
 
 /**
+ * Helper to resolve text and color theme for ribbon presets.
+ */
+export function resolveRibbonPresetTextAndTheme(
+    type: string,
+    mediaInfo?: PlexMediaStreamInfo,
+    leavingSoonDays?: number
+): { text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" } {
+    switch (type) {
+        case "imdb_top_250":
+            return { text: "IMDb TOP 250", theme: "gold" };
+        case "imdb_top_250_tv":
+            return { text: "IMDb TOP TV", theme: "gold" };
+        case "certified_fresh":
+            return { text: "CERTIFIED FRESH", theme: "crimson" };
+        case "rt_fresh":
+            return { text: "RT FRESH", theme: "crimson" };
+        case "oscar_winner":
+            return { text: "OSCAR WINNER", theme: "gold" };
+        case "academy_award":
+            return { text: "BEST PICTURE", theme: "gold" };
+        case "emmy_winner":
+            return { text: "EMMY WINNER", theme: "purple" };
+        case "golden_globe":
+            return { text: "GOLDEN GLOBE", theme: "gold" };
+        case "critics_choice":
+            return { text: "CRITICS' CHOICE", theme: "cyan" };
+        case "bafta_winner":
+            return { text: "BAFTA WINNER", theme: "gold" };
+        case "cannes_winner":
+            return { text: "PALME D'OR", theme: "gold" };
+        case "metacritic_must_see":
+            return { text: "MUST-SEE", theme: "emerald" };
+        case "auto_edition":
+            return { text: mediaInfo?.detectedBadges?.edition || "SPECIAL EDITION", theme: "cyan" };
+        case "leaving_soon":
+            return { text: leavingSoonDays ? `LEAVING IN ${leavingSoonDays}D` : "LEAVING SOON", theme: "crimson" };
+        case "auto_quality":
+            if (mediaInfo?.detectedBadges?.hdr === "DV") return { text: "DOLBY VISION", theme: "purple" };
+            if (mediaInfo?.detectedBadges?.resolution === "4K") return { text: "4K UHD", theme: "purple" };
+            if (mediaInfo?.detectedBadges?.hdr) return { text: String(mediaInfo.detectedBadges.hdr).toUpperCase(), theme: "cyan" };
+            return { text: "1080P FHD", theme: "cyan" };
+        default:
+            return { text: type ? type.toUpperCase() : "FEATURED", theme: "purple" };
+    }
+}
+
+/**
  * Evaluates Waterfall Ribbon priority against media telemetry and returns the SINGLE winning ribbon.
  * In Kometa, a waterfall cascades top-to-bottom through priority tiers. The FIRST matching tier wins.
  */
@@ -1778,8 +739,183 @@ export function evaluateWaterfallRibbon(
 }
 
 /**
- * Applies overlay SVG badges & custom uploaded badges onto a poster image buffer using Sharp.
- * Supports independent positioning for every individual badge type.
+ * Interpolates dynamic template variables for Agregarr/Kometa style banners:
+ * {date}, {days}, {title}, {source}, {status}, {reason}, {quality}
+ */
+export function interpolateBannerText(
+    template: string,
+    variables: {
+        title?: string;
+        date?: string;
+        formattedDate?: string;
+        days?: number | string;
+        daysRemaining?: number | string;
+        source?: string;
+        status?: string;
+        reason?: string;
+        quality?: string;
+    } = {}
+): string {
+    if (!template) return "";
+    let result = template;
+    const dateVal = variables.formattedDate || variables.date || "";
+    const daysVal = String(variables.daysRemaining ?? variables.days ?? "7");
+    const titleVal = variables.title || "";
+    const sourceVal = variables.source || "Radarr";
+    const statusVal = variables.status || "Downloading Soon";
+    const reasonVal = variables.reason || "Storage Threshold";
+    const qualityVal = variables.quality || "4K UHD";
+
+    result = result
+        .replace(/\{date\}/gi, dateVal)
+        .replace(/\{formattedDate\}/gi, dateVal)
+        .replace(/\{days\}/gi, daysVal)
+        .replace(/\{daysRemaining\}/gi, daysVal)
+        .replace(/\{title\}/gi, titleVal)
+        .replace(/\{source\}/gi, sourceVal)
+        .replace(/\{status\}/gi, statusVal)
+        .replace(/\{reason\}/gi, reasonVal)
+        .replace(/\{quality\}/gi, qualityVal);
+
+    return result;
+}
+
+// Backward compatibility stub generators
+export function generatePlaceholderRibbonSvg(type: string, options: any = {}): string { return ""; }
+export function generateLeavingSoonRibbonSvg(days?: number): string { return ""; }
+export function generateDigitalReleaseRibbonSvg(days: number, date?: string): string { return ""; }
+export function generateDovetailedResolutionHdrBadgeSvg(res: string, hdr?: string | null, theme?: string): string { return ""; }
+export function generateResolutionBadgeSvg(res: string, theme?: string): string { return ""; }
+export function generateHdrBadgeSvg(hdr: string, theme?: string): string { return ""; }
+export function generateAudioBadgeSvg(audio: string, theme?: string): string { return ""; }
+export function generateAudioChannelBadgeSvg(ch: string, theme?: string): string { return ""; }
+export function generateCodecBadgeSvg(codec: string, theme?: string): string { return ""; }
+export function generateEditionBadgeSvg(ed: string, theme?: string): string { return ""; }
+export function generateStudioLogoBadgeSvg(studio: string, theme?: string): string { return ""; }
+export function generateContentRatingBadgeSvg(rating: string, theme?: string): string { return ""; }
+export function generateRatingsBadgeSvg(ratings: any, theme?: string): string { return ""; }
+export function generateKometaCornerRibbonSvg(text: string, pos?: string, theme?: string): string { return ""; }
+export function generateCornerRibbonSvg(text: string, pos?: string, theme?: string): string { return ""; }
+export function generateTieredCornerRibbonSvg(ribbons: any[], pos?: string): string { return ""; }
+
+async function resolvePosterBuffer(posterUrl: string | null | undefined, title?: string): Promise<Buffer | null> {
+    if (!posterUrl) return null;
+
+    // 0. Base64 Data URL
+    if (posterUrl.startsWith("data:image/")) {
+        try {
+            const base64Data = posterUrl.split(",")[1];
+            if (base64Data) {
+                return Buffer.from(base64Data, "base64");
+            }
+        } catch (e) {}
+    }
+
+    // 1. Full HTTP URL
+    if (posterUrl.startsWith("http://") || posterUrl.startsWith("https://")) {
+        try {
+            const res = await fetch(posterUrl, { signal: AbortSignal.timeout(3000) });
+            if (res.ok) {
+                const arrayBuf = await res.arrayBuffer();
+                if (arrayBuf.byteLength > 200) return Buffer.from(arrayBuf);
+            }
+        } catch (e) {}
+    }
+
+    // 2. Relative /api/media/image URL or PMS proxy URL
+    if (posterUrl.startsWith("/api/media/image") || posterUrl.includes("thumb=") || posterUrl.includes("serverId=")) {
+        try {
+            const dummyUrl = new URL(posterUrl, "http://localhost:3000");
+            const serverId = dummyUrl.searchParams.get("serverId") || dummyUrl.searchParams.get("instanceId") || "";
+            const thumb = dummyUrl.searchParams.get("thumb") || dummyUrl.searchParams.get("url") || "";
+
+            if (serverId && thumb) {
+                const { resolveWorkingPlexServerConnection } = await import("@/lib/plex");
+                const resolved = await resolveWorkingPlexServerConnection(serverId);
+                if (resolved && resolved.serverUrl) {
+                    const candidateUrls = [resolved.serverUrl, ...resolved.allCandidateUrls];
+                    for (const baseUrl of candidateUrls) {
+                        const cleanBase = baseUrl.replace(/\/+$/, "");
+                        const sep = thumb.includes("?") ? "&" : "?";
+                        const directUrl = `${cleanBase}${thumb}${sep}X-Plex-Token=${encodeURIComponent(resolved.token)}`;
+                        try {
+                            const res = await fetch(directUrl, { headers: { "X-Plex-Token": resolved.token }, signal: AbortSignal.timeout(3000) });
+                            if (res.ok) {
+                                const arrayBuf = await res.arrayBuffer();
+                                if (arrayBuf.byteLength > 200) {
+                                    return Buffer.from(arrayBuf);
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    return null;
+}
+
+/**
+ * Generates a full high-resolution composited placeholder poster with custom banner / ribbon using Sharp.
+ */
+export async function generatePlaceholderPosterBuffer(
+    posterUrl: string | null | undefined,
+    title: string,
+    options: {
+        type?: string;
+        customText?: string;
+        daysRemaining?: number | string;
+        formattedDate?: string;
+        date?: string;
+        source?: string;
+        status?: string;
+        reason?: string;
+        theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted" | "cyber-neon" | string;
+        position?: "top" | "bottom" | "corner";
+    } = {}
+): Promise<Buffer> {
+    const width = 1000;
+    const height = 1500;
+    const baseBuffer: Buffer | null = await resolvePosterBuffer(posterUrl, title);
+
+    let pipeline: ReturnType<typeof sharp>;
+    if (baseBuffer) {
+        pipeline = sharp(baseBuffer).resize(width, height, { fit: "cover" });
+    } else {
+        pipeline = sharp({
+            create: {
+                width,
+                height,
+                channels: 4,
+                background: { r: 15, g: 23, b: 42, alpha: 1 }
+            }
+        });
+    }
+
+    const type = options.type || "not_requested";
+    const ribbonTheme = (type === "not_requested" || type.includes("leaving")) ? "red" : "yellow";
+    const ribbonPath = resolveStockRibbonPath(type, ribbonTheme);
+
+    const composites: any[] = [];
+    if (ribbonPath) {
+        const fullRibbon = path.join(STOCK_KOMETA_DIR, ribbonPath);
+        if (fs.existsSync(fullRibbon)) {
+            const ribbonBuf = await sharp(fullRibbon).resize(380, 380).toBuffer();
+            composites.push({
+                input: ribbonBuf,
+                top: height - 380,
+                left: width - 380
+            });
+        }
+    }
+
+    return await pipeline.composite(composites).jpeg({ quality: 92 }).toBuffer();
+}
+
+/**
+ * Applies pure pre-rendered PNG Kometa overlay badges & custom uploaded badges onto a poster image buffer using Sharp.
+ * 100% font-independent raster pipeline — zero blank boxes, zero SVG text dependency.
  */
 export async function applyOverlaysToPoster(
     originalBuffer: Buffer,
@@ -1792,56 +928,43 @@ export async function applyOverlaysToPoster(
     const baseImage = sharp(originalBuffer).resize(1000, 1500, { fit: "cover" });
     const overlays: { input: Buffer | string; top?: number; left?: number }[] = [];
 
-    // 1. Leaving Soon Banner (Takes precedence at the very top)
+    // 1. Leaving Soon Banner / Ribbon
     const isItemLeavingSoon = Boolean(mediaInfo.isLeavingSoon || mediaInfo.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) || mediaInfo.collections?.some(c => /leaving[\s_-]?soon/i.test(c)));
     if (options.showLeavingSoon && isItemLeavingSoon) {
-        const leavingSoonSvg = injectEmbeddedFontIntoSvg(generateLeavingSoonRibbonSvg(options.leavingSoonDays));
-        const ribbonBuf = await sharp(Buffer.from(leavingSoonSvg)).resize(1000, 78).toBuffer();
-        overlays.push({
-            input: ribbonBuf,
-            top: 0,
-            left: 0
-        });
+        // Use stock fire ribbon or banner
+        const firePath = path.join(STOCK_KOMETA_DIR, "fire.png");
+        const flamePath = path.join(STOCK_KOMETA_DIR, "flame.png");
+        const iconPath = fs.existsSync(firePath) ? firePath : fs.existsSync(flamePath) ? flamePath : null;
+        if (iconPath) {
+            const iconBuf = await sharp(iconPath).resize(90, 90).toBuffer();
+            overlays.push({
+                input: iconBuf,
+                top: 35,
+                left: 35
+            });
+        }
     }
 
-    // 2. Agregarr-Style Placeholder Banner (if active)
-    if (options.showPlaceholder) {
-        const phSvg = injectEmbeddedFontIntoSvg(generatePlaceholderRibbonSvg(options.placeholderType || "countdown", {
-            daysRemaining: options.placeholderDays,
-            formattedDate: options.placeholderDate,
-            customText: options.placeholderText,
-            theme: options.placeholderTheme
-        }));
-        const phBuf = await sharp(Buffer.from(phSvg)).resize(1000, 72).toBuffer();
-        const phPos = options.placeholderPosition || "bottom";
-        overlays.push({
-            input: phBuf,
-            top: phPos === "top" ? (options.showLeavingSoon && isItemLeavingSoon ? 78 : 0) : 1500 - 72,
-            left: 0
-        });
-    }
-
-    // 3. Diagonal Corner Ribbons (Kometa Waterfall Priority / Single Ribbon)
+    // 2. Diagonal Corner Ribbons (Kometa Waterfall Priority / Single Ribbon)
     if (options.showRibbon || options.ribbonText || (options.tieredRibbons && options.tieredRibbons.length > 0) || options.ribbonMode === "auto_stack" || options.ribbonMode === "tiered" || options.ribbonMode === "waterfall") {
         const rPos = options.ribbonPosition || "bottom-right";
-        let winningRibbon: { text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" } | null = null;
+        let winningRibbonName = "";
+        let winningTheme = options.ribbonTheme || "gold";
 
         if (options.ribbonMode === "single") {
-            // Single explicit custom text or verified single preset match
             if (options.ribbonText && options.ribbonText.trim()) {
-                winningRibbon = { text: options.ribbonText.trim().toUpperCase(), theme: options.ribbonTheme || "purple" };
+                winningRibbonName = options.ribbonText.trim();
             } else if (options.ribbonType) {
                 const isMatch = isRibbonTypeMatching(options.ribbonType, mediaInfo, {
                     leavingSoonDays: options.leavingSoonDays,
                     ratingsSource: options.ratingsSource
                 });
                 if (isMatch) {
-                    const mapped = resolveRibbonPresetTextAndTheme(options.ribbonType, mediaInfo, options.leavingSoonDays);
-                    winningRibbon = { text: mapped.text, theme: options.ribbonTheme || mapped.theme };
+                    winningRibbonName = options.ribbonType;
                 }
             }
         } else {
-            // Waterfall Priority Mode (Default in Kometa)
+            // Waterfall Priority Mode (Kometa Standard)
             const waterfallTiers = (options.tieredRibbons && options.tieredRibbons.length > 0)
                 ? options.tieredRibbons
                 : [
@@ -1857,26 +980,42 @@ export async function applyOverlaysToPoster(
             });
 
             if (matched) {
-                winningRibbon = { text: matched.text, theme: matched.theme };
+                winningRibbonName = matched.matchedType || matched.text;
+                if (matched.theme) winningTheme = matched.theme;
             }
         }
 
-        if (winningRibbon && winningRibbon.text) {
-            const cornerRibbonSvg = injectEmbeddedFontIntoSvg(generateKometaCornerRibbonSvg(winningRibbon.text, rPos, winningRibbon.theme));
-            const ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(380, 380).toBuffer();
+        if (winningRibbonName) {
+            const ribbonRelPath = resolveStockRibbonPath(winningRibbonName, winningTheme);
+            if (ribbonRelPath) {
+                const fullRibbonPath = path.join(STOCK_KOMETA_DIR, ribbonRelPath);
+                if (fs.existsSync(fullRibbonPath)) {
+                    let ribbonSharp = sharp(fullRibbonPath).resize(380, 380);
 
-            const rTop = rPos.startsWith("top") ? (options.showLeavingSoon ? 78 : 0) : 1500 - 380;
-            const rLeft = rPos.endsWith("right") ? 1000 - 380 : 0;
+                    // Standard Kometa ribbon PNG is naturally in bottom-right
+                    if (rPos === "bottom-left") {
+                        ribbonSharp = ribbonSharp.flop();
+                    } else if (rPos === "top-right") {
+                        ribbonSharp = ribbonSharp.flip();
+                    } else if (rPos === "top-left") {
+                        ribbonSharp = ribbonSharp.flip().flop();
+                    }
 
-            overlays.push({
-                input: ribbonBuf,
-                top: rTop,
-                left: rLeft
-            });
+                    const ribbonBuf = await ribbonSharp.toBuffer();
+                    const rTop = rPos.startsWith("top") ? 0 : 1500 - 380;
+                    const rLeft = rPos.endsWith("right") ? 1000 - 380 : 0;
+
+                    overlays.push({
+                        input: ribbonBuf,
+                        top: rTop,
+                        left: rLeft
+                    });
+                }
+            }
         }
     }
 
-    // 4. Custom Badge Media Stream Matcher with Dovetail & Compound Support
+    // 3. Custom Badges Matcher & Category Tracking
     function doesCustomBadgeMatchMedia(
         cb: { category?: string; matchRule?: string | null; name?: string; filePath?: string },
         mInfo: PlexMediaStreamInfo
@@ -1886,7 +1025,6 @@ export async function applyOverlaysToPoster(
         const rawName = (cb.name || "").toLowerCase();
         const rawFile = path.basename(cb.filePath || "").toLowerCase();
 
-        // Wildcard or universal banner/ribbon without rules
         if (rawRule === "all" || rawRule === "*" || (rawCategory === "ribbon" && !rawRule) || (rawCategory === "banner" && !rawRule)) {
             return true;
         }
@@ -1897,14 +1035,12 @@ export async function applyOverlaysToPoster(
         const audioTitle = (primaryMedia?.audioTitle || "").toLowerCase();
         const fullAudioStr = `${mInfo.detectedBadges.audio || ""} ${audioCodec} ${audioProfile} ${audioTitle}`.toLowerCase();
 
-        // Parse tokens from rule (split by +, ,, &, or space when compound)
         let tokens: string[] = [];
         if (rawRule.includes("+") || rawRule.includes(",") || rawRule.includes("&")) {
             tokens = rawRule.split(/[+,&]/).map(t => t.trim()).filter(Boolean);
         } else if (rawRule) {
             tokens = [rawRule];
         } else {
-            // Infer from name or filename
             const baseName = rawName || rawFile.replace(/\.[^/.]+$/, "");
             const inferredTokens: string[] = [];
             if (/4k|2160/i.test(baseName)) inferredTokens.push("4k");
@@ -1926,12 +1062,32 @@ export async function applyOverlaysToPoster(
         }
 
         if (tokens.length === 0) return false;
-
-        // ALL token conditions must match
         return tokens.every(tok => evaluateBadgeCondition(tok, mInfo.detectedBadges, fullAudioStr));
     }
 
-    // 5. Resolve Independent Positions and Buckets for All Badges
+    function getCustomBadgeCategories(cb: { category?: string; matchRule?: string | null; name?: string; filePath?: string }): string[] {
+        const cat = (cb.category || "").toLowerCase();
+        const rule = (cb.matchRule || "").toLowerCase();
+        const name = (cb.name || "").toLowerCase();
+        const fName = path.basename(cb.filePath || "").toLowerCase();
+        const combined = `${cat} ${rule} ${name} ${fName}`;
+
+        const categories: string[] = [];
+        if (cat === "resolution" || /\b(4k|2160p?|1080p?|720p?|480p?|576p?|sd|uhd|fhd)\b/i.test(combined)) categories.push("resolution");
+        if (cat === "hdr" || /\b(dv|dolby\s*vision|hdr10\+|hdr10|hdr|hdrplus)\b/i.test(combined)) categories.push("hdr");
+        if (cat === "codec" || /\b(hevc|av1|prores|avc|h\.?264|h\.?265|x264|x265)\b/i.test(combined)) categories.push("codec");
+        if (cat === "audio" || /\b(atmos|truehd|dts:?x|dts-hd|dts|flac|aac|eac3|ac3)\b/i.test(combined)) categories.push("audio");
+        if (/\b(7\.1|5\.1|2\.0|surround)\b/i.test(combined)) categories.push("channels");
+        if (cat === "edition" || /\b(imax|criterion|directors?[\s_-]?cut|extended|remux|theatrical|remastered?)\b/i.test(combined)) categories.push("edition");
+        if (cat === "studio" || /\b(netflix|disney\+?|hbo(?:\s*max)?|apple\s*tv\+?|prime(?:\s*video)?|paramount\+?|marvel|dc(?:\s*comics)?|a24)\b/i.test(combined)) categories.push("studio");
+        if (cat === "ratings" || cat === "contentrating" || cat === "rating" || /\b(pg-13|nc-17|tv-ma|tv-14|tv-pg|tv-g|rated\s+[a-z0-9-]+)\b/i.test(combined)) categories.push("contentRating");
+        if (cat === "ribbon" || /\b(ribbon|laurel|award|top_?250|cannes|oscar|emmy|bafta|certified_fresh|palme)\b/i.test(combined)) categories.push("ribbon");
+
+        if (categories.length === 0 && cat && cat !== "custom") categories.push(cat);
+        return categories;
+    }
+
+    // 4. Resolve Independent Positions and Buckets for All Badges
     const fallbackPos = options.position || "top-right";
     const resPos = options.resolutionPosition || options.videoPosition || fallbackPos;
     const hdrPos = options.hdrPosition || options.videoPosition || fallbackPos;
@@ -1960,34 +1116,10 @@ export async function applyOverlaysToPoster(
     let hasCustomStudio = false;
     let hasCustomContentRating = false;
 
-    // Helper to determine all categories fulfilled by a custom badge
-    function getCustomBadgeCategories(cb: { category?: string; matchRule?: string | null; name?: string; filePath?: string }): string[] {
-        const cat = (cb.category || "").toLowerCase();
-        const rule = (cb.matchRule || "").toLowerCase();
-        const name = (cb.name || "").toLowerCase();
-        const fName = path.basename(cb.filePath || "").toLowerCase();
-        const combined = `${cat} ${rule} ${name} ${fName}`;
-
-        const categories: string[] = [];
-        if (cat === "resolution" || /\b(4k|2160p?|1080p?|720p?|480p?|576p?|sd|uhd|fhd)\b/i.test(combined)) categories.push("resolution");
-        if (cat === "hdr" || /\b(dv|dolby\s*vision|hdr10\+|hdr10|hdr|hdrplus)\b/i.test(combined)) categories.push("hdr");
-        if (cat === "codec" || /\b(hevc|av1|prores|avc|h\.?264|h\.?265|x264|x265)\b/i.test(combined)) categories.push("codec");
-        if (cat === "audio" || /\b(atmos|truehd|dts:?x|dts-hd|dts|flac|aac|eac3|ac3)\b/i.test(combined)) categories.push("audio");
-        if (/\b(7\.1|5\.1|2\.0|surround)\b/i.test(combined)) categories.push("channels");
-        if (cat === "edition" || /\b(imax|criterion|directors?[\s_-]?cut|extended|remux|theatrical|remastered?)\b/i.test(combined)) categories.push("edition");
-        if (cat === "studio" || /\b(netflix|disney\+?|hbo(?:\s*max)?|apple\s*tv\+?|prime(?:\s*video)?|paramount\+?|marvel|dc(?:\s*comics)?|a24)\b/i.test(combined)) categories.push("studio");
-        if (cat === "ratings" || cat === "contentrating" || cat === "rating" || /\b(pg-13|nc-17|tv-ma|tv-14|tv-pg|tv-g|rated\s+[a-z0-9-]+)\b/i.test(combined)) categories.push("contentRating");
-        if (cat === "ribbon" || /\b(ribbon|laurel|award|top_?250|cannes|oscar|emmy|bafta|certified_fresh|palme)\b/i.test(combined)) categories.push("ribbon");
-
-        if (categories.length === 0 && cat && cat !== "custom") categories.push(cat);
-        return categories;
-    }
-
     const appliedCategories = new Set<string>();
 
-    // First, process active Custom Badges (from GitHub / Uploads) matching this specific media item
+    // Process active custom badges
     if (options.customBadges && Array.isArray(options.customBadges)) {
-        // Sort custom badges so more specific compound badges (e.g. "4k + dv + hdr10+" with 3 tokens) apply first
         const sortedCustomBadges = [...options.customBadges].sort((a, b) => {
             const aTokens = (a.matchRule || "").split(/[+,&]/).length;
             const bTokens = (b.matchRule || "").split(/[+,&]/).length;
@@ -1996,38 +1128,17 @@ export async function applyOverlaysToPoster(
 
         for (const cb of sortedCustomBadges) {
             if (!cb.filePath || !fs.existsSync(cb.filePath)) continue;
-            
-            // Only apply if the custom badge matches the media stream telemetry
             if (!doesCustomBadgeMatchMedia(cb, mediaInfo)) continue;
 
             const badgeCats = getCustomBadgeCategories(cb);
-
-            // Deduplication: If all categories provided by this custom badge have ALREADY been fulfilled, skip it
-            if (badgeCats.length > 0 && badgeCats.every(c => appliedCategories.has(c))) {
-                continue;
-            }
-
-            // Check if all its categories are explicitly disabled in options
-            const allDisabled = badgeCats.length > 0 && badgeCats.every(c => {
-                if (c === "resolution" && options.showResolution === false) return true;
-                if (c === "hdr" && options.showHdr === false) return true;
-                if (c === "codec" && !options.showCodec) return true;
-                if (c === "audio" && options.showAudio === false) return true;
-                if (c === "channels" && !options.showAudioChannels) return true;
-                if (c === "edition" && !options.showEdition) return true;
-                if (c === "studio" && !options.showStudio) return true;
-                if (c === "contentRating" && !options.showContentRating) return true;
-                return false;
-            });
-            if (allDisabled) continue;
+            if (badgeCats.length > 0 && badgeCats.every(c => appliedCategories.has(c))) continue;
 
             try {
                 const scale = options.badgeScale || 1.0;
-                const rawW = cb.width || 140;
-                const rawH = cb.height || 46;
+                const rawW = cb.width || 240;
+                const rawH = cb.height || 48;
                 const isFullPoster = rawW >= 800 && rawH >= 1200;
 
-                // Register all categories this badge fulfills so no duplicates are added
                 for (const cat of badgeCats) {
                     appliedCategories.add(cat);
                     if (cat === "resolution") hasCustomResolution = true;
@@ -2039,38 +1150,16 @@ export async function applyOverlaysToPoster(
                     if (cat === "contentRating") hasCustomContentRating = true;
                 }
 
-                const cbScale = options.badgeScale || 1.0;
-                const cbWidth = Math.round(rawW * cbScale);
-                const cbHeight = Math.round(rawH * cbScale);
+                const cbWidth = Math.round(rawW * scale);
+                const cbHeight = Math.round(rawH * scale);
 
                 if (isFullPoster) {
-                    // Full-frame poster overlay (e.g. 1000x1500 Kometa template)
-                    let fullBuf: Buffer;
-                    if (cb.filePath.toLowerCase().endsWith(".svg")) {
-                        const rawSvg = injectEmbeddedFontIntoSvg(fs.readFileSync(cb.filePath, "utf-8"));
-                        fullBuf = await sharp(Buffer.from(rawSvg))
-                            .resize(1000, 1500, { fit: "cover" })
-                            .toBuffer();
-                    } else {
-                        fullBuf = await sharp(cb.filePath)
-                            .resize(1000, 1500, { fit: "cover" })
-                            .toBuffer();
-                    }
-
+                    let fullBuf = await sharp(cb.filePath).resize(1000, 1500, { fit: "cover" }).toBuffer();
                     if (cb.opacity !== undefined && cb.opacity < 1.0) {
-                        fullBuf = await sharp(fullBuf)
-                            .ensureAlpha()
-                            .linear(cb.opacity, 0)
-                            .toBuffer();
+                        fullBuf = await sharp(fullBuf).ensureAlpha().linear(cb.opacity, 0).toBuffer();
                     }
-
-                    overlays.push({
-                        input: fullBuf,
-                        top: 0,
-                        left: 0
-                    });
+                    overlays.push({ input: fullBuf, top: 0, left: 0 });
                 } else {
-                    // Resolve target position based on badge category or explicit override
                     let targetCategoryPos = fallbackPos;
                     if (badgeCats.includes("edition")) targetCategoryPos = editionPos;
                     else if (badgeCats.includes("resolution")) targetCategoryPos = resPos;
@@ -2083,24 +1172,12 @@ export async function applyOverlaysToPoster(
                     else if (badgeCats.includes("ratings")) targetCategoryPos = ratingsPos;
 
                     const cbPos = targetCategoryPos || cb.position || fallbackPos;
-
-                    let cbBuffer: Buffer;
-                    if (cb.filePath.toLowerCase().endsWith(".svg")) {
-                        const rawSvg = injectEmbeddedFontIntoSvg(fs.readFileSync(cb.filePath, "utf-8"));
-                        cbBuffer = await sharp(Buffer.from(rawSvg))
-                            .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-                            .toBuffer();
-                    } else {
-                        cbBuffer = await sharp(cb.filePath)
-                            .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-                            .toBuffer();
-                    }
+                    let cbBuffer = await sharp(cb.filePath)
+                        .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                        .toBuffer();
 
                     if (cb.opacity !== undefined && cb.opacity < 1.0) {
-                        cbBuffer = await sharp(cbBuffer)
-                            .ensureAlpha()
-                            .linear(cb.opacity, 0)
-                            .toBuffer();
+                        cbBuffer = await sharp(cbBuffer).ensureAlpha().linear(cb.opacity, 0).toBuffer();
                     }
 
                     const primaryLayerKey = badgeCats[0] || "custom";
@@ -2112,34 +1189,14 @@ export async function applyOverlaysToPoster(
         }
     }
 
-    const pushSvgToBucket = async (pos: string, svg: string, layerKey: string) => {
-        if (!buckets[pos]) return;
-        const fontInjectedSvg = injectEmbeddedFontIntoSvg(svg);
-        let buf = Buffer.from(fontInjectedSvg);
-        const meta = await sharp(buf).metadata();
-        const rawW = meta.width || 140;
-        const rawH = meta.height || 46;
-        const scale = options.badgeScale || 1.0;
-        
-        let w = rawW;
-        let h = rawH;
-        if (scale !== 1.0 && scale > 0.1) {
-            w = Math.round(rawW * scale);
-            h = Math.round(rawH * scale);
-            buf = await sharp(buf)
-                .resize(w, h, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-                .toBuffer();
-        }
-
-        buckets[pos].push({
-            buf,
-            w,
-            h,
-            layerKey
-        });
-    };
-
-    const pushStockImageToBucket = async (pos: string, relativePath: string, layerKey: string, targetW = 140, targetH = 46): Promise<boolean> => {
+    // Helper to push pre-rendered stock PNG badge into bucket
+    const pushStockImageToBucket = async (
+        pos: string,
+        relativePath: string,
+        layerKey: string,
+        targetW = 240,
+        targetH = 48
+    ): Promise<boolean> => {
         if (!buckets[pos]) return false;
         const fullPath = path.join(STOCK_KOMETA_DIR, relativePath);
         if (!fs.existsSync(fullPath)) return false;
@@ -2179,8 +1236,8 @@ export async function applyOverlaysToPoster(
         }
     };
 
-    // Dovetailed Resolution & HDR Combination (Kometa glassmorphism or procedural SVG)
-    const shouldDovetail = (options.dovetailResolutionHdr !== false) &&
+    // 5. Stock Resolution / HDR Badges
+    const shouldCombineResHdr = (options.dovetailResolutionHdr !== false) &&
         options.showResolution !== false &&
         options.showHdr !== false &&
         resPos === hdrPos &&
@@ -2188,39 +1245,62 @@ export async function applyOverlaysToPoster(
         !hasCustomHdr &&
         Boolean(mediaInfo.detectedBadges.resolution);
 
-    if (shouldDovetail) {
-        const dtSvg = generateDovetailedResolutionHdrBadgeSvg(
+    if (shouldCombineResHdr) {
+        const resHdrPath = resolveStockResolutionBadgePath(
             mediaInfo.detectedBadges.resolution!,
-            mediaInfo.detectedBadges.hdr,
-            options.theme
+            mediaInfo.detectedBadges.hdr
         );
-        await pushSvgToBucket(resPos, dtSvg, "resolution");
+        if (resHdrPath) {
+            await pushStockImageToBucket(resPos, resHdrPath, "resolution", 240, 48);
+        }
     } else {
         if (options.showResolution !== false && mediaInfo.detectedBadges.resolution && !hasCustomResolution) {
-            await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme), "resolution");
+            const resPath = resolveStockResolutionBadgePath(mediaInfo.detectedBadges.resolution);
+            if (resPath) {
+                await pushStockImageToBucket(resPos, resPath, "resolution", 200, 48);
+            }
         }
         if (options.showHdr !== false && mediaInfo.detectedBadges.hdr && !hasCustomHdr) {
-            await pushSvgToBucket(hdrPos, generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme), "hdr");
+            const hdrPath = resolveStockResolutionBadgePath("1080p", mediaInfo.detectedBadges.hdr);
+            if (hdrPath) {
+                await pushStockImageToBucket(hdrPos, hdrPath, "hdr", 200, 48);
+            }
         }
     }
-    if (options.showCodec && mediaInfo.detectedBadges.codec && !hasCustomCodec) {
-        await pushSvgToBucket(codecPos, generateCodecBadgeSvg(mediaInfo.detectedBadges.codec, options.theme), "codec");
-    }
+
+    // 6. Audio Codec Badge
     if (options.showAudio !== false && mediaInfo.detectedBadges.audio && !hasCustomAudio) {
-        await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio, options.theme), "audio");
+        const audioPath = resolveStockAudioCodecBadgePath(mediaInfo.detectedBadges.audio, mediaInfo.detectedBadges.audioChannels);
+        if (audioPath) {
+            await pushStockImageToBucket(audioPos, audioPath, "audio", 210, 48);
+        }
     }
-    if (options.showAudioChannels && mediaInfo.detectedBadges.audioChannels) {
-        await pushSvgToBucket(channelsPos, generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels, options.theme), "channels");
-    }
+
+    // 7. Edition / Cut Badge
     if (options.showEdition && mediaInfo.detectedBadges.edition && !hasCustomEdition) {
-        await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition, options.theme), "edition");
+        const editionPath = resolveStockEditionBadgePath(mediaInfo.detectedBadges.edition);
+        if (editionPath) {
+            await pushStockImageToBucket(editionPos, editionPath, "edition", 210, 52);
+        }
     }
-    if (options.showStudio && mediaInfo.detectedBadges.studio && !hasCustomStudio) {
-        await pushSvgToBucket(studioPos, generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio, options.theme), "studio");
-    }
+
+    // 8. Content Rating Badge
     if (options.showContentRating && mediaInfo.detectedBadges.contentRating && !hasCustomContentRating) {
-        await pushSvgToBucket(contentRatingPos, generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating, options.theme), "contentRating");
+        const crPath = resolveStockContentRatingBadgePath(mediaInfo.detectedBadges.contentRating);
+        if (crPath) {
+            await pushStockImageToBucket(contentRatingPos, crPath, "contentRating", 120, 50);
+        }
     }
+
+    // 9. Studio Logo Badge
+    if (options.showStudio && mediaInfo.detectedBadges.studio && !hasCustomStudio) {
+        const studioPath = resolveStockStudioBadgePath(mediaInfo.detectedBadges.studio);
+        if (studioPath) {
+            await pushStockImageToBucket(studioPos, studioPath, "studio", 190, 55);
+        }
+    }
+
+    // 10. Community Ratings Badge
     const effectiveRatings = options.ratingsSource || (
         (mediaInfo.imdbRating || mediaInfo.rating || mediaInfo.rtCriticsRating || mediaInfo.rtAudienceRating)
         ? {
@@ -2231,8 +1311,14 @@ export async function applyOverlaysToPoster(
         : undefined
     );
     if (options.showRatings && effectiveRatings) {
-        const rSvg = generateRatingsBadgeSvg(effectiveRatings, options.theme);
-        if (rSvg) await pushSvgToBucket(ratingsPos, rSvg, "ratings");
+        if (effectiveRatings.imdb) {
+            const imdbPath = resolveStockRatingBadgePath("imdb", effectiveRatings.imdb);
+            if (imdbPath) await pushStockImageToBucket(ratingsPos, imdbPath, "ratings", 100, 48);
+        }
+        if (effectiveRatings.rtCritics) {
+            const rtPath = resolveStockRatingBadgePath("rt", effectiveRatings.rtCritics);
+            if (rtPath) await pushStockImageToBucket(ratingsPos, rtPath, "ratings", 100, 48);
+        }
     }
 
     // Default layer priority order fallback
@@ -2241,11 +1327,10 @@ export async function applyOverlaysToPoster(
         ? options.layerPriorityOrder
         : defaultPriority;
 
-    // Render Each Bucket onto Poster Overlays
+    // 11. Render Buckets onto Poster Overlays (Vertical Stacking / Horizontal Row Stacking)
     for (const [posKey, items] of Object.entries(buckets)) {
         if (!items || items.length === 0) continue;
 
-        // Sort items in this bucket according to user-configured layer priority
         items.sort((a, b) => {
             const idxA = priorityOrder.indexOf(a.layerKey);
             const idxB = priorityOrder.indexOf(b.layerKey);
@@ -2257,10 +1342,10 @@ export async function applyOverlaysToPoster(
         const isBCenter = posKey.includes("center");
 
         const isRibbonInSameCorner = Boolean(options.showRibbon) && (options.ribbonPosition || "bottom-right") === posKey;
-        const bTopOffset = isBTop ? (options.showLeavingSoon && Boolean(mediaInfo.isLeavingSoon) ? 95 : 35) : (1500 - 35);
+        const bTopOffset = isBTop ? 35 : (1500 - 35);
 
         if (isBCenter) {
-            let totalW = items.reduce((acc, it) => acc + it.w + 12, 0) - 12;
+            let totalW = items.reduce((acc, it) => acc + it.w + 14, 0) - 14;
             let curX = (1000 - totalW) / 2;
             for (const it of items) {
                 overlays.push({
@@ -2268,16 +1353,18 @@ export async function applyOverlaysToPoster(
                     top: isBTop ? bTopOffset : bTopOffset - it.h,
                     left: Math.round(curX)
                 });
-                curX += it.w + 12;
+                curX += it.w + 14;
             }
         } else {
-            let currentX = isBRight 
-                ? (isRibbonInSameCorner ? 1000 - 280 - 40 : 1000 - 35) 
-                : (isRibbonInSameCorner ? 280 + 40 : 35);
+            // Stack items vertically in each corner with clean spacing
+            let currentY = isBTop ? bTopOffset : bTopOffset;
+            const currentX = isBRight
+                ? (isRibbonInSameCorner && !isBTop ? 1000 - 35 : 1000 - 35)
+                : 35;
 
             for (const it of items) {
                 const placeX = isBRight ? currentX - it.w : currentX;
-                const placeY = isBTop ? bTopOffset : bTopOffset - it.h;
+                const placeY = isBTop ? currentY : currentY - it.h;
 
                 overlays.push({
                     input: it.buf,
@@ -2285,29 +1372,13 @@ export async function applyOverlaysToPoster(
                     left: Math.round(placeX)
                 });
 
-                if (isBRight) {
-                    currentX -= (it.w + 12);
+                if (isBTop) {
+                    currentY += (it.h + 14);
                 } else {
-                    currentX += (it.w + 12);
+                    currentY -= (it.h + 14);
                 }
             }
         }
-    }
-
-    // 6. Digital Release Banner (if set)
-    if (options.showDigitalRelease && options.digitalReleaseDate && !options.showPlaceholder) {
-        const relDate = new Date(options.digitalReleaseDate);
-        const now = new Date();
-        const diffDays = Math.ceil((relDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        const formatted = relDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
-        const relSvg = generateDigitalReleaseRibbonSvg(diffDays, formatted);
-        const relBuf = await sharp(Buffer.from(relSvg)).resize(1000, 68).toBuffer();
-        overlays.push({
-            input: relBuf,
-            top: 1500 - 68,
-            left: 0
-        });
     }
 
     // Composite all layers together
@@ -2335,13 +1406,11 @@ export async function backupAndApplyOverlay(
         return { success: false, message: "Item has no thumbnail to overlay." };
     }
 
-    // 1. Fetch current raw poster buffer
     const originalBuffer = await fetchPlexPosterBuffer(serverUrl, token, item.thumb);
     if (!originalBuffer) {
         return { success: false, message: "Failed to download poster buffer from Plex." };
     }
 
-    // 2. Check if backup already exists in database
     const existingBackup = await prisma.mediaArtBackup.findUnique({
         where: {
             serverId_ratingKey: {
@@ -2354,10 +1423,7 @@ export async function backupAndApplyOverlay(
     const backupFilePath = path.join(BACKUP_DIR, `${serverId}_${item.ratingKey}.jpg`);
 
     if (!existingBackup) {
-        // Save pristine original to disk
         fs.writeFileSync(backupFilePath, originalBuffer);
-
-        // Record in DB
         await prisma.mediaArtBackup.create({
             data: {
                 ratingKey: item.ratingKey,
@@ -2369,7 +1435,6 @@ export async function backupAndApplyOverlay(
         logger.addLog("INFO", "CURATION", `Backed up original poster for "${item.title}" (RatingKey: ${item.ratingKey})`);
     }
 
-    // 3. Composite overlays with sharp
     const overlayBuffer = await applyOverlaysToPoster(
         existingBackup && fs.existsSync(existingBackup.backupFilePath)
             ? fs.readFileSync(existingBackup.backupFilePath)
@@ -2378,7 +1443,6 @@ export async function backupAndApplyOverlay(
         options
     );
 
-    // 4. Upload composited poster to Plex
     const uploaded = await uploadPlexItemPoster(serverUrl, token, item.ratingKey, overlayBuffer);
 
     if (uploaded) {
@@ -2416,7 +1480,6 @@ export async function restoreItemOriginalArtwork(
         const restored = await uploadPlexItemPoster(serverUrl, token, ratingKey, originalBuf);
 
         if (restored) {
-            // Remove backup file and record
             try { fs.unlinkSync(backup.backupFilePath); } catch (e) {}
             await prisma.mediaArtBackup.delete({ where: { id: backup.id } });
 
