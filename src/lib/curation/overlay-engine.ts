@@ -1350,32 +1350,33 @@ export function generateKometaCornerRibbonSvg(
     const g = gradientThemeMap[theme] || gradientThemeMap.purple;
     const gradId = `kometaRibbonGrad_${theme}_${position}`;
 
-    let polygonPoints = "45,0 180,135 180,180 0,0";
-    let highlightLine = { x1: "50", y1: "0", x2: "180", y2: "130" };
-    let shadowLine = { x1: "10", y1: "0", x2: "180", y2: "170" };
-    let textTransform = "translate(100, 75) rotate(45)";
+    let polygonPoints = "110,0 260,0 380,120 380,270";
+    let highlightLine = { x1: "110", y1: "0", x2: "380", y2: "270" };
+    let shadowLine = { x1: "260", y1: "0", x2: "380", y2: "120" };
+    let textTransform = "translate(282.5, 97.5) rotate(45)";
 
     if (isTopLeft) {
-        polygonPoints = "135,0 0,135 0,180 180,0";
-        highlightLine = { x1: "130", y1: "0", x2: "0", y2: "130" };
-        shadowLine = { x1: "170", y1: "0", x2: "0", y2: "170" };
-        textTransform = "translate(80, 75) rotate(-45)";
+        polygonPoints = "120,0 270,0 0,270 0,120";
+        highlightLine = { x1: "270", y1: "0", x2: "0", y2: "270" };
+        shadowLine = { x1: "120", y1: "0", x2: "0", y2: "120" };
+        textTransform = "translate(97.5, 97.5) rotate(-45)";
     } else if (isBottomRight) {
-        polygonPoints = "0,180 180,0 180,45 45,180";
-        highlightLine = { x1: "0", y1: "170", x2: "180", y2: "10" };
-        shadowLine = { x1: "0", y1: "130", x2: "180", y2: "50" };
-        textTransform = "translate(100, 105) rotate(-45)";
+        polygonPoints = "380,110 380,260 260,380 110,380";
+        highlightLine = { x1: "380", y1: "110", x2: "110", y2: "380" };
+        shadowLine = { x1: "380", y1: "260", x2: "260", y2: "380" };
+        textTransform = "translate(282.5, 282.5) rotate(-45)";
     } else if (isBottomLeft) {
-        polygonPoints = "0,135 135,180 180,180 0,0";
-        highlightLine = { x1: "0", y1: "130", x2: "130", y2: "180" };
-        shadowLine = { x1: "0", y1: "170", x2: "170", y2: "180" };
-        textTransform = "translate(80, 105) rotate(45)";
+        polygonPoints = "0,110 0,260 120,380 270,380";
+        highlightLine = { x1: "0", y1: "110", x2: "270", y2: "380" };
+        shadowLine = { x1: "0", y1: "260", x2: "120", y2: "380" };
+        textTransform = "translate(97.5, 282.5) rotate(45)";
     }
 
-    const fontSize = cleanText.length > 20 ? 9.5 : cleanText.length > 14 ? 10.5 : 12;
+    const fontSize = cleanText.length > 20 ? 19 : cleanText.length > 14 ? 22 : 25;
+    const subFontSize = 13;
 
     return `
-    <svg width="280" height="280" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+    <svg width="380" height="380" viewBox="0 0 380 380" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stop-color="${g.start}" />
@@ -1383,21 +1384,21 @@ export function generateKometaCornerRibbonSvg(
                 <stop offset="100%" stop-color="${g.end}" />
             </linearGradient>
             <filter id="ribbonDropShadow_${position}" x="-25%" y="-25%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.85"/>
+                <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000000" flood-opacity="0.9"/>
             </filter>
         </defs>
         <g filter="url(#ribbonDropShadow_${position})">
             <!-- Ribbon Solid Body -->
             <polygon points="${polygonPoints}" fill="url(#${gradId})" />
             <!-- Top Specular Highlight Line -->
-            <line x1="${highlightLine.x1}" y1="${highlightLine.y1}" x2="${highlightLine.x2}" y2="${highlightLine.y2}" stroke="${g.highlight}" stroke-width="1.8" />
+            <line x1="${highlightLine.x1}" y1="${highlightLine.y1}" x2="${highlightLine.x2}" y2="${highlightLine.y2}" stroke="${g.highlight}" stroke-width="3" />
             <!-- Bottom Fold Shadow Line -->
-            <line x1="${shadowLine.x1}" y1="${shadowLine.y1}" x2="${shadowLine.x2}" y2="${shadowLine.y2}" stroke="${g.shadow}" stroke-width="2.2" />
+            <line x1="${shadowLine.x1}" y1="${shadowLine.y1}" x2="${shadowLine.x2}" y2="${shadowLine.y2}" stroke="${g.shadow}" stroke-width="3.5" />
             
             <!-- Crisp Typography -->
             <g transform="${textTransform}">
-                <text x="0" y="0" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle" letter-spacing="2.2">${cleanText}</text>
-                <text x="0" y="11" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="7.5" fill="${g.subText}" text-anchor="middle" letter-spacing="1">${subLabel}</text>
+                <text x="0" y="0" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle" letter-spacing="2.5">${cleanText}</text>
+                <text x="0" y="20" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="${subFontSize}" fill="${g.subText}" text-anchor="middle" letter-spacing="1.5">${subLabel}</text>
             </g>
         </g>
     </svg>`;
@@ -1717,7 +1718,7 @@ export async function applyOverlaysToPoster(
 
     // 3. Diagonal Corner Ribbons (Kometa Waterfall Priority / Single Ribbon)
     if (options.showRibbon || options.ribbonText || (options.tieredRibbons && options.tieredRibbons.length > 0) || options.ribbonMode === "auto_stack" || options.ribbonMode === "tiered" || options.ribbonMode === "waterfall") {
-        const rPos = options.ribbonPosition || "top-right";
+        const rPos = options.ribbonPosition || "bottom-right";
         let winningRibbon: { text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" } | null = null;
 
         if (options.ribbonMode === "single") {
@@ -1764,18 +1765,8 @@ export async function applyOverlaysToPoster(
         }
 
         if (winningRibbon && winningRibbon.text) {
-            const stockRibbonPath = resolveStockRibbonPath(winningRibbon.text, winningRibbon.theme);
-            let ribbonBuf: Buffer;
-
-            if (stockRibbonPath && fs.existsSync(path.join(STOCK_KOMETA_DIR, stockRibbonPath))) {
-                let img = sharp(path.join(STOCK_KOMETA_DIR, stockRibbonPath)).resize(380, 380, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } });
-                if (rPos.endsWith("left")) img = img.flop();
-                if (rPos.startsWith("bottom")) img = img.flip();
-                ribbonBuf = await img.toBuffer();
-            } else {
-                const cornerRibbonSvg = generateKometaCornerRibbonSvg(winningRibbon.text, rPos, winningRibbon.theme);
-                ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(380, 380).toBuffer();
-            }
+            const cornerRibbonSvg = generateKometaCornerRibbonSvg(winningRibbon.text, rPos, winningRibbon.theme);
+            const ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(380, 380).toBuffer();
 
             const rTop = rPos.startsWith("top") ? (options.showLeavingSoon ? 78 : 0) : 1500 - 380;
             const rLeft = rPos.endsWith("right") ? 1000 - 380 : 0;
@@ -2061,7 +2052,7 @@ export async function applyOverlaysToPoster(
         }
     };
 
-    // Dovetailed Resolution & HDR Combination (Kometa stock PNG or procedural SVG)
+    // Dovetailed Resolution & HDR Combination (Kometa glassmorphism or procedural SVG)
     const shouldDovetail = (options.dovetailResolutionHdr !== false) &&
         options.showResolution !== false &&
         options.showHdr !== false &&
@@ -2071,27 +2062,15 @@ export async function applyOverlaysToPoster(
         Boolean(mediaInfo.detectedBadges.resolution);
 
     if (shouldDovetail) {
-        const stockRes = resolveStockResolutionBadgePath(mediaInfo.detectedBadges.resolution!, mediaInfo.detectedBadges.hdr);
-        let stockApplied = false;
-        if (stockRes) {
-            stockApplied = await pushStockImageToBucket(resPos, stockRes, "resolution", 220, 50);
-        }
-        if (!stockApplied) {
-            const dtSvg = generateDovetailedResolutionHdrBadgeSvg(
-                mediaInfo.detectedBadges.resolution!,
-                mediaInfo.detectedBadges.hdr,
-                options.theme
-            );
-            await pushSvgToBucket(resPos, dtSvg, "resolution");
-        }
+        const dtSvg = generateDovetailedResolutionHdrBadgeSvg(
+            mediaInfo.detectedBadges.resolution!,
+            mediaInfo.detectedBadges.hdr,
+            options.theme
+        );
+        await pushSvgToBucket(resPos, dtSvg, "resolution");
     } else {
         if (options.showResolution !== false && mediaInfo.detectedBadges.resolution && !hasCustomResolution) {
-            const stockRes = resolveStockResolutionBadgePath(mediaInfo.detectedBadges.resolution!, null);
-            let stockApplied = false;
-            if (stockRes) stockApplied = await pushStockImageToBucket(resPos, stockRes, "resolution", 140, 46);
-            if (!stockApplied) {
-                await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme), "resolution");
-            }
+            await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme), "resolution");
         }
         if (options.showHdr !== false && mediaInfo.detectedBadges.hdr && !hasCustomHdr) {
             await pushSvgToBucket(hdrPos, generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme), "hdr");
@@ -2101,23 +2080,13 @@ export async function applyOverlaysToPoster(
         await pushSvgToBucket(codecPos, generateCodecBadgeSvg(mediaInfo.detectedBadges.codec, options.theme), "codec");
     }
     if (options.showAudio !== false && mediaInfo.detectedBadges.audio && !hasCustomAudio) {
-        const stockAudio = resolveStockAudioCodecBadgePath(mediaInfo.detectedBadges.audio);
-        let stockApplied = false;
-        if (stockAudio) stockApplied = await pushStockImageToBucket(audioPos, stockAudio, "audio", 140, 46);
-        if (!stockApplied) {
-            await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio, options.theme), "audio");
-        }
+        await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio, options.theme), "audio");
     }
     if (options.showAudioChannels && mediaInfo.detectedBadges.audioChannels) {
         await pushSvgToBucket(channelsPos, generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels, options.theme), "channels");
     }
     if (options.showEdition && mediaInfo.detectedBadges.edition && !hasCustomEdition) {
-        const stockEdition = resolveStockEditionBadgePath(mediaInfo.detectedBadges.edition);
-        let stockApplied = false;
-        if (stockEdition) stockApplied = await pushStockImageToBucket(editionPos, stockEdition, "edition", 140, 46);
-        if (!stockApplied) {
-            await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition, options.theme), "edition");
-        }
+        await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition, options.theme), "edition");
     }
     if (options.showStudio && mediaInfo.detectedBadges.studio && !hasCustomStudio) {
         await pushSvgToBucket(studioPos, generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio, options.theme), "studio");
@@ -2151,7 +2120,7 @@ export async function applyOverlaysToPoster(
         const isBRight = posKey.endsWith("right");
         const isBCenter = posKey.includes("center");
 
-        const isRibbonInSameCorner = Boolean(options.showRibbon) && (options.ribbonPosition || "top-right") === posKey;
+        const isRibbonInSameCorner = Boolean(options.showRibbon) && (options.ribbonPosition || "bottom-right") === posKey;
         const bTopOffset = isBTop ? (options.showLeavingSoon && Boolean(mediaInfo.isLeavingSoon) ? 95 : 35) : (1500 - 35);
 
         if (isBCenter) {

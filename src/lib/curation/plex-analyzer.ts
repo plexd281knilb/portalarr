@@ -261,7 +261,7 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
                 const displayTitle = (videoStream.displayTitle || "").toLowerCase();
                 const extendedDisplayTitle = (videoStream.extendedDisplayTitle || "").toLowerCase();
 
-                if (doviProfile || doviTitle || displayTitle.includes("dovi") || displayTitle.includes("dolby vision") || extendedDisplayTitle.includes("dolby vision")) {
+                if (doviProfile || doviTitle || displayTitle.includes("dovi") || displayTitle.includes("dolby vision") || extendedDisplayTitle.includes("dolby vision") || videoStream.DOVIBaselinePresent || videoStream.doviBaselinePresent) {
                     itemHdr = "Dolby Vision";
                     detectedHdr = "DV";
                 } else if (displayTitle.includes("hdr10+") || extendedDisplayTitle.includes("hdr10+")) {
@@ -539,6 +539,8 @@ function parsePlexXmlMetadata(xml: string): any[] {
                         colorSpace: getSAttr("colorSpace"),
                         doviTitle: getSAttr("doviTitle"),
                         doviProfile: getSAttr("doviProfile"),
+                        DOVIBaselinePresent: getSAttr("DOVIBaselinePresent") === "1" || getSAttr("DOVIBaselinePresent") === "true",
+                        doviBaselinePresent: getSAttr("doviBaselinePresent") === "1" || getSAttr("doviBaselinePresent") === "true",
                         profile: getSAttr("profile")
                     });
                 }
@@ -753,12 +755,12 @@ export async function getPlexLibraryMediaItems(
     for (const cleanBase of urlsToTry) {
         if (!cleanBase) continue;
 
-        // 1. Try standard query with includeGuids=1
-        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
+        // 1. Try standard query with includeGuids=1&includeAdvanced=1&includeMeta=1
+        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&includeAdvanced=1&includeMeta=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
         lastUrlAttempted = urlWithGuids;
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
             const res = await fetch(urlWithGuids, {
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
@@ -795,11 +797,11 @@ export async function getPlexLibraryMediaItems(
         }
 
         // 2. Try fast fallback without includeGuids=1
-        const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
+        const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeAdvanced=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
         lastUrlAttempted = fallbackUrl;
         try {
             const fbController = new AbortController();
-            const fbTimeoutId = setTimeout(() => fbController.abort(), 3500);
+            const fbTimeoutId = setTimeout(() => fbController.abort(), 10000);
             const fbRes = await fetch(fallbackUrl, {
                 headers: {
                     "Accept": "application/json, application/xml, text/xml, */*",
