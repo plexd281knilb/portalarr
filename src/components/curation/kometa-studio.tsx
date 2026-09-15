@@ -2129,31 +2129,52 @@ export function KometaStudio() {
         if (e) e.preventDefault();
         if (!inspectorSearchQuery.trim()) return;
         setSearchingPlex(true);
+        setSingleItemMsg(null);
         try {
-            const res = await searchPlexLibraryItemsAction(inspectorSearchQuery, selectedServerId, selectedSectionKey);
+            const targetServerId = selectedServerId || (servers.length > 0 ? servers[0].serverId : "");
+            const res = await searchPlexLibraryItemsAction(targetServerId, inspectorSearchQuery.trim(), selectedSectionKey || undefined);
             if (res.success && res.items) {
                 setSearchResults(res.items);
-                if (res.items.length > 0 && !inspectingItem) {
-                    handleInspectItem(res.items[0].ratingKey);
+                if (res.items.length > 0) {
+                    handleInspectItem(res.items[0].ratingKey, targetServerId);
+                } else {
+                    setSingleItemMsg({ success: false, text: `No media found matching "${inspectorSearchQuery}".` });
                 }
+            } else if (!res.success && res.error) {
+                setSingleItemMsg({ success: false, text: res.error });
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed searching plex library:", e);
+            setSingleItemMsg({ success: false, text: e.message || "Failed searching Plex library." });
         } finally {
             setSearchingPlex(false);
         }
     };
 
-    const handleInspectItem = async (ratingKey: string) => {
+    const handleInspectItem = async (ratingKey: string, srvId?: string) => {
         setLoadingInspection(true);
         setSingleItemMsg(null);
         try {
-            const res = await inspectPlexMediaItemAction(ratingKey, selectedServerId);
+            const targetServerId = srvId || selectedServerId || (servers.length > 0 ? servers[0].serverId : "");
+            const res = await inspectPlexMediaItemAction(targetServerId, ratingKey);
             if (res.success && res.item) {
-                setInspectingItem(res.item);
+                setInspectingItem({
+                    ...res.item,
+                    rawStreams: res.rawStreams,
+                    parts: res.parts,
+                    hasBackup: res.hasBackup,
+                    isLeavingSoon: res.isLeavingSoon,
+                    leavingSoonDate: res.leavingSoonDate,
+                    leavingReason: res.leavingReason,
+                    serverName: res.serverName,
+                    serverUrl: res.serverUrl
+                });
+            } else if (!res.success && res.error) {
+                setSingleItemMsg({ success: false, text: res.error });
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed inspecting item:", e);
+            setSingleItemMsg({ success: false, text: e.message || "Failed inspecting item." });
         } finally {
             setLoadingInspection(false);
         }

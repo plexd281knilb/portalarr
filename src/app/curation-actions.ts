@@ -3197,7 +3197,7 @@ export async function searchPlexLibraryItemsAction(
     try {
         if (!query || query.trim().length === 0) return { success: true, items: [] };
 
-        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        const resolved = await resolveWorkingPlexServerConnection(serverId || undefined);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured.", items: [] };
 
         let rawItems: PlexMediaStreamInfo[] = [];
@@ -3373,7 +3373,7 @@ export async function getPlexLibraryTagsAuditAction(
 export async function inspectPlexMediaItemAction(serverId: string, ratingKey: string) {
     await verifyAdmin();
     try {
-        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        const resolved = await resolveWorkingPlexServerConnection(serverId || undefined);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
 
         let inspection: any = null;
