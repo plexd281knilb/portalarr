@@ -21,7 +21,7 @@ import {
     getPaymentAndTrialSettings,
     savePaymentAndTrialSettings
 } from "@/app/actions";
-import { changeUserPassword } from "@/app/auth-actions";
+import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,8 @@ import {
     Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, 
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
-    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal
+    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
+    Eye
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
@@ -125,6 +126,9 @@ export default function AccessSettingsPage() {
     // Inline Edit Kindle Email state
     const [editingKindleUserId, setEditingKindleUserId] = useState<string | null>(null);
     const [kindleEmailInput, setKindleEmailInput] = useState("");
+
+    // Impersonation state
+    const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
 
     const loadUsers = async () => {
         setLoading(true);
@@ -273,6 +277,26 @@ export default function AccessSettingsPage() {
         setEditingKindleUserId(null);
         setKindleEmailInput("");
         loadUsers();
+    };
+
+    const handleImpersonateUser = async (targetUserId: string, username: string) => {
+        if (!confirm(`Switch to viewing the site as "${username}"?\n\nYou will experience the site exactly as this user sees it (their personal shelves, hub stats, active streams, and user role restrictions).\n\nA sticky banner at the top of the screen will let you return to your Admin account anytime.`)) {
+            return;
+        }
+        setImpersonatingUserId(targetUserId);
+        try {
+            const res = await impersonateUserAction(targetUserId);
+            if (res?.error) {
+                alert("Unable to switch user: " + res.error);
+                setImpersonatingUserId(null);
+                return;
+            }
+            window.location.href = "/";
+        } catch (err: any) {
+            console.error("Impersonate error:", err);
+            alert("Failed to switch user. Please try again.");
+            setImpersonatingUserId(null);
+        }
     };
 
     const handleAdminResetPassword = async (e: React.FormEvent) => {
@@ -1164,6 +1188,23 @@ export default function AccessSettingsPage() {
                                                         >
                                                             <Timer className="h-3.5 w-3.5 text-blue-400" />
                                                             Access & Timer
+                                                        </Button>
+
+                                                        {/* VIEW AS USER (IMPERSONATE) BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-amber-500/40 text-amber-300 hover:bg-amber-500/15 hover:border-amber-500 transition-all active:scale-95"
+                                                            onClick={() => handleImpersonateUser(user.id, user.username)}
+                                                            title={`View Site As ${user.username}`}
+                                                            disabled={impersonatingUserId === user.id}
+                                                        >
+                                                            {impersonatingUserId === user.id ? (
+                                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                                                            ) : (
+                                                                <Eye className="h-3.5 w-3.5 text-amber-400" />
+                                                            )}
+                                                            View As
                                                         </Button>
                                                     </div>
 

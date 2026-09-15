@@ -124,7 +124,9 @@ export async function requestAccount(formData: FormData) {
 
 // --- 5. LOGOUT ---
 export async function logout() {
-  (await cookies()).delete("session");
+  const cookieStore = await cookies();
+  cookieStore.delete("session");
+  cookieStore.delete("portalarr_impersonator_token");
   redirect("/login");
 }
 
@@ -666,4 +668,144 @@ export async function changeUserPassword(formData: FormData) {
   });
 
   return { success: true, message: "Your password has been successfully updated!" };
+}
+
+// ============================================================================
+// --- 9. IMPERSONATION (VIEW SITE AS USER) ---
+// ============================================================================
+const IMPERSONATOR_COOKIE_NAME = "portalarr_impersonator_token";
+
+export async function impersonateUserAction(targetUserId: string) {
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get("session")?.value;
+  const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
+
+  // 1. Verify caller is an Admin (either current active session or original impersonator token is Admin)
+  let callerIsAdmin = false;
+
+  if (sessionToken) {
+    try {
+      const { payload } = await jwtVerify(sessionToken, getJwtSecret());
+      if (payload.role === "ADMIN" && payload.userId) {
+        callerIsAdmin = true;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!callerIsAdmin && impersonatorToken) {
+    try {
+      const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
+      if (payload.role === "ADMIN" && payload.userId) {
+        const dbAdmin = await prisma.user.findUnique({ where: { id: payload.userId as string } });
+        if (dbAdmin && dbAdmin.role === "ADMIN") {
+          callerIsAdmin = true;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!callerIsAdmin) {
+    return { error: "Unauthorized. Admin privileges required to view site as another user." };
+  }
+
+  // 2. Fetch target user
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, username: true, role: true, status: true }
+  });
+
+  if (!targetUser) {
+    return { error: "Target user not found." };
+  }
+
+  // 3. Preserve original Admin session token if not already impersonating
+  if (!impersonatorToken && sessionToken) {
+    cookieStore.set(IMPERSONATOR_COOKIE_NAME, sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: "/",
+      sameSite: "lax"
+    });
+  }
+
+  // 4. Create fresh session cookie for the target user
+  await createSession(targetUser.id, targetUser.username, targetUser.role, targetUser.status);
+
+  return {
+    success: true,
+    targetUsername: targetUser.username,
+    targetRole: targetUser.role
+  };
+}
+
+export async function stopImpersonationAction() {
+  const cookieStore = await cookies();
+  const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
+
+  if (!impersonatorToken) {
+    return { error: "No active impersonation session found." };
+  }
+
+  try {
+    const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
+    if (!payload.userId) {
+      cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+      return { error: "Invalid impersonator session token." };
+    }
+
+    const adminUser = await prisma.user.findUnique({
+      where: { id: payload.userId as string },
+      select: { id: true, username: true, role: true, status: true }
+    });
+
+    if (!adminUser || adminUser.role !== "ADMIN") {
+      cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+      return { error: "Original admin user not found or no longer has admin privileges." };
+    }
+
+    // Restore original Admin session
+    await createSession(adminUser.id, adminUser.username, adminUser.role, adminUser.status);
+    cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+
+    return { success: true, adminUsername: adminUser.username };
+  } catch (err: any) {
+    console.error("[AUTH] Failed to stop impersonation:", err);
+    cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+    return { error: "Failed to restore admin session." };
+  }
+}
+
+export async function getImpersonationStatusAction() {
+  const cookieStore = await cookies();
+  const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
+  const sessionToken = cookieStore.get("session")?.value;
+
+  if (!impersonatorToken || !sessionToken) {
+    return { isImpersonating: false };
+  }
+
+  try {
+    const { payload: adminPayload } = await jwtVerify(impersonatorToken, getJwtSecret());
+    const { payload: currentPayload } = await jwtVerify(sessionToken, getJwtSecret());
+
+    if (!adminPayload.userId || adminPayload.role !== "ADMIN") {
+      return { isImpersonating: false };
+    }
+
+    return {
+      isImpersonating: true,
+      adminUserId: adminPayload.userId as string,
+      adminUsername: (adminPayload.username as string) || "Admin",
+      currentUserId: currentPayload.userId as string,
+      currentUsername: (currentPayload.username as string) || "User",
+      currentRole: (currentPayload.role as string) || "USER"
+    };
+  } catch {
+    return { isImpersonating: false };
+  }
 }

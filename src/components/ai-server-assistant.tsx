@@ -109,7 +109,7 @@ export function AiServerAssistant() {
 
         try {
             const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) => 
-                setTimeout(() => resolve({ success: false, error: "Request timed out. Please try again." }), 12000)
+                setTimeout(() => resolve({ success: false, error: "Request timed out. Please try again." }), 30000)
             );
             const res = await Promise.race([
                 askAiServerMasterAction(query, updatedHistory),

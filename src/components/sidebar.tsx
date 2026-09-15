@@ -31,13 +31,18 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   useEffect(() => {
     getSession().then((session) => {
       if (session) {
-        setRole((session.role as string) || "");
-        if (session.role === "ADMIN") {
-          setIsAdmin(true);
-        }
+        const userRole = (session.role as string) || "";
+        setRole(userRole);
+        setIsAdmin(userRole === "ADMIN");
+      } else {
+        setIsAdmin(false);
+        setRole("");
       }
+    }).catch(() => {
+      setIsAdmin(false);
+      setRole("");
     });
-  }, []);
+  }, [pathname]);
 
   return (
     <div className={cn("pb-12 h-screen border-r bg-[#101014] text-sidebar-foreground border-border/40 flex flex-col justify-between select-none", className)}>
@@ -292,13 +297,18 @@ export function MobileSidebar() {
   useEffect(() => {
     getSession().then((session) => {
       if (session) {
-        setRole((session.role as string) || "");
-        if (session.role === "ADMIN") {
-          setIsAdmin(true);
-        }
+        const userRole = (session.role as string) || "";
+        setRole(userRole);
+        setIsAdmin(userRole === "ADMIN");
+      } else {
+        setIsAdmin(false);
+        setRole("");
       }
+    }).catch(() => {
+      setIsAdmin(false);
+      setRole("");
     });
-  }, []);
+  }, [pathname]);
 
   return (
     <>

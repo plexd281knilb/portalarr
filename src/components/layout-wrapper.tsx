@@ -2,29 +2,34 @@
 
 import { usePathname } from "next/navigation";
 import { Sidebar, MobileSidebar } from "@/components/sidebar";
-import { LogOut, Settings, LayoutDashboard, Server, BookOpen } from "lucide-react";
+import { LogOut, Settings, LayoutDashboard, Server, BookOpen, User } from "lucide-react";
 import { logout, getSession } from "@/app/auth-actions";
 import { checkUserLibraryAccess } from "@/app/actions";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import ImpersonationBanner from "@/components/impersonation-banner";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [hasLibraryAccess, setHasLibraryAccess] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     async function checkAccess() {
       try {
         const session = await getSession();
         if (session) {
-          if (session.role === "ADMIN") {
+          const isAdm = session.role === "ADMIN";
+          setIsAdmin(isAdm);
+          if (isAdm) {
             setHasLibraryAccess(true);
           } else {
             const hasAcc = await checkUserLibraryAccess();
             setHasLibraryAccess(hasAcc);
           }
         } else {
+          setIsAdmin(false);
           setHasLibraryAccess(false);
         }
       } catch (e) {
@@ -39,6 +44,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   if (isPublicRoute) {
     return (
       <div className="w-full min-h-[100dvh] flex flex-col bg-background">
+        <ImpersonationBanner />
         {/* --- GLOBAL USER HEADER --- */}
         {pathname !== "/login" && (
           <header className="flex items-center justify-between px-6 h-16 border-b bg-muted/20 shrink-0">
@@ -64,11 +70,18 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                             <span className="hidden sm:inline font-semibold">Dashboard</span>
                         </Link>
                     </Button>
-                ) : (
-                    <Button asChild variant="ghost" size="sm" className="flex gap-2 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
-                        <Link href="/settings" title="Settings">
+                ) : isAdmin ? (
+                    <Button asChild variant="ghost" size="sm" className="flex gap-2 text-primary hover:text-primary hover:bg-primary/10 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
+                        <Link href="/settings" title="System Settings">
                             <Settings className="h-4 w-4" /> 
                             <span className="hidden sm:inline font-semibold">Settings</span>
+                        </Link>
+                    </Button>
+                ) : (
+                    <Button asChild variant="ghost" size="sm" className="flex gap-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-400/40 active:scale-95 transition-all">
+                        <Link href="/settings/profile" title="Account Settings">
+                            <User className="h-4 w-4" /> 
+                            <span className="hidden sm:inline font-semibold">Account</span>
                         </Link>
                     </Button>
                 )}
@@ -93,28 +106,30 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-background text-foreground">
+    <div className="flex flex-col h-[100dvh] overflow-hidden bg-background text-foreground">
+      <ImpersonationBanner />
       
-      {/* Desktop Sidebar (Admins Only) */}
-      <div className="w-56 lg:w-64 flex-none hidden md:block">
-        <Sidebar />
-      </div>
-      
-      {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        
-        {/* Mobile Header (Admins Only) */}
-        <div className="md:hidden border-b bg-background p-4 flex items-center gap-3 shrink-0">
-           <MobileSidebar /> 
-           <span className="font-bold text-lg">Portalarr Settings</span>
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        {/* Desktop Sidebar (Admins Only) */}
+        <div className="w-56 lg:w-64 flex-none hidden md:block">
+          <Sidebar />
         </div>
+        
+        {/* Main Content Wrapper */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          
+          {/* Mobile Header (Admins Only) */}
+          <div className="md:hidden border-b bg-background p-4 flex items-center gap-3 shrink-0">
+             <MobileSidebar /> 
+             <span className="font-bold text-lg">Portalarr Settings</span>
+          </div>
 
-        {/* Scrollable Page Content */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-8">
-          {children}
-        </main>
+          {/* Scrollable Page Content */}
+          <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-8">
+            {children}
+          </main>
+        </div>
       </div>
-
     </div>
   );
 }

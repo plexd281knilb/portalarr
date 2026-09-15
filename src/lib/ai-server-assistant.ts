@@ -517,17 +517,16 @@ INSTRUCTIONS:
     const geminiKey = rawKey || process.env.GEMINI_API_KEY || "";
     if ((provider === "gemini" || provider === "google" || (!provider || provider === "default")) && geminiKey) {
         const candidateModels = Array.from(new Set([
-            ...(modelName ? [modelName] : []),
-            "gemini-2.5-flash",
-            "gemini-1.5-flash",
+            ...(modelName && modelName !== "gemini-2.5-flash" && modelName !== "default" ? [modelName] : []),
             "gemini-2.0-flash",
+            "gemini-1.5-flash",
             "gemini-1.5-pro"
         ]));
 
         for (const activeModel of candidateModels) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 6000);
+                const timeoutId = setTimeout(() => controller.abort(), 7000);
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
 
                 const contents: any[] = [];
