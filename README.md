@@ -6,6 +6,13 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 
 ## 🚀 Features
 
+- **Plex & Server Master AI Assistant:** Interactive AI assistant trained on media server troubleshooting, stream telemetry, and device playback bugs. Delivers step-by-step fixes for issues like Roku Auto-Adjust Quality bandwidth rejection, transcode stuttering, audio transcoding, and subtitle burn-in, with 1-click ticket escalation pre-populated with diagnostic telemetry.
+- **View Site As User (Admin Impersonation):** Administrators can switch into any user's exact perspective with 1 click from the User Directory (`/settings/access`). Enforces user-specific library shelves, watch time, active streams, and non-admin restrictions, with a persistent global warning banner and 1-click return to admin.
+- **Curation Studio Suite (Beta):** Native built-in tools replacing external containers:
+  - **Kometa Overlays Studio:** High-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, and custom overlay canvas previews.
+  - **Agregarr Hubs:** Dynamic trending collections and discovery rows driven by Trakt, TMDb, and IMDb charts.
+  - **Maintainerr Prune:** Automated storage cleanup rules based on watch history, disk thresholds, and user requests.
+  - **Tagging Studio:** Plex media tagging for parental guide filtering and personalized shelf visibility.
 - **Personalized "My Plex Hub":** A dedicated stream and playback hub for every user with real-time active stream telemetry (video/audio codecs, transcode decisions, hardware NVENC acceleration, bitrate), **Transcode Doctor** stream diagnostics with tailored device fixes, self-service stream termination, personal watch time analytics (hours streamed, movies finished, episodes watched), in-browser **Server Speed Test**, and **Plex Device Optimization Guides** (Apple TV, Roku, Fire TV, Smart TVs, Android TV, iOS, Web).
 - **Connected Servers Integration:** Unified multi-server management that deduplicates Direct Plex Media Servers and Tautulli monitors into a single clean connected servers view.
 - **Unified Dashboard:** Aggregate status from Plex, Tautulli, Glances, and your "Arr" stack.
@@ -28,7 +35,11 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 - **Support & Password Recovery:** Direct support ticket submission with SMTP notifications, format-specific request email badges (`🎧 AUDIOBOOK` vs `📖 EBOOK`), plus built-in temporary password email recovery.
 - **Secure Encryption:** Sensitive API keys and service tokens are encrypted at rest using AES-256-GCM.
 - **Automated CI/CD & Docker:** GitHub Actions pipeline automatically builds and publishes `ghcr.io/plexd281knilb/portalarr:latest` with concurrency rate-limiting safeguards.
-- **🚧 Upcoming — Agregarr & Kometa Replacement:** Built-in dynamic collection manager, smart playlist generator, custom poster overlays (4K UHD, Dolby Vision/Atmos), and personalized user-level movie/TV tag management (allowing users to directly customize and toggle tags, genres, and collections they do and do not want to see).
+- **Upcoming Roadmap:**
+  - **Step 1 — Curation & Poster Studio (Agregarr & Kometa Replacement):** Dynamic collection generator, smart playlists, automated poster overlays (4K HDR, Dolby Vision/Atmos), and storage prune engine.
+  - **Step 2 — Native *Seerr Replacement (Overseerr / Jellyseerr):** All-in-one Movie & TV media discovery, interactive trailer playback, trending carousels, and Radarr/Sonarr request engine.
+  - **Step 3 — User Authorization, Personal Visibility & Kid/Living Room Accounts:** Granular user control over personalized tag, genre, and collection visibility, plus dedicated Kid and Shared Household accounts.
+  - **Step 4 — AI Log Ingestion & Deep Server Log Diagnostics:** Automated Plex Media Server, Tautulli, Transcoder, and Arr log ingestion into Portalarr for AI agent error correlation and pinpoint fixes.
 
 ## 🛠️ Quick Start
 

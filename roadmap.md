@@ -1,5 +1,11 @@
 ### ✨ Recently Released
 
+- **🤖 Plex & Server Master AI:** Real-time stream telemetry diagnostics, device error troubleshooting (e.g. Roku auto-adjust quality / minimum bandwidth errors), automated step-by-step resolution guides, and 1-click support ticket escalation with full diagnostic snapshot attachments.
+
+- **👁️ View Site As User (Admin Impersonation):** 1-click user view switching from the User Directory (`/settings/access`) with a persistent top warning banner and instant return to admin, enabling administrators to inspect exact user shelves, permissions, watch histories, and dashboard views.
+
+- **🎨 Curation Studio Suite (Beta):** Native Kometa Overlays Studio (stock ribbon/badge presets & custom asset guides), Agregarr Hubs, Maintainerr Prune storage manager, and Plex Tagging Studio.
+
 - **🎬 My Plex Hub & Stream Diagnostics:** Live playback telemetry (codecs, bitrates, bandwidth), **Transcode Doctor** stream health fixes, self-service stuck stream termination, and client setup guides for Apple TV, Roku, Fire TV, and Smart TVs.
 
 - **⚡ Server Bandwidth & Connected Nodes:** In-browser download/latency speed tester and unified multi-server inspector for linked Plex Media Server instances.

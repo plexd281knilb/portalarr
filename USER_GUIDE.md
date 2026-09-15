@@ -4,15 +4,18 @@ Welcome to Portalarr! This guide will walk you through monitoring your Plex stre
 
 ---
 
-## 📑 Table of Contents
+### 📑 Table of Contents
 1. [Getting Started & Logging In](#1-getting-started--logging-in)
 2. [My Plex Hub, Stream Diagnostics & Speed Tests](#2-my-plex-hub-stream-diagnostics--speed-tests)
-3. [Plex Device Setup & Optimization Guides](#3-plex-device-setup--optimization-guides)
-4. [Optional Send-to-Kindle Setup (For E-Readers)](#4-optional-send-to-kindle-setup-for-e-readers)
-5. [Browsing & Accessing Media (Ebooks & Audiobooks)](#5-browsing--accessing-media-ebooks--audiobooks)
-6. [Requesting New Books & Audiobooks](#6-requesting-new-books--audiobooks)
-7. [Troubleshooting, Release Selection & 1-Click Import](#7-troubleshooting-release-selection--1-click-import)
-8. [Need Help or Technical Support?](#8-need-help-or-technical-support)
+3. [🤖 Plex & Server Master AI Assistant](#3--plex--server-master-ai-assistant)
+4. [Plex Device Setup & Optimization Guides](#4-plex-device-setup--optimization-guides)
+5. [Optional Send-to-Kindle Setup (For E-Readers)](#5-optional-send-to-kindle-setup-for-e-readers)
+6. [Browsing & Accessing Media (Ebooks & Audiobooks)](#6-browsing--accessing-media-ebooks--audiobooks)
+7. [Requesting New Books & Audiobooks](#7-requesting-new-books--audiobooks)
+8. [Troubleshooting, Release Selection & 1-Click Import](#8-troubleshooting-release-selection--1-click-import)
+9. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#9--curation-studio-suite-kometa-agregarr-maintainerr-tagging)
+10. [👁️ Admin Tools: View Site As User (Impersonation)](#10-️-admin-tools-view-site-as-user-impersonation)
+11. [Need Help or Technical Support?](#11-need-help-or-technical-support)
 
 ---
 
@@ -60,7 +63,19 @@ Diagnose buffering or stuttering directly from your current viewing device:
 
 ---
 
-## 📱 3. Plex Device Setup & Optimization Guides
+## 🤖 3. 🤖 Plex & Server Master AI Assistant
+
+Need instant help troubleshooting a playback error on your TV or streaming device? Use the built-in **Plex & Server Master AI**!
+
+### How to Ask the AI Master:
+1. Click the **Plex Master AI** widget on the dashboard (or click **Ask AI Master**).
+2. Type your question or paste the exact error message (e.g. *"not enough bandwidth for any playback of this item. can not convert to below minimum bandwidth"* or *"why is my Roku buffering on 4K?"*).
+3. The AI Master analyzes your active stream telemetry, device profile, and known device bugs, providing numbered, step-by-step resolution steps for your exact TV/device model.
+4. **1-Click Ticket Escalation:** If the issue requires administrator intervention, click **Open Ticket With This Diagnosis** to instantly submit a support ticket pre-populated with the AI's diagnostic snapshot!
+
+---
+
+## 📱 4. Plex Device Setup & Optimization Guides
 
 To eliminate buffering and enjoy maximum 4K HDR / 1080p video quality, configure your Plex client apps using our built-in interactive guides:
 
@@ -75,7 +90,7 @@ To eliminate buffering and enjoy maximum 4K HDR / 1080p video quality, configure
 
 ---
 
-## 📱 4. Optional Send-to-Kindle Setup (For E-Readers)
+## 📱 5. Optional Send-to-Kindle Setup (For E-Readers)
 
 When you first visit the Library, you will be prompted to set up Send-to-Kindle for 1-click Wireless Ebook Delivery.
 
@@ -97,7 +112,7 @@ Amazon requires all senders to be approved before emails can reach your Kindle:
 
 ---
 
-## 📚 5. Browsing & Accessing Media (Ebooks & Audiobooks)
+## 📚 6. Browsing & Accessing Media (Ebooks & Audiobooks)
 
 Portalarr organizes your reading and listening collection into dedicated tabs:
 
@@ -122,7 +137,7 @@ Portalarr organizes your reading and listening collection into dedicated tabs:
 
 ---
 
-## 🔍 6. Requesting New Books & Audiobooks
+## 🔍 7. Requesting New Books & Audiobooks
 
 Can't find a title in the library? Request to download it in seconds!
 
@@ -146,7 +161,7 @@ Click **Submit Request**. You can track live progress under the **Requests** tab
 
 ---
 
-## 🛠️ 7. Troubleshooting, Release Selection & 1-Click Import
+## 🛠️ 8. Troubleshooting, Release Selection & 1-Click Import
 
 - 🔄 **User Scan Folder:** All approved users can click **Scan Share Folder** or **Scan Audio Folder** directly on library shelves to instantly scan folders for new files without needing admin intervention.
 - 🖼️ **Fetch Cover (`🖼️`):** Click the Fetch Cover button on any library card to query iTunes HD (600x600/600x900), OpenLibrary, and Google Books to refresh low-resolution or missing covers.
@@ -166,7 +181,29 @@ Click **Submit Request**. You can track live progress under the **Requests** tab
 
 ---
 
-## ❓ 8. Need Help or Technical Support?
+## 🎨 9. 🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)
+
+Administrators can curate Plex libraries natively without external scripts or extra docker containers:
+
+- **✨ Kometa Overlays Studio:** Apply high-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, audio codecs, and custom user overlays to movie and TV posters with live canvas previews.
+- **🎬 Agregarr Hubs:** Generate dynamic trending hubs, smart collections, and discovery rows linked directly with Trakt, TMDb, and IMDb charts.
+- **🧹 Maintainerr Prune:** Set disk quota rules, identify unwatched media, and safely prune media to recover storage automatically.
+- **🏷️ Tagging Studio:** Tag movies, shows, and parental guide labels across Plex libraries to prepare for user-level customizable shelf toggles.
+
+---
+
+## 👁️ 10. 👁️ Admin Tools: View Site As User (Impersonation)
+
+Administrators can view the entire Portalarr portal through the eyes of any registered user:
+1. Navigate to **System Settings** → **Access Control** (`/settings/access`).
+2. On any user's card in the User Directory, click **`👁️ View As`**.
+3. Confirm the prompt to switch your active session to that user.
+4. While impersonating, a prominent sticky warning banner appears across all pages: `Viewing site as [Username] ([ROLE])`.
+5. To exit and return to your Admin account, click **`Return to Admin`** on the top banner anytime.
+
+---
+
+## ❓ 11. Need Help or Technical Support?
 
 If a download fails, a stream won't play, or you need server assistance:
 1. Click the **Support** (`💬`) icon in the main navigation bar.
