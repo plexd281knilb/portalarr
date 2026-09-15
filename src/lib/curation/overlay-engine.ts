@@ -95,6 +95,72 @@ function ensureBackupDir() {
     }
 }
 
+let cachedFontBase64 = "";
+
+/**
+ * Returns embedded @font-face CSS style block with bundled Base64 TrueType font.
+ * Ensures 100% reliable SVG typography rendering in Docker, Linux, Alpine, and headless environments.
+ */
+export function getEmbeddedFontStyle(): string {
+    if (!cachedFontBase64) {
+        try {
+            const candidatePaths = [
+                path.join(process.cwd(), "public", "fonts", "arialbd.ttf"),
+                path.join(process.cwd(), "public", "fonts", "DejaVuSans-Bold.ttf"),
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+                "C:\\Windows\\Fonts\\arialbd.ttf",
+                "C:\\Windows\\Fonts\\arial.ttf"
+            ];
+            for (const p of candidatePaths) {
+                if (fs.existsSync(p)) {
+                    cachedFontBase64 = fs.readFileSync(p).toString("base64");
+                    break;
+                }
+            }
+        } catch (e) {}
+    }
+    if (cachedFontBase64) {
+        return `<style>
+            @font-face {
+                font-family: 'KometaSans';
+                src: url('data:font/ttf;base64,${cachedFontBase64}');
+                font-weight: 900;
+                font-style: normal;
+            }
+            text {
+                font-family: 'KometaSans', 'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif !important;
+            }
+        </style>`;
+    }
+    return `<style>
+        text {
+            font-family: 'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif !important;
+        }
+    </style>`;
+}
+
+/**
+ * Injects embedded TrueType font @font-face into SVG payload before passing to Sharp / librsvg.
+ */
+export function injectEmbeddedFontIntoSvg(svg: string): string {
+    if (!svg || typeof svg !== "string") return svg;
+    const fontStyle = getEmbeddedFontStyle();
+    if (!fontStyle) return svg;
+    if (svg.includes("KometaSans")) return svg;
+    if (svg.includes("<defs>")) {
+        return svg.replace("<defs>", `<defs>${fontStyle}`);
+    }
+    if (svg.includes("<defs/>")) {
+        return svg.replace("<defs/>", `<defs>${fontStyle}</defs>`);
+    }
+    if (svg.includes("<svg")) {
+        return svg.replace(/<svg([^>]*)>/, `<svg$1><defs>${fontStyle}</defs>`);
+    }
+    return svg;
+}
+
 /**
  * Reads an official Kometa stock asset buffer from public/kometa_stock.
  */
@@ -1729,7 +1795,7 @@ export async function applyOverlaysToPoster(
     // 1. Leaving Soon Banner (Takes precedence at the very top)
     const isItemLeavingSoon = Boolean(mediaInfo.isLeavingSoon || mediaInfo.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) || mediaInfo.collections?.some(c => /leaving[\s_-]?soon/i.test(c)));
     if (options.showLeavingSoon && isItemLeavingSoon) {
-        const leavingSoonSvg = generateLeavingSoonRibbonSvg(options.leavingSoonDays);
+        const leavingSoonSvg = injectEmbeddedFontIntoSvg(generateLeavingSoonRibbonSvg(options.leavingSoonDays));
         const ribbonBuf = await sharp(Buffer.from(leavingSoonSvg)).resize(1000, 78).toBuffer();
         overlays.push({
             input: ribbonBuf,
@@ -1740,12 +1806,12 @@ export async function applyOverlaysToPoster(
 
     // 2. Agregarr-Style Placeholder Banner (if active)
     if (options.showPlaceholder) {
-        const phSvg = generatePlaceholderRibbonSvg(options.placeholderType || "countdown", {
+        const phSvg = injectEmbeddedFontIntoSvg(generatePlaceholderRibbonSvg(options.placeholderType || "countdown", {
             daysRemaining: options.placeholderDays,
             formattedDate: options.placeholderDate,
             customText: options.placeholderText,
             theme: options.placeholderTheme
-        });
+        }));
         const phBuf = await sharp(Buffer.from(phSvg)).resize(1000, 72).toBuffer();
         const phPos = options.placeholderPosition || "bottom";
         overlays.push({
@@ -1796,7 +1862,7 @@ export async function applyOverlaysToPoster(
         }
 
         if (winningRibbon && winningRibbon.text) {
-            const cornerRibbonSvg = generateKometaCornerRibbonSvg(winningRibbon.text, rPos, winningRibbon.theme);
+            const cornerRibbonSvg = injectEmbeddedFontIntoSvg(generateKometaCornerRibbonSvg(winningRibbon.text, rPos, winningRibbon.theme));
             const ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(380, 380).toBuffer();
 
             const rTop = rPos.startsWith("top") ? (options.showLeavingSoon ? 78 : 0) : 1500 - 380;
@@ -1979,9 +2045,17 @@ export async function applyOverlaysToPoster(
 
                 if (isFullPoster) {
                     // Full-frame poster overlay (e.g. 1000x1500 Kometa template)
-                    let fullBuf = await sharp(cb.filePath)
-                        .resize(1000, 1500, { fit: "cover" })
-                        .toBuffer();
+                    let fullBuf: Buffer;
+                    if (cb.filePath.toLowerCase().endsWith(".svg")) {
+                        const rawSvg = injectEmbeddedFontIntoSvg(fs.readFileSync(cb.filePath, "utf-8"));
+                        fullBuf = await sharp(Buffer.from(rawSvg))
+                            .resize(1000, 1500, { fit: "cover" })
+                            .toBuffer();
+                    } else {
+                        fullBuf = await sharp(cb.filePath)
+                            .resize(1000, 1500, { fit: "cover" })
+                            .toBuffer();
+                    }
 
                     if (cb.opacity !== undefined && cb.opacity < 1.0) {
                         fullBuf = await sharp(fullBuf)
@@ -2010,9 +2084,17 @@ export async function applyOverlaysToPoster(
 
                     const cbPos = targetCategoryPos || cb.position || fallbackPos;
 
-                    let cbBuffer = await sharp(cb.filePath)
-                        .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-                        .toBuffer();
+                    let cbBuffer: Buffer;
+                    if (cb.filePath.toLowerCase().endsWith(".svg")) {
+                        const rawSvg = injectEmbeddedFontIntoSvg(fs.readFileSync(cb.filePath, "utf-8"));
+                        cbBuffer = await sharp(Buffer.from(rawSvg))
+                            .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                            .toBuffer();
+                    } else {
+                        cbBuffer = await sharp(cb.filePath)
+                            .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                            .toBuffer();
+                    }
 
                     if (cb.opacity !== undefined && cb.opacity < 1.0) {
                         cbBuffer = await sharp(cbBuffer)
@@ -2032,7 +2114,8 @@ export async function applyOverlaysToPoster(
 
     const pushSvgToBucket = async (pos: string, svg: string, layerKey: string) => {
         if (!buckets[pos]) return;
-        let buf = Buffer.from(svg);
+        const fontInjectedSvg = injectEmbeddedFontIntoSvg(svg);
+        let buf = Buffer.from(fontInjectedSvg);
         const meta = await sharp(buf).metadata();
         const rawW = meta.width || 140;
         const rawH = meta.height || 46;

@@ -32,8 +32,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# CRITICAL: Install libraries required for Prisma engines and Calibre for EPUB sanitation
-RUN apt-get update && apt-get install -y openssl calibre bash && rm -rf /var/lib/apt/lists/*
+# CRITICAL: Install libraries required for Prisma engines, Calibre for EPUB sanitation, and Font packages for Kometa poster overlay rendering
+RUN apt-get update && apt-get install -y openssl calibre bash fontconfig fonts-dejavu-core fonts-liberation fonts-freefont-ttf && rm -rf /var/lib/apt/lists/*
 
 # CRITICAL: Install Prisma CLI globally. 
 # This is the most reliable way to ensure the 'prisma' command is in the PATH
