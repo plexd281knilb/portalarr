@@ -63,6 +63,7 @@ export interface AiChatMessage {
     content: string;
     timestamp?: string;
     diagnosticsSnapshot?: Partial<UserDiagnosticSnapshot>;
+    providerUsed?: string;
 }
 
 export interface AiAssistantResponse {

@@ -121,7 +121,8 @@ export function AiServerAssistant() {
                     role: "assistant",
                     content: res.answer,
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    diagnosticsSnapshot: res.diagnostics
+                    diagnosticsSnapshot: res.diagnostics,
+                    providerUsed: res.providerUsed
                 };
                 setMessages([...updatedHistory, assistantMsg]);
                 if (res.diagnostics) {
@@ -426,9 +427,16 @@ export function AiServerAssistant() {
                                             : "bg-[#161622] border border-border/50 text-slate-200 rounded-tl-xs"
                                     }`}>
                                         <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-1.5 mb-1.5 text-[10px] text-muted-foreground">
-                                            <span className="font-bold text-foreground">
-                                                {msg.role === "user" ? "You" : "Plex & Server Master"}
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-bold text-foreground">
+                                                    {msg.role === "user" ? "You" : "Plex & Server Master"}
+                                                </span>
+                                                {msg.role === "assistant" && msg.providerUsed && (
+                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-normal border-purple-500/30 text-purple-300 bg-purple-950/30">
+                                                        {msg.providerUsed}
+                                                    </Badge>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-1.5">
                                                 <span>{msg.timestamp}</span>
                                                 {msg.role === "assistant" && (
