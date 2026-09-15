@@ -1434,6 +1434,11 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
 
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const enabledServersForCollections: string[] = settings?.enabledServersForCollections
+            ? JSON.parse(settings.enabledServersForCollections)
+            : [];
+
         const scheduledCollections = await prisma.mediaCollection.findMany({
             where: {
                 OR: [
@@ -1457,6 +1462,14 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
         const results: Array<{ title: string; active: boolean; action: string }> = [];
 
         for (const coll of scheduledCollections) {
+            // Respect library section enablement whitelist
+            if (coll.serverId && coll.sectionKey) {
+                const isSecEnabled = await isSectionEnabledInList(enabledServersForCollections, coll.serverId, coll.sectionKey);
+                if (!isSecEnabled) {
+                    continue;
+                }
+            }
+
             let isScheduleActive = true;
 
             // 1. Day of Week Check

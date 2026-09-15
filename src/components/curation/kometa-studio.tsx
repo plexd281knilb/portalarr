@@ -1576,26 +1576,26 @@ export function KometaStudio() {
         const isLeaving = cleanText.includes("LEAVING");
 
         const subLabel = isOscar 
-            ? "🌿 ACADEMY AWARDS 🌿" 
+            ? "- ACADEMY AWARDS -" 
             : isTop250 
-                ? "⭐ ALL-TIME BEST ⭐" 
+                ? "- ALL-TIME BEST -" 
                 : isCannes 
-                    ? "🌿 CANNES WINNER 🌿" 
+                    ? "- CANNES WINNER -" 
                     : isCriterion 
-                        ? "SPECIAL EDITION" 
+                        ? "- SPECIAL EDITION -" 
                         : isLeaving 
-                            ? "⚠️ SOON" 
-                            : "★ OFFICIAL SELECTION ★";
+                            ? "- SOON -" 
+                            : "- OFFICIAL SELECTION -";
 
         const gradientThemeMap: Record<string, { start: string; mid: string; end: string; border: string; highlight: string; text: string; subText: string }> = {
-            gold: { start: "#fef08a", mid: "#f59e0b", end: "#b45309", border: "#fef9c3", highlight: "rgba(255,255,255,0.8)", text: "#0f172a", subText: "#1e293b" },
-            crimson: { start: "#fb7185", mid: "#e11d48", end: "#881337", border: "#fda4af", highlight: "rgba(255,255,255,0.7)", text: "#ffffff", subText: "#ffe4e6" },
-            emerald: { start: "#6ee7b7", mid: "#059669", end: "#064e3b", border: "#a7f3d0", highlight: "rgba(255,255,255,0.7)", text: "#ffffff", subText: "#d1fae5" },
-            purple: { start: "#c7d2fe", mid: "#6366f1", end: "#3730a3", border: "#e0e7ff", highlight: "rgba(255,255,255,0.7)", text: "#ffffff", subText: "#e0e7ff" },
-            cyan: { start: "#7dd3fc", mid: "#0284c7", end: "#075985", border: "#bae6fd", highlight: "rgba(255,255,255,0.7)", text: "#ffffff", subText: "#e0f2fe" },
-            pink: { start: "#fbcfe8", mid: "#db2777", end: "#831843", border: "#fce7f3", highlight: "rgba(255,255,255,0.7)", text: "#ffffff", subText: "#fdf2f8" },
-            glass: { start: "#94a3b8", mid: "#1e293b", end: "#020617", border: "#cbd5e1", highlight: "rgba(255,255,255,0.6)", text: "#f8fafc", subText: "#94a3b8" },
-            orange: { start: "#fed7aa", mid: "#ea580c", end: "#9a3412", border: "#ffedd5", highlight: "rgba(255,255,255,0.7)", text: "#ffffff", subText: "#ffedd5" }
+            gold: { start: "#fef08a", mid: "#f59e0b", end: "#b45309", border: "#fef9c3", highlight: "rgba(255,255,255,0.9)", text: "#000000", subText: "#1c1917" },
+            crimson: { start: "#fb7185", mid: "#e11d48", end: "#881337", border: "#fda4af", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#ffe4e6" },
+            emerald: { start: "#6ee7b7", mid: "#059669", end: "#064e3b", border: "#a7f3d0", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#d1fae5" },
+            purple: { start: "#c7d2fe", mid: "#6366f1", end: "#3730a3", border: "#e0e7ff", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#e0e7ff" },
+            cyan: { start: "#7dd3fc", mid: "#0284c7", end: "#075985", border: "#bae6fd", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#e0f2fe" },
+            pink: { start: "#fbcfe8", mid: "#db2777", end: "#831843", border: "#fce7f3", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#fdf2f8" },
+            glass: { start: "#94a3b8", mid: "#1e293b", end: "#020617", border: "#cbd5e1", highlight: "rgba(255,255,255,0.7)", text: "#f8fafc", subText: "#cbd5e1" },
+            orange: { start: "#fed7aa", mid: "#ea580c", end: "#9a3412", border: "#ffedd5", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#ffedd5" }
         };
 
         const g = gradientThemeMap[theme] || gradientThemeMap.purple;
@@ -1604,27 +1604,27 @@ export function KometaStudio() {
         const isBottomRight = !isTop && isRight;
         const isBottomLeft = !isTop && !isRight;
 
-        // Position polygon vertices and text angles
-        let polygonPoints = "45,0 180,135 180,180 0,0";
-        let highlightLine = { x1: "50", y1: "0", x2: "180", y2: "130" };
-        let shadowLine = { x1: "10", y1: "0", x2: "180", y2: "170" };
-        let textTransform = "translate(100, 75) rotate(45)";
+        // Position polygon vertices and text angles (180x180 viewBox)
+        let polygonPoints = "52,0 125,0 180,55 180,128";
+        let highlightLine = { x1: "52", y1: "0", x2: "180", y2: "128" };
+        let shadowLine = { x1: "125", y1: "0", x2: "180", y2: "55" };
+        let textTransform = "translate(134.5, 45.5) rotate(45)";
 
         if (isTopLeft) {
-            polygonPoints = "135,0 0,135 0,180 180,0";
-            highlightLine = { x1: "130", y1: "0", x2: "0", y2: "130" };
-            shadowLine = { x1: "170", y1: "0", x2: "0", y2: "170" };
-            textTransform = "translate(80, 75) rotate(-45)";
+            polygonPoints = "55,0 128,0 0,128 0,55";
+            highlightLine = { x1: "128", y1: "0", x2: "0", y2: "128" };
+            shadowLine = { x1: "55", y1: "0", x2: "0", y2: "55" };
+            textTransform = "translate(45.5, 45.5) rotate(-45)";
         } else if (isBottomRight) {
-            polygonPoints = "0,180 180,0 180,45 45,180";
-            highlightLine = { x1: "0", y1: "170", x2: "180", y2: "10" };
-            shadowLine = { x1: "0", y1: "130", x2: "180", y2: "50" };
-            textTransform = "translate(100, 105) rotate(-45)";
+            polygonPoints = "180,52 180,125 125,180 52,180";
+            highlightLine = { x1: "180", y1: "52", x2: "52", y2: "180" };
+            shadowLine = { x1: "180", y1: "125", x2: "125", y2: "180" };
+            textTransform = "translate(134.5, 134.5) rotate(-45)";
         } else if (isBottomLeft) {
-            polygonPoints = "0,135 135,180 180,180 0,0";
-            highlightLine = { x1: "0", y1: "130", x2: "130", y2: "180" };
-            shadowLine = { x1: "0", y1: "170", x2: "170", y2: "180" };
-            textTransform = "translate(80, 105) rotate(45)";
+            polygonPoints = "0,52 0,125 55,180 128,180";
+            highlightLine = { x1: "0", y1: "52", x2: "128", y2: "180" };
+            shadowLine = { x1: "0", y1: "125", x2: "55", y2: "180" };
+            textTransform = "translate(45.5, 134.5) rotate(45)";
         }
 
         return (
@@ -1645,10 +1645,10 @@ export function KometaStudio() {
                         <line x1={highlightLine.x1} y1={highlightLine.y1} x2={highlightLine.x2} y2={highlightLine.y2} stroke={g.highlight} strokeWidth="1.5" />
                         <line x1={shadowLine.x1} y1={shadowLine.y1} x2={shadowLine.x2} y2={shadowLine.y2} stroke="rgba(0,0,0,0.5)" strokeWidth="2" />
                         <g transform={textTransform}>
-                            <text x="0" y="0" fontFamily="system-ui, -apple-system, sans-serif" fontWeight="900" fontSize="11" fill={g.text} textAnchor="middle" letterSpacing="2.2">
+                            <text x="0" y="0" fontFamily="Arial, Helvetica, 'DejaVu Sans', sans-serif" fontWeight="900" fontSize="11" fill={g.text} textAnchor="middle">
                                 {cleanText.length > 16 ? cleanText.slice(0, 15) + "…" : cleanText}
                             </text>
-                            <text x="0" y="11" fontFamily="system-ui, -apple-system, sans-serif" fontWeight="800" fontSize="7" fill={g.subText} textAnchor="middle" letterSpacing="1">
+                            <text x="0" y="11" fontFamily="Arial, Helvetica, 'DejaVu Sans', sans-serif" fontWeight="800" fontSize="7" fill={g.subText} textAnchor="middle">
                                 {subLabel}
                             </text>
                         </g>

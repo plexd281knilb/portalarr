@@ -317,8 +317,8 @@ export function generateDovetailedResolutionHdrBadgeSvg(
         ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="${theme === 'gold' ? 'rgba(254,240,138,0.5)' : theme === 'crimson' ? 'rgba(253,164,175,0.6)' : theme === 'cyber' ? 'rgba(34,211,238,0.6)' : 'rgba(255,255,255,0.4)'}" stroke-width="1.2" stroke-linecap="round"/>` : ''}
         
         <!-- Left: Resolution -->
-        <text x="36" y="29" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="18.5" fill="${theme === 'gold' || is4k ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle" letter-spacing="0.5">${resText}</text>
-        <text x="70" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.6)" text-anchor="middle" letter-spacing="1.5">${resSub}</text>
+        <text x="36" y="29" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="18.5" fill="${theme === 'gold' || is4k ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle">${resText}</text>
+        <text x="70" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle">${resSub}</text>
         
         <!-- Dovetail Interlocking Notch / Vertical Divider -->
         <line x1="90" y1="10" x2="90" y2="36" stroke="${theme === 'gold' ? 'rgba(250,204,21,0.4)' : theme === 'cyber' ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.25)'}" stroke-width="1.5"/>
@@ -333,13 +333,13 @@ export function generateDovetailedResolutionHdrBadgeSvg(
                 <path d="M 18 0 A 8 8 0 0 0 18 16 Z" fill="${theme === 'cyber' ? '#a855f7' : theme === 'gold' ? '#eab308' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
                 <rect x="19" y="0" width="4" height="16" rx="1.2" fill="${theme === 'cyber' ? '#a855f7' : theme === 'gold' ? '#eab308' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
             </g>
-            <text x="180" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="12.5" fill="#f8fafc" text-anchor="middle" letter-spacing="1.5">DOLBY VISION</text>
+            <text x="180" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="12.5" fill="#f8fafc" text-anchor="middle">DOLBY VISION</text>
         ` : isHdr10Plus ? `
-            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14.5" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle" letter-spacing="1.5">HDR10+</text>
+            <text x="${90 + (width - 90) / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14.5" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle">HDR10+</text>
         ` : isHdr ? `
-            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="14.5" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle" letter-spacing="1.5">${hdrType === "HDR10" ? "HDR10" : "HDR"}</text>
+            <text x="${90 + (width - 90) / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14.5" fill="${theme === 'cyber' ? '#22d3ee' : theme === 'gold' ? '#facc15' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle">${hdrType === "HDR10" ? "HDR10" : "HDR"}</text>
         ` : `
-            <text x="${90 + (width - 90) / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="13" fill="rgba(255,255,255,0.7)" text-anchor="middle" letter-spacing="1.5">SDR</text>
+            <text x="${90 + (width - 90) / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13" fill="rgba(255,255,255,0.7)" text-anchor="middle">SDR</text>
         `}
     </svg>`;
 }
@@ -420,11 +420,11 @@ export function generateResolutionBadgeSvg(
         <!-- Specular Top Highlight (Kometa Gloss Effect) -->
         ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="132" y2="5" stroke="${theme === 'gold' && is4k ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.4)'}" stroke-width="1.2" stroke-linecap="round"/>` : ''}
         <!-- Main Resolution Text -->
-        <text x="40" y="29" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="20" fill="${textColor}" text-anchor="middle" letter-spacing="0.5">${textLabel}</text>
+        <text x="40" y="29" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="20" fill="${textColor}" text-anchor="middle">${textLabel}</text>
         <!-- Center Divider Line -->
         <line x1="72" y1="10" x2="72" y2="36" stroke="${dividerColor}" stroke-width="1.5"/>
         <!-- Sub-Label (UHD / FHD / HD) -->
-        <text x="105" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="14" fill="${subColor}" text-anchor="middle" letter-spacing="2">${subLabel}</text>
+        <text x="105" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14" fill="${subColor}" text-anchor="middle">${subLabel}</text>
     </svg>`;
 }
 
@@ -485,7 +485,7 @@ export function generateHdrBadgeSvg(
                 <rect x="22.5" y="0" width="4.5" height="16" rx="1.5" fill="${theme === 'gold' ? '#eab308' : theme === 'cyber' ? '#a855f7' : theme === 'crimson' ? '#be123c' : '#818cf8'}"/>
             </g>
             <!-- Dolby Vision Text -->
-            <text x="106" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13.5" fill="#f8fafc" text-anchor="middle" letter-spacing="1.8">DOLBY VISION</text>
+            <text x="106" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="#f8fafc" text-anchor="middle">DOLBY VISION</text>
         </svg>`;
     }
 
@@ -512,7 +512,7 @@ export function generateHdrBadgeSvg(
         <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
         ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="29" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="16" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#f8fafc'}" text-anchor="middle" letter-spacing="1.8">${hdrType}</text>
+        <text x="${width / 2}" y="29" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="16" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#f8fafc'}" text-anchor="middle">${hdrType}</text>
     </svg>`;
 }
 
@@ -559,7 +559,7 @@ export function generateAudioBadgeSvg(
         <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
         ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#f8fafc'}" text-anchor="middle" letter-spacing="1.5">${label}</text>
+        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#f8fafc'}" text-anchor="middle">${label}</text>
     </svg>`;
 }
 
@@ -600,7 +600,7 @@ export function generateAudioChannelBadgeSvg(
         <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
         ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="14" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle" letter-spacing="1.8">${label}</text>
+        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : theme === 'crimson' ? '#fda4af' : '#38bdf8'}" text-anchor="middle">${label}</text>
     </svg>`;
 }
 
@@ -643,7 +643,7 @@ export function generateCodecBadgeSvg(
         <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
         ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#c084fc' : theme === 'crimson' ? '#fda4af' : '#c7d2fe'}" text-anchor="middle" letter-spacing="1.5">${label}</text>
+        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#c084fc' : theme === 'crimson' ? '#fda4af' : '#c7d2fe'}" text-anchor="middle">${label}</text>
     </svg>`;
 }
 
@@ -709,7 +709,7 @@ export function generateEditionBadgeSvg(
         <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeGrad}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
         ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="12.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#38bdf8' : theme === 'crimson' ? '#fda4af' : '#fdf4ff'}" text-anchor="middle" letter-spacing="1.5">${label}</text>
+        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="12.5" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#38bdf8' : theme === 'crimson' ? '#fda4af' : '#fdf4ff'}" text-anchor="middle">${label}</text>
     </svg>`;
 }
 
@@ -758,7 +758,7 @@ export function generateStudioLogoBadgeSvg(
         <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeColor}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
         ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="13" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : textColor}" text-anchor="middle" letter-spacing="1.8">${s}</text>
+        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : textColor}" text-anchor="middle">${s}</text>
     </svg>`;
 }
 
@@ -798,12 +798,13 @@ export function generateContentRatingBadgeSvg(
         <rect x="2" y="2" width="${width - 4}" height="42" rx="8" fill="${bgFill}" stroke="${strokeColor}" stroke-width="${theme === 'minimal' ? 1.2 : 1.8}" filter="url(#kometaShadow)"/>
         <!-- Specular Top Highlight -->
         ${theme !== 'minimal' ? `<line x1="8" y1="5" x2="${width - 8}" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/>` : ''}
-        <text x="${width / 2}" y="28" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="14" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : '#f8fafc'}" text-anchor="middle" letter-spacing="1.2">${r}</text>
+        <text x="${width / 2}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14" fill="${theme === 'gold' ? '#facc15' : theme === 'cyber' ? '#22d3ee' : '#f8fafc'}" text-anchor="middle">${r}</text>
     </svg>`;
 }
 
 /**
  * Creates Kometa-Style SVG for Community Ratings badge (IMDb, RT Critics, RT Audience, Metacritic).
+ * Uses pure SVG vector icons for 100% reliable rendering without emoji glyph dependencies.
  */
 export function generateRatingsBadgeSvg(
     ratings: {
@@ -819,9 +820,9 @@ export function generateRatingsBadgeSvg(
 
     if (ratings.imdb) {
         segments.push(`
-            <rect x="${curX}" y="8" width="32" height="24" rx="4" fill="#f5c518"/>
-            <text x="${curX + 16}" y="24" font-family="system-ui, sans-serif" font-weight="900" font-size="11" fill="#000" text-anchor="middle">IMDb</text>
-            <text x="${curX + 40}" y="25" font-family="system-ui, sans-serif" font-weight="900" font-size="15" fill="#fff">${ratings.imdb.toFixed(1)}</text>
+            <rect x="${curX}" y="11" width="34" height="22" rx="4" fill="#f5c518"/>
+            <text x="${curX + 17}" y="26" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="10.5" fill="#000" text-anchor="middle">IMDb</text>
+            <text x="${curX + 44}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="15" fill="#fff">${ratings.imdb.toFixed(1)}</text>
         `);
         curX += 78;
     }
@@ -829,25 +830,37 @@ export function generateRatingsBadgeSvg(
     if (ratings.rtCritics) {
         const isFresh = ratings.rtCritics >= 60;
         segments.push(`
-            <text x="${curX + 8}" y="25" font-size="16">${isFresh ? "🍅" : "🟢"}</text>
-            <text x="${curX + 30}" y="25" font-family="system-ui, sans-serif" font-weight="900" font-size="15" fill="#fff">${ratings.rtCritics}%</text>
+            <!-- RT Tomato Vector Icon -->
+            <g transform="translate(${curX}, 13)">
+                <circle cx="8" cy="9" r="8" fill="${isFresh ? '#f93a1e' : '#16a34a'}"/>
+                <polygon points="5,3 8,5 11,3 9,1 7,1" fill="#15803d"/>
+            </g>
+            <text x="${curX + 26}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14.5" fill="#fff">${ratings.rtCritics}%</text>
         `);
-        curX += 74;
+        curX += 72;
     }
 
     if (ratings.rtAudience) {
         segments.push(`
-            <text x="${curX + 8}" y="25" font-size="16">🍿</text>
-            <text x="${curX + 30}" y="25" font-family="system-ui, sans-serif" font-weight="900" font-size="15" fill="#fff">${ratings.rtAudience}%</text>
+            <!-- RT Audience Popcorn Vector Icon -->
+            <g transform="translate(${curX}, 13)">
+                <polygon points="2,7 14,7 12,18 4,18" fill="#dc2626"/>
+                <polygon points="5,7 7,7 6,18 4,18" fill="#ffffff"/>
+                <polygon points="9,7 11,7 10,18 8,18" fill="#ffffff"/>
+                <circle cx="5" cy="5" r="2.5" fill="#facc15"/>
+                <circle cx="8" cy="3.5" r="3" fill="#fde047"/>
+                <circle cx="11" cy="5" r="2.5" fill="#facc15"/>
+            </g>
+            <text x="${curX + 26}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14.5" fill="#fff">${ratings.rtAudience}%</text>
         `);
-        curX += 74;
+        curX += 72;
     }
 
     if (ratings.metacritic) {
         segments.push(`
-            <rect x="${curX}" y="8" width="24" height="24" rx="4" fill="#66cc33"/>
-            <text x="${curX + 12}" y="24" font-family="system-ui, sans-serif" font-weight="900" font-size="11" fill="#fff" text-anchor="middle">MC</text>
-            <text x="${curX + 32}" y="25" font-family="system-ui, sans-serif" font-weight="900" font-size="15" fill="#fff">${ratings.metacritic}</text>
+            <rect x="${curX}" y="11" width="24" height="22" rx="4" fill="#66cc33"/>
+            <text x="${curX + 12}" y="26" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="10.5" fill="#fff" text-anchor="middle">MC</text>
+            <text x="${curX + 34}" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="15" fill="#fff">${ratings.metacritic}</text>
         `);
         curX += 68;
     }
@@ -888,8 +901,8 @@ export function generateRatingsBadgeSvg(
  */
 export function generateLeavingSoonRibbonSvg(daysRemaining?: number): string {
     const text = daysRemaining !== undefined && daysRemaining > 0 
-        ? `⚠️ LEAVING SOON • ${daysRemaining} DAYS LEFT` 
-        : `⚠️ LEAVING SOON`;
+        ? `LEAVING SOON • ${daysRemaining} DAYS LEFT` 
+        : `LEAVING SOON`;
 
     return `
     <svg width="600" height="56" viewBox="0 0 600 56" xmlns="http://www.w3.org/2000/svg">
@@ -908,7 +921,7 @@ export function generateLeavingSoonRibbonSvg(daysRemaining?: number): string {
         <line x1="0" y1="2" x2="600" y2="2" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
         <!-- Bottom Neon Line -->
         <line x1="0" y1="54" x2="600" y2="54" stroke="#fca5a5" stroke-width="2"/>
-        <text x="300" y="36" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="20" fill="#ffffff" text-anchor="middle" letter-spacing="2.5">${text}</text>
+        <text x="300" y="36" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="20" fill="#ffffff" text-anchor="middle">${text}</text>
     </svg>`;
 }
 
@@ -917,7 +930,7 @@ export function generateLeavingSoonRibbonSvg(daysRemaining?: number): string {
  */
 export function generateDigitalReleaseRibbonSvg(daysRemaining: number, formattedDate?: string): string {
     const text = daysRemaining === 0 
-        ? `✨ NOW STREAMING ON DIGITAL` 
+        ? `NOW STREAMING ON DIGITAL` 
         : daysRemaining > 0 
             ? `STREAMING ON DIGITAL IN ${daysRemaining} DAYS${formattedDate ? ` (${formattedDate})` : ''}`
             : `AVAILABLE ON DIGITAL`;
@@ -937,7 +950,7 @@ export function generateDigitalReleaseRibbonSvg(daysRemaining: number, formatted
         <rect x="0" y="0" width="600" height="52" fill="url(#streamGrad)" filter="url(#bannerShadow)"/>
         <line x1="0" y1="2" x2="600" y2="2" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
         <line x1="0" y1="50" x2="600" y2="50" stroke="#a5b4fc" stroke-width="2"/>
-        <text x="300" y="33" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="16.5" fill="#e0e7ff" text-anchor="middle" letter-spacing="2">${text}</text>
+        <text x="300" y="33" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="16.5" fill="#e0e7ff" text-anchor="middle">${text}</text>
     </svg>`;
 }
 
@@ -1104,7 +1117,7 @@ export function generatePlaceholderRibbonSvg(
         <rect x="0" y="0" width="600" height="54" fill="url(#phGrad)" filter="url(#phShadow)"/>
         <line x1="0" y1="2" x2="600" y2="2" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
         <line x1="0" y1="52" x2="600" y2="52" stroke="${lineStroke}" stroke-width="2"/>
-        <text x="300" y="34" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="16.5" fill="#ffffff" text-anchor="middle" letter-spacing="2">${safeLabel}</text>
+        <text x="300" y="34" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="16.5" fill="#ffffff" text-anchor="middle">${safeLabel}</text>
     </svg>`;
 }
 
@@ -1206,8 +1219,8 @@ export async function generatePlaceholderPosterBuffer(
             </defs>
             <rect width="${width}" height="${height}" fill="url(#bgGrad)" />
             <circle cx="300" cy="400" r="80" fill="rgba(99,102,241,0.1)" stroke="rgba(99,102,241,0.3)" stroke-width="2"/>
-            <text x="300" y="420" font-family="sans-serif" font-weight="900" font-size="48" fill="#6366f1" text-anchor="middle">🎬</text>
-            <text x="300" y="540" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="28" fill="#f8fafc" text-anchor="middle">${safeTitle}</text>
+            <text x="300" y="420" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="48" fill="#6366f1" text-anchor="middle">★</text>
+            <text x="300" y="540" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="800" font-size="28" fill="#f8fafc" text-anchor="middle">${safeTitle}</text>
         </svg>`;
         pipeline = sharp(Buffer.from(fallbackSvg)).png();
     }
@@ -1325,25 +1338,25 @@ export function generateKometaCornerRibbonSvg(
     const isLeaving = cleanText.includes("LEAVING");
 
     const subLabel = isOscar 
-        ? "🌿 ACADEMY AWARDS 🌿" 
+        ? "- ACADEMY AWARDS -" 
         : isTop250 
-            ? "⭐ ALL-TIME BEST ⭐" 
+            ? "- ALL-TIME BEST -" 
             : isCannes 
-                ? "🌿 CANNES WINNER 🌿" 
+                ? "- CANNES WINNER -" 
                 : isCriterion 
-                    ? "SPECIAL EDITION" 
+                    ? "- SPECIAL EDITION -" 
                     : isLeaving 
-                        ? "⚠️ SOON" 
-                        : "★ OFFICIAL SELECTION ★";
+                        ? "- SOON -" 
+                        : "- OFFICIAL SELECTION -";
 
     const gradientThemeMap: Record<string, { start: string; mid: string; end: string; border: string; highlight: string; text: string; subText: string; shadow: string }> = {
-        gold: { start: "#fef08a", mid: "#f59e0b", end: "#b45309", border: "#fef9c3", highlight: "rgba(255,255,255,0.9)", text: "#0f172a", subText: "#1e293b", shadow: "rgba(0,0,0,0.5)" },
+        gold: { start: "#fef08a", mid: "#f59e0b", end: "#b45309", border: "#fef9c3", highlight: "rgba(255,255,255,0.9)", text: "#000000", subText: "#1c1917", shadow: "rgba(0,0,0,0.6)" },
         crimson: { start: "#fb7185", mid: "#e11d48", end: "#881337", border: "#fda4af", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#ffe4e6", shadow: "rgba(0,0,0,0.5)" },
         emerald: { start: "#6ee7b7", mid: "#059669", end: "#064e3b", border: "#a7f3d0", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#d1fae5", shadow: "rgba(0,0,0,0.5)" },
         purple: { start: "#c7d2fe", mid: "#6366f1", end: "#3730a3", border: "#e0e7ff", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#e0e7ff", shadow: "rgba(0,0,0,0.5)" },
         cyan: { start: "#7dd3fc", mid: "#0284c7", end: "#075985", border: "#bae6fd", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#e0f2fe", shadow: "rgba(0,0,0,0.5)" },
         pink: { start: "#fbcfe8", mid: "#db2777", end: "#831843", border: "#fce7f3", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#fdf2f8", shadow: "rgba(0,0,0,0.5)" },
-        glass: { start: "#94a3b8", mid: "#1e293b", end: "#020617", border: "#cbd5e1", highlight: "rgba(255,255,255,0.7)", text: "#f8fafc", subText: "#94a3b8", shadow: "rgba(0,0,0,0.6)" },
+        glass: { start: "#94a3b8", mid: "#1e293b", end: "#020617", border: "#cbd5e1", highlight: "rgba(255,255,255,0.7)", text: "#f8fafc", subText: "#cbd5e1", shadow: "rgba(0,0,0,0.6)" },
         orange: { start: "#fed7aa", mid: "#ea580c", end: "#9a3412", border: "#ffedd5", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#ffedd5", shadow: "rgba(0,0,0,0.5)" }
     };
 
@@ -1397,8 +1410,8 @@ export function generateKometaCornerRibbonSvg(
             
             <!-- Crisp Typography -->
             <g transform="${textTransform}">
-                <text x="0" y="0" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle" letter-spacing="2.5">${cleanText}</text>
-                <text x="0" y="20" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="${subFontSize}" fill="${g.subText}" text-anchor="middle" letter-spacing="1.5">${subLabel}</text>
+                <text x="0" y="-4" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle">${cleanText}</text>
+                <text x="0" y="16" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="800" font-size="${subFontSize}" fill="${g.subText}" text-anchor="middle">${subLabel}</text>
             </g>
         </g>
     </svg>`;
@@ -1547,6 +1560,97 @@ export function evaluateBadgeCondition(
 }
 
 /**
+ * Validates whether a given media item matches a specific ribbon preset type.
+ */
+export function isRibbonTypeMatching(
+    type: string,
+    mediaInfo: PlexMediaStreamInfo,
+    options: {
+        leavingSoonDays?: number;
+        ratingsSource?: { rtCritics?: number; rtAudience?: number; metacritic?: number };
+    } = {}
+): boolean {
+    const t = (type || "").toLowerCase().trim();
+
+    // 1. IMDb Top 250 (movies or TV)
+    if (t === "imdb_top_250") {
+        const hasTop250 = mediaInfo.collections?.some(c => /top[\s_-]?250/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?250/i.test(l));
+        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
+        if (hasTop250) return true;
+        if (mediaInfo.type !== "show" && score && score >= 8.3) return true;
+        return false;
+    }
+    if (t === "imdb_top_250_tv") {
+        const hasTop250 = mediaInfo.collections?.some(c => /top[\s_-]?250|top[\s_-]?tv/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?250|top[\s_-]?tv/i.test(l));
+        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
+        if (hasTop250) return true;
+        if (mediaInfo.type === "show" && score && score >= 8.5) return true;
+        return false;
+    }
+
+    // 2. Rotten Tomatoes Certified Fresh / RT Fresh
+    if (t === "certified_fresh") {
+        const rtCrit = mediaInfo.rtCriticsRating ?? options.ratingsSource?.rtCritics;
+        const rtAud = mediaInfo.rtAudienceRating ?? options.ratingsSource?.rtAudience;
+        return Boolean((rtCrit && rtCrit >= 75) || (rtAud && rtAud >= 80));
+    }
+    if (t === "rt_fresh") {
+        const rtCrit = mediaInfo.rtCriticsRating ?? options.ratingsSource?.rtCritics;
+        return Boolean(rtCrit && rtCrit >= 60);
+    }
+
+    // 3. Metacritic Must-See
+    if (t === "metacritic_must_see") {
+        const meta = options.ratingsSource?.metacritic;
+        return Boolean(meta && meta >= 81);
+    }
+
+    // 4. Awards (Oscar / Academy Award / Emmy / Golden Globe / Cannes / BAFTA / Critics Choice)
+    if (t === "oscar_winner" || t === "academy_award") {
+        const hasOscar = mediaInfo.collections?.some(c => /oscar|academy[\s_-]?award|best[\s_-]?picture/i.test(c)) || mediaInfo.labels?.some(l => /oscar|academy[\s_-]?award/i.test(l));
+        const fullStr = `${mediaInfo.title} ${mediaInfo.editionTitle || ""}`.toLowerCase();
+        return Boolean(hasOscar || fullStr.includes("oscar") || fullStr.includes("academy award") || fullStr.includes("best picture"));
+    }
+    if (t === "emmy_winner") {
+        const hasEmmy = mediaInfo.collections?.some(c => /emmy/i.test(c)) || mediaInfo.labels?.some(l => /emmy/i.test(l));
+        return Boolean(hasEmmy || mediaInfo.title.toLowerCase().includes("emmy"));
+    }
+    if (t === "golden_globe") {
+        const hasGlobe = mediaInfo.collections?.some(c => /golden[\s_-]?globe/i.test(c)) || mediaInfo.labels?.some(l => /golden[\s_-]?globe/i.test(l));
+        return Boolean(hasGlobe || mediaInfo.title.toLowerCase().includes("golden globe"));
+    }
+    if (t === "cannes_winner") {
+        const hasCannes = mediaInfo.collections?.some(c => /cannes|palme[\s_-]?d['\u2019]?or/i.test(c)) || mediaInfo.labels?.some(l => /cannes|palme[\s_-]?d['\u2019]?or/i.test(l));
+        return Boolean(hasCannes || mediaInfo.title.toLowerCase().includes("cannes"));
+    }
+    if (t === "bafta_winner") {
+        const hasBafta = mediaInfo.collections?.some(c => /bafta/i.test(c)) || mediaInfo.labels?.some(l => /bafta/i.test(l));
+        return Boolean(hasBafta || mediaInfo.title.toLowerCase().includes("bafta"));
+    }
+    if (t === "critics_choice") {
+        const hasCc = mediaInfo.collections?.some(c => /critics[\s_-]?choice/i.test(c)) || mediaInfo.labels?.some(l => /critics[\s_-]?choice/i.test(l));
+        return Boolean(hasCc || mediaInfo.title.toLowerCase().includes("critics choice") || mediaInfo.title.toLowerCase().includes("critics' choice"));
+    }
+
+    // 5. Quality (4K UHD / Dolby Vision)
+    if (t === "auto_quality" || t === "4k_uhd") {
+        return Boolean(mediaInfo.detectedBadges?.resolution === "4K" || mediaInfo.detectedBadges?.hdr === "DV" || mediaInfo.detectedBadges?.hdr);
+    }
+
+    // 6. Special Edition
+    if (t === "auto_edition") {
+        return Boolean(mediaInfo.detectedBadges?.edition);
+    }
+
+    // 7. Leaving Soon
+    if (t === "leaving_soon") {
+        return Boolean(mediaInfo.isLeavingSoon || mediaInfo.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) || mediaInfo.collections?.some(c => /leaving[\s_-]?soon/i.test(c)));
+    }
+
+    return false;
+}
+
+/**
  * Evaluates Waterfall Ribbon priority against media telemetry and returns the SINGLE winning ribbon.
  * In Kometa, a waterfall cascades top-to-bottom through priority tiers. The FIRST matching tier wins.
  */
@@ -1567,83 +1671,17 @@ export function evaluateWaterfallRibbon(
             continue;
         }
 
-        const type = (tier.type || "").toLowerCase();
+        const type = (tier.type || "").toLowerCase().trim();
         let isMatch = false;
 
-        // 1. IMDb Top 250 (movies or TV)
-        if (type === "imdb_top_250") {
-            const hasTop250Collection = mediaInfo.collections?.some(c => /top[\s_-]?250/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?250/i.test(l));
-            const score = mediaInfo.imdbRating ?? mediaInfo.rating;
-            if (hasTop250Collection) {
-                isMatch = true;
-            } else if (mediaInfo.type !== "show" && score && score >= 8.3) {
-                isMatch = true;
-            }
-        } else if (type === "imdb_top_250_tv") {
-            const hasTop250Collection = mediaInfo.collections?.some(c => /top[\s_-]?250|top[\s_-]?tv/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?250|top[\s_-]?tv/i.test(l));
-            const score = mediaInfo.imdbRating ?? mediaInfo.rating;
-            if (hasTop250Collection) {
-                isMatch = true;
-            } else if (mediaInfo.type === "show" && score && score >= 8.5) {
-                isMatch = true;
-            }
-        }
-        // 2. Rotten Tomatoes Certified Fresh / RT Fresh
-        else if (type === "certified_fresh") {
-            const rtCrit = mediaInfo.rtCriticsRating ?? options.ratingsSource?.rtCritics;
-            const rtAud = mediaInfo.rtAudienceRating ?? options.ratingsSource?.rtAudience;
-            if ((rtCrit && rtCrit >= 75) || (rtAud && rtAud >= 80)) isMatch = true;
-        } else if (type === "rt_fresh") {
-            const rtCrit = mediaInfo.rtCriticsRating ?? options.ratingsSource?.rtCritics;
-            if (rtCrit && rtCrit >= 60) isMatch = true;
-        }
-        // 3. Metacritic Must-See
-        else if (type === "metacritic_must_see") {
-            const meta = options.ratingsSource?.metacritic;
-            if (meta && meta >= 81) isMatch = true;
-        }
-        // 4. Awards (Oscar / Academy Award / Emmy / Golden Globe / Cannes / BAFTA / Critics Choice)
-        else if (type === "oscar_winner" || type === "academy_award") {
-            const hasOscar = mediaInfo.collections?.some(c => /oscar|academy[\s_-]?award|best[\s_-]?picture/i.test(c)) || mediaInfo.labels?.some(l => /oscar|academy[\s_-]?award/i.test(l));
-            const fullStr = `${mediaInfo.title} ${mediaInfo.editionTitle || ""}`.toLowerCase();
-            if (hasOscar || fullStr.includes("oscar") || fullStr.includes("academy award") || fullStr.includes("best picture")) isMatch = true;
-        } else if (type === "emmy_winner") {
-            const hasEmmy = mediaInfo.collections?.some(c => /emmy/i.test(c)) || mediaInfo.labels?.some(l => /emmy/i.test(l));
-            if (hasEmmy || mediaInfo.title.toLowerCase().includes("emmy")) isMatch = true;
-        } else if (type === "golden_globe") {
-            const hasGlobe = mediaInfo.collections?.some(c => /golden[\s_-]?globe/i.test(c)) || mediaInfo.labels?.some(l => /golden[\s_-]?globe/i.test(l));
-            if (hasGlobe || mediaInfo.title.toLowerCase().includes("golden globe")) isMatch = true;
-        } else if (type === "cannes_winner") {
-            const hasCannes = mediaInfo.collections?.some(c => /cannes|palme[\s_-]?d['’]?or/i.test(c)) || mediaInfo.labels?.some(l => /cannes|palme[\s_-]?d['’]?or/i.test(l));
-            if (hasCannes || mediaInfo.title.toLowerCase().includes("cannes")) isMatch = true;
-        } else if (type === "bafta_winner") {
-            const hasBafta = mediaInfo.collections?.some(c => /bafta/i.test(c)) || mediaInfo.labels?.some(l => /bafta/i.test(l));
-            if (hasBafta || mediaInfo.title.toLowerCase().includes("bafta")) isMatch = true;
-        } else if (type === "critics_choice") {
-            const hasCc = mediaInfo.collections?.some(c => /critics[\s_-]?choice/i.test(c)) || mediaInfo.labels?.some(l => /critics[\s_-]?choice/i.test(l));
-            if (hasCc || mediaInfo.title.toLowerCase().includes("critics choice") || mediaInfo.title.toLowerCase().includes("critics' choice")) isMatch = true;
-        }
-        // 5. Quality (4K UHD / Dolby Vision)
-        else if (type === "auto_quality" || type === "4k_uhd") {
-            if (mediaInfo.detectedBadges?.resolution === "4K" || mediaInfo.detectedBadges?.hdr === "DV" || Boolean(mediaInfo.detectedBadges?.hdr)) {
-                isMatch = true;
-            }
-        }
-        // 6. Special Edition
-        else if (type === "auto_edition") {
-            if (Boolean(mediaInfo.detectedBadges?.edition)) isMatch = true;
-        }
-        // 7. Leaving Soon
-        else if (type === "leaving_soon") {
-            if (Boolean(mediaInfo.isLeavingSoon)) isMatch = true;
-        }
-        // 8. Custom rule
-        else if (type === "custom" || tier.matchRule) {
+        if (type === "custom" || tier.matchRule) {
             if (tier.matchRule) {
                 isMatch = evaluateBadgeCondition(tier.matchRule, mediaInfo.detectedBadges);
             } else {
                 isMatch = true;
             }
+        } else if (type) {
+            isMatch = isRibbonTypeMatching(type, mediaInfo, options);
         }
 
         if (isMatch) {
@@ -1689,7 +1727,8 @@ export async function applyOverlaysToPoster(
     const overlays: { input: Buffer | string; top?: number; left?: number }[] = [];
 
     // 1. Leaving Soon Banner (Takes precedence at the very top)
-    if (options.showLeavingSoon && Boolean(mediaInfo.isLeavingSoon)) {
+    const isItemLeavingSoon = Boolean(mediaInfo.isLeavingSoon || mediaInfo.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) || mediaInfo.collections?.some(c => /leaving[\s_-]?soon/i.test(c)));
+    if (options.showLeavingSoon && isItemLeavingSoon) {
         const leavingSoonSvg = generateLeavingSoonRibbonSvg(options.leavingSoonDays);
         const ribbonBuf = await sharp(Buffer.from(leavingSoonSvg)).resize(1000, 78).toBuffer();
         overlays.push({
@@ -1711,7 +1750,7 @@ export async function applyOverlaysToPoster(
         const phPos = options.placeholderPosition || "bottom";
         overlays.push({
             input: phBuf,
-            top: phPos === "top" ? (options.showLeavingSoon ? 78 : 0) : 1500 - 72,
+            top: phPos === "top" ? (options.showLeavingSoon && isItemLeavingSoon ? 78 : 0) : 1500 - 72,
             left: 0
         });
     }
@@ -1722,27 +1761,19 @@ export async function applyOverlaysToPoster(
         let winningRibbon: { text: string; theme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" } | null = null;
 
         if (options.ribbonMode === "single") {
-            // Single explicit custom text
-            let rText = options.ribbonText;
-            let rTheme = options.ribbonTheme || "purple";
-
-            if (!rText && options.ribbonType) {
-                const mapped = resolveRibbonPresetTextAndTheme(options.ribbonType, mediaInfo, options.leavingSoonDays);
-                rText = mapped.text;
-                if (!options.ribbonTheme) rTheme = mapped.theme;
-            }
-
-            if (!rText) {
-                if (mediaInfo.detectedBadges.resolution === "4K") {
-                    rText = "4K UHD";
-                } else if (mediaInfo.detectedBadges.hdr) {
-                    rText = String(mediaInfo.detectedBadges.hdr).toUpperCase();
-                } else {
-                    rText = "FEATURED";
+            // Single explicit custom text or verified single preset match
+            if (options.ribbonText && options.ribbonText.trim()) {
+                winningRibbon = { text: options.ribbonText.trim().toUpperCase(), theme: options.ribbonTheme || "purple" };
+            } else if (options.ribbonType) {
+                const isMatch = isRibbonTypeMatching(options.ribbonType, mediaInfo, {
+                    leavingSoonDays: options.leavingSoonDays,
+                    ratingsSource: options.ratingsSource
+                });
+                if (isMatch) {
+                    const mapped = resolveRibbonPresetTextAndTheme(options.ribbonType, mediaInfo, options.leavingSoonDays);
+                    winningRibbon = { text: mapped.text, theme: options.ribbonTheme || mapped.theme };
                 }
             }
-
-            winningRibbon = { text: rText, theme: rTheme };
         } else {
             // Waterfall Priority Mode (Default in Kometa)
             const waterfallTiers = (options.tieredRibbons && options.tieredRibbons.length > 0)
@@ -1942,6 +1973,10 @@ export async function applyOverlaysToPoster(
                     if (cat === "contentRating") hasCustomContentRating = true;
                 }
 
+                const cbScale = options.badgeScale || 1.0;
+                const cbWidth = Math.round(rawW * cbScale);
+                const cbHeight = Math.round(rawH * cbScale);
+
                 if (isFullPoster) {
                     // Full-frame poster overlay (e.g. 1000x1500 Kometa template)
                     let fullBuf = await sharp(cb.filePath)
@@ -1961,10 +1996,19 @@ export async function applyOverlaysToPoster(
                         left: 0
                     });
                 } else {
-                    // Corner / positioned badge
-                    const cbWidth = scale !== 1.0 && scale > 0.1 ? Math.round(rawW * scale) : rawW;
-                    const cbHeight = scale !== 1.0 && scale > 0.1 ? Math.round(rawH * scale) : rawH;
-                    const cbPos = cb.position || fallbackPos;
+                    // Resolve target position based on badge category or explicit override
+                    let targetCategoryPos = fallbackPos;
+                    if (badgeCats.includes("edition")) targetCategoryPos = editionPos;
+                    else if (badgeCats.includes("resolution")) targetCategoryPos = resPos;
+                    else if (badgeCats.includes("hdr")) targetCategoryPos = hdrPos;
+                    else if (badgeCats.includes("codec")) targetCategoryPos = codecPos;
+                    else if (badgeCats.includes("audio")) targetCategoryPos = audioPos;
+                    else if (badgeCats.includes("channels")) targetCategoryPos = channelsPos;
+                    else if (badgeCats.includes("studio")) targetCategoryPos = studioPos;
+                    else if (badgeCats.includes("contentRating")) targetCategoryPos = contentRatingPos;
+                    else if (badgeCats.includes("ratings")) targetCategoryPos = ratingsPos;
+
+                    const cbPos = targetCategoryPos || cb.position || fallbackPos;
 
                     let cbBuffer = await sharp(cb.filePath)
                         .resize(cbWidth, cbHeight, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
@@ -2094,8 +2138,17 @@ export async function applyOverlaysToPoster(
     if (options.showContentRating && mediaInfo.detectedBadges.contentRating && !hasCustomContentRating) {
         await pushSvgToBucket(contentRatingPos, generateContentRatingBadgeSvg(mediaInfo.detectedBadges.contentRating, options.theme), "contentRating");
     }
-    if (options.showRatings && options.ratingsSource) {
-        const rSvg = generateRatingsBadgeSvg(options.ratingsSource, options.theme);
+    const effectiveRatings = options.ratingsSource || (
+        (mediaInfo.imdbRating || mediaInfo.rating || mediaInfo.rtCriticsRating || mediaInfo.rtAudienceRating)
+        ? {
+            imdb: mediaInfo.imdbRating ?? mediaInfo.rating,
+            rtCritics: mediaInfo.rtCriticsRating,
+            rtAudience: mediaInfo.rtAudienceRating
+        }
+        : undefined
+    );
+    if (options.showRatings && effectiveRatings) {
+        const rSvg = generateRatingsBadgeSvg(effectiveRatings, options.theme);
         if (rSvg) await pushSvgToBucket(ratingsPos, rSvg, "ratings");
     }
 
