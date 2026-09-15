@@ -813,7 +813,7 @@ export function KometaStudio() {
         return null;
     };
 
-    const getActiveSimulatorRibbon = (): { text: string; theme: "purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange"; priority: number; ruleLabel: string } | null => {
+    const getActiveSimulatorRibbon = (): { text: string; theme: "purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange"; priority: number; ruleLabel: string; matchedType?: string } | null => {
         if (!simShowRibbon) return null;
 
         if (simRibbonMode === "single") {
@@ -822,7 +822,8 @@ export function KometaStudio() {
                 text: text || "FEATURED",
                 theme: simRibbonTheme,
                 priority: 1,
-                ruleLabel: "Manual Custom Text"
+                ruleLabel: "Manual Custom Text",
+                matchedType: "featured"
             };
         }
 
@@ -907,22 +908,32 @@ export function KometaStudio() {
         if (c === "apple" || c === "apple_tv") return (detected.studio || "").toLowerCase().includes("apple");
         if (c === "amazon" || c === "prime") return (detected.studio || "").toLowerCase().includes("amazon") || (detected.studio || "").toLowerCase().includes("prime");
         if (c === "paramount") return (detected.studio || "").toLowerCase().includes("paramount");
+        if (c === "peacock") return (detected.studio || "").toLowerCase().includes("peacock");
+        if (c === "hulu") return (detected.studio || "").toLowerCase().includes("hulu");
+        if (c === "crunchyroll") return (detected.studio || "").toLowerCase().includes("crunchyroll");
         if (c === "marvel") return (detected.studio || "").toLowerCase().includes("marvel");
         if (c === "dc") return (detected.studio || "").toLowerCase().includes("dc");
         if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
 
-        const cr = (detected.contentRating || "").toUpperCase();
-        if (c === "pg-13") return cr === "PG-13" || cr === "US:PG-13";
-        if (c === "nc-17") return cr === "NC-17" || cr === "US:NC-17";
-        if (c === "r") return cr === "R" || cr === "US:R";
-        if (c === "pg") return cr === "PG" || cr === "US:PG";
-        if (c === "g") return cr === "G" || cr === "US:G";
-        if (c === "tv-ma" || c === "tvma") return cr === "TV-MA" || cr === "US:TV-MA";
-        if (c === "tv-14" || c === "tv14") return cr === "TV-14" || cr === "US:TV-14";
-        if (c === "tv-pg" || c === "tvpg") return cr === "TV-PG" || cr === "US:TV-PG";
-        if (c === "tv-g" || c === "tvg") return cr === "TV-G" || cr === "US:TV-G";
-        if (c === "tv-y" || c === "tvy") return cr === "TV-Y" || cr === "US:TV-Y";
-        if (c === "tv-y7" || c === "tvy7") return cr === "TV-Y7" || cr === "US:TV-Y7";
+        const cr = (detected.contentRating || "").toUpperCase().replace(/^US[:\-_]?/i, "").replace(/[^A-Z0-9]/g, "");
+        const condClean = c.replace(/^US[:\-_]?/i, "").replace(/[^a-z0-9]/g, "");
+        if (condClean === "pg13") return cr === "PG13" || cr === "PG-13";
+        if (condClean === "nc17") return cr === "NC17" || cr === "NC-17";
+        if (condClean === "r") return cr === "R";
+        if (condClean === "pg") return cr === "PG";
+        if (condClean === "g") return cr === "G";
+        if (condClean === "nr" || condClean === "unrated") return cr === "NR" || cr === "UNRATED" || cr === "NOTRATED";
+        if (condClean === "tvma") return cr === "TVMA" || cr === "TV-MA";
+        if (condClean === "tv14") return cr === "TV14" || cr === "TV-14";
+        if (condClean === "tvpg") return cr === "TVPG" || cr === "TV-PG";
+        if (condClean === "tvg") return cr === "TVG" || cr === "TV-G";
+        if (condClean === "tvy") return cr === "TVY" || cr === "TV-Y";
+        if (condClean === "tvy7") return cr === "TVY7" || cr === "TV-Y7";
+
+        if (c === "imdb_top_250" || c === "imdb" || c === "imdbtop250") return true;
+        if (c === "rt_fresh" || c === "criticfresh" || c === "audiencefresh") return true;
+        if (c === "metacritic_must_see" || c === "metacritic" || c === "metacritictop") return true;
+        if (c === "tmdb" || c === "trakt") return true;
 
         return false;
     };
@@ -934,7 +945,7 @@ export function KometaStudio() {
         const rawRule = (cb.matchRule || "").trim().toLowerCase();
         const rawCategory = (cb.category || "").trim().toLowerCase();
         const rawName = (cb.name || "").toLowerCase();
-        const rawFile = (cb.filePath || "").split("/").pop()?.toLowerCase() || "";
+        const rawFile = (cb.filePath || "").split(/[\/\\]/).pop()?.toLowerCase() || "";
 
         if (rawRule === "all" || rawRule === "*" || (rawCategory === "ribbon" && !rawRule) || (rawCategory === "banner" && !rawRule)) {
             return true;
@@ -971,25 +982,61 @@ export function KometaStudio() {
     };
 
     const getCustomBadgeCategoriesClient = (cb: any): string[] => {
-        const cat = (cb.category || "").toLowerCase();
-        const rule = (cb.matchRule || "").toLowerCase();
-        const name = (cb.name || "").toLowerCase();
-        const fName = (cb.filePath || "").split("/").pop()?.toLowerCase() || "";
+        const cat = (cb.category || "").toLowerCase().trim();
+        const rule = (cb.matchRule || "").toLowerCase().trim();
+        const name = (cb.name || "").toLowerCase().trim();
+        const fName = (cb.filePath || "").split(/[\/\\]/).pop()?.toLowerCase() || "";
         const combined = `${cat} ${rule} ${name} ${fName}`;
 
-        const categories: string[] = [];
-        if (cat === "resolution" || /4k|2160|1080|720|480|576|sd|uhd|fhd/i.test(combined)) categories.push("resolution");
-        if (cat === "hdr" || /dv|hdr|dolby.*vision|plus/i.test(combined)) categories.push("hdr");
-        if (cat === "codec" || /hevc|av1|prores|avc|h264|h265|x264|x265/i.test(combined)) categories.push("codec");
-        if (cat === "audio" || /atmos|truehd|dts|flac|aac|eac3|ac3/i.test(combined)) categories.push("audio");
-        if (/7\.1|5\.1|2\.0|channels|surround/i.test(combined)) categories.push("channels");
-        if (cat === "edition" || /imax|criterion|director|extended|remux|theatrical|remaster/i.test(combined)) categories.push("edition");
-        if (cat === "studio" || /netflix|disney|hbo|apple|prime|paramount|marvel|dc|a24/i.test(combined)) categories.push("studio");
-        if (cat === "ratings" || /pg-13|nc-17|tv-ma|rated|pg|r|g/i.test(combined)) categories.push("contentRating");
-        if (cat === "ribbon") categories.push("ribbon");
+        const categories = new Set<string>();
 
-        if (categories.length === 0 && cat && cat !== "custom") categories.push(cat);
-        return categories;
+        if (cat === "resolution") categories.add("resolution");
+        if (cat === "hdr") categories.add("hdr");
+        if (cat === "codec") categories.add("codec");
+        if (cat === "audio") categories.add("audio");
+        if (cat === "channels") categories.add("channels");
+        if (cat === "edition") categories.add("edition");
+        if (cat === "studio") categories.add("studio");
+        if (cat === "contentrating" || cat === "cr" || cat === "age_rating") categories.add("contentRating");
+        if (cat === "ratings" || cat === "rating" || cat === "audience") categories.add("ratings");
+        if (cat === "ribbon" || cat === "banner") categories.add("ribbon");
+
+        if (fName.includes("_resolution_") || /\b(4k|2160p?|1080p?|720p?|480p?|576p?|sd|uhd|fhd)\b/i.test(rule) || /\b(4k|2160p?|1080p?|720p?|480p?|576p?|sd|uhd|fhd)\b/i.test(name)) {
+            categories.add("resolution");
+        }
+        if (fName.includes("_hdr_") || /\b(dv|dolby\s*vision|hdr10\+|hdr10|hdr|hlg|sdr)\b/i.test(rule) || /\b(dv|dolby\s*vision|hdr10\+|hdr10|hdr|hlg|sdr)\b/i.test(name)) {
+            categories.add("hdr");
+        }
+        if (fName.includes("_codec_") || /\b(hevc|h265|x265|av1|prores|avc|h264|x264|vc1|mpeg2)\b/i.test(combined)) {
+            categories.add("codec");
+        }
+        if (fName.includes("_audio_codec_") || /\b(atmos|truehd|dts:x|dts-x|dts-hd|dtshd|dts-ma|dts|flac|aac|eac3|ac3|pcm|opus|mp3)\b/i.test(combined)) {
+            categories.add("audio");
+        }
+        if (/\b(7\.1|5\.1|2\.0|channels|surround)\b/i.test(combined)) {
+            categories.add("channels");
+        }
+        if (fName.includes("_edition_") || /\b(imax|criterion|director|extended|theatrical|remux|remaster|uncut|unrated|collector|definitive|anniversary)\b/i.test(combined)) {
+            categories.add("edition");
+        }
+        if (fName.includes("_streaming_") || fName.includes("_studio_") || /\b(netflix|disney|hbo|max|apple|prime|amazon|paramount|peacock|hulu|crunchyroll|amc|discovery|hayu|tubi|filmin|crave|itvx|a24|marvel|dc)\b/i.test(combined)) {
+            categories.add("studio");
+        }
+        if (fName.includes("_cr_") || /\b(usg|uspg|uspg-13|uspg13|usr|usnc-17|usnc17|usnr|ustv-ma|ustvma|ustv-14|ustv14|ustv-pg|ustvpg|pg-13|nc-17|tv-ma|tv-14|tv-pg|tv-y7|tv-y|tv-g)\b/i.test(combined)) {
+            categories.add("contentRating");
+        }
+        if (fName.includes("_rating_") || /\b(imdb|criticfresh|audiencefresh|criticrotten|audiencerotten|metacritic|tmdb|trakt|letterboxd|mdblist|anidb|mal)\b/i.test(combined)) {
+            categories.add("ratings");
+        }
+        if (fName.includes("_ribbon_") || /\b(oscar|cannes|golden|emmy|bafta|sundance|berlinale|venice|spirit|rottenverified)\b/i.test(combined)) {
+            categories.add("ribbon");
+        }
+
+        if (categories.size === 0 && cat && cat !== "custom") {
+            categories.add(cat);
+        }
+
+        return Array.from(categories);
     };
 
     // Dynamic Theme Styling Helper for all 6 Themes
@@ -1140,182 +1187,276 @@ export function KometaStudio() {
             contentRating: simShowRating ? (realRating || "PG-13") : undefined
         };
 
+        const renderCustomOrVectorBadge = (badge: any, vectorFallbackJsx: React.ReactNode) => {
+            if (!badge) return vectorFallbackJsx;
+            return (
+                <div 
+                    key={`custom-badge-${badge.id}`} 
+                    className="transition-all duration-200 drop-shadow-2xl flex items-center justify-center pointer-events-auto"
+                    style={{ 
+                        transform: `scale(${simBadgeScale || 1.0})`, 
+                        transformOrigin: pos.includes("left") ? "left center" : pos.includes("right") ? "right center" : "center" 
+                    }}
+                >
+                    <img 
+                        src={`/api/curation/badges/${encodeURIComponent(badge.id)}`}
+                        alt={badge.name}
+                        className="max-h-7 max-w-[125px] object-contain drop-shadow-md"
+                        onError={(e) => {
+                            const el = e.currentTarget;
+                            el.style.display = "none";
+                            if (el.nextElementSibling) {
+                                (el.nextElementSibling as HTMLElement).style.display = "flex";
+                            }
+                        }}
+                    />
+                    <div style={{ display: "none" }}>
+                        {vectorFallbackJsx}
+                    </div>
+                </div>
+            );
+        };
+
         const isDovetailed = simDovetailResolutionHdr && 
             simShowResolution && 
             simShowHdr && 
             simResolutionPosition === simHdrPosition &&
             simResolutionPosition === pos;
 
-        const matchingResCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("resolution") && doesCustomBadgeMatchDetected(cb, simDetected));
-        const matchingHdrCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("hdr") && doesCustomBadgeMatchDetected(cb, simDetected));
+        // Check for official composite dovetail custom badge (e.g. 4k + dv, 4k + hdr, 1080p + hdr)
+        const matchingDovetailCustom = isDovetailed ? customBadges.find(cb => 
+            cb.enabled && 
+            (getCustomBadgeCategoriesClient(cb).includes("resolution") || getCustomBadgeCategoriesClient(cb).includes("hdr")) && 
+            doesCustomBadgeMatchDetected(cb, simDetected) &&
+            (cb.matchRule?.includes("+") || cb.id.includes("dv") || cb.id.includes("hdr"))
+        ) : undefined;
+
+        const matchingResCustom = customBadges.find(cb => 
+            cb.enabled && 
+            getCustomBadgeCategoriesClient(cb).includes("resolution") && 
+            doesCustomBadgeMatchDetected(cb, simDetected) &&
+            !cb.matchRule?.includes("+")
+        );
+        const matchingHdrCustom = customBadges.find(cb => 
+            cb.enabled && 
+            getCustomBadgeCategoriesClient(cb).includes("hdr") && 
+            doesCustomBadgeMatchDetected(cb, simDetected) &&
+            !cb.matchRule?.includes("+")
+        );
 
         // 1. Dovetailed Resolution + HDR
-        if (isDovetailed && !matchingResCustom && !matchingHdrCustom) {
+        if (isDovetailed) {
             const st = getThemeBadgeStyle(simTheme, "hdr", true);
             const resText = (simDetected.resolution || "4K").toUpperCase();
             const hdrText = (simDetected.hdr || "DOLBY VISION").toUpperCase();
+            const dovetailVectorJsx = (
+                <div key="dovetail" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-wider flex items-center gap-1.5 shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                    <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                    <span className={st.textPrimary}>{resText}</span>
+                    <span className={`text-[7.5px] tracking-widest ${st.textSecondary}`}>{resText.includes("4K") ? "UHD" : "FHD"}</span>
+                    <div className="h-2.5 w-[1px] bg-white/30 mx-0.5 relative flex items-center justify-center">
+                        <div className="w-1 h-1 rounded-full bg-white/50" />
+                    </div>
+                    <span className={`w-1.5 h-2.5 rounded-sm inline-block shrink-0 ${st.accent}`} />
+                    <span className={`text-[8px] tracking-widest font-black ${st.textSecondary}`}>{hdrText}</span>
+                </div>
+            );
+
             items.push({
                 key: "resolution",
                 category: "resolution",
-                jsx: (
-                    <div key="dovetail" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-wider flex items-center gap-1.5 shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
-                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>{resText}</span>
-                        <span className={`text-[7.5px] tracking-widest ${st.textSecondary}`}>{resText.includes("4K") ? "UHD" : "FHD"}</span>
-                        <div className="h-2.5 w-[1px] bg-white/30 mx-0.5 relative flex items-center justify-center">
-                            <div className="w-1 h-1 rounded-full bg-white/50" />
-                        </div>
-                        <span className={`w-1.5 h-2.5 rounded-sm inline-block shrink-0 ${st.accent}`} />
-                        <span className={`text-[8px] tracking-widest font-black ${st.textSecondary}`}>{hdrText}</span>
-                    </div>
-                )
+                jsx: renderCustomOrVectorBadge(matchingDovetailCustom, dovetailVectorJsx)
             });
         } else {
             // Independent Resolution
             if (simShowResolution && simResolutionPosition === pos) {
                 const st = getThemeBadgeStyle(simTheme, "resolution");
                 const resText = (simDetected.resolution || "4K").toUpperCase();
+                const resVectorJsx = (
+                    <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <span className={st.textPrimary}>{resText}</span>
+                        <span className={`text-[8px] border-l border-current pl-1 ml-0.5 tracking-widest ${st.textSecondary}`}>{resText.includes("4K") ? "UHD" : "FHD"}</span>
+                    </div>
+                );
                 items.push({
                     key: "resolution",
                     category: "resolution",
-                    jsx: (
-                        <div key="res" className={`relative px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
-                            <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                            <span className={st.textPrimary}>{resText}</span>
-                            <span className={`text-[8px] border-l border-current pl-1 ml-0.5 tracking-widest ${st.textSecondary}`}>{resText.includes("4K") ? "UHD" : "FHD"}</span>
-                        </div>
-                    )
+                    jsx: renderCustomOrVectorBadge(matchingResCustom, resVectorJsx)
                 });
             }
             // Independent HDR
             if (simShowHdr && simHdrPosition === pos) {
                 const st = getThemeBadgeStyle(simTheme, "hdr");
                 const hdrText = (simDetected.hdr || "DOLBY VISION").toUpperCase();
+                const hdrVectorJsx = (
+                    <div key="hdr" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1 ${st.container}`}>
+                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                        <span className={`w-1.5 h-2.5 rounded-sm inline-block mr-0.5 ${st.accent}`} />
+                        <span className={st.textPrimary}>{hdrText}</span>
+                    </div>
+                );
                 items.push({
                     key: "hdr",
                     category: "hdr",
-                    jsx: (
-                        <div key="hdr" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md flex items-center gap-1 ${st.container}`}>
-                            <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                            <span className={`w-1.5 h-2.5 rounded-sm inline-block mr-0.5 ${st.accent}`} />
-                            <span className={st.textPrimary}>{hdrText}</span>
-                        </div>
-                    )
+                    jsx: renderCustomOrVectorBadge(matchingHdrCustom, hdrVectorJsx)
                 });
             }
         }
 
         // Video Codec
         if (simShowCodec && simCodecPosition === pos) {
+            const matchingCodecCustom = customBadges.find(cb => 
+                cb.enabled && 
+                getCustomBadgeCategoriesClient(cb).includes("codec") && 
+                doesCustomBadgeMatchDetected(cb, simDetected)
+            );
             const st = getThemeBadgeStyle(simTheme, "codec");
             const codecText = (simDetected.codec || "HEVC").toUpperCase();
+            const codecVectorJsx = (
+                <div key="codec" className={`relative px-1.5 py-0.5 rounded-md border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                    <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                    <span className={st.textPrimary}>{codecText}</span>
+                </div>
+            );
             items.push({
                 key: "codec",
                 category: "codec",
-                jsx: (
-                    <div key="codec" className={`relative px-1.5 py-0.5 rounded-md border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
-                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>{codecText}</span>
-                    </div>
-                )
+                jsx: renderCustomOrVectorBadge(matchingCodecCustom, codecVectorJsx)
             });
         }
 
         // Audio Codec
         if (simShowAudio && simAudioPosition === pos) {
+            const matchingAudioCustom = customBadges.find(cb => 
+                cb.enabled && 
+                getCustomBadgeCategoriesClient(cb).includes("audio") && 
+                doesCustomBadgeMatchDetected(cb, simDetected)
+            );
             const st = getThemeBadgeStyle(simTheme, "audio");
             const audioText = (simDetected.audio || "DOLBY ATMOS").toUpperCase();
+            const audioVectorJsx = (
+                <div key="audio" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                    <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                    <span className={st.textPrimary}>{audioText}</span>
+                </div>
+            );
             items.push({
                 key: "audio",
                 category: "audio",
-                jsx: (
-                    <div key="audio" className={`relative px-2 py-0.5 rounded-md border text-[9px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
-                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>{audioText}</span>
-                    </div>
-                )
+                jsx: renderCustomOrVectorBadge(matchingAudioCustom, audioVectorJsx)
             });
         }
 
         // Audio Channels
         if (simShowChannels && simChannelsPosition === pos) {
+            const matchingChannelsCustom = customBadges.find(cb => 
+                cb.enabled && 
+                getCustomBadgeCategoriesClient(cb).includes("channels") && 
+                doesCustomBadgeMatchDetected(cb, simDetected)
+            );
             const st = getThemeBadgeStyle(simTheme, "audio");
             const channelsText = simDetected.audioChannels ? `${simDetected.audioChannels} SURROUND` : "7.1 SURROUND";
+            const channelsVectorJsx = (
+                <div key="channels" className={`relative px-1.5 py-0.5 rounded-md border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                    <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                    <span className={st.textPrimary}>{channelsText}</span>
+                </div>
+            );
             items.push({
                 key: "channels",
                 category: "channels",
-                jsx: (
-                    <div key="channels" className={`relative px-1.5 py-0.5 rounded-md border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
-                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>{channelsText}</span>
-                    </div>
-                )
+                jsx: renderCustomOrVectorBadge(matchingChannelsCustom, channelsVectorJsx)
             });
         }
 
         // Edition / Cut
         if (simShowEdition && simEditionPosition === pos) {
+            const matchingEditionCustom = customBadges.find(cb => 
+                cb.enabled && 
+                getCustomBadgeCategoriesClient(cb).includes("edition") && 
+                doesCustomBadgeMatchDetected(cb, simDetected)
+            );
             const st = getThemeBadgeStyle(simTheme, "edition");
             const editionText = (simDetected.edition || "IMAX ENHANCED").toUpperCase();
+            const editionVectorJsx = (
+                <div key="edition" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                    <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                    <span className={st.textPrimary}>{editionText}</span>
+                </div>
+            );
             items.push({
                 key: "edition",
                 category: "edition",
-                jsx: (
-                    <div key="edition" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
-                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>{editionText}</span>
-                    </div>
-                )
+                jsx: renderCustomOrVectorBadge(matchingEditionCustom, editionVectorJsx)
             });
         }
 
         // Studio / Network
         if (simShowStudio && simStudioPosition === pos) {
+            const matchingStudioCustom = customBadges.find(cb => 
+                cb.enabled && 
+                getCustomBadgeCategoriesClient(cb).includes("studio") && 
+                doesCustomBadgeMatchDetected(cb, simDetected)
+            );
             const st = getThemeBadgeStyle(simTheme, "studio");
             const studioText = (simDetected.studio || "HBO MAX").toUpperCase();
+            const studioVectorJsx = (
+                <div key="studio" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                    <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                    <span className={st.textPrimary}>{studioText}</span>
+                </div>
+            );
             items.push({
                 key: "studio",
                 category: "studio",
-                jsx: (
-                    <div key="studio" className={`relative px-2 py-0.5 rounded-md border text-[8px] font-black tracking-widest shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
-                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>{studioText}</span>
-                    </div>
-                )
+                jsx: renderCustomOrVectorBadge(matchingStudioCustom, studioVectorJsx)
             });
         }
 
         // Age Rating
         if (simShowRating && simRatingPosition === pos) {
+            const matchingRatingCustom = customBadges.find(cb => 
+                cb.enabled && 
+                getCustomBadgeCategoriesClient(cb).includes("contentRating") && 
+                doesCustomBadgeMatchDetected(cb, simDetected)
+            );
             const st = getThemeBadgeStyle(simTheme, "contentRating");
             const ratingText = (simDetected.contentRating || "PG-13").toUpperCase();
+            const ratingVectorJsx = (
+                <div key="rating" className={`relative px-1.5 py-0.5 rounded border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
+                    <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                    <span className={st.textPrimary}>{ratingText}</span>
+                </div>
+            );
             items.push({
                 key: "contentRating",
                 category: "contentRating",
-                jsx: (
-                    <div key="rating" className={`relative px-1.5 py-0.5 rounded border text-[8px] font-black tracking-wider shadow-lg overflow-hidden backdrop-blur-md ${st.container}`}>
-                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <span className={st.textPrimary}>{ratingText}</span>
-                    </div>
-                )
+                jsx: renderCustomOrVectorBadge(matchingRatingCustom, ratingVectorJsx)
             });
         }
 
         // Community Ratings
         if (simRatings && simRatingsPosition === pos) {
+            const matchingRatingsCustom = customBadges.find(cb => 
+                cb.enabled && 
+                getCustomBadgeCategoriesClient(cb).includes("ratings") && 
+                doesCustomBadgeMatchDetected(cb, simDetected)
+            );
             const st = getThemeBadgeStyle(simTheme, "ratings");
+            const ratingsVectorJsx = (
+                <div key="ratings" className={`relative flex items-center gap-1.5 px-2 py-0.5 rounded-md border shadow-lg text-[10px] overflow-hidden backdrop-blur-md ${st.container}`}>
+                    <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
+                    <div className="bg-yellow-400 text-black font-black px-1 rounded text-[8.5px] leading-tight">IMDb</div>
+                    <span className="font-bold text-white text-[10px]">8.6</span>
+                    <span className="text-[10px]">🍅</span>
+                    <span className="font-bold text-white text-[10px]">94%</span>
+                </div>
+            );
             items.push({
                 key: "ratings",
                 category: "ratings",
-                jsx: (
-                    <div key="ratings" className={`relative flex items-center gap-1.5 px-2 py-0.5 rounded-md border shadow-lg text-[10px] overflow-hidden backdrop-blur-md ${st.container}`}>
-                        <div className={`absolute top-0 left-1 right-1 h-[1px] rounded-full pointer-events-none ${st.highlight}`} />
-                        <div className="bg-yellow-400 text-black font-black px-1 rounded text-[8.5px] leading-tight">IMDb</div>
-                        <span className="font-bold text-white text-[10px]">8.6</span>
-                        <span className="text-[10px]">🍅</span>
-                        <span className="font-bold text-white text-[10px]">94%</span>
-                    </div>
-                )
+                jsx: renderCustomOrVectorBadge(matchingRatingsCustom, ratingsVectorJsx)
             });
         }
 
@@ -1344,6 +1485,28 @@ export function KometaStudio() {
             "bottom-right": "bottom-0 right-0",
             "bottom-left": "bottom-0 left-0"
         };
+
+        const matchingRibbonCustom = customBadges.find(cb => 
+            cb.enabled && 
+            getCustomBadgeCategoriesClient(cb).includes("ribbon") && 
+            (
+                cb.matchRule === winningRibbon.matchedType ||
+                cb.name.toLowerCase().includes(winningRibbon.text.toLowerCase()) ||
+                winningRibbon.text.toLowerCase().includes(cb.name.toLowerCase())
+            )
+        );
+
+        if (matchingRibbonCustom) {
+            return (
+                <div className={`absolute ${positionClasses[simRibbonPosition] || "top-0 left-0"} w-24 h-24 overflow-hidden pointer-events-none z-30 drop-shadow-2xl`}>
+                    <img 
+                        src={`/api/curation/badges/${encodeURIComponent(matchingRibbonCustom.id)}`}
+                        alt={matchingRibbonCustom.name}
+                        className="w-full h-full object-contain drop-shadow-lg"
+                    />
+                </div>
+            );
+        }
 
         const rotation = (isTop && isRight) || (!isTop && !isRight) ? "rotate-45" : "-rotate-45";
         
@@ -3584,6 +3747,7 @@ export function KometaStudio() {
                                         { id: "edition", label: "Editions" },
                                         { id: "studio", label: "Studios" },
                                         { id: "contentRating", label: "Age Ratings" },
+                                        { id: "ratings", label: "Critic & Scores" },
                                         { id: "ribbon", label: "Ribbons" }
                                     ].map(tab => (
                                         <button
