@@ -3,11 +3,6 @@ import { decryptData } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
 import { logger, maskToken } from "@/lib/logger";
 
-// Allow connections to local Plex servers with self-signed / plex.direct SSL certificates
-if (typeof process !== "undefined" && process.env) {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
-
 // In-memory DNS resolver for *.plex.direct domains to bypass router DNS Rebinding Protection
 let isDnsPatched = false;
 export function patchPlexDirectDns() {

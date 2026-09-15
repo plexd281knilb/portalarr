@@ -1,7 +1,3 @@
-if (typeof process !== "undefined" && process.env) {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
-
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";

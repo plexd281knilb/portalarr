@@ -223,6 +223,10 @@ if (!globalLogger.consoleIntercepted) {
         if (rawFirstArg.includes("Failed to find Server Action")) return;
         if (args.length > 1 && String(args[1]).includes("Failed to find Server Action")) return;
 
+        // Filter out Node.js TLS rejection warning
+        if (rawFirstArg.includes("NODE_TLS_REJECT_UNAUTHORIZED")) return;
+        if (args.length > 1 && String(args[1]).includes("NODE_TLS_REJECT_UNAUTHORIZED")) return;
+
         // 1. Strip timestamp prefixes (e.g. from prisma.ts or node console: "[2026-09-09 10:48:50]", "[10:48:50]", etc.)
         let cleanMsg = rawFirstArg
             .replace(/^\[\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\]\s*/i, "")

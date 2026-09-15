@@ -1,9 +1,5 @@
 "use server";
 
-if (typeof process !== "undefined" && process.env) {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
-
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
