@@ -23,6 +23,7 @@ import {
 } from "@/lib/plex";
 import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
+import type { AiAssistantResponse, UserDiagnosticSnapshot } from "@/lib/ai-server-assistant-types";
 
 import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
 import { encryptData, decryptData } from "@/lib/encryption";
@@ -12807,3 +12808,44 @@ export async function getPlexSetupGuides() {
     ];
 }
 
+export async function getUserAiDiagnosticSnapshotAction() {
+    try {
+        let user: any = null;
+        try {
+            user = await verifyUser();
+        } catch (e) {
+            user = { username: "Guest User", role: "USER" };
+        }
+        const { getUserDiagnosticSnapshot } = await import("@/lib/ai-server-assistant");
+        const snapshot = await getUserDiagnosticSnapshot(user);
+        return { success: true, snapshot };
+    } catch (e: any) {
+        console.error("getUserAiDiagnosticSnapshotAction error:", e);
+        return { success: false, error: e.message || "Failed to generate diagnostic snapshot" };
+    }
+}
+
+export async function askAiServerMasterAction(
+    question: string,
+    history: Array<{ role: "user" | "assistant"; content: string }> = []
+): Promise<AiAssistantResponse> {
+    try {
+        if (!question || !question.trim()) {
+            return { success: false, error: "Question cannot be empty" };
+        }
+
+        let user: any = null;
+        try {
+            user = await verifyUser();
+        } catch (e) {
+            user = { username: "Plex User", role: "USER" };
+        }
+
+        const { askAiServerMaster } = await import("@/lib/ai-server-assistant");
+        const response = await askAiServerMaster(question.trim(), history, user);
+        return response;
+    } catch (e: any) {
+        console.error("askAiServerMasterAction error:", e);
+        return { success: false, error: e.message || "AI Assistant failed to process question" };
+    }
+}

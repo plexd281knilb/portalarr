@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw'; 
 import LandingSupport from "@/components/landing-support";
+import { AiServerAssistant } from "@/components/ai-server-assistant";
 import SystemStatus from "@/components/system-status"; 
 import ActiveDownloads from "@/components/active-downloads"; 
 import RequestLibraryAccess from "@/components/request-library-access";
@@ -77,7 +78,7 @@ export default async function UserLandingPage() {
             </p>
         </section>
 
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
             <SystemStatus />
             <Card className="h-full flex flex-col border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
                 <CardHeader>
@@ -130,6 +131,7 @@ export default async function UserLandingPage() {
                 </CardContent>
             </Card>
             <LandingSupport />
+            <AiServerAssistant />
         </div>
 
         {/* --- MY PLEX HUB (PERSONAL STREAMS, WATCH HISTORY & DIAGNOSTICS) --- */}
