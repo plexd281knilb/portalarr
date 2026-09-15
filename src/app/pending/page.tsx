@@ -7,6 +7,7 @@ import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
 import { Clock, MailCheck, LogOut, RefreshCw, ShieldAlert, AlertTriangle, CreditCard, DollarSign, Copy, Check, Calendar } from "lucide-react";
 
 export default function PendingPage() {
@@ -159,80 +160,8 @@ export default function PendingPage() {
               )}
 
               {/* PAYMENT HANDLES */}
-              <div className="space-y-2 pt-1 border-t border-orange-500/20">
-                <p className="font-bold text-foreground text-xs flex items-center gap-1.5">
-                  <DollarSign className="h-3.5 w-3.5 text-primary" /> Supported Payment Methods
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
-                  {paymentConfig?.paymentPaypal && (
-                    <div className="p-2.5 rounded-xl bg-background/80 border border-border/40 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">PayPal</span>
-                        <span className="font-semibold text-foreground truncate block">{paymentConfig.paymentPaypal}</span>
-                      </div>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
-                        onClick={() => handleCopy(paymentConfig.paymentPaypal, "paypal")}
-                      >
-                        {copiedHandle === "paypal" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
-                  )}
-                  {paymentConfig?.paymentVenmo && (
-                    <div className="p-2.5 rounded-xl bg-background/80 border border-border/40 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">Venmo</span>
-                        <span className="font-semibold text-foreground truncate block">{paymentConfig.paymentVenmo}</span>
-                      </div>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
-                        onClick={() => handleCopy(paymentConfig.paymentVenmo, "venmo")}
-                      >
-                        {copiedHandle === "venmo" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
-                  )}
-                  {paymentConfig?.paymentCashApp && (
-                    <div className="p-2.5 rounded-xl bg-background/80 border border-border/40 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">Cash App</span>
-                        <span className="font-semibold text-foreground truncate block">{paymentConfig.paymentCashApp}</span>
-                      </div>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
-                        onClick={() => handleCopy(paymentConfig.paymentCashApp, "cashapp")}
-                      >
-                        {copiedHandle === "cashapp" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
-                  )}
-                  {paymentConfig?.paymentZelle && (
-                    <div className="p-2.5 rounded-xl bg-background/80 border border-border/40 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-muted-foreground font-sans text-[10px] uppercase font-bold tracking-wider block">Zelle</span>
-                        <span className="font-semibold text-foreground truncate block">{paymentConfig.paymentZelle}</span>
-                      </div>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10"
-                        onClick={() => handleCopy(paymentConfig.paymentZelle, "zelle")}
-                      >
-                        {copiedHandle === "zelle" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
-                  )}
-                </div>
+              <div className="pt-1 border-t border-orange-500/20">
+                <PaymentMethodsGrid config={paymentConfig} />
               </div>
 
               <p className="text-[11px] text-muted-foreground italic pt-1">
