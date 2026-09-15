@@ -1972,8 +1972,10 @@ export function KometaStudio() {
         try {
             // Auto-save active studio options to rule first
             const payload: any = {
+                name: "Kometa Library Overlay",
                 serverId: selectedServerId,
                 sectionKey: selectedSectionKey,
+                overlayType: "combined",
                 theme: simTheme,
                 showResolution: simShowResolution,
                 showHdr: simShowHdr,

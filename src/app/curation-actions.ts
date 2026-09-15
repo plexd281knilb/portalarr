@@ -2257,10 +2257,10 @@ export async function getOverlayRulesAction(serverId?: string, sectionKey?: stri
 
 export async function saveOverlayRuleAction(data: {
     id?: string;
-    name: string;
+    name?: string;
     serverId: string;
-    sectionKey: string;
-    overlayType: string;
+    sectionKey?: string;
+    overlayType?: string;
     position?: string;
     videoPosition?: string;
     audioPosition?: string;
@@ -2320,11 +2320,15 @@ export async function saveOverlayRuleAction(data: {
             });
         }
 
+        const generatedName = (data.name && data.name.trim())
+            ? data.name.trim()
+            : (data.sectionKey ? `Section #${data.sectionKey} Overlay Rule` : `Server ${data.serverId} Overlay Rule`);
+
         const ruleData = {
-            name: data.name,
-            serverId: data.serverId,
-            sectionKey: data.sectionKey,
-            overlayType: data.overlayType,
+            name: generatedName,
+            serverId: data.serverId || null,
+            sectionKey: data.sectionKey ? String(data.sectionKey) : null,
+            overlayType: data.overlayType || "combined",
             position: data.position || "top-right",
             videoPosition: data.videoPosition || data.position || "top-right",
             audioPosition: data.audioPosition || "top-left",
@@ -2367,12 +2371,26 @@ export async function saveOverlayRuleAction(data: {
                 data: ruleData
             });
         } else {
-            rule = await prisma.mediaOverlayRule.create({
-                data: ruleData
+            const existingRule = await prisma.mediaOverlayRule.findFirst({
+                where: {
+                    serverId: data.serverId || undefined,
+                    sectionKey: data.sectionKey ? String(data.sectionKey) : undefined
+                }
             });
+
+            if (existingRule) {
+                rule = await prisma.mediaOverlayRule.update({
+                    where: { id: existingRule.id },
+                    data: ruleData
+                });
+            } else {
+                rule = await prisma.mediaOverlayRule.create({
+                    data: ruleData
+                });
+            }
         }
 
-        return { success: true, rule, message: `Overlay rule "${data.name}" saved.` };
+        return { success: true, rule, message: `Overlay rule "${generatedName}" saved.` };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
