@@ -1571,12 +1571,21 @@ export function evaluateWaterfallRibbon(
 
         // 1. IMDb Top 250 (movies or TV)
         if (type === "imdb_top_250") {
+            const hasTop250Collection = mediaInfo.collections?.some(c => /top[\s_-]?250/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?250/i.test(l));
             const score = mediaInfo.imdbRating ?? mediaInfo.rating;
-            if (mediaInfo.type !== "show" && score && score >= 8.0) isMatch = true;
-            else if (mediaInfo.guids?.imdb && mediaInfo.type !== "show") isMatch = true;
+            if (hasTop250Collection) {
+                isMatch = true;
+            } else if (mediaInfo.type !== "show" && score && score >= 8.3) {
+                isMatch = true;
+            }
         } else if (type === "imdb_top_250_tv") {
+            const hasTop250Collection = mediaInfo.collections?.some(c => /top[\s_-]?250|top[\s_-]?tv/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?250|top[\s_-]?tv/i.test(l));
             const score = mediaInfo.imdbRating ?? mediaInfo.rating;
-            if (mediaInfo.type === "show" && score && score >= 8.0) isMatch = true;
+            if (hasTop250Collection) {
+                isMatch = true;
+            } else if (mediaInfo.type === "show" && score && score >= 8.5) {
+                isMatch = true;
+            }
         }
         // 2. Rotten Tomatoes Certified Fresh / RT Fresh
         else if (type === "certified_fresh") {
@@ -1594,23 +1603,24 @@ export function evaluateWaterfallRibbon(
         }
         // 4. Awards (Oscar / Academy Award / Emmy / Golden Globe / Cannes / BAFTA / Critics Choice)
         else if (type === "oscar_winner" || type === "academy_award") {
-            const fullStr = `${mediaInfo.title} ${mediaInfo.editionTitle || ""} ${mediaInfo.genre || ""}`.toLowerCase();
-            if (fullStr.includes("oscar") || fullStr.includes("academy award") || fullStr.includes("best picture")) isMatch = true;
+            const hasOscar = mediaInfo.collections?.some(c => /oscar|academy[\s_-]?award|best[\s_-]?picture/i.test(c)) || mediaInfo.labels?.some(l => /oscar|academy[\s_-]?award/i.test(l));
+            const fullStr = `${mediaInfo.title} ${mediaInfo.editionTitle || ""}`.toLowerCase();
+            if (hasOscar || fullStr.includes("oscar") || fullStr.includes("academy award") || fullStr.includes("best picture")) isMatch = true;
         } else if (type === "emmy_winner") {
-            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
-            if (fullStr.includes("emmy")) isMatch = true;
+            const hasEmmy = mediaInfo.collections?.some(c => /emmy/i.test(c)) || mediaInfo.labels?.some(l => /emmy/i.test(l));
+            if (hasEmmy || mediaInfo.title.toLowerCase().includes("emmy")) isMatch = true;
         } else if (type === "golden_globe") {
-            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
-            if (fullStr.includes("golden globe")) isMatch = true;
+            const hasGlobe = mediaInfo.collections?.some(c => /golden[\s_-]?globe/i.test(c)) || mediaInfo.labels?.some(l => /golden[\s_-]?globe/i.test(l));
+            if (hasGlobe || mediaInfo.title.toLowerCase().includes("golden globe")) isMatch = true;
         } else if (type === "cannes_winner") {
-            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
-            if (fullStr.includes("cannes") || fullStr.includes("palme d'or")) isMatch = true;
+            const hasCannes = mediaInfo.collections?.some(c => /cannes|palme[\s_-]?d['’]?or/i.test(c)) || mediaInfo.labels?.some(l => /cannes|palme[\s_-]?d['’]?or/i.test(l));
+            if (hasCannes || mediaInfo.title.toLowerCase().includes("cannes")) isMatch = true;
         } else if (type === "bafta_winner") {
-            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
-            if (fullStr.includes("bafta")) isMatch = true;
+            const hasBafta = mediaInfo.collections?.some(c => /bafta/i.test(c)) || mediaInfo.labels?.some(l => /bafta/i.test(l));
+            if (hasBafta || mediaInfo.title.toLowerCase().includes("bafta")) isMatch = true;
         } else if (type === "critics_choice") {
-            const fullStr = `${mediaInfo.title} ${mediaInfo.genre || ""}`.toLowerCase();
-            if (fullStr.includes("critics' choice") || fullStr.includes("critics choice")) isMatch = true;
+            const hasCc = mediaInfo.collections?.some(c => /critics[\s_-]?choice/i.test(c)) || mediaInfo.labels?.some(l => /critics[\s_-]?choice/i.test(l));
+            if (hasCc || mediaInfo.title.toLowerCase().includes("critics choice") || mediaInfo.title.toLowerCase().includes("critics' choice")) isMatch = true;
         }
         // 5. Quality (4K UHD / Dolby Vision)
         else if (type === "auto_quality" || type === "4k_uhd") {
@@ -1678,7 +1688,7 @@ export async function applyOverlaysToPoster(
     const overlays: { input: Buffer | string; top?: number; left?: number }[] = [];
 
     // 1. Leaving Soon Banner (Takes precedence at the very top)
-    if (options.showLeavingSoon) {
+    if (options.showLeavingSoon && Boolean(mediaInfo.isLeavingSoon)) {
         const leavingSoonSvg = generateLeavingSoonRibbonSvg(options.leavingSoonDays);
         const ribbonBuf = await sharp(Buffer.from(leavingSoonSvg)).resize(1000, 78).toBuffer();
         overlays.push({
@@ -2142,7 +2152,7 @@ export async function applyOverlaysToPoster(
         const isBCenter = posKey.includes("center");
 
         const isRibbonInSameCorner = Boolean(options.showRibbon) && (options.ribbonPosition || "top-right") === posKey;
-        const bTopOffset = isBTop ? (options.showLeavingSoon ? 95 : 35) : (1500 - 35);
+        const bTopOffset = isBTop ? (options.showLeavingSoon && Boolean(mediaInfo.isLeavingSoon) ? 95 : 35) : (1500 - 35);
 
         if (isBCenter) {
             let totalW = items.reduce((acc, it) => acc + it.w + 12, 0) - 12;

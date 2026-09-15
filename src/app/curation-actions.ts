@@ -240,9 +240,22 @@ export async function toggleCurationLibrarySectionAction(
         );
 
         // Known sections for this server
-        const allSecs = (allServerSections && allServerSections.length > 0)
+        let allSecs = (allServerSections && allServerSections.length > 0)
             ? allServerSections.map(s => String(s))
-            : [strSecKey];
+            : [];
+
+        if (allSecs.length === 0) {
+            try {
+                const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+                if (token) {
+                    const secs = await getPlexServerSections(token, serverId);
+                    allSecs = secs.map((s: any) => String(s.key));
+                }
+            } catch (err) {}
+        }
+        if (allSecs.length === 0) {
+            allSecs = [strSecKey];
+        }
 
         // Determine existing configured sections for this server
         const hasExistingEntries = currentList.some(k => k.startsWith(`${serverId}:`) || k === serverId || k.startsWith(`disabled:${serverId}`));
@@ -306,7 +319,7 @@ export async function toggleAllCurationServerSectionsAction(
     pageType: "kometa" | "agregarr" | "prune",
     serverId: string,
     enableAll: boolean,
-    allServerSections: string[]
+    allServerSections?: string[]
 ) {
     await verifyAdmin();
     await ensureSchemaColumns();
@@ -329,8 +342,20 @@ export async function toggleAllCurationServerSectionsAction(
 
         let thisServerEntries: string[];
         if (enableAll) {
-            thisServerEntries = (allServerSections && allServerSections.length > 0)
-                ? allServerSections.map(s => `${serverId}:${String(s)}`)
+            let allSecs = (allServerSections && allServerSections.length > 0)
+                ? allServerSections.map(s => String(s))
+                : [];
+            if (allSecs.length === 0) {
+                try {
+                    const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+                    if (token) {
+                        const secs = await getPlexServerSections(token, serverId);
+                        allSecs = secs.map((s: any) => String(s.key));
+                    }
+                } catch (err) {}
+            }
+            thisServerEntries = allSecs.length > 0
+                ? allSecs.map(s => `${serverId}:${String(s)}`)
                 : [`${serverId}`];
         } else {
             thisServerEntries = [`${serverId}:none`];
@@ -2504,8 +2529,20 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
         const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 200);
 
+        // Map leaving soon flags from content advisories
+        const leavingSoonAdvisories = await prisma.mediaContentAdvisory.findMany({
+            where: {
+                serverId,
+                isLeavingSoon: true
+            }
+        }).catch(() => []);
+        const leavingSoonKeys = new Set(leavingSoonAdvisories.map(a => String(a.ratingKey)));
+
         let successCount = 0;
         for (const it of items) {
+            if (leavingSoonKeys.has(String(it.ratingKey))) {
+                it.isLeavingSoon = true;
+            }
             // Apply if item has quality badges, ratings, ribbon match, leaving soon, or custom badges are active
             if (
                 it.detectedBadges.resolution ||
@@ -3629,7 +3666,7 @@ export async function runFullCurationSyncInternal(): Promise<{
             ? JSON.parse(settings.enabledServersForCollections) 
             : [];
 
-        // 1. Seasonal & Scheduled Collections Sync
+        // 1. Seasonal & Scheduled Collections Sync (Agregarr)
         if (settings.curationSyncCollections !== false) {
             try {
                 const seasonalRes = await syncSeasonalAndScheduledCollectionsInternal();
@@ -3640,41 +3677,7 @@ export async function runFullCurationSyncInternal(): Promise<{
             }
         }
 
-        // 2. Poster Overlays on New Library Additions
-        if (settings.curationSyncOverlays !== false) {
-            try {
-                const overlayServers = enabledServersForOverlays.length > 0 
-                    ? servers.filter(s => enabledServersForOverlays.includes(s.clientIdentifier))
-                    : servers;
-
-                for (const srv of overlayServers) {
-                    const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
-                    if (!resolved || !resolved.serverUrl) continue;
-
-                    const srvSections = await getPlexServerSections(resolved.token, srv.clientIdentifier);
-
-                    for (const sec of srvSections) {
-                        const isSecEnabled = await isSectionEnabledInList(enabledServersForOverlays, srv.clientIdentifier, String(sec.key));
-                        if (!isSecEnabled) {
-                            continue;
-                        }
-                        try {
-                            const res = await applyOverlaysToLibraryInternal(srv.clientIdentifier, String(sec.key));
-                            if (res.success && res.appliedCount) {
-                                overlaysAppliedCount += res.appliedCount;
-                            }
-                        } catch (secErr: any) {
-                            console.warn(`[CURATION-SYNC] Error applying overlays to ${sec.title}:`, secErr.message);
-                        }
-                    }
-                }
-                details.push(`Applied overlays to ${overlaysAppliedCount} new/updated library posters.`);
-            } catch (oErr: any) {
-                details.push(`Overlay sync error: ${oErr.message}`);
-            }
-        }
-
-        // 3. Leaving Soon Hub Sync
+        // 2. Leaving Soon Hub Sync (Prune / Storage Management)
         if (settings.curationSyncPruning !== false) {
             try {
                 const leaveRes = await syncLeavingSoonCollectionHubInternal();
@@ -3685,7 +3688,7 @@ export async function runFullCurationSyncInternal(): Promise<{
             }
         }
 
-        // 4. Automated IMDb Parental Rating Tags Sync
+        // 3. Automated IMDb Parental Rating Tags Sync
         let parentalTaggedCount = 0;
         if (settings.curationSyncParentalTags !== false && settings.parentalTaggingEnabled !== false) {
             try {
@@ -3716,6 +3719,41 @@ export async function runFullCurationSyncInternal(): Promise<{
                 details.push(`Applied IMDb parental ratings tags to ${parentalTaggedCount} library items.`);
             } catch (pErr: any) {
                 details.push(`Parental tagging error: ${pErr.message}`);
+            }
+        }
+
+        // 4. Poster Overlays & Waterfall Ribbons Sync (Kometa)
+        // Executed last so that all newly created Collections, Labels, and Leaving Soon statuses are available for matching
+        if (settings.curationSyncOverlays !== false) {
+            try {
+                const overlayServers = enabledServersForOverlays.length > 0 
+                    ? servers.filter(s => enabledServersForOverlays.includes(s.clientIdentifier))
+                    : servers;
+
+                for (const srv of overlayServers) {
+                    const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
+                    if (!resolved || !resolved.serverUrl) continue;
+
+                    const srvSections = await getPlexServerSections(resolved.token, srv.clientIdentifier);
+
+                    for (const sec of srvSections) {
+                        const isSecEnabled = await isSectionEnabledInList(enabledServersForOverlays, srv.clientIdentifier, String(sec.key));
+                        if (!isSecEnabled) {
+                            continue;
+                        }
+                        try {
+                            const res = await applyOverlaysToLibraryInternal(srv.clientIdentifier, String(sec.key));
+                            if (res.success && res.appliedCount) {
+                                overlaysAppliedCount += res.appliedCount;
+                            }
+                        } catch (secErr: any) {
+                            console.warn(`[CURATION-SYNC] Error applying overlays to ${sec.title}:`, secErr.message);
+                        }
+                    }
+                }
+                details.push(`Applied overlays to ${overlaysAppliedCount} new/updated library posters.`);
+            } catch (oErr: any) {
+                details.push(`Overlay sync error: ${oErr.message}`);
             }
         }
 

@@ -18,6 +18,8 @@ export interface PlexMediaStreamInfo {
     contentRating?: string;
     genres?: string[];
     genre?: string[];
+    collections?: string[];
+    labels?: string[];
     rating?: number;
     audienceRating?: number;
     imdbRating?: number;
@@ -102,8 +104,30 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
     } else if (metadata.genre) {
         if (Array.isArray(metadata.genre)) extractedGenres.push(...metadata.genre);
         else if (typeof metadata.genre === "string") extractedGenres.push(metadata.genre);
-    } else if (Array.isArray(metadata.genres)) {
-        extractedGenres.push(...metadata.genres);
+    }
+
+    // Extract Collections
+    const extractedCollections: string[] = [];
+    if (Array.isArray(metadata.Collection)) {
+        for (const c of metadata.Collection) {
+            if (typeof c === "string") extractedCollections.push(c);
+            else if (c?.tag) extractedCollections.push(c.tag);
+        }
+    } else if (metadata.collection) {
+        if (Array.isArray(metadata.collection)) extractedCollections.push(...metadata.collection);
+        else if (typeof metadata.collection === "string") extractedCollections.push(metadata.collection);
+    }
+
+    // Extract Labels
+    const extractedLabels: string[] = [];
+    if (Array.isArray(metadata.Label)) {
+        for (const l of metadata.Label) {
+            if (typeof l === "string") extractedLabels.push(l);
+            else if (l?.tag) extractedLabels.push(l.tag);
+        }
+    } else if (metadata.label) {
+        if (Array.isArray(metadata.label)) extractedLabels.push(...metadata.label);
+        else if (typeof metadata.label === "string") extractedLabels.push(metadata.label);
     }
 
     let detectedRes: "4K" | "1080p" | "720p" | "SD" | undefined;
@@ -345,6 +369,8 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         contentRating: metadata.contentRating,
         genres: extractedGenres.length > 0 ? extractedGenres : undefined,
         genre: extractedGenres.length > 0 ? extractedGenres : undefined,
+        collections: extractedCollections.length > 0 ? extractedCollections : undefined,
+        labels: extractedLabels.length > 0 ? extractedLabels : undefined,
         rating: metadata.rating ? parseFloat(metadata.rating) : undefined,
         audienceRating: metadata.audienceRating ? parseFloat(metadata.audienceRating) : undefined,
         addedAt: metadata.addedAt ? parseInt(metadata.addedAt, 10) * 1000 : undefined,

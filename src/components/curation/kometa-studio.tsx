@@ -730,19 +730,22 @@ export function KometaStudio() {
             let ruleLabel = tier.text || type;
 
             if (type === "imdb_top_250") {
-                ruleLabel = "IMDb Top 250 (Score ≥ 8.0)";
+                ruleLabel = "IMDb Top 250 (Score ≥ 8.3)";
                 if (item) {
+                    const hasTop250Collection = item.collections?.some(c => /top[\s_-]?250/i.test(c)) || item.labels?.some(l => /top[\s_-]?250/i.test(l));
                     const score = item.imdbRating ?? item.rating;
-                    if (item.type !== "show" && score && score >= 8.0) isMatch = true;
-                    else if (item.guids?.imdb && item.type !== "show") isMatch = true;
+                    if (hasTop250Collection) isMatch = true;
+                    else if (item.type !== "show" && score && score >= 8.3) isMatch = true;
                 } else if (simFallback.ratings) {
                     isMatch = true;
                 }
             } else if (type === "imdb_top_250_tv") {
-                ruleLabel = "IMDb Top TV (Score ≥ 8.0)";
+                ruleLabel = "IMDb Top TV (Score ≥ 8.5)";
                 if (item) {
+                    const hasTop250Collection = item.collections?.some(c => /top[\s_-]?250|top[\s_-]?tv/i.test(c)) || item.labels?.some(l => /top[\s_-]?250|top[\s_-]?tv/i.test(l));
                     const score = item.imdbRating ?? item.rating;
-                    if (item.type === "show" && score && score >= 8.0) isMatch = true;
+                    if (hasTop250Collection) isMatch = true;
+                    else if (item.type === "show" && score && score >= 8.5) isMatch = true;
                 }
             } else if (type === "certified_fresh") {
                 ruleLabel = "RT Certified Fresh (≥ 75%)";
@@ -768,38 +771,44 @@ export function KometaStudio() {
             } else if (type === "oscar_winner" || type === "academy_award") {
                 ruleLabel = "Academy Award / Oscar Winner";
                 if (item) {
-                    const fullStr = `${item.title} ${item.editionTitle || ""} ${item.genre || ""}`.toLowerCase();
-                    if (fullStr.includes("oscar") || fullStr.includes("academy award") || fullStr.includes("best picture") || fullStr.includes("lord of the rings") || fullStr.includes("godfather") || fullStr.includes("parasite") || fullStr.includes("oppenheimer") || fullStr.includes("everything everywhere") || fullStr.includes("gladiator") || fullStr.includes("titanic") || fullStr.includes("braveheart") || fullStr.includes("forrest gump")) isMatch = true;
+                    const hasOscar = item.collections?.some(c => /oscar|academy[\s_-]?award|best[\s_-]?picture/i.test(c)) || item.labels?.some(l => /oscar|academy[\s_-]?award/i.test(l));
+                    const fullStr = `${item.title} ${item.editionTitle || ""}`.toLowerCase();
+                    if (hasOscar || fullStr.includes("oscar") || fullStr.includes("academy award") || fullStr.includes("best picture") || fullStr.includes("lord of the rings") || fullStr.includes("godfather") || fullStr.includes("parasite") || fullStr.includes("oppenheimer") || fullStr.includes("everything everywhere") || fullStr.includes("gladiator") || fullStr.includes("titanic") || fullStr.includes("braveheart") || fullStr.includes("forrest gump")) isMatch = true;
                 }
             } else if (type === "emmy_winner") {
                 ruleLabel = "Emmy Winner";
                 if (item) {
+                    const hasEmmy = item.collections?.some(c => /emmy/i.test(c)) || item.labels?.some(l => /emmy/i.test(l));
                     const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
-                    if (fullStr.includes("emmy") || fullStr.includes("breaking bad") || fullStr.includes("succession") || fullStr.includes("game of thrones") || fullStr.includes("the bear") || fullStr.includes("sopranos") || fullStr.includes("the wire")) isMatch = true;
+                    if (hasEmmy || fullStr.includes("emmy") || fullStr.includes("breaking bad") || fullStr.includes("succession") || fullStr.includes("game of thrones") || fullStr.includes("the bear") || fullStr.includes("sopranos") || fullStr.includes("the wire")) isMatch = true;
                 }
             } else if (type === "golden_globe") {
                 ruleLabel = "Golden Globe Winner";
                 if (item) {
+                    const hasGlobe = item.collections?.some(c => /golden[\s_-]?globe/i.test(c)) || item.labels?.some(l => /golden[\s_-]?globe/i.test(l));
                     const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
-                    if (fullStr.includes("golden globe")) isMatch = true;
+                    if (hasGlobe || fullStr.includes("golden globe")) isMatch = true;
                 }
             } else if (type === "cannes_winner") {
                 ruleLabel = "Cannes Palme d'Or Winner";
                 if (item) {
+                    const hasCannes = item.collections?.some(c => /cannes|palme[\s_-]?d['’]?or/i.test(c)) || item.labels?.some(l => /cannes|palme[\s_-]?d['’]?or/i.test(l));
                     const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
-                    if (fullStr.includes("cannes") || fullStr.includes("palme d'or")) isMatch = true;
+                    if (hasCannes || fullStr.includes("cannes") || fullStr.includes("palme d'or")) isMatch = true;
                 }
             } else if (type === "bafta_winner") {
                 ruleLabel = "BAFTA Winner";
                 if (item) {
+                    const hasBafta = item.collections?.some(c => /bafta/i.test(c)) || item.labels?.some(l => /bafta/i.test(l));
                     const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
-                    if (fullStr.includes("bafta")) isMatch = true;
+                    if (hasBafta || fullStr.includes("bafta")) isMatch = true;
                 }
             } else if (type === "critics_choice") {
                 ruleLabel = "Critics' Choice Award";
                 if (item) {
+                    const hasCc = item.collections?.some(c => /critics[\s_-]?choice/i.test(c)) || item.labels?.some(l => /critics[\s_-]?choice/i.test(l));
                     const fullStr = `${item.title} ${item.genre || ""}`.toLowerCase();
-                    if (fullStr.includes("critics' choice") || fullStr.includes("critics choice")) isMatch = true;
+                    if (hasCc || fullStr.includes("critics' choice") || fullStr.includes("critics choice")) isMatch = true;
                 }
             } else if (type === "auto_quality" || type === "4k_uhd") {
                 ruleLabel = "4K UHD / Dolby Vision";
