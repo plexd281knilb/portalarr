@@ -29,6 +29,8 @@ import {
     Search,
     ChevronUp,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     Trash2,
     ExternalLink,
     Clock,
@@ -38,7 +40,11 @@ import {
     ImageIcon,
     Shield,
     ShieldCheck,
-    ShieldAlert
+    ShieldAlert,
+    CheckSquare,
+    Square,
+    CheckCheck,
+    AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,6 +69,7 @@ import {
     saveCustomBadgeAction,
     deleteCustomBadgeAction,
     deleteMultipleCustomBadgesAction,
+    deleteAllCustomBadgesAction,
     toggleMultipleCustomBadgesAction,
     toggleCustomBadgeAction,
     seedDefaultCustomBadgesAction,
@@ -317,6 +324,10 @@ export function KometaStudio() {
     const [customBadgeFilter, setCustomBadgeFilter] = useState<string>("all");
     const [customBadgeSearch, setCustomBadgeSearch] = useState<string>("");
     const [deletingCustomBadges, setDeletingCustomBadges] = useState(false);
+    const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+    const [purgingBadges, setPurgingBadges] = useState(false);
+    const [badgePage, setBadgePage] = useState(1);
+    const BADGES_PER_PAGE = 48;
 
     // GitHub Badge Hub
     const [githubModalOpen, setGithubModalOpen] = useState(false);
@@ -1957,6 +1968,33 @@ export function KometaStudio() {
         } catch (e) {}
     };
 
+    const handleToggleSelectCustomBadge = (id: string) => {
+        setSelectedCustomBadgeIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAllFilteredBadges = () => {
+        if (selectedCustomBadgeIds.length === filteredCustomBadges.length && filteredCustomBadges.length > 0) {
+            setSelectedCustomBadgeIds([]);
+        } else {
+            setSelectedCustomBadgeIds(filteredCustomBadges.map(b => b.id));
+        }
+    };
+
+    const handleSelectCurrentPageBadges = (pageIds: string[]) => {
+        const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedCustomBadgeIds.includes(id));
+        if (allPageSelected) {
+            setSelectedCustomBadgeIds(prev => prev.filter(id => !pageIds.includes(id)));
+        } else {
+            setSelectedCustomBadgeIds(prev => Array.from(new Set([...prev, ...pageIds])));
+        }
+    };
+
+    const handleSelectNoneBadges = () => {
+        setSelectedCustomBadgeIds([]);
+    };
+
     const handleBulkToggleBadges = async (enabled: boolean) => {
         const ids = selectedCustomBadgeIds.length > 0 ? selectedCustomBadgeIds : customBadges.map(b => b.id);
         if (ids.length === 0) return;
@@ -1966,19 +2004,42 @@ export function KometaStudio() {
         } catch (e) {}
     };
 
-    const handleBulkDeleteBadges = async () => {
+    const handleDeleteSelectedBadges = async () => {
         if (selectedCustomBadgeIds.length === 0) return;
+        const count = selectedCustomBadgeIds.length;
+        if (!confirm(`Are you sure you want to permanently delete ${count} custom badge(s)? This will also purge the image files from disk.`)) return;
         setDeletingCustomBadges(true);
         const idsToDelete = [...selectedCustomBadgeIds];
         setCustomBadges(prev => prev.filter(b => !idsToDelete.includes(b.id)));
         setSelectedCustomBadgeIds([]);
         try {
-            await deleteMultipleCustomBadgesAction(idsToDelete);
+            const res = await deleteMultipleCustomBadgesAction(idsToDelete);
+            if (res.success) {
+                const refreshed = await getCustomBadgesAction();
+                if (refreshed.success && refreshed.badges) setCustomBadges(refreshed.badges);
+            }
         } catch (e) {
             const res = await getCustomBadgesAction();
             if (res.success && res.badges) setCustomBadges(res.badges);
         } finally {
             setDeletingCustomBadges(false);
+        }
+    };
+
+    const handleBulkPurgeBadges = async (keepEssential: boolean) => {
+        setPurgingBadges(true);
+        try {
+            const res = await deleteAllCustomBadgesAction({ keepEssential });
+            if (res.success) {
+                if (res.badges) setCustomBadges(res.badges);
+                setSelectedCustomBadgeIds([]);
+                setBulkDeleteModalOpen(false);
+                setBadgePage(1);
+            }
+        } catch (e) {
+            console.error("Failed purging badges:", e);
+        } finally {
+            setPurgingBadges(false);
         }
     };
 
@@ -3377,237 +3438,403 @@ export function KometaStudio() {
             </Card>
 
             {/* Custom Badges Vault & Repository Card */}
-            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                <CardHeader className="p-6 pb-4 border-b border-slate-800/80">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div className="space-y-1">
-                            <CardTitle className="text-xl font-black text-white flex items-center gap-2.5">
-                                <Zap className="h-5 w-5 text-amber-400 fill-amber-400/20" />
-                                <span>Custom Badges Vault &amp; Overrides Repository</span>
-                            </CardTitle>
-                            <CardDescription className="text-xs text-slate-400">
-                                Upload high-DPI SVGs or PNG graphics to override default Kometa badges. Custom badges automatically take Priority 1 over built-in SVGs.
-                            </CardDescription>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                                type="button"
-                                size="sm"
-                                disabled={seedingBadges}
-                                onClick={handleSeedDefaultBadges}
-                                className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer"
-                                title="Seed or reset 35+ essential high-DPI SVGs (4K UHD, DV, HDR10+, Atmos, IMAX, Netflix, HBO Max, etc.)"
-                            >
-                                {seedingBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 fill-slate-950" />}
-                                <span>⚡ Install / Reset 35+ Essential Badges</span>
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                onClick={() => setBadgeUploadModalOpen(true)}
-                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer"
-                            >
-                                <Plus className="h-3.5 w-3.5" />
-                                <span>📤 Upload Custom Badge</span>
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setGithubModalOpen(true)}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5"
-                            >
-                                <DownloadCloud className="h-3.5 w-3.5" />
-                                <span>📥 Import from GitHub Repo</span>
-                            </Button>
-                        </div>
-                    </div>
-                </CardHeader>
+            {(() => {
+                const totalBadgePages = Math.max(1, Math.ceil(filteredCustomBadges.length / BADGES_PER_PAGE));
+                const currentBadgePage = Math.min(badgePage, totalBadgePages);
+                const displayedBadges = filteredCustomBadges.slice((currentBadgePage - 1) * BADGES_PER_PAGE, currentBadgePage * BADGES_PER_PAGE);
 
-                <CardContent className="p-6 space-y-4">
-                    {/* Search & Category Filter Pills */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                            {[
-                                { id: "all", label: "All Badges" },
-                                { id: "resolution", label: "Resolution" },
-                                { id: "hdr", label: "HDR / DV" },
-                                { id: "audio", label: "Audio" },
-                                { id: "codec", label: "Video Codec" },
-                                { id: "channels", label: "Surround" },
-                                { id: "edition", label: "Editions" },
-                                { id: "studio", label: "Studios" },
-                                { id: "contentRating", label: "Age Ratings" },
-                                { id: "ribbon", label: "Ribbons" }
-                            ].map(tab => (
-                                <button
-                                    key={tab.id}
-                                    type="button"
-                                    onClick={() => setCustomBadgeFilter(tab.id)}
-                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                        customBadgeFilter === tab.id
-                                            ? "bg-purple-600 text-white shadow-md shadow-purple-950/60"
-                                            : "bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white"
-                                    }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="relative w-full sm:w-64">
-                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                            <Input
-                                value={customBadgeSearch}
-                                onChange={e => setCustomBadgeSearch(e.target.value)}
-                                placeholder="Search badges by name or rule..."
-                                className="pl-8 h-8 bg-slate-950/80 border-slate-800 text-xs text-slate-100"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Bulk Action Controls */}
-                    {customBadges.length > 0 && (
-                        <div className="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 text-xs text-slate-400">
-                            <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-[11px] font-mono border-purple-500/30 text-purple-300">
-                                    {filteredCustomBadges.length} of {customBadges.length} Badges
-                                </Badge>
-                                <span className="text-[10px] text-slate-500">•</span>
-                                <span className="text-[11px]">
-                                    {customBadges.filter(b => b.enabled !== false).length} Active Overrides
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleBulkToggleBadges(true)}
-                                    className="h-6 px-2 text-[10px] text-emerald-400 hover:text-emerald-300"
-                                >
-                                    Enable All
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleBulkToggleBadges(false)}
-                                    className="h-6 px-2 text-[10px] text-slate-400 hover:text-slate-300"
-                                >
-                                    Disable All
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Custom Badges Grid */}
-                    {filteredCustomBadges.length === 0 ? (
-                        <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 space-y-3">
-                            <Zap className="h-8 w-8 text-amber-400/50 mx-auto" />
-                            <p className="text-xs text-slate-400">No custom badges found matching your filter.</p>
-                            <Button
-                                type="button"
-                                size="sm"
-                                onClick={handleSeedDefaultBadges}
-                                className="bg-purple-600 hover:bg-purple-500 text-white text-xs h-8 px-3"
-                            >
-                                ⚡ Install 35+ Essential High-DPI Badges
-                            </Button>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                            {filteredCustomBadges.map(badge => {
-                                const isEnabled = badge.enabled !== false;
-                                return (
-                                    <div
-                                        key={badge.id}
-                                        className={`p-3 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
-                                            isEnabled
-                                                ? "bg-slate-950/90 border-slate-800 hover:border-purple-500/50 shadow-md"
-                                                : "bg-slate-950/40 border-slate-900 opacity-60 hover:opacity-100"
-                                        }`}
+                return (
+                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                        <CardHeader className="p-6 pb-4 border-b border-slate-800/80">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <CardTitle className="text-xl font-black text-white flex items-center gap-2.5">
+                                        <Zap className="h-5 w-5 text-amber-400 fill-amber-400/20" />
+                                        <span>Custom Badges Vault &amp; Overrides Repository</span>
+                                    </CardTitle>
+                                    <CardDescription className="text-xs text-slate-400">
+                                        Upload high-DPI SVGs or PNG graphics to override default Kometa badges. Custom badges automatically take Priority 1 over built-in SVGs.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={seedingBadges}
+                                        onClick={handleSeedDefaultBadges}
+                                        className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer"
+                                        title="Seed or reset 35+ essential high-DPI SVGs (4K UHD, DV, HDR10+, Atmos, IMAX, Netflix, HBO Max, etc.)"
                                     >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 overflow-hidden p-1">
-                                                    {badge.filePath ? (
-                                                        <img 
-                                                            src={`/api/media/badge/${badge.id}?t=${Date.now()}`} 
-                                                            alt={badge.name} 
-                                                            className="w-full h-full object-contain"
-                                                            onError={(e) => {
-                                                                (e.target as HTMLElement).style.display = "none";
-                                                            }}
+                                        {seedingBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 fill-slate-950" />}
+                                        <span>⚡ Install / Reset 35+ Essential Badges</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => setBadgeUploadModalOpen(true)}
+                                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        <span>📤 Upload Custom Badge</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setGithubModalOpen(true)}
+                                        className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5"
+                                    >
+                                        <DownloadCloud className="h-3.5 w-3.5" />
+                                        <span>📥 Import from GitHub Repo</span>
+                                    </Button>
+                                    {customBadges.length > 0 && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => setBulkDeleteModalOpen(true)}
+                                            className="border-rose-800/60 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white text-xs h-8 px-2.5 gap-1.5 shadow-sm cursor-pointer"
+                                            title="Bulk delete or purge downloaded custom badges from database & disk"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                                            <span>🗑️ Bulk Delete</span>
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-6 space-y-4">
+                            {/* Search & Category Filter Pills */}
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    {[
+                                        { id: "all", label: "All Badges" },
+                                        { id: "resolution", label: "Resolution" },
+                                        { id: "hdr", label: "HDR / DV" },
+                                        { id: "audio", label: "Audio" },
+                                        { id: "codec", label: "Video Codec" },
+                                        { id: "channels", label: "Surround" },
+                                        { id: "edition", label: "Editions" },
+                                        { id: "studio", label: "Studios" },
+                                        { id: "contentRating", label: "Age Ratings" },
+                                        { id: "ribbon", label: "Ribbons" }
+                                    ].map(tab => (
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setCustomBadgeFilter(tab.id);
+                                                setBadgePage(1);
+                                            }}
+                                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                                customBadgeFilter === tab.id
+                                                    ? "bg-purple-600 text-white shadow-md shadow-purple-950/60"
+                                                    : "bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white"
+                                            }`}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="relative w-full sm:w-64">
+                                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                    <Input
+                                        value={customBadgeSearch}
+                                        onChange={e => {
+                                            setCustomBadgeSearch(e.target.value);
+                                            setBadgePage(1);
+                                        }}
+                                        placeholder="Search badges by name or rule..."
+                                        className="pl-8 h-8 bg-slate-950/80 border-slate-800 text-xs text-slate-100"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Bulk Action Controls */}
+                            {customBadges.length > 0 && (
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-xs text-slate-400">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleSelectAllFilteredBadges}
+                                            className="h-7 px-2.5 text-xs border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
+                                        >
+                                            <CheckCheck className="h-3.5 w-3.5 mr-1 text-purple-400" />
+                                            {selectedCustomBadgeIds.length === filteredCustomBadges.length && filteredCustomBadges.length > 0
+                                                ? "Deselect All"
+                                                : `Select All (${filteredCustomBadges.length})`}
+                                        </Button>
+                                        {totalBadgePages > 1 && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleSelectCurrentPageBadges(displayedBadges.map(b => b.id))}
+                                                className="h-7 px-2 text-xs text-slate-400 hover:text-white"
+                                            >
+                                                Select Page ({displayedBadges.length})
+                                            </Button>
+                                        )}
+                                        {selectedCustomBadgeIds.length > 0 && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={handleSelectNoneBadges}
+                                                className="h-7 px-2 text-xs text-slate-400 hover:text-white"
+                                            >
+                                                Clear Selection
+                                            </Button>
+                                        )}
+                                        <Badge variant="outline" className="text-[11px] font-mono border-purple-500/30 text-purple-300 ml-1">
+                                            {filteredCustomBadges.length} of {customBadges.length} Badges
+                                        </Badge>
+                                        <span className="text-[10px] text-slate-500">•</span>
+                                        <span className="text-[11px]">
+                                            {customBadges.filter(b => b.enabled !== false).length} Active Overrides
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                                        {selectedCustomBadgeIds.length > 0 ? (
+                                            <>
+                                                <Badge className="bg-purple-600 text-white text-[11px] font-mono px-2 py-0.5 mr-1">
+                                                    {selectedCustomBadgeIds.length} Selected
+                                                </Badge>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleBulkToggleBadges(true)}
+                                                    className="h-7 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30"
+                                                >
+                                                    Enable Selected
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleBulkToggleBadges(false)}
+                                                    className="h-7 px-2 text-xs text-slate-400 hover:text-slate-300 hover:bg-slate-900"
+                                                >
+                                                    Disable Selected
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    disabled={deletingCustomBadges}
+                                                    onClick={handleDeleteSelectedBadges}
+                                                    className="h-7 px-2.5 text-xs bg-rose-600 hover:bg-rose-500 text-white font-semibold shadow-sm gap-1"
+                                                >
+                                                    {deletingCustomBadges ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                                    <span>Delete Selected ({selectedCustomBadgeIds.length})</span>
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleBulkToggleBadges(true)}
+                                                    className="h-7 px-2 text-xs text-emerald-400 hover:text-emerald-300"
+                                                >
+                                                    Enable All
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleBulkToggleBadges(false)}
+                                                    className="h-7 px-2 text-xs text-slate-400 hover:text-slate-300"
+                                                >
+                                                    Disable All
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setBulkDeleteModalOpen(true)}
+                                                    className="h-7 px-2.5 text-xs text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 gap-1 font-semibold"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                                                    <span>Purge / Delete All ({customBadges.length})</span>
+                                                </Button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Custom Badges Grid */}
+                            {filteredCustomBadges.length === 0 ? (
+                                <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 space-y-3">
+                                    <Zap className="h-8 w-8 text-amber-400/50 mx-auto" />
+                                    <p className="text-xs text-slate-400">No custom badges found matching your filter.</p>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={handleSeedDefaultBadges}
+                                        className="bg-purple-600 hover:bg-purple-500 text-white text-xs h-8 px-3"
+                                    >
+                                        ⚡ Install 35+ Essential High-DPI Badges
+                                    </Button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                        {displayedBadges.map(badge => {
+                                            const isEnabled = badge.enabled !== false;
+                                            const isSelected = selectedCustomBadgeIds.includes(badge.id);
+                                            return (
+                                                <div
+                                                    key={badge.id}
+                                                    onClick={() => handleToggleSelectCustomBadge(badge.id)}
+                                                    className={`p-3 rounded-xl border transition-all flex flex-col justify-between gap-2.5 cursor-pointer ${
+                                                        isSelected
+                                                            ? "bg-purple-950/40 border-2 border-purple-500 shadow-lg shadow-purple-950/40 ring-1 ring-purple-500/40"
+                                                            : isEnabled
+                                                                ? "bg-slate-950/90 border-slate-800 hover:border-purple-500/50 shadow-md"
+                                                                : "bg-slate-950/40 border-slate-900 opacity-60 hover:opacity-100"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-start justify-between gap-2" onClick={e => e.stopPropagation()}>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleToggleSelectCustomBadge(badge.id)}
+                                                                className="text-slate-400 hover:text-white shrink-0"
+                                                                title={isSelected ? "Deselect" : "Select"}
+                                                            >
+                                                                {isSelected ? (
+                                                                    <CheckSquare className="h-4 w-4 text-purple-400" />
+                                                                ) : (
+                                                                    <Square className="h-4 w-4 text-slate-600" />
+                                                                )}
+                                                            </button>
+                                                            <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 overflow-hidden p-1">
+                                                                {badge.filePath ? (
+                                                                    <img 
+                                                                        src={`/api/media/badge/${badge.id}?t=${Date.now()}`} 
+                                                                        alt={badge.name} 
+                                                                        className="w-full h-full object-contain"
+                                                                        onError={(e) => {
+                                                                            (e.target as HTMLElement).style.display = "none";
+                                                                        }}
+                                                                    />
+                                                                ) : (
+                                                                    <Zap className="h-4 w-4 text-amber-400" />
+                                                                )}
+                                                            </div>
+                                                            <div className="space-y-0.5 overflow-hidden">
+                                                                <span className="font-bold text-white text-xs block truncate" title={badge.name}>
+                                                                    {badge.name}
+                                                                </span>
+                                                                <div className="flex items-center gap-1">
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono capitalize border-slate-700 text-slate-300">
+                                                                        {badge.category || "custom"}
+                                                                    </Badge>
+                                                                    {badge.matchRule && (
+                                                                        <span className="text-[9px] font-mono text-amber-300 truncate max-w-[80px]" title={`Rule: ${badge.matchRule}`}>
+                                                                            {badge.matchRule}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <Switch
+                                                            checked={isEnabled}
+                                                            onCheckedChange={() => handleToggleCustomBadge(badge.id, isEnabled)}
                                                         />
-                                                    ) : (
-                                                        <Zap className="h-4 w-4 text-amber-400" />
-                                                    )}
-                                                </div>
-                                                <div className="space-y-0.5 overflow-hidden">
-                                                    <span className="font-bold text-white text-xs block truncate" title={badge.name}>
-                                                        {badge.name}
-                                                    </span>
-                                                    <div className="flex items-center gap-1">
-                                                        <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono capitalize border-slate-700 text-slate-300">
-                                                            {badge.category || "custom"}
-                                                        </Badge>
-                                                        {badge.matchRule && (
-                                                            <span className="text-[9px] font-mono text-amber-300 truncate max-w-[80px]" title={`Rule: ${badge.matchRule}`}>
-                                                                {badge.matchRule}
-                                                            </span>
-                                                        )}
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-900 text-[10px]" onClick={e => e.stopPropagation()}>
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-slate-500">Pos:</span>
+                                                            <Select 
+                                                                value={badge.position || "top-right"} 
+                                                                onValueChange={(val) => handleUpdateCustomBadgePosition(badge.id, val)}
+                                                            >
+                                                                <SelectTrigger className="h-5 w-24 bg-slate-900 border-slate-800 text-[9px] py-0 px-1.5">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="top-right">Top-Right</SelectItem>
+                                                                    <SelectItem value="top-left">Top-Left</SelectItem>
+                                                                    <SelectItem value="top-center">Top-Center</SelectItem>
+                                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1">
+                                                            <Badge className="text-[8px] px-1 py-0 bg-purple-950 text-purple-300 border-purple-500/30">
+                                                                ⚡ P1
+                                                            </Badge>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteCustomBadge(badge.id)}
+                                                                className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
+                                                                title="Delete Custom Badge"
+                                                            >
+                                                                <Trash2 className="h-3 w-3" />
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <Switch
-                                                checked={isEnabled}
-                                                onCheckedChange={() => handleToggleCustomBadge(badge.id, isEnabled)}
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-900 text-[10px]">
-                                            <div className="flex items-center gap-1">
-                                                <span className="text-slate-500">Pos:</span>
-                                                <Select 
-                                                    value={badge.position || "top-right"} 
-                                                    onValueChange={(val) => handleUpdateCustomBadgePosition(badge.id, val)}
-                                                >
-                                                    <SelectTrigger className="h-5 w-24 bg-slate-900 border-slate-800 text-[9px] py-0 px-1.5">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-
-                                            <div className="flex items-center gap-1">
-                                                <Badge className="text-[8px] px-1 py-0 bg-purple-950 text-purple-300 border-purple-500/30">
-                                                    ⚡ P1
-                                                </Badge>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDeleteCustomBadge(badge.id)}
-                                                    className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
-                                                    title="Delete Custom Badge"
-                                                >
-                                                    <Trash2 className="h-3 w-3" />
-                                                </button>
-                                            </div>
-                                        </div>
+                                            );
+                                        })}
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+
+                                    {/* Pagination Controls */}
+                                    {totalBadgePages > 1 && (
+                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800/80 text-xs text-slate-400">
+                                            <div className="flex items-center gap-2">
+                                                <span>
+                                                    Showing <strong className="text-white">{(currentBadgePage - 1) * BADGES_PER_PAGE + 1}</strong> to <strong className="text-white">{Math.min(currentBadgePage * BADGES_PER_PAGE, filteredCustomBadges.length)}</strong> of <strong className="text-white">{filteredCustomBadges.length}</strong> badges
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={currentBadgePage === 1}
+                                                    onClick={() => setBadgePage(prev => Math.max(1, prev - 1))}
+                                                    className="h-7 px-2 text-xs border-slate-700 bg-slate-900 text-slate-300 hover:text-white disabled:opacity-30"
+                                                >
+                                                    <ChevronLeft className="h-3.5 w-3.5 mr-0.5" />
+                                                    Previous
+                                                </Button>
+                                                <div className="px-2.5 py-1 text-xs font-mono font-bold bg-slate-950 rounded border border-slate-800 text-purple-300">
+                                                    Page {currentBadgePage} of {totalBadgePages}
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={currentBadgePage === totalBadgePages}
+                                                    onClick={() => setBadgePage(prev => Math.min(totalBadgePages, prev + 1))}
+                                                    className="h-7 px-2 text-xs border-slate-700 bg-slate-900 text-slate-300 hover:text-white disabled:opacity-30"
+                                                >
+                                                    Next
+                                                    <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+                );
+            })()}
 
             {/* Media Inspector & Stream Telemetry Diagnostics Card */}
             <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
@@ -4273,6 +4500,117 @@ export function KometaStudio() {
                 servers={servers}
                 onSelect={handleSelectRealPoster}
             />
+
+            {/* Bulk Delete & Purge Custom Badges Dialog */}
+            <Dialog open={bulkDeleteModalOpen} onOpenChange={setBulkDeleteModalOpen}>
+                <DialogContent className="bg-slate-900 border-slate-800 text-white max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg font-bold flex items-center gap-2 text-rose-400">
+                            <Trash2 className="h-5 w-5" />
+                            <span>Bulk Delete &amp; Purge Custom Badges</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Manage and purge downloaded custom badges from your disk storage (<code className="text-purple-300 font-mono">data/custom_badges</code>) and database.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between text-slate-300">
+                                <span>Total Badges in Vault:</span>
+                                <strong className="text-white font-mono text-sm">{customBadges.length} Badges</strong>
+                            </div>
+                            {selectedCustomBadgeIds.length > 0 && (
+                                <div className="flex items-center justify-between text-purple-300">
+                                    <span>Currently Selected:</span>
+                                    <strong className="font-mono text-sm">{selectedCustomBadgeIds.length} Badges</strong>
+                                </div>
+                            )}
+                            {filteredCustomBadges.length < customBadges.length && (
+                                <div className="flex items-center justify-between text-amber-300">
+                                    <span>Matching Current Filter/Search:</span>
+                                    <strong className="font-mono text-sm">{filteredCustomBadges.length} Badges</strong>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2.5">
+                            {/* Option 1: Reset to 35 Essentials (Recommended) */}
+                            <button
+                                type="button"
+                                disabled={purgingBadges}
+                                onClick={() => handleBulkPurgeBadges(true)}
+                                className="w-full text-left p-3.5 rounded-xl border border-amber-500/40 bg-amber-950/20 hover:bg-amber-950/40 transition-all flex items-start gap-3 cursor-pointer group"
+                            >
+                                <Zap className="h-5 w-5 text-amber-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                                <div className="space-y-0.5">
+                                    <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                                        <span>⚡ Purge All &amp; Reset to 35 Essential Badges (Recommended)</span>
+                                        {purgingBadges && <Loader2 className="h-3 w-3 animate-spin text-amber-400" />}
+                                    </p>
+                                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                                        Deletes all {customBadges.length} downloaded/imported community badges, purges disk files, and immediately restores the clean standard 35 high-DPI SVGs (4K UHD, HDR10+, DV, Atmos, etc.).
+                                    </p>
+                                </div>
+                            </button>
+
+                            {/* Option 2: Delete Selected if any */}
+                            {selectedCustomBadgeIds.length > 0 && (
+                                <button
+                                    type="button"
+                                    disabled={purgingBadges || deletingCustomBadges}
+                                    onClick={async () => {
+                                        setBulkDeleteModalOpen(false);
+                                        await handleDeleteSelectedBadges();
+                                    }}
+                                    className="w-full text-left p-3.5 rounded-xl border border-purple-500/40 bg-purple-950/20 hover:bg-purple-950/40 transition-all flex items-start gap-3 cursor-pointer group"
+                                >
+                                    <CheckCheck className="h-5 w-5 text-purple-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                                    <div className="space-y-0.5">
+                                        <p className="text-xs font-bold text-purple-300">
+                                            🗑️ Delete Selected ({selectedCustomBadgeIds.length}) Badges Only
+                                        </p>
+                                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                                            Permanently deletes only the {selectedCustomBadgeIds.length} currently selected badge(s) and their image files.
+                                        </p>
+                                    </div>
+                                </button>
+                            )}
+
+                            {/* Option 3: Wipe Everything (0 Badges) */}
+                            <button
+                                type="button"
+                                disabled={purgingBadges}
+                                onClick={() => handleBulkPurgeBadges(false)}
+                                className="w-full text-left p-3.5 rounded-xl border border-rose-500/40 bg-rose-950/20 hover:bg-rose-950/40 transition-all flex items-start gap-3 cursor-pointer group"
+                            >
+                                <Trash2 className="h-5 w-5 text-rose-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                                <div className="space-y-0.5">
+                                    <p className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                                        <span>🗑️ Delete Everything (Wipe All {customBadges.length} Badges)</span>
+                                        {purgingBadges && <Loader2 className="h-3 w-3 animate-spin text-rose-400" />}
+                                    </p>
+                                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                                        Permanently deletes every badge and image file from the custom badge vault, leaving it completely empty (0 badges).
+                                    </p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={purgingBadges}
+                            onClick={() => setBulkDeleteModalOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

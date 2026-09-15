@@ -214,7 +214,7 @@ export interface PlexServerResource {
 }
 
 let cachedServers: { token: string; timestamp: number; data: PlexServerResource[] } | null = null;
-const SERVERS_CACHE_TTL = 30000; // 30 seconds
+const SERVERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function getPlexServers(adminToken: string, forceRefresh = false): Promise<PlexServerResource[]> {
     if (!adminToken) return [];
@@ -542,7 +542,7 @@ export async function getPlexCloudServersMap(
     if (!adminToken) return new Map();
 
     const now = Date.now();
-    if (!forceRefresh && cloudServersMapCache && (now - cloudServersMapCache.timestamp < 60000)) {
+    if (!forceRefresh && cloudServersMapCache && (now - cloudServersMapCache.timestamp < 5 * 60 * 1000)) {
         return cloudServersMapCache.data;
     }
 
@@ -815,13 +815,12 @@ export async function getPlexServerSections(
     }
 
     const token = resolved.token || adminToken;
-    const candidates = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
 
-    for (const candUrl of candidates) {
+    const fetchSectionsFromUrl = async (candUrl: string): Promise<PlexLibrarySection[] | null> => {
         try {
             const cleanBase = candUrl.replace(/\/+$/, "");
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2500);
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
 
             const res = await fetch(`${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`, {
                 headers: {
@@ -870,12 +869,30 @@ export async function getPlexServerSections(
                     return sections;
                 }
             }
-        } catch (e) {
-            // Try next candidate
+        } catch (e) {}
+        return null;
+    };
+
+    // 1. First probe the verified working resolved.serverUrl directly (takes <20ms)
+    const directSections = await fetchSectionsFromUrl(resolved.serverUrl);
+    if (directSections && directSections.length > 0) {
+        return directSections;
+    }
+
+    // 2. If primary resolved URL failed, probe remaining candidate URLs concurrently in parallel
+    const otherCandidates = resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl);
+    if (otherCandidates.length > 0) {
+        const results = await Promise.allSettled(
+            otherCandidates.map(u => fetchSectionsFromUrl(u))
+        );
+        for (const r of results) {
+            if (r.status === "fulfilled" && r.value && r.value.length > 0) {
+                return r.value;
+            }
         }
     }
 
-    // Cloud fallback for this server if direct connection failed
+    // 3. Cloud fallback for this server if direct connection failed
     const cloudMap = await getPlexCloudServersMap(adminToken).catch(() => new Map());
     const cloudSrv = cloudMap.get(targetServerIdOrName) || 
                      Array.from(cloudMap.values()).find(c => c.serverId.toLowerCase() === targetServerIdOrName.toLowerCase() || c.serverName.toLowerCase() === targetServerIdOrName.toLowerCase());
@@ -925,7 +942,7 @@ export interface ResolvedPlexConnection {
 }
 
 const resolvedServerCache = new Map<string, { timestamp: number; data: ResolvedPlexConnection }>();
-const RESOLVED_SERVER_CACHE_TTL = 60 * 1000; // 60 seconds
+const RESOLVED_SERVER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function resolveWorkingPlexServerConnection(
     serverIdOrName?: string,
@@ -1118,14 +1135,15 @@ export async function resolveWorkingPlexServerConnection(
 
     const candidateUrls = Array.from(new Set([...priorityUrls, ...directLanUrls, ...otherUrls]));
 
-    // Probe candidates with machineIdentifier verification
+    // Probe candidates in parallel with machineIdentifier verification
+    // Direct LAN / local connections respond in <20ms; timeout capped at 2000ms.
+    const expectedClientId = targetServer?.clientIdentifier || targetCloud?.serverId || manualMatchingServer?.clientIdentifier;
     const probeFailures: string[] = [];
-    let workingUrl = "";
 
-    for (const cand of candidateUrls) {
+    const probeCandidate = async (cand: string, index: number): Promise<{ cand: string; index: number } | null> => {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500);
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
             const res = await fetch(`${cand}/identity?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                 headers: {
                     Accept: "application/json, application/xml, text/xml, */*",
@@ -1139,7 +1157,6 @@ export async function resolveWorkingPlexServerConnection(
 
             if (res.ok) {
                 const text = await res.text();
-                // Check machineIdentifier in JSON or XML
                 let returnedMachineId = "";
                 if (text.startsWith("{")) {
                     try {
@@ -1152,18 +1169,13 @@ export async function resolveWorkingPlexServerConnection(
                     if (match) returnedMachineId = match[1];
                 }
 
-                // If target server has a known clientIdentifier, verify it matches!
-                const expectedClientId = targetServer?.clientIdentifier || targetCloud?.serverId || manualMatchingServer?.clientIdentifier;
                 if (expectedClientId && returnedMachineId) {
                     if (returnedMachineId.toLowerCase() !== expectedClientId.toLowerCase()) {
-                        // REJECT: Candidate URL belongs to a DIFFERENT Plex server!
                         probeFailures.push(`${cand} (mismatched server identity: expected ${expectedClientId}, got ${returnedMachineId})`);
-                        continue;
+                        return null;
                     }
                 }
-
-                workingUrl = cand;
-                break;
+                return { cand, index };
             } else {
                 probeFailures.push(`${cand} (HTTP ${res.status})`);
             }
@@ -1171,31 +1183,50 @@ export async function resolveWorkingPlexServerConnection(
             const code = e?.cause?.code || e?.cause?.message || e?.name || e?.message || "error";
             probeFailures.push(`${cand} (${code})`);
         }
-    }
+        return null;
+    };
 
-    // Secondary probe fallback: test /library/sections
+    // Probe all candidate URLs concurrently
+    const probeResults = await Promise.allSettled(
+        candidateUrls.map((cand, idx) => probeCandidate(cand, idx))
+    );
+
+    const verified = probeResults
+        .filter((r): r is PromiseFulfilledResult<{ cand: string; index: number } | null> => r.status === "fulfilled" && r.value !== null)
+        .map(r => r.value!)
+        .sort((a, b) => a.index - b.index);
+
+    let workingUrl = verified[0]?.cand || "";
+
+    // Secondary parallel fallback: probe /library/sections if /identity failed
     if (!workingUrl) {
-        for (const cand of candidateUrls) {
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2500);
-                const res = await fetch(`${cand}/library/sections?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
-                    headers: {
-                        Accept: "application/json, application/xml, text/xml, */*",
-                        "X-Plex-Token": serverToken,
-                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                    },
-                    signal: controller.signal,
-                    cache: "no-store"
-                });
-                clearTimeout(timeoutId);
+        const fallbackResults = await Promise.allSettled(
+            candidateUrls.map(async (cand, idx) => {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2000);
+                    const res = await fetch(`${cand}/library/sections?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
+                        headers: {
+                            Accept: "application/json, application/xml, text/xml, */*",
+                            "X-Plex-Token": serverToken,
+                            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                        },
+                        signal: controller.signal,
+                        cache: "no-store"
+                    });
+                    clearTimeout(timeoutId);
+                    if (res.ok) return { cand, index: idx };
+                } catch (e) {}
+                return null;
+            })
+        );
 
-                if (res.ok) {
-                    workingUrl = cand;
-                    break;
-                }
-            } catch (e) {}
-        }
+        const verifiedFallback = fallbackResults
+            .filter((r): r is PromiseFulfilledResult<{ cand: string; index: number } | null> => r.status === "fulfilled" && r.value !== null)
+            .map(r => r.value!)
+            .sort((a, b) => a.index - b.index);
+
+        workingUrl = verifiedFallback[0]?.cand || "";
     }
 
     const finalUrl = workingUrl || candidateUrls[0] || "";

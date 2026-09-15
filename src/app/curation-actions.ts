@@ -2236,7 +2236,7 @@ export async function getCustomBadgesAction() {
             });
         }
 
-        // Auto-heal any badges with outdated or truncated match rules (e.g. 4kplus, 4khdr, 4kdvhdrplus being saved as just '4k')
+        // Auto-heal any badges with outdated or truncated match rules (in memory during retrieval)
         for (const b of badges) {
             const inferred = inferBadgeCategoryAndRule(b.filePath || "", b.name || "");
             if (inferred.suggestedMatchRule && (!b.matchRule || ((b.matchRule === "4k" || b.matchRule === "1080p") && inferred.suggestedMatchRule !== b.matchRule))) {
@@ -2244,10 +2244,6 @@ export async function getCustomBadgesAction() {
                 if (!b.category || b.category === "custom") {
                     b.category = inferred.category;
                 }
-                prisma.customBadge.update({
-                    where: { id: b.id },
-                    data: { matchRule: inferred.suggestedMatchRule, category: b.category }
-                }).catch(() => {});
             }
         }
 
@@ -2309,20 +2305,81 @@ export async function deleteMultipleCustomBadgesAction(ids: string[]) {
     await verifyAdmin();
     try {
         if (!ids || ids.length === 0) return { success: true, count: 0 };
-        const badges = await prisma.customBadge.findMany({
-            where: { id: { in: ids } }
-        });
-        for (const b of badges) {
-            try {
-                if (fs.existsSync(b.filePath)) fs.unlinkSync(b.filePath);
-            } catch (err) {}
+        let deletedCount = 0;
+        const CHUNK_SIZE = 400;
+
+        for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+            const chunk = ids.slice(i, i + CHUNK_SIZE);
+            const badges = await prisma.customBadge.findMany({
+                where: { id: { in: chunk } }
+            });
+            for (const b of badges) {
+                try {
+                    if (fs.existsSync(b.filePath)) fs.unlinkSync(b.filePath);
+                } catch (err) {}
+            }
+            const delRes = await prisma.customBadge.deleteMany({
+                where: { id: { in: chunk } }
+            });
+            deletedCount += delRes.count;
         }
-        const delRes = await prisma.customBadge.deleteMany({
-            where: { id: { in: ids } }
-        });
-        return { success: true, count: delRes.count, message: `Deleted ${delRes.count} custom badge(s).` };
+
+        logger.addLog("INFO", "CURATION", `Deleted ${deletedCount} custom badges.`);
+        return { success: true, count: deletedCount, message: `Deleted ${deletedCount} custom badge(s).` };
     } catch (e: any) {
         return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Server action to bulk delete all custom badges and purge all badge image files from disk.
+ * @param options.keepEssential - If true (default), immediately re-seeds the standard 35 essential high-DPI SVGs. If false, completely wipes all badges (0 badges).
+ */
+export async function deleteAllCustomBadgesAction(options?: { keepEssential?: boolean }) {
+    await verifyAdmin();
+    try {
+        const keepEssential = options?.keepEssential ?? true;
+        const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
+
+        // Remove all files from data/custom_badges
+        if (fs.existsSync(badgeVaultDir)) {
+            try {
+                const files = fs.readdirSync(badgeVaultDir);
+                for (const file of files) {
+                    try {
+                        const p = path.join(badgeVaultDir, file);
+                        if (fs.statSync(p).isFile()) {
+                            fs.unlinkSync(p);
+                        }
+                    } catch (fErr) {}
+                }
+            } catch (dErr) {}
+        }
+
+        // Wipe all records from the CustomBadge database table
+        const delRes = await prisma.customBadge.deleteMany({});
+
+        let seededCount = 0;
+        if (keepEssential) {
+            const seedRes = await seedDefaultCustomBadgesInternal();
+            seededCount = seedRes.count;
+        }
+
+        const remainingBadges = await prisma.customBadge.findMany({ orderBy: { createdAt: "desc" } });
+
+        logger.addLog("SUCCESS", "CURATION", `Bulk purged ${delRes.count} custom badges from vault. Current count: ${remainingBadges.length}`);
+
+        return {
+            success: true,
+            deletedCount: delRes.count,
+            totalBadges: remainingBadges.length,
+            badges: remainingBadges,
+            message: keepEssential
+                ? `Successfully purged ${delRes.count} badges from disk & database and restored ${seededCount} clean essential high-DPI badges!`
+                : `Successfully deleted all ${delRes.count} custom badges and purged files from disk.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed bulk deleting custom badges." };
     }
 }
 
@@ -2330,11 +2387,19 @@ export async function toggleMultipleCustomBadgesAction(ids: string[], enabled: b
     await verifyAdmin();
     try {
         if (!ids || ids.length === 0) return { success: true, count: 0 };
-        const updateRes = await prisma.customBadge.updateMany({
-            where: { id: { in: ids } },
-            data: { enabled }
-        });
-        return { success: true, count: updateRes.count, message: `${enabled ? "Enabled" : "Disabled"} ${updateRes.count} custom badge(s).` };
+        let updatedCount = 0;
+        const CHUNK_SIZE = 400;
+
+        for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+            const chunk = ids.slice(i, i + CHUNK_SIZE);
+            const updateRes = await prisma.customBadge.updateMany({
+                where: { id: { in: chunk } },
+                data: { enabled }
+            });
+            updatedCount += updateRes.count;
+        }
+
+        return { success: true, count: updatedCount, message: `${enabled ? "Enabled" : "Disabled"} ${updatedCount} custom badge(s).` };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
