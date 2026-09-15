@@ -299,6 +299,7 @@ export function PruneStudio() {
     const [simTemplateReason, setSimTemplateReason] = useState<string>("Unwatched for 180+ Days");
     const [simTemplateStatus, setSimTemplateStatus] = useState<string>("Leaving Soon");
     const [simPreviewDataUrl, setSimPreviewDataUrl] = useState<string | null>(null);
+    const [simPreviewLoading, setSimPreviewLoading] = useState<boolean>(false);
 
     const generatePrunePreview = async (
         posterUrl: string | null,
@@ -312,6 +313,7 @@ export function PruneStudio() {
         reason = simTemplateReason,
         status = simTemplateStatus
     ) => {
+        setSimPreviewLoading(true);
         try {
             const res = await getPlaceholderPreviewDataUrlAction(posterUrl, title, {
                 bannerType: type,
@@ -329,6 +331,8 @@ export function PruneStudio() {
             }
         } catch (e) {
             console.error("Failed generating prune preview:", e);
+        } finally {
+            setSimPreviewLoading(false);
         }
     };
 
@@ -368,6 +372,20 @@ export function PruneStudio() {
 
     // Initial Data Fetch
     useEffect(() => {
+        // Immediately kick off initial preview render so simulator never stalls
+        generatePrunePreview(
+            null,
+            "Sample Media",
+            simBannerType,
+            simBannerText,
+            simBannerTheme,
+            simBannerPosition,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+
         const loadInitialData = async () => {
             setLoading(true);
             try {
@@ -1144,9 +1162,29 @@ export function PruneStudio() {
                                         {simPreviewDataUrl ? (
                                             <img src={simPreviewDataUrl} alt="Leaving Soon Preview" className="w-full h-full object-cover" />
                                         ) : (
-                                            <div className="flex items-center justify-center h-full text-slate-500 text-xs gap-1.5">
-                                                <Loader2 className="h-4 w-4 animate-spin text-rose-400" />
-                                                <span>Rendering banner preview...</span>
+                                            /* Instant Client-side Visual Fallback while generating */
+                                            <div className="relative w-full h-full flex flex-col justify-between p-3 bg-gradient-to-b from-slate-900 via-slate-950 to-black text-slate-100 select-none">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-2xl">🎬</span>
+                                                    {simPreviewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-400" />}
+                                                </div>
+                                                <div className="text-center space-y-1">
+                                                    <p className="text-xs font-black truncate text-white">{simSelectedRealItem?.title || "Sample Media"}</p>
+                                                    <p className="text-[10px] text-slate-400">Leaving Soon Advisory</p>
+                                                </div>
+                                                <div className={`py-1.5 px-2 rounded-lg text-[10px] font-black text-center tracking-wider text-white shadow-lg ${
+                                                    simBannerTheme.includes("emerald") ? "bg-emerald-600" :
+                                                    simBannerTheme.includes("gold") ? "bg-amber-500 text-slate-950" :
+                                                    simBannerTheme.includes("purple") ? "bg-purple-600" :
+                                                    simBannerTheme.includes("blue") ? "bg-sky-600" : "bg-red-600"
+                                                }`}>
+                                                    {simBannerText.replace("{date}", simTemplateDate).replace("{days}", String(simTemplateDays)).replace("{reason}", simTemplateReason).replace("{status}", simTemplateStatus)}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {simPreviewLoading && simPreviewDataUrl && (
+                                            <div className="absolute top-2 right-2 p-1.5 rounded-full bg-slate-950/80 border border-slate-800 backdrop-blur-md shadow-md">
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-400" />
                                             </div>
                                         )}
                                     </div>

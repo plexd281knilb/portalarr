@@ -19,7 +19,8 @@ import {
   Film,
   Tv,
   Sparkles,
-  Trash2
+  Trash2,
+  Tag
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -216,6 +217,21 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                   >
                     <Trash2 className="mr-2 h-4 w-4 text-rose-400" />
                     Maintainerr Prune
+                  </Button>
+                </Link>
+
+                <Link href="/curation/tagging">
+                  <Button
+                    variant={pathname.startsWith("/curation/tagging") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/curation/tagging")
+                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                    )}
+                  >
+                    <Tag className="mr-2 h-4 w-4 text-emerald-400" />
+                    Tagging Studio
                   </Button>
                 </Link>
 
@@ -466,6 +482,20 @@ export function MobileSidebar() {
                           )}
                         >
                           <Trash2 className="mr-2 h-4 w-4 text-rose-400" /> Maintainerr Prune
+                        </Button>
+                      </Link>
+
+                      <Link href="/curation/tagging" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/curation/tagging") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/curation/tagging")
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                          )}
+                        >
+                          <Tag className="mr-2 h-4 w-4 text-emerald-400" /> Tagging Studio
                         </Button>
                       </Link>
 

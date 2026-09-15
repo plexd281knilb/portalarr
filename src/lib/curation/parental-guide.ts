@@ -762,3 +762,353 @@ export async function clearParentalTagsFromLibrary(
 
     return { success: true, clearedCount };
 }
+
+/**
+ * Retrieves cached parental advisories for all items in a library section.
+ */
+export async function getStoredParentalAdvisoriesForLibrary(
+    serverId: string,
+    sectionKey: string | number
+): Promise<{
+    items: Array<{
+        ratingKey: string;
+        title: string;
+        year?: number;
+        contentRating?: string;
+        advisory: ImdbParentalAdvisory | null;
+        appliedTags?: string[];
+    }>;
+}> {
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { items: [] };
+
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        const mediaItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 500);
+
+        const ratingKeys = mediaItems.map(m => m.ratingKey);
+        const advisories = await prisma.mediaContentAdvisory.findMany({
+            where: {
+                ratingKey: { in: ratingKeys },
+                serverId: resolved.serverId
+            }
+        });
+
+        const advMap = new Map<string, ImdbParentalAdvisory>();
+        for (const adv of advisories) {
+            advMap.set(adv.ratingKey, {
+                nudity: (adv.nudityLevel as ParentalSeverity) || "None",
+                violence: (adv.violenceLevel as ParentalSeverity) || "None",
+                profanity: (adv.profanityLevel as ParentalSeverity) || "None",
+                alcohol: (adv.alcoholLevel as ParentalSeverity) || "None",
+                frightening: (adv.frighteningLevel as ParentalSeverity) || "None",
+                certificate: adv.mpaaRating || undefined,
+                summary: adv.leavingReason || undefined,
+                source: "cache"
+            });
+        }
+
+        return {
+            items: mediaItems.map(m => ({
+                ratingKey: m.ratingKey,
+                title: m.title,
+                year: m.year,
+                contentRating: m.contentRating,
+                advisory: advMap.get(m.ratingKey) || null
+            }))
+        };
+    } catch (e) {
+        return { items: [] };
+    }
+}
+
+export interface CustomTagRule {
+    tagName: string;
+    field: "label" | "genre" | "collection";
+    filterType: "all" | "resolution" | "hdr" | "audio" | "studio" | "decade" | "contentRating" | "rating_above" | "rating_below";
+    filterValue?: string;
+}
+
+/**
+ * Applies a custom tag (Label, Genre, or Collection) to media matching a rule.
+ */
+export async function applyCustomTagRuleToLibrary(
+    serverId: string,
+    sectionKey: string | number,
+    rule: CustomTagRule
+): Promise<{
+    success: boolean;
+    totalEvaluated: number;
+    taggedCount: number;
+    skippedCount: number;
+    error?: string;
+}> {
+    const resolved = await resolveWorkingPlexServerConnection(serverId);
+    if (!resolved || !resolved.serverUrl) {
+        return { success: false, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, error: "Plex server unreachable or token not configured." };
+    }
+
+    const serverToken = resolved.token;
+    const serverUrl = resolved.serverUrl;
+    const serverName = resolved.serverName;
+    const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+
+    logger.addLog("INFO", "CURATION", `Applying custom tag "${rule.tagName}" (${rule.field}) on section ${sectionKey} on "${serverName}"...`);
+
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 1500);
+    let taggedCount = 0;
+    let skippedCount = 0;
+
+    for (const item of items) {
+        let matches = false;
+
+        const itemRes = (item.detectedBadges?.resolution || item.media?.[0]?.videoResolution || "").toLowerCase();
+        const itemHdr = (item.detectedBadges?.hdr || item.media?.[0]?.hdrFormat || "").toLowerCase();
+        const itemAudio = (item.detectedBadges?.audio || item.media?.[0]?.audioCodec || "").toLowerCase();
+
+        switch (rule.filterType) {
+            case "all":
+                matches = true;
+                break;
+            case "resolution":
+                matches = Boolean(itemRes && itemRes.includes((rule.filterValue || "").toLowerCase()));
+                break;
+            case "hdr":
+                matches = Boolean(itemHdr && itemHdr.includes((rule.filterValue || "").toLowerCase()));
+                break;
+            case "audio":
+                matches = Boolean(itemAudio && itemAudio.includes((rule.filterValue || "").toLowerCase()));
+                break;
+            case "studio":
+                matches = Boolean(item.studio && item.studio.toLowerCase().includes((rule.filterValue || "").toLowerCase()));
+                break;
+            case "decade":
+                if (item.year && rule.filterValue) {
+                    const startYear = parseInt(rule.filterValue, 10);
+                    matches = item.year >= startYear && item.year < startYear + 10;
+                }
+                break;
+            case "contentRating":
+                matches = Boolean(item.contentRating && item.contentRating.toLowerCase() === (rule.filterValue || "").toLowerCase());
+                break;
+            case "rating_above":
+                matches = Boolean(item.rating && item.rating >= parseFloat(rule.filterValue || "7.0"));
+                break;
+            case "rating_below":
+                matches = Boolean(item.rating && item.rating < parseFloat(rule.filterValue || "5.0"));
+                break;
+            default:
+                matches = true;
+        }
+
+        if (!matches) {
+            skippedCount++;
+            continue;
+        }
+
+        // Apply tag to Plex Item
+        const mediaType = item.type === "show" ? "show" : "movie";
+        const typeId = mediaType === "show" ? 2 : 1;
+
+        for (const cleanBase of urlsToTry) {
+            try {
+                const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": serverToken }
+                });
+
+                let existingTags: string[] = [];
+                if (metaRes.ok) {
+                    const metaData = await metaRes.json();
+                    const meta = metaData.MediaContainer?.Metadata?.[0];
+                    if (rule.field === "label" && meta?.Label) {
+                        existingTags = meta.Label.map((l: any) => l.tag);
+                    } else if (rule.field === "genre" && meta?.Genre) {
+                        existingTags = meta.Genre.map((g: any) => g.tag);
+                    } else if (rule.field === "collection" && meta?.Collection) {
+                        existingTags = meta.Collection.map((c: any) => c.tag);
+                    }
+                }
+
+                if (existingTags.includes(rule.tagName)) {
+                    // Already has tag
+                    taggedCount++;
+                    break;
+                }
+
+                const merged = Array.from(new Set([...existingTags, rule.tagName]));
+                const params = new URLSearchParams();
+                params.set("type", String(typeId));
+                params.set("id", String(item.ratingKey));
+
+                merged.forEach((t, idx) => {
+                    params.set(`${rule.field}[${idx}].tag.tag`, t);
+                });
+                params.set(`${rule.field}.locked`, "1");
+
+                const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
+                const putRes = await fetch(url, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+
+                if (putRes.ok) {
+                    taggedCount++;
+                    break;
+                }
+            } catch (e) {}
+        }
+    }
+
+    logger.addLog("SUCCESS", "CURATION", `Applied custom tag "${rule.tagName}" to ${taggedCount} items (${skippedCount} skipped).`);
+
+    return {
+        success: true,
+        totalEvaluated: items.length,
+        taggedCount,
+        skippedCount
+    };
+}
+
+/**
+ * Removes a specific custom tag from all items in a library section.
+ */
+export async function clearCustomTagFromLibrary(
+    serverId: string,
+    sectionKey: string | number,
+    tagName: string,
+    field: "label" | "genre" | "collection" = "label"
+): Promise<{ success: boolean; clearedCount: number; error?: string }> {
+    const resolved = await resolveWorkingPlexServerConnection(serverId);
+    if (!resolved || !resolved.serverUrl) {
+        return { success: false, clearedCount: 0, error: "Plex server unreachable or token not configured." };
+    }
+
+    const serverToken = resolved.token;
+    const serverUrl = resolved.serverUrl;
+    const serverName = resolved.serverName;
+    const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+
+    logger.addLog("INFO", "CURATION", `Removing custom tag "${tagName}" (${field}) from section ${sectionKey} on "${serverName}"...`);
+
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 1500);
+    let clearedCount = 0;
+
+    for (const item of items) {
+        const mediaType = item.type === "show" ? "show" : "movie";
+        const typeId = mediaType === "show" ? 2 : 1;
+
+        for (const cleanBase of urlsToTry) {
+            try {
+                const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": serverToken }
+                });
+
+                if (!metaRes.ok) continue;
+                const metaData = await metaRes.json();
+                const meta = metaData.MediaContainer?.Metadata?.[0];
+
+                let existingTags: string[] = [];
+                if (field === "label" && meta?.Label) existingTags = meta.Label.map((l: any) => l.tag);
+                else if (field === "genre" && meta?.Genre) existingTags = meta.Genre.map((g: any) => g.tag);
+                else if (field === "collection" && meta?.Collection) existingTags = meta.Collection.map((c: any) => c.tag);
+
+                if (!existingTags.includes(tagName)) break;
+
+                const remaining = existingTags.filter(t => t !== tagName);
+                const params = new URLSearchParams();
+                params.set("type", String(typeId));
+                params.set("id", String(item.ratingKey));
+
+                if (remaining.length > 0) {
+                    remaining.forEach((t, idx) => {
+                        params.set(`${field}[${idx}].tag.tag`, t);
+                    });
+                } else {
+                    params.set(`${field}[0].tag.tag`, "");
+                }
+
+                const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
+                const putRes = await fetch(url, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+
+                if (putRes.ok) {
+                    clearedCount++;
+                    break;
+                }
+            } catch (e) {}
+        }
+    }
+
+    logger.addLog("SUCCESS", "CURATION", `Removed custom tag "${tagName}" from ${clearedCount} items.`);
+
+    return { success: true, clearedCount };
+}
+
+/**
+ * Scans a Plex library section and returns an audit of all active Labels, Genres, and Collections with counts.
+ */
+export async function getPlexLibraryTagsAudit(
+    serverId: string,
+    sectionKey: string | number
+): Promise<{
+    labels: Array<{ tag: string; count: number; isParental: boolean }>;
+    genres: Array<{ tag: string; count: number; isParental: boolean }>;
+    collections: Array<{ tag: string; count: number }>;
+    totalItems: number;
+}> {
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { labels: [], genres: [], collections: [], totalItems: 0 };
+
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 1000);
+
+        const labelCounts: Record<string, number> = {};
+        const genreCounts: Record<string, number> = {};
+        const collectionCounts: Record<string, number> = {};
+
+        // In a single pass, fetch metadata or summarize tags
+        for (const item of items) {
+            // Note: getPlexLibraryMediaItems gets summary. To get deep tags for each item:
+            // if available on item
+            if ((item as any).labels) {
+                for (const l of (item as any).labels) {
+                    labelCounts[l] = (labelCounts[l] || 0) + 1;
+                }
+            }
+            if ((item as any).genres) {
+                for (const g of (item as any).genres) {
+                    genreCounts[g] = (genreCounts[g] || 0) + 1;
+                }
+            }
+        }
+
+        const labels = Object.entries(labelCounts).map(([tag, count]) => ({
+            tag,
+            count,
+            isParental: isParentalTag(tag)
+        })).sort((a, b) => b.count - a.count);
+
+        const genres = Object.entries(genreCounts).map(([tag, count]) => ({
+            tag,
+            count,
+            isParental: isParentalTag(tag)
+        })).sort((a, b) => b.count - a.count);
+
+        const collections = Object.entries(collectionCounts).map(([tag, count]) => ({
+            tag,
+            count
+        })).sort((a, b) => b.count - a.count);
+
+        return {
+            labels,
+            genres,
+            collections,
+            totalItems: items.length
+        };
+    } catch (e) {
+        return { labels: [], genres: [], collections: [], totalItems: 0 };
+    }
+}

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles, Film, Trash2, ShieldCheck, ShieldAlert, Sliders } from "lucide-react";
+import { Sparkles, Film, Trash2, Tag, ShieldCheck, ShieldAlert, Sliders } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ServerGuardRailsModal } from "@/components/curation/server-guard-rails-modal";
@@ -32,6 +32,7 @@ export function CurationNavHeader({
     const isKometa = pathname === "/curation" || pathname.startsWith("/curation/kometa");
     const isAgregarr = pathname.startsWith("/curation/agregarr");
     const isPrune = pathname.startsWith("/curation/prune");
+    const isTagging = pathname.startsWith("/curation/tagging") || pathname.startsWith("/curation/tags");
 
     useEffect(() => {
         getServerGuardRailsAction().then(res => {
@@ -54,23 +55,36 @@ export function CurationNavHeader({
                                 ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
                                 : isAgregarr
                                     ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                                    : "bg-rose-500/20 text-rose-400 border-rose-500/30"
+                                    : isTagging
+                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                        : "bg-rose-500/20 text-rose-400 border-rose-500/30"
                         }`}>
                             {isKometa && <Sparkles className="h-6 w-6" />}
                             {isAgregarr && <Film className="h-6 w-6" />}
+                            {isTagging && <Tag className="h-6 w-6" />}
                             {isPrune && <Trash2 className="h-6 w-6" />}
                         </div>
                         <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                            {title || (isKometa ? "Kometa Overlays & Badge Studio" : isAgregarr ? "Agregarr Collections & Coming Soon Hub" : "Maintainerr Storage & Auto-Prune Studio")}
+                            {title || (
+                                isKometa 
+                                    ? "Kometa Overlays & Badge Studio" 
+                                    : isAgregarr 
+                                        ? "Agregarr Collections & Coming Soon Hub" 
+                                        : isTagging
+                                            ? "Plex Media Tagging & Content Advisory Studio"
+                                            : "Maintainerr Storage & Auto-Prune Studio"
+                            )}
                         </h1>
                         <Badge variant="outline" className={`text-xs font-semibold px-2 py-0.5 ${
                             isKometa 
                                 ? "border-purple-500/40 text-purple-300 bg-purple-950/40"
                                 : isAgregarr
                                     ? "border-amber-500/40 text-amber-300 bg-amber-950/40"
-                                    : "border-rose-500/40 text-rose-300 bg-rose-950/40"
+                                    : isTagging
+                                        ? "border-emerald-500/40 text-emerald-300 bg-emerald-950/40"
+                                        : "border-rose-500/40 text-rose-300 bg-rose-950/40"
                         }`}>
-                            {isKometa ? "Kometa / PMM Engine" : isAgregarr ? "Agregarr Engine" : "Maintainerr / Cleanarr"}
+                            {isKometa ? "Kometa / PMM Engine" : isAgregarr ? "Agregarr Engine" : isTagging ? "Plex Tagging Engine" : "Maintainerr / Cleanarr"}
                         </Badge>
                     </div>
                     <p className="text-sm text-slate-400 max-w-2xl">
@@ -79,7 +93,9 @@ export function CurationNavHeader({
                                 ? "4K UHD, HDR, Dolby Vision, Audio codecs, US age ratings, network logos, tiered gloss ribbons, and YAML config migration."
                                 : isAgregarr
                                     ? "Automated TMDb/Trakt/MDBList collections, Plex Home screen ranking (#1-#99), seasonal schedules, upcoming releases, and coming soon banners."
-                                    : "Storage mount thresholds, rule-based media pruning (unwatched, low rating, ended series), pinned 'Leaving Soon' Plex collection, and safe file cleanup."
+                                    : isTagging
+                                        ? "IMDb Parental Guide advisory severity tags (Nudity, Violence, Profanity, Alcohol/Drugs, Frightening), custom Plex labels/genres, and future-state rule-based auto-taggers."
+                                        : "Storage mount thresholds, rule-based media pruning (unwatched, low rating, ended series), pinned 'Leaving Soon' Plex collection, and safe file cleanup."
                         )}
                     </p>
                 </div>
@@ -128,12 +144,12 @@ export function CurationNavHeader({
                 }}
             />
 
-            {/* 3-Way Mode Switcher Navigation Tabs */}
+            {/* 4-Way Mode Switcher Navigation Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-lg backdrop-blur-md overflow-x-auto">
-                <Link href="/curation" className="flex-1 min-w-[200px]">
+                <Link href="/curation" className="flex-1 min-w-[180px]">
                     <button
                         type="button"
-                        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                             isKometa
                                 ? "bg-purple-600 text-white shadow-lg shadow-purple-950/60 border border-purple-400/50 ring-1 ring-purple-400/40"
                                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
@@ -142,15 +158,15 @@ export function CurationNavHeader({
                         <Sparkles className={`h-4 w-4 ${isKometa ? "text-white" : "text-purple-400"}`} />
                         <span>🎨 Kometa Overlays</span>
                         <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isKometa ? "border-purple-300 text-purple-100 bg-purple-700/60" : "border-slate-700 text-slate-400"}`}>
-                            Badges &amp; Ribbons
+                            Badges
                         </Badge>
                     </button>
                 </Link>
 
-                <Link href="/curation/agregarr" className="flex-1 min-w-[200px]">
+                <Link href="/curation/agregarr" className="flex-1 min-w-[180px]">
                     <button
                         type="button"
-                        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                             isAgregarr
                                 ? "bg-amber-500 text-slate-950 shadow-lg shadow-amber-950/60 border border-amber-300/50 ring-1 ring-amber-300/40 font-black"
                                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
@@ -159,15 +175,15 @@ export function CurationNavHeader({
                         <Film className={`h-4 w-4 ${isAgregarr ? "text-slate-950" : "text-amber-400"}`} />
                         <span>🎬 Agregarr Hubs</span>
                         <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isAgregarr ? "border-amber-900/60 text-slate-950 bg-amber-400" : "border-slate-700 text-slate-400"}`}>
-                            Coming Soon &amp; Hubs
+                            Collections
                         </Badge>
                     </button>
                 </Link>
 
-                <Link href="/curation/prune" className="flex-1 min-w-[200px]">
+                <Link href="/curation/prune" className="flex-1 min-w-[180px]">
                     <button
                         type="button"
-                        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                             isPrune
                                 ? "bg-rose-600 text-white shadow-lg shadow-rose-950/60 border border-rose-400/50 ring-1 ring-rose-400/40"
                                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
@@ -176,7 +192,24 @@ export function CurationNavHeader({
                         <Trash2 className={`h-4 w-4 ${isPrune ? "text-white" : "text-rose-400"}`} />
                         <span>🧹 Maintainerr Prune</span>
                         <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isPrune ? "border-rose-300 text-rose-100 bg-rose-700/60" : "border-slate-700 text-slate-400"}`}>
-                            Leaving Soon &amp; Clean
+                            Storage
+                        </Badge>
+                    </button>
+                </Link>
+
+                <Link href="/curation/tagging" className="flex-1 min-w-[180px]">
+                    <button
+                        type="button"
+                        className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            isTagging
+                                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-950/60 border border-emerald-400/50 ring-1 ring-emerald-400/40"
+                                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                        }`}
+                    >
+                        <Tag className={`h-4 w-4 ${isTagging ? "text-white" : "text-emerald-400"}`} />
+                        <span>🏷️ Tagging Studio</span>
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isTagging ? "border-emerald-300 text-emerald-100 bg-emerald-700/60" : "border-slate-700 text-slate-400"}`}>
+                            Parental &amp; Custom
                         </Badge>
                     </button>
                 </Link>

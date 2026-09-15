@@ -205,6 +205,7 @@ export function AgregarrStudio() {
     const [placeholderModalBannerPosition, setPlaceholderModalBannerPosition] = useState<"bottom" | "top" | "corner">("bottom");
     const [generatingPlaceholder, setGeneratingPlaceholder] = useState(false);
     const [placeholderPreviewDataUrl, setPlaceholderPreviewDataUrl] = useState<string | null>(null);
+    const [placeholderPreviewLoading, setPlaceholderPreviewLoading] = useState<boolean>(false);
     const [placeholderSuccessMsg, setPlaceholderSuccessMsg] = useState<string | null>(null);
 
     // Live Simulator & Template Variable States
@@ -747,6 +748,7 @@ export function AgregarrStudio() {
         status = templateVarStatus,
         reason = templateVarReason
     ) => {
+        setPlaceholderPreviewLoading(true);
         try {
             const res = await getPlaceholderPreviewDataUrlAction(posterPath, title, {
                 bannerType: type,
@@ -765,6 +767,8 @@ export function AgregarrStudio() {
             }
         } catch (e) {
             console.error("Failed generating preview:", e);
+        } finally {
+            setPlaceholderPreviewLoading(false);
         }
     };
 
@@ -2603,13 +2607,27 @@ export function AgregarrStudio() {
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                             {/* Preview Poster */}
                             <div className="sm:col-span-5 flex flex-col items-center justify-center space-y-2">
-                                <div className="aspect-[2/3] w-36 rounded-xl overflow-hidden bg-slate-950 border-2 border-slate-700 shadow-xl">
+                                <div className="relative aspect-[2/3] w-36 rounded-xl overflow-hidden bg-slate-950 border-2 border-slate-700 shadow-xl select-none">
                                     {placeholderPreviewDataUrl ? (
                                         <img src={placeholderPreviewDataUrl} alt="Preview" className="w-full h-full object-cover" />
                                     ) : (
-                                        <div className="flex items-center justify-center h-full text-slate-600 gap-1.5">
-                                            <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
-                                            <span>Loading...</span>
+                                        <div className="relative w-full h-full flex flex-col justify-between p-2.5 bg-gradient-to-b from-slate-900 via-slate-950 to-black text-slate-100">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xl">🎬</span>
+                                                {placeholderPreviewLoading && <Loader2 className="h-3 w-3 animate-spin text-amber-400" />}
+                                            </div>
+                                            <div className="text-center space-y-0.5">
+                                                <p className="text-[11px] font-black truncate text-white">{selectedPlaceholderItem?.title || "Upcoming Media"}</p>
+                                                <p className="text-[9px] text-slate-400">Coming Soon</p>
+                                            </div>
+                                            <div className="py-1 px-1.5 rounded text-[9px] font-black text-center tracking-wider text-white shadow-md bg-amber-500 text-slate-950">
+                                                {placeholderModalBannerText}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {placeholderPreviewLoading && placeholderPreviewDataUrl && (
+                                        <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-slate-950/80 border border-slate-800 backdrop-blur-md">
+                                            <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
                                         </div>
                                     )}
                                 </div>

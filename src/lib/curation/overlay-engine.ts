@@ -84,6 +84,7 @@ export interface OverlayOptions {
 
 const BACKUP_DIR = path.join(process.cwd(), "data", "art_backups");
 const CUSTOM_BADGES_DIR = path.join(process.cwd(), "data", "custom_badges");
+const STOCK_KOMETA_DIR = path.join(process.cwd(), "public", "kometa_stock");
 
 function ensureBackupDir() {
     if (!fs.existsSync(BACKUP_DIR)) {
@@ -92,6 +93,145 @@ function ensureBackupDir() {
     if (!fs.existsSync(CUSTOM_BADGES_DIR)) {
         fs.mkdirSync(CUSTOM_BADGES_DIR, { recursive: true });
     }
+}
+
+/**
+ * Reads an official Kometa stock asset buffer from public/kometa_stock.
+ */
+export function getStockKometaAssetBuffer(relativePath: string): Buffer | null {
+    try {
+        const fullPath = path.join(STOCK_KOMETA_DIR, relativePath);
+        if (fs.existsSync(fullPath)) {
+            return fs.readFileSync(fullPath);
+        }
+    } catch (e) {}
+    return null;
+}
+
+/**
+ * Resolves the matching official stock Kometa resolution/HDR dovetail PNG image.
+ */
+export function resolveStockResolutionBadgePath(
+    resolution: string,
+    hdr?: string | null
+): string | null {
+    const resUpper = (resolution || "").toUpperCase();
+    const is4k = resUpper.includes("4K") || resUpper.includes("2160");
+    const is1080 = resUpper.includes("1080");
+    const is720 = resUpper.includes("720");
+    const is576 = resUpper.includes("576");
+    const is480 = resUpper.includes("480") || resUpper.includes("SD");
+
+    const basePrefix = is4k ? "4k" : is1080 ? "1080p" : is720 ? "720p" : is576 ? "576p" : is480 ? "480p" : "";
+    if (!basePrefix) return null;
+
+    const hdrUpper = (hdr || "").toUpperCase();
+    const isDv = hdrUpper.includes("DV") || hdrUpper.includes("DOLBY") || hdrUpper.includes("VISION");
+    const isPlus = hdrUpper.includes("HDR10+") || hdrUpper.includes("PLUS");
+    const isHdr = isDv || hdrUpper.includes("HDR") || hdrUpper.includes("HDR10");
+    const isHlg = hdrUpper.includes("HLG");
+
+    let candidate = "";
+    if (isDv && isPlus) candidate = `resolution/${basePrefix}dvhdrplus.png`;
+    else if (isDv && isHdr) candidate = `resolution/${basePrefix}dvhdr.png`;
+    else if (isDv) candidate = `resolution/${basePrefix}dv.png`;
+    else if (isPlus) candidate = `resolution/${basePrefix}plus.png`;
+    else if (isHdr) candidate = `resolution/${basePrefix}hdr.png`;
+    else if (isHlg) candidate = `resolution/${basePrefix}hlg.png`;
+    else candidate = `resolution/${basePrefix}.png`;
+
+    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
+        return candidate;
+    }
+    return null;
+}
+
+/**
+ * Resolves the matching official stock Kometa ribbon PNG image (with authentic laurel wreaths/logos).
+ */
+export function resolveStockRibbonPath(
+    ribbonName: string,
+    theme: string = "crimson"
+): string | null {
+    const color = (theme === "gold" || theme === "amber-gold") ? "yellow"
+        : (theme === "glass" || theme === "minimal") ? "black"
+        : (theme === "classic") ? "gray"
+        : "red";
+
+    const nameLower = ribbonName.toLowerCase().replace(/[^a-z0-9_]/g, "");
+
+    let assetName = `blank-${color}`;
+    if (nameLower.includes("oscar") || nameLower.includes("academy")) assetName = "oscars";
+    else if (nameLower.includes("bafta")) assetName = "bafta";
+    else if (nameLower.includes("cannes") || nameLower.includes("palme")) assetName = "cannes";
+    else if (nameLower.includes("emmy")) assetName = "emmys";
+    else if (nameLower.includes("golden") || nameLower.includes("globe")) assetName = "golden";
+    else if (nameLower.includes("imdb") || nameLower.includes("top250") || nameLower.includes("top_250")) assetName = "imdb";
+    else if (nameLower.includes("certified") || nameLower.includes("rottenverified")) assetName = "rottenverified";
+    else if (nameLower.includes("rotten") || nameLower.includes("fresh")) assetName = "rotten";
+    else if (nameLower.includes("meta") || nameLower.includes("mustsee")) assetName = "metacritic";
+    else if (nameLower.includes("sundance")) assetName = "sundance";
+    else if (nameLower.includes("venice")) assetName = "venice";
+    else if (nameLower.includes("letterboxd")) assetName = "letterboxd";
+    else if (nameLower.includes("choice")) assetName = "choice";
+    else if (nameLower.includes("netflix")) assetName = "netflix";
+    else if (nameLower.includes("razzie")) assetName = "razzie";
+    else if (nameLower.includes("spirit")) assetName = "spirit";
+    else if (nameLower.includes("cesar")) assetName = "cesar";
+    else if (nameLower.includes("berlinale")) assetName = "berlinale";
+
+    const candidate = `ribbon/${color}/${assetName}.png`;
+    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
+        return candidate;
+    }
+
+    const redCandidate = `ribbon/red/${assetName}.png`;
+    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, redCandidate))) {
+        return redCandidate;
+    }
+
+    return null;
+}
+
+/**
+ * Resolves stock Kometa edition badge PNG.
+ */
+export function resolveStockEditionBadgePath(edition: string): string | null {
+    const nameLower = (edition || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const candidates = [
+        `edition/${nameLower}.png`,
+        `edition/${nameLower.replace(/edition$/, "")}.png`,
+        `edition/${nameLower.replace(/cut$/, "")}.png`
+    ];
+
+    for (const c of candidates) {
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, c))) return c;
+    }
+    return null;
+}
+
+/**
+ * Resolves stock Kometa audio codec badge PNG.
+ */
+export function resolveStockAudioCodecBadgePath(codec: string): string | null {
+    const nameLower = (codec || "").toLowerCase();
+    let filename = "";
+    if (nameLower.includes("atmos")) filename = "atmos.png";
+    else if (nameLower.includes("truehd")) filename = "truehd.png";
+    else if (nameLower.includes("dts-hd") || nameLower.includes("dtshd")) filename = "dts-hd.png";
+    else if (nameLower.includes("dts-x") || nameLower.includes("dtsx")) filename = "dts-x.png";
+    else if (nameLower.includes("dts")) filename = "dts.png";
+    else if (nameLower.includes("flac")) filename = "flac.png";
+    else if (nameLower.includes("eac3") || nameLower.includes("ddp") || nameLower.includes("plus")) filename = "eac3.png";
+    else if (nameLower.includes("ac3") || nameLower.includes("dolby digital")) filename = "ac3.png";
+    else if (nameLower.includes("aac")) filename = "aac.png";
+    else if (nameLower.includes("opus")) filename = "opus.png";
+
+    if (filename) {
+        const p = `audio_codec/standard/${filename}`;
+        if (fs.existsSync(path.join(STOCK_KOMETA_DIR, p))) return p;
+    }
+    return null;
 }
 
 /**
@@ -971,10 +1111,20 @@ export function generatePlaceholderRibbonSvg(
 async function resolvePosterBuffer(posterUrl: string | null | undefined, title?: string): Promise<Buffer | null> {
     if (!posterUrl) return null;
 
+    // 0. Base64 Data URL
+    if (posterUrl.startsWith("data:image/")) {
+        try {
+            const base64Data = posterUrl.split(",")[1];
+            if (base64Data) {
+                return Buffer.from(base64Data, "base64");
+            }
+        } catch (e) {}
+    }
+
     // 1. Full HTTP URL
     if (posterUrl.startsWith("http://") || posterUrl.startsWith("https://")) {
         try {
-            const res = await fetch(posterUrl);
+            const res = await fetch(posterUrl, { signal: AbortSignal.timeout(3000) });
             if (res.ok) {
                 const arrayBuf = await res.arrayBuffer();
                 if (arrayBuf.byteLength > 200) return Buffer.from(arrayBuf);
@@ -999,7 +1149,7 @@ async function resolvePosterBuffer(posterUrl: string | null | undefined, title?:
                         const sep = thumb.includes("?") ? "&" : "?";
                         const directUrl = `${cleanBase}${thumb}${sep}X-Plex-Token=${encodeURIComponent(resolved.token)}`;
                         try {
-                            const res = await fetch(directUrl, { headers: { "X-Plex-Token": resolved.token } });
+                            const res = await fetch(directUrl, { headers: { "X-Plex-Token": resolved.token }, signal: AbortSignal.timeout(3000) });
                             if (res.ok) {
                                 const arrayBuf = await res.arrayBuffer();
                                 if (arrayBuf.byteLength > 200) {
@@ -1624,8 +1774,18 @@ export async function applyOverlaysToPoster(
         }
 
         if (winningRibbon && winningRibbon.text) {
-            const cornerRibbonSvg = generateKometaCornerRibbonSvg(winningRibbon.text, rPos, winningRibbon.theme);
-            const ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(380, 380).toBuffer();
+            const stockRibbonPath = resolveStockRibbonPath(winningRibbon.text, winningRibbon.theme);
+            let ribbonBuf: Buffer;
+
+            if (stockRibbonPath && fs.existsSync(path.join(STOCK_KOMETA_DIR, stockRibbonPath))) {
+                let img = sharp(path.join(STOCK_KOMETA_DIR, stockRibbonPath)).resize(380, 380, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } });
+                if (rPos.endsWith("left")) img = img.flop();
+                if (rPos.startsWith("bottom")) img = img.flip();
+                ribbonBuf = await img.toBuffer();
+            } else {
+                const cornerRibbonSvg = generateKometaCornerRibbonSvg(winningRibbon.text, rPos, winningRibbon.theme);
+                ribbonBuf = await sharp(Buffer.from(cornerRibbonSvg)).resize(380, 380).toBuffer();
+            }
 
             const rTop = rPos.startsWith("top") ? (options.showLeavingSoon ? 78 : 0) : 1500 - 380;
             const rLeft = rPos.endsWith("right") ? 1000 - 380 : 0;
@@ -1871,7 +2031,47 @@ export async function applyOverlaysToPoster(
         });
     };
 
-    // Dovetailed Resolution & HDR Combination
+    const pushStockImageToBucket = async (pos: string, relativePath: string, layerKey: string, targetW = 140, targetH = 46): Promise<boolean> => {
+        if (!buckets[pos]) return false;
+        const fullPath = path.join(STOCK_KOMETA_DIR, relativePath);
+        if (!fs.existsSync(fullPath)) return false;
+
+        try {
+            const scale = options.badgeScale || 1.0;
+            const meta = await sharp(fullPath).metadata();
+            const srcW = meta.width || targetW;
+            const srcH = meta.height || targetH;
+            const aspect = srcW / srcH;
+
+            let w = targetW;
+            let h = Math.round(targetW / aspect);
+            if (h > targetH) {
+                h = targetH;
+                w = Math.round(targetH * aspect);
+            }
+
+            if (scale !== 1.0 && scale > 0.1) {
+                w = Math.round(w * scale);
+                h = Math.round(h * scale);
+            }
+
+            const buf = await sharp(fullPath)
+                .resize(w, h, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+                .toBuffer();
+
+            buckets[pos].push({
+                buf,
+                w,
+                h,
+                layerKey
+            });
+            return true;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    // Dovetailed Resolution & HDR Combination (Kometa stock PNG or procedural SVG)
     const shouldDovetail = (options.dovetailResolutionHdr !== false) &&
         options.showResolution !== false &&
         options.showHdr !== false &&
@@ -1881,15 +2081,27 @@ export async function applyOverlaysToPoster(
         Boolean(mediaInfo.detectedBadges.resolution);
 
     if (shouldDovetail) {
-        const dtSvg = generateDovetailedResolutionHdrBadgeSvg(
-            mediaInfo.detectedBadges.resolution!,
-            mediaInfo.detectedBadges.hdr,
-            options.theme
-        );
-        await pushSvgToBucket(resPos, dtSvg, "resolution");
+        const stockRes = resolveStockResolutionBadgePath(mediaInfo.detectedBadges.resolution!, mediaInfo.detectedBadges.hdr);
+        let stockApplied = false;
+        if (stockRes) {
+            stockApplied = await pushStockImageToBucket(resPos, stockRes, "resolution", 220, 50);
+        }
+        if (!stockApplied) {
+            const dtSvg = generateDovetailedResolutionHdrBadgeSvg(
+                mediaInfo.detectedBadges.resolution!,
+                mediaInfo.detectedBadges.hdr,
+                options.theme
+            );
+            await pushSvgToBucket(resPos, dtSvg, "resolution");
+        }
     } else {
         if (options.showResolution !== false && mediaInfo.detectedBadges.resolution && !hasCustomResolution) {
-            await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme), "resolution");
+            const stockRes = resolveStockResolutionBadgePath(mediaInfo.detectedBadges.resolution!, null);
+            let stockApplied = false;
+            if (stockRes) stockApplied = await pushStockImageToBucket(resPos, stockRes, "resolution", 140, 46);
+            if (!stockApplied) {
+                await pushSvgToBucket(resPos, generateResolutionBadgeSvg(mediaInfo.detectedBadges.resolution, options.theme), "resolution");
+            }
         }
         if (options.showHdr !== false && mediaInfo.detectedBadges.hdr && !hasCustomHdr) {
             await pushSvgToBucket(hdrPos, generateHdrBadgeSvg(mediaInfo.detectedBadges.hdr, options.theme), "hdr");
@@ -1899,13 +2111,23 @@ export async function applyOverlaysToPoster(
         await pushSvgToBucket(codecPos, generateCodecBadgeSvg(mediaInfo.detectedBadges.codec, options.theme), "codec");
     }
     if (options.showAudio !== false && mediaInfo.detectedBadges.audio && !hasCustomAudio) {
-        await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio, options.theme), "audio");
+        const stockAudio = resolveStockAudioCodecBadgePath(mediaInfo.detectedBadges.audio);
+        let stockApplied = false;
+        if (stockAudio) stockApplied = await pushStockImageToBucket(audioPos, stockAudio, "audio", 140, 46);
+        if (!stockApplied) {
+            await pushSvgToBucket(audioPos, generateAudioBadgeSvg(mediaInfo.detectedBadges.audio, options.theme), "audio");
+        }
     }
     if (options.showAudioChannels && mediaInfo.detectedBadges.audioChannels) {
         await pushSvgToBucket(channelsPos, generateAudioChannelBadgeSvg(mediaInfo.detectedBadges.audioChannels, options.theme), "channels");
     }
     if (options.showEdition && mediaInfo.detectedBadges.edition && !hasCustomEdition) {
-        await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition, options.theme), "edition");
+        const stockEdition = resolveStockEditionBadgePath(mediaInfo.detectedBadges.edition);
+        let stockApplied = false;
+        if (stockEdition) stockApplied = await pushStockImageToBucket(editionPos, stockEdition, "edition", 140, 46);
+        if (!stockApplied) {
+            await pushSvgToBucket(editionPos, generateEditionBadgeSvg(mediaInfo.detectedBadges.edition, options.theme), "edition");
+        }
     }
     if (options.showStudio && mediaInfo.detectedBadges.studio && !hasCustomStudio) {
         await pushSvgToBucket(studioPos, generateStudioLogoBadgeSvg(mediaInfo.detectedBadges.studio, options.theme), "studio");

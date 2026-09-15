@@ -44,7 +44,9 @@ import {
     CheckSquare,
     Square,
     CheckCheck,
-    AlertTriangle
+    AlertTriangle,
+    BookOpen,
+    HelpCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,6 +59,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurationNavHeader } from "./curation-nav-header";
 import { PlexPosterPickerModal } from "./plex-poster-picker-modal";
+import { KometaOverlaysGuideModal } from "./kometa-overlays-guide-modal";
 import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import {
     getPlexServersAndSectionsAction,
@@ -343,6 +346,7 @@ export function KometaStudio() {
 
     // Kometa Config YAML Importer States
     const [kometaModalOpen, setKometaModalOpen] = useState(false);
+    const [guideModalOpen, setGuideModalOpen] = useState(false);
     const [kometaInspecting, setKometaInspecting] = useState(false);
     const [kometaImporting, setKometaImporting] = useState(false);
     const [kometaLoadingDisk, setKometaLoadingDisk] = useState(false);
@@ -2534,6 +2538,16 @@ export function KometaStudio() {
                             <Button
                                 type="button"
                                 size="sm"
+                                variant="outline"
+                                onClick={() => setGuideModalOpen(true)}
+                                className="border-purple-500/40 text-purple-300 hover:text-white hover:bg-purple-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm"
+                            >
+                                <BookOpen className="h-3.5 w-3.5 text-purple-400" />
+                                <span>📖 Overlays &amp; Badges Guide</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
                                 onClick={() => setKometaModalOpen(true)}
                                 className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer"
                             >
@@ -3457,6 +3471,16 @@ export function KometaStudio() {
                                     </CardDescription>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setGuideModalOpen(true)}
+                                        className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5 cursor-pointer"
+                                    >
+                                        <HelpCircle className="h-3.5 w-3.5 text-purple-400" />
+                                        <span>📖 Guide &amp; Rules</span>
+                                    </Button>
                                     <Button
                                         type="button"
                                         size="sm"
@@ -4611,6 +4635,12 @@ export function KometaStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Comprehensive Stock & Custom Overlays Guide Modal */}
+            <KometaOverlaysGuideModal
+                open={guideModalOpen}
+                onOpenChange={setGuideModalOpen}
+            />
         </div>
     );
 }

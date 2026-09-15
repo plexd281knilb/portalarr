@@ -70,17 +70,23 @@ import {
 import {
     applyParentalTagsToLibrary,
     clearParentalTagsFromLibrary,
-    resolveParentalAdvisory,
-    saveParentalAdvisory,
+    getStoredParentalAdvisoriesForLibrary,
+    applyCustomTagRuleToLibrary,
+    clearCustomTagFromLibrary,
+    getPlexLibraryTagsAudit,
     getServerGuardRailsMap,
     getServerGuardRailConfig,
     saveServerGuardRailConfig,
     saveAllServerGuardRails,
     isMediaAllowedByServerGuardRail,
+    resolveParentalAdvisory,
+    saveParentalAdvisory,
+    getStoredParentalAdvisory,
     ServerGuardRailConfig,
     ParentalTaggingOptions,
     ParentalCategoryKey,
-    ParentalSeverity
+    ParentalSeverity,
+    CustomTagRule
 } from "@/lib/curation/parental-guide";
 import {
     parseKometaYamlString,
@@ -3510,6 +3516,73 @@ export async function saveAllServerGuardRailsAction(configs: Record<string, Serv
         return res;
     } catch (e: any) {
         return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Retrieves stored parental advisories for all items in a library section.
+ */
+export async function getStoredParentalAdvisoriesForLibraryAction(
+    serverId: string,
+    sectionKey: string | number
+) {
+    await verifyAdmin();
+    try {
+        const res = await getStoredParentalAdvisoriesForLibrary(serverId, sectionKey);
+        return { success: true, items: res.items };
+    } catch (e: any) {
+        return { success: false, items: [], error: e.message };
+    }
+}
+
+/**
+ * Applies a custom tagging rule (Label, Genre, Collection) across a library section.
+ */
+export async function applyCustomTagRuleAction(
+    serverId: string,
+    sectionKey: string | number,
+    rule: CustomTagRule
+) {
+    await verifyAdmin();
+    try {
+        const res = await applyCustomTagRuleToLibrary(serverId, sectionKey, rule);
+        return res;
+    } catch (e: any) {
+        return { success: false, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, error: e.message };
+    }
+}
+
+/**
+ * Clears a specific custom tag from a library section.
+ */
+export async function clearCustomTagFromLibraryAction(
+    serverId: string,
+    sectionKey: string | number,
+    tagName: string,
+    field: "label" | "genre" | "collection" = "label"
+) {
+    await verifyAdmin();
+    try {
+        const res = await clearCustomTagFromLibrary(serverId, sectionKey, tagName, field);
+        return res;
+    } catch (e: any) {
+        return { success: false, clearedCount: 0, error: e.message };
+    }
+}
+
+/**
+ * Retrieves an audit of all active tags, genres, and collections across a library section.
+ */
+export async function getPlexLibraryTagsAuditAction(
+    serverId: string,
+    sectionKey: string | number
+) {
+    await verifyAdmin();
+    try {
+        const res = await getPlexLibraryTagsAudit(serverId, sectionKey);
+        return { success: true, ...res };
+    } catch (e: any) {
+        return { success: false, labels: [], genres: [], collections: [], totalItems: 0, error: e.message };
     }
 }
 

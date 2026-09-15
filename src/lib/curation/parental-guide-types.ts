@@ -22,12 +22,12 @@ export interface ParentalTaggingOptions {
     dryRun?: boolean;
 }
 
-export const PARENTAL_CATEGORY_INFO: Record<ParentalCategoryKey, { label: string; short: string; icon: string }> = {
-    nudity: { label: "Sex & Nudity", short: "Nudity", icon: "🔞" },
-    violence: { label: "Violence & Gore", short: "Violence", icon: "🩸" },
-    profanity: { label: "Profanity", short: "Profanity", icon: "🤬" },
-    alcohol: { label: "Alcohol, Drugs & Smoking", short: "Alcohol", icon: "🍷" },
-    frightening: { label: "Frightening & Intense Scenes", short: "Frightening", icon: "😱" }
+export const PARENTAL_CATEGORY_INFO: Record<ParentalCategoryKey, { label: string; short: string; icon: string; description: string }> = {
+    nudity: { label: "Sex & Nudity", short: "Nudity", icon: "🔞", description: "Sexual content, nudity, and suggestive scenes" },
+    violence: { label: "Violence & Gore", short: "Violence", icon: "🩸", description: "Graphic combat, bloodshed, injuries, and weapons" },
+    profanity: { label: "Profanity", short: "Profanity", icon: "🤬", description: "Strong explicit language, slurs, and swearing" },
+    alcohol: { label: "Alcohol, Drugs & Smoking", short: "Alcohol", icon: "🍷", description: "Substance usage, intoxication, and narcotics" },
+    frightening: { label: "Frightening & Intense Scenes", short: "Frightening", icon: "😱", description: "Jumpscares, terror, psychological horror, and suspense" }
 };
 
 export const SEVERITY_LEVELS: Record<ParentalSeverity, number> = {
