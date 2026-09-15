@@ -115,6 +115,12 @@ model Settings {
   parentalTagTarget                String?   @default("labels") // "labels" (Plex Sharing Labels), "genres" (Plex Genres), "both"
   parentalMinSeverity              String?   @default("Mild") // "Severe", "Moderate", "Mild", "None"
   parentalCategories               String?   @default("[\"nudity\",\"violence\",\"profanity\",\"alcohol\",\"frightening\"]") // JSON array
+
+  // Payment Email Scraper & Verification Controls
+  paymentEmailAutoScan             Boolean   @default(true)
+  paymentEmailScanInterval         Int?      @default(15) // Minutes interval between auto-scans
+  paymentLastScanAt                DateTime?
+  paymentLastScanResult            String?   // JSON telemetry summary
 }
 
 model PlexServer {
@@ -185,6 +191,7 @@ model User {
   convertedAt            DateTime? // When trial converted to paying subscriber
   lastLogin              DateTime? // Last time the user logged in
   createdAt              DateTime  @default(now())
+  paymentTransactions    PaymentTransaction[]
 }
 
 model SupportTicket {
@@ -468,4 +475,52 @@ model MediaContentAdvisory {
   updatedAt             DateTime  @updatedAt
 
   @@unique([ratingKey, serverId])
+}
+
+model PaymentEmailSource {
+  id            String               @id @default(cuid())
+  name          String               // e.g. "Primary Gmail (Venmo & Zelle)", "PayPal Dedicated"
+  host          String               // e.g. "imap.gmail.com"
+  port          Int                  @default(993)
+  secure        Boolean              @default(true) // TLS / SSL
+  user          String               // IMAP login email or username
+  pass          String               // Encrypted password or app-password
+  mailbox       String               @default("INBOX")
+  enabled       Boolean              @default(true)
+  lastScannedAt DateTime?
+  lastStatus    String?
+  lastUid       Int?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @default(now()) @updatedAt
+  transactions  PaymentTransaction[]
+}
+
+model PaymentTransaction {
+  id                        String              @id @default(cuid())
+  sourceId                  String?
+  source                    PaymentEmailSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  provider                  String              // "VENMO", "PAYPAL", "ZELLE", "CASHAPP", "OTHER"
+  externalTxId              String?             // Transaction ID / Reference number from email
+  senderName                String?             // Name of the payer (e.g. "John Smith")
+  senderEmail               String?             // Email of the payer (e.g. "john@gmail.com")
+  senderHandle              String?             // Venmo @handle or CashApp $cashtag
+  amount                    Float               // Payment amount (e.g. 180.00)
+  currency                  String              @default("USD")
+  note                      String?             // Payment memo / comment / note
+  emailSubject              String?             // Original email subject line
+  emailDate                 DateTime            // Timestamp of the payment email
+  emailUid                  String?             // IMAP message UID
+  matchedUserId             String?             // ID of the matched Portalarr user
+  matchedUser               User?               @relation(fields: [matchedUserId], references: [id], onDelete: SetNull)
+  status                    String              @default("PROCESSED") // "PROCESSED", "UNMATCHED", "MANUAL", "IGNORED"
+  appliedSubscription       Boolean             @default(false)       // Whether subscription was granted
+  subscriptionPeriodGranted String?             // Summary e.g. "1 Year (Valid to 2027-09-15)"
+  adminNotes                String?
+  rawPayload                String?             // JSON debug snapshot
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @default(now()) @updatedAt
+
+  @@unique([provider, externalTxId])
+  @@index([matchedUserId])
+  @@index([emailDate])
 }

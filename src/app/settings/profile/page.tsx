@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
 import { getUserReferralInfo, getPublicJoinConfig, updateCurrentUserKindleEmail } from "@/app/actions";
+import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
     User, Mail, KeyRound, CheckCircle2, XCircle, Loader2, ShieldCheck, 
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
-    CreditCard, Calendar, AlertCircle, Trash2
+    CreditCard, Calendar, AlertCircle, Trash2, RefreshCw
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
@@ -25,11 +26,38 @@ export default function UserProfilePage() {
     const [copied, setCopied] = useState(false);
     const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
 
+    // Check Access & Payment Status State
+    const [checkingStatus, setCheckingStatus] = useState(false);
+    const [statusSyncMsg, setStatusSyncMsg] = useState("");
+    const [statusSyncErr, setStatusSyncErr] = useState("");
+
     const handleCopy = (text: string, key: string) => {
         if (!text) return;
         navigator.clipboard.writeText(text);
         setCopiedHandle(key);
         setTimeout(() => setCopiedHandle(null), 2000);
+    };
+
+    const handleRecheckStatus = async () => {
+        setCheckingStatus(true);
+        setStatusSyncMsg("");
+        setStatusSyncErr("");
+        try {
+            const res = await recheckUserAccessAndPaymentAction();
+            if (res.success) {
+                if (res.user) setUser(res.user);
+                setStatusSyncMsg(res.message || "Payment status and access verification complete!");
+                const ref = await getUserReferralInfo();
+                if (ref?.success) setReferralInfo(ref);
+                setTimeout(() => setStatusSyncMsg(""), 6000);
+            } else {
+                setStatusSyncErr(res.error || "Failed to sync payment status.");
+            }
+        } catch (err: any) {
+            setStatusSyncErr(err.message || "Error checking access status");
+        } finally {
+            setCheckingStatus(false);
+        }
     };
 
     // Change Password State
@@ -166,11 +194,36 @@ export default function UserProfilePage() {
                         Manage your account credentials, Send-to-Kindle delivery address, and invite friends with your personal link.
                     </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRecheckStatus}
+                        disabled={checkingStatus}
+                        className="h-9 px-3 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+                        title="Ping payment email inboxes to verify new Venmo/PayPal/Zelle payments and refresh access"
+                    >
+                        <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin text-emerald-400" : ""}`} />
+                        {checkingStatus ? "Checking Payment Emails..." : "Check Access & Payment Status"}
+                    </Button>
                     <ServerSpeedTest />
                     <PlexSetupGuides />
                 </div>
             </div>
+
+            {/* STATUS SYNC ALERT FEEDBACK */}
+            {statusSyncMsg && (
+                <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                    <span>{statusSyncMsg}</span>
+                </div>
+            )}
+            {statusSyncErr && (
+                <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-500/40 text-red-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
+                    <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                    <span>{statusSyncErr}</span>
+                </div>
+            )}
 
             {/* REFERRAL & INVITE LINK CARD */}
             <Card id="referral" className="border-purple-500/30 bg-purple-950/10 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">

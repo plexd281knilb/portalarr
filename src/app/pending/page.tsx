@@ -3,16 +3,19 @@
 import { useEffect, useState } from "react";
 import { getCurrentUser, logout } from "@/app/auth-actions";
 import { getPublicJoinConfig } from "@/app/actions";
+import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Clock, MailCheck, LogOut, RefreshCw, ShieldAlert, AlertTriangle, CreditCard, DollarSign, Copy, Check, Calendar } from "lucide-react";
 
 export default function PendingPage() {
-  const [user, setUser] = useState<{ username: string; email: string; status?: string } | null>(null);
+  const [user, setUser] = useState<{ username: string; email: string; status?: string; subscriptionEndsAt?: Date | null; trialEndsAt?: Date | null } | null>(null);
   const [paymentConfig, setPaymentConfig] = useState<any>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
+  const [checkMsg, setCheckMsg] = useState<string | null>(null);
+  const [checkErr, setCheckErr] = useState<string | null>(null);
 
   const handleCopy = (text: string, key: string) => {
     if (!text) return;
@@ -22,7 +25,7 @@ export default function PendingPage() {
   };
 
   useEffect(() => {
-    fetchUser();
+    fetchUser(false);
     getPublicJoinConfig().then(res => {
       if (res?.success && res.config) {
         setPaymentConfig(res.config);
@@ -30,18 +33,45 @@ export default function PendingPage() {
     }).catch(() => {});
   }, []);
 
-  async function fetchUser() {
+  async function fetchUser(isManualClick: boolean = false) {
     setIsRefreshing(true);
+    setCheckMsg(null);
+    setCheckErr(null);
     try {
-      const u = await getCurrentUser();
-      if (u) {
-        setUser(u);
-        if (u.status === "APPROVED" || u.status === "TRIAL") {
-          window.location.href = "/";
+      if (isManualClick) {
+        const res = await recheckUserAccessAndPaymentAction();
+        if (res.success && res.user) {
+          setUser(res.user);
+          if (res.isSubscribed) {
+            setCheckMsg(`Payment detected! Subscribed until ${res.user.subscriptionEndsAt ? new Date(res.user.subscriptionEndsAt).toLocaleDateString() : 'Active'}. Redirecting...`);
+            setTimeout(() => {
+              window.location.href = "/";
+            }, 1500);
+            return;
+          }
+          if (res.user.status === "APPROVED" || res.user.status === "TRIAL") {
+            setCheckMsg("Account approved! Redirecting to dashboard...");
+            setTimeout(() => {
+              window.location.href = "/";
+            }, 1000);
+            return;
+          }
+          setCheckMsg(res.message || "Checked payment emails. No new payment matching your account was found yet.");
+        } else {
+          setCheckErr(res.error || "Could not check payment status.");
+        }
+      } else {
+        const u = await getCurrentUser();
+        if (u) {
+          setUser(u);
+          if (u.status === "APPROVED" || u.status === "TRIAL") {
+            window.location.href = "/";
+          }
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setCheckErr(e.message || "Failed to check status.");
     } finally {
       setIsRefreshing(false);
     }
@@ -240,7 +270,21 @@ export default function PendingPage() {
 
           {!isRejected && (
             <div className="text-center space-y-1 text-xs text-muted-foreground">
-              <p>Once activated, clicking below will verify your status and grant access to the dashboard.</p>
+              <p>Once paid or activated, clicking below will verify your status, check payment emails, and grant access to the dashboard.</p>
+            </div>
+          )}
+
+          {checkMsg && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-400 font-medium flex items-center gap-2">
+              <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+              <span>{checkMsg}</span>
+            </div>
+          )}
+
+          {checkErr && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400 font-medium flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 shrink-0 text-red-400" />
+              <span>{checkErr}</span>
             </div>
           )}
 
@@ -250,11 +294,11 @@ export default function PendingPage() {
                 type="button" 
                 variant="default" 
                 className="w-full h-11 font-semibold gap-2 hover:ring-2 hover:ring-primary/40 hover:shadow-lg active:scale-95 transition-all"
-                onClick={fetchUser}
+                onClick={() => fetchUser(true)}
                 disabled={isRefreshing}
               >
                 <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                Check Access Status
+                {isRefreshing ? "Checking Payment Emails..." : "Check Access & Payment Status"}
               </Button>
             )}
 

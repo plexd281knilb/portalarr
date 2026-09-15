@@ -1298,8 +1298,27 @@ if (!globalForScheduler.schedulerInitialized) {
                 });
               }
             }
-          } catch (curationJobErr: any) {
-            console.error("[BACKGROUND-JOB] Error in curation job checker:", curationJobErr.message || curationJobErr);
+          } catch (curationErr: any) {
+            console.error("[BACKGROUND-JOB] Error in curation timer runner:", curationErr.message || curationErr);
+          }
+
+          // Auto-run automated Payment Email Scraper timer job
+          try {
+            const paymentAutoScan = settings?.paymentEmailAutoScan ?? true;
+            if (paymentAutoScan) {
+              const scanIntervalMin = settings?.paymentEmailScanInterval || 15;
+              const requiredIntervalMs = scanIntervalMin * 60 * 1000;
+              const lastScan = settings?.paymentLastScanAt;
+              if (!lastScan || (now.getTime() - lastScan.getTime()) >= requiredIntervalMs) {
+                console.log(`[PAYMENT-TIMER] Triggering scheduled payment email scan (every ${scanIntervalMin}m)...`);
+                const { scanPaymentEmailsInternal } = await import("./payment-email-scraper");
+                await scanPaymentEmailsInternal().catch(pErr => {
+                  console.error("[PAYMENT-TIMER] Error in payment email scraper background runner:", pErr.message || pErr);
+                });
+              }
+            }
+          } catch (payJobErr: any) {
+            console.error("[BACKGROUND-JOB] Error in payment scraper checker:", payJobErr.message || payJobErr);
           }
 
           await prisma.settings.upsert({

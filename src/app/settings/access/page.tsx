@@ -40,6 +40,7 @@ import {
     Eye
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
+import PaymentEmailManager from "@/components/payment-email-manager";
 
 export default function AccessSettingsPage() {
     const [activeTab, setActiveTab] = useState("users");
@@ -721,7 +722,7 @@ export default function AccessSettingsPage() {
 
             {/* TOP NAVIGATION TABS */}
             <Tabs defaultValue="users" value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-                <TabsList className="grid grid-cols-1 sm:grid-cols-3 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-4 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
                     <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <Users className="h-4 w-4 shrink-0" /> <span className="truncate">User Directory ({users.length})</span>
                     </TabsTrigger>
@@ -730,6 +731,9 @@ export default function AccessSettingsPage() {
                     </TabsTrigger>
                     <TabsTrigger value="onboarding" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <CreditCard className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Payment & Onboarding</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="scraper" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
+                        <DollarSign className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Email Payment Scraper</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -1767,6 +1771,13 @@ export default function AccessSettingsPage() {
                             </form>
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* TAB 4: EMAIL PAYMENT SCRAPER & AUTOMATED SUBSCRIPTION FULFILLMENT */}
+                {/* ========================================================================= */}
+                <TabsContent value="scraper" className="space-y-6 animate-in fade-in-50 duration-200">
+                    <PaymentEmailManager />
                 </TabsContent>
             </Tabs>
 
