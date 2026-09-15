@@ -146,7 +146,7 @@ export function CurationNavHeader({
 
             {/* 4-Way Mode Switcher Navigation Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-lg backdrop-blur-md overflow-x-auto">
-                <Link href="/curation" className="flex-1 min-w-[180px]">
+                <Link href="/curation/kometa" className="flex-1 min-w-[180px]">
                     <button
                         type="button"
                         className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${

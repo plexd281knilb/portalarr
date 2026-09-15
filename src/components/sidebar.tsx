@@ -175,7 +175,7 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                 <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   Administration
                 </div>
-                <Link href="/curation">
+                <Link href="/curation/kometa">
                   <Button
                     variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
                     className={cn(
@@ -443,7 +443,7 @@ export function MobileSidebar() {
                       <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                         Administration
                       </div>
-                      <Link href="/curation" onClick={() => setIsOpen(false)}>
+                      <Link href="/curation/kometa" onClick={() => setIsOpen(false)}>
                         <Button
                           variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
                           className={cn(
