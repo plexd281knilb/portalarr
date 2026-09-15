@@ -107,6 +107,8 @@ interface CustomBadgeItem {
     category?: string;
     matchRule?: string | null;
     filePath?: string;
+    fileType?: string;
+    mimeType?: string;
     position?: string;
     width?: number;
     height?: number;
@@ -3718,52 +3720,39 @@ export function KometaStudio() {
                                                 <div
                                                     key={badge.id}
                                                     onClick={() => handleToggleSelectCustomBadge(badge.id)}
-                                                    className={`p-3 rounded-xl border transition-all flex flex-col justify-between gap-2.5 cursor-pointer ${
+                                                    className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 cursor-pointer group/card ${
                                                         isSelected
-                                                            ? "bg-purple-950/40 border-2 border-purple-500 shadow-lg shadow-purple-950/40 ring-1 ring-purple-500/40"
+                                                            ? "bg-purple-950/40 border-2 border-purple-500 shadow-xl shadow-purple-950/50 ring-1 ring-purple-500/40"
                                                             : isEnabled
-                                                                ? "bg-slate-950/90 border-slate-800 hover:border-purple-500/50 shadow-md"
+                                                                ? "bg-slate-950/90 border-slate-800/90 hover:border-purple-500/60 shadow-lg hover:shadow-purple-950/20"
                                                                 : "bg-slate-950/40 border-slate-900 opacity-60 hover:opacity-100"
                                                     }`}
                                                 >
-                                                    <div className="flex items-start justify-between gap-2" onClick={e => e.stopPropagation()}>
-                                                        <div className="flex items-center gap-2">
+                                                    {/* Card Header */}
+                                                    <div className="flex items-center justify-between gap-2" onClick={e => e.stopPropagation()}>
+                                                        <div className="flex items-center gap-2 overflow-hidden">
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleToggleSelectCustomBadge(badge.id)}
-                                                                className="text-slate-400 hover:text-white shrink-0"
+                                                                className="text-slate-400 hover:text-white shrink-0 p-0.5"
                                                                 title={isSelected ? "Deselect" : "Select"}
                                                             >
                                                                 {isSelected ? (
                                                                     <CheckSquare className="h-4 w-4 text-purple-400" />
                                                                 ) : (
-                                                                    <Square className="h-4 w-4 text-slate-600" />
+                                                                    <Square className="h-4 w-4 text-slate-600 group-hover/card:text-slate-400" />
                                                                 )}
                                                             </button>
-                                                            <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 overflow-hidden p-1">
-                                                                {badge.filePath ? (
-                                                                    <img 
-                                                                        src={`/api/media/badge/${badge.id}?t=${Date.now()}`} 
-                                                                        alt={badge.name} 
-                                                                        className="w-full h-full object-contain"
-                                                                        onError={(e) => {
-                                                                            (e.target as HTMLElement).style.display = "none";
-                                                                        }}
-                                                                    />
-                                                                ) : (
-                                                                    <Zap className="h-4 w-4 text-amber-400" />
-                                                                )}
-                                                            </div>
                                                             <div className="space-y-0.5 overflow-hidden">
-                                                                <span className="font-bold text-white text-xs block truncate" title={badge.name}>
+                                                                <span className="font-black text-white text-xs block truncate tracking-tight" title={badge.name}>
                                                                     {badge.name}
                                                                 </span>
-                                                                <div className="flex items-center gap-1">
-                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono capitalize border-slate-700 text-slate-300">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-mono capitalize border-slate-700 text-slate-300 bg-slate-900">
                                                                         {badge.category || "custom"}
                                                                     </Badge>
                                                                     {badge.matchRule && (
-                                                                        <span className="text-[9px] font-mono text-amber-300 truncate max-w-[80px]" title={`Rule: ${badge.matchRule}`}>
+                                                                        <span className="text-[9px] font-mono text-amber-300 font-bold bg-amber-950/50 border border-amber-500/30 px-1 py-0 rounded truncate max-w-[100px]" title={`Rule: ${badge.matchRule}`}>
                                                                             {badge.matchRule}
                                                                         </span>
                                                                     )}
@@ -3776,14 +3765,37 @@ export function KometaStudio() {
                                                         />
                                                     </div>
 
+                                                    {/* High-DPI Visual Badge Preview Showcase */}
+                                                    <div className="h-20 w-full rounded-lg bg-gradient-to-b from-slate-900/90 to-slate-950/90 border border-slate-800/80 flex items-center justify-center p-3 relative overflow-hidden bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:10px_10px] shadow-inner group/badge transition-all group-hover/card:border-purple-500/30">
+                                                        <img 
+                                                            src={`/api/curation/badges/${encodeURIComponent(badge.id)}?t=${Date.now()}`} 
+                                                            alt={badge.name} 
+                                                            className="max-h-14 max-w-[90%] object-contain drop-shadow-lg transition-transform duration-200 group-hover/badge:scale-105"
+                                                            onError={(e) => {
+                                                                const target = e.target as HTMLElement;
+                                                                target.style.display = "none";
+                                                                const fallback = target.parentElement?.querySelector(".badge-fallback-mockup") as HTMLElement;
+                                                                if (fallback) fallback.style.display = "flex";
+                                                            }}
+                                                        />
+                                                        <div 
+                                                            style={{ display: "none" }}
+                                                            className="badge-fallback-mockup flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-purple-500/40 bg-purple-950/60 text-purple-200 text-xs font-black tracking-wider uppercase shadow-md"
+                                                        >
+                                                            <Sparkles className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                                            <span className="truncate">{badge.name}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Card Footer Controls */}
                                                     <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-900 text-[10px]" onClick={e => e.stopPropagation()}>
                                                         <div className="flex items-center gap-1">
-                                                            <span className="text-slate-500">Pos:</span>
+                                                            <span className="text-slate-500 font-medium">Pos:</span>
                                                             <Select 
                                                                 value={badge.position || "top-right"} 
                                                                 onValueChange={(val) => handleUpdateCustomBadgePosition(badge.id, val)}
                                                             >
-                                                                <SelectTrigger className="h-5 w-24 bg-slate-900 border-slate-800 text-[9px] py-0 px-1.5">
+                                                                <SelectTrigger className="h-6 w-24 bg-slate-900 border-slate-800 text-[10px] py-0 px-1.5 font-mono">
                                                                     <SelectValue />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
@@ -3797,17 +3809,17 @@ export function KometaStudio() {
                                                             </Select>
                                                         </div>
 
-                                                        <div className="flex items-center gap-1">
-                                                            <Badge className="text-[8px] px-1 py-0 bg-purple-950 text-purple-300 border-purple-500/30">
-                                                                ⚡ P1
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-800 text-slate-400 font-mono">
+                                                                {badge.fileType ? badge.fileType.toUpperCase() : "SVG"}
                                                             </Badge>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleDeleteCustomBadge(badge.id)}
-                                                                className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
+                                                                className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 transition-colors"
                                                                 title="Delete Custom Badge"
                                                             >
-                                                                <Trash2 className="h-3 w-3" />
+                                                                <Trash2 className="h-3.5 w-3.5" />
                                                             </button>
                                                         </div>
                                                     </div>
