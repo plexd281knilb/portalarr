@@ -3268,6 +3268,7 @@ export async function getPaymentAndTrialSettings() {
 
 export async function getUserReferralInfo() {
     try {
+        await ensureSchemaColumns();
         const user: any = await verifyUser();
         const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
@@ -3463,7 +3464,8 @@ export async function registerTrialUserFromInvite(data: {
 
 export async function getPublicJoinConfig(refCode?: string) {
     try {
-        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
         let referrerName: string | null = null;
         let validReferral = false;
 

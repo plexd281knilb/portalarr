@@ -279,7 +279,11 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "parentalTagPrefix" TEXT DEFAULT 'IMDb',
                     "parentalTagTarget" TEXT DEFAULT 'labels',
                     "parentalMinSeverity" TEXT DEFAULT 'Mild',
-                    "parentalCategories" TEXT DEFAULT '["nudity","violence","profanity","alcohol","frightening"]'
+                    "parentalCategories" TEXT DEFAULT '["nudity","violence","profanity","alcohol","frightening"]',
+                    "paymentEmailAutoScan" BOOLEAN NOT NULL DEFAULT 1,
+                    "paymentEmailScanInterval" INTEGER DEFAULT 15,
+                    "paymentLastScanAt" DATETIME,
+                    "paymentLastScanResult" TEXT
                 );
             `);
 
@@ -371,7 +375,11 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["parentalTagPrefix", `ALTER TABLE "Settings" ADD COLUMN "parentalTagPrefix" TEXT DEFAULT 'IMDb';`],
                 ["parentalTagTarget", `ALTER TABLE "Settings" ADD COLUMN "parentalTagTarget" TEXT DEFAULT 'labels';`],
                 ["parentalMinSeverity", `ALTER TABLE "Settings" ADD COLUMN "parentalMinSeverity" TEXT DEFAULT 'Mild';`],
-                ["parentalCategories", `ALTER TABLE "Settings" ADD COLUMN "parentalCategories" TEXT DEFAULT '["nudity","violence","profanity","alcohol","frightening"]';`]
+                ["parentalCategories", `ALTER TABLE "Settings" ADD COLUMN "parentalCategories" TEXT DEFAULT '["nudity","violence","profanity","alcohol","frightening"]';`],
+                ["paymentEmailAutoScan", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailAutoScan" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["paymentEmailScanInterval", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailScanInterval" INTEGER DEFAULT 15;`],
+                ["paymentLastScanAt", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanAt" DATETIME;`],
+                ["paymentLastScanResult", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanResult" TEXT;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -1052,6 +1060,62 @@ export async function ensureSchemaColumns(): Promise<void> {
             console.error("[DB-SCHEMA-AUTOFIX] Failed to create Curation tables:", e.message || e);
         }
 
+        // --- 11. PAYMENT EMAIL SOURCES & TRANSACTIONS TABLES ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "PaymentEmailSource" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "host" TEXT NOT NULL,
+                    "port" INTEGER NOT NULL DEFAULT 993,
+                    "secure" BOOLEAN NOT NULL DEFAULT 1,
+                    "user" TEXT NOT NULL,
+                    "pass" TEXT NOT NULL,
+                    "mailbox" TEXT NOT NULL DEFAULT 'INBOX',
+                    "enabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "lastScannedAt" DATETIME,
+                    "lastStatus" TEXT,
+                    "lastUid" INTEGER NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "PaymentTransaction" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "sourceId" TEXT,
+                    "provider" TEXT NOT NULL,
+                    "externalTxId" TEXT,
+                    "senderName" TEXT,
+                    "senderEmail" TEXT,
+                    "senderHandle" TEXT,
+                    "amount" REAL NOT NULL,
+                    "currency" TEXT NOT NULL DEFAULT 'USD',
+                    "note" TEXT,
+                    "emailSubject" TEXT NOT NULL,
+                    "emailDate" DATETIME NOT NULL,
+                    "emailUid" TEXT NOT NULL,
+                    "matchedUserId" TEXT,
+                    "status" TEXT NOT NULL DEFAULT 'UNMATCHED',
+                    "appliedSubscription" BOOLEAN NOT NULL DEFAULT 0,
+                    "subscriptionPeriodGranted" TEXT,
+                    "adminNotes" TEXT,
+                    "rawPayload" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("sourceId") REFERENCES "PaymentEmailSource" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+                    FOREIGN KEY ("matchedUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+                );
+            `);
+
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PaymentTransaction_matchedUserId_idx" ON "PaymentTransaction"("matchedUserId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PaymentTransaction_provider_externalTxId_idx" ON "PaymentTransaction"("provider", "externalTxId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PaymentTransaction_emailDate_idx" ON "PaymentTransaction"("emailDate");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Payment tables check error:", e.message || e);
+        }
+
         schemaPatchCompleted = true;
     } catch (globalErr: any) {
         console.error("[DB-SCHEMA-AUTOFIX] Critical error in ensureSchemaColumns:", globalErr.message || globalErr);
@@ -1106,6 +1170,8 @@ if (!globalForScheduler.schedulerInitialized) {
     
     // Check every minute if periodic scan or trial expirations are due
     setInterval(async () => {
+      await ensureSchemaColumns().catch(() => {});
+
       // Evaluate expired trials and subscriptions every minute down to the minute
       try {
         const { expireDueTrialsAndSubscriptionsInternal } = await import("../app/actions");
@@ -1118,7 +1184,7 @@ if (!globalForScheduler.schedulerInitialized) {
         return;
       }
       try {
-        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
         const intervalMinutes = settings?.autoSyncInterval || 5; // Default to 5 minutes
         
         const lastSync = settings?.lastAutoSync;
