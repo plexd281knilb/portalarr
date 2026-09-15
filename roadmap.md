@@ -31,6 +31,12 @@
   - Dedicated **Kid Accounts** with automated parental rating filters and safe content restrictions.
   - Dedicated **Main Living Room / Shared Household Accounts** tailored for family-safe, multi-user living room streaming setups.
 
+- **🤖 Step 4: AI Log Ingestion & Deep Server Log Diagnostics (Plex & System Log Analysis)**
+  - Automated Plex Media Server, Tautulli, Transcoder, and Arr log ingestion directly into Portalarr.
+  - Persistent server log storage and indexing with live snapshot captures.
+  - Deep AI Agent log inspection: When users or admins encounter playback errors, transcoder crashes, or connection drops, the AI agent can analyze exact log excerpts, correlate them with user playback timestamps, and diagnose the root cause with pinpoint device/server remedies.
+  - Automatic error pattern detection with 1-click administrative diagnostic reports and proactive fix recommendations.
+
 
 ---
 

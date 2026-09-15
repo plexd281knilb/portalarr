@@ -42,6 +42,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
     - **Step 1 — Curation & Poster Studio (Agregarr & Kometa Replacement):** Native built-in collection generator, dynamic smart playlists, automated poster overlays (4K HDR, Dolby Vision/Atmos), Media Inspector stream telemetry, and storage prune engine.
     - **Step 2 — Native *Seerr Replacement (Overseerr / Jellyseerr):** All-in-one native Movie & TV media discovery, interactive trailer playback, trending carousels, and Radarr/Sonarr request engine eliminating external Overseerr/Jellyseerr containers, featuring quotas, auto-approvals, and stream readiness notifications.
     - **Step 3 — User Authorization, Personal Visibility & Kid/Living Room Accounts:** Finalized granular authorization giving users full control over what they see (customizable tag, genre, and collection toggles), plus dedicated Kid Accounts (content restrictions) and Main Living Room / Shared Household account profiles.
+    - **Step 4 — AI Log Ingestion & Deep Server Log Diagnostics:** Automated Plex Media Server, Tautulli, Transcoder, and Arr log ingestion saved to Portalarr for deep AI agent log analysis, timestamp correlation with user playback errors, automatic crash/transcode diagnostic reports, and pinpoint server/client fixes.
 
 ## Building and Running
 
