@@ -116,7 +116,7 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
     const recentDevicesSet = new Set<string>();
     let serversOnlineCount = 0;
 
-    // 1. Scan Tautulli instances
+    // 1. Scan Tautulli instances with strict 2.5s timeout
     await Promise.allSettled(tautullis.map(async (t) => {
         const cleanBase = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
         const apiKey = decryptData(t.apiKey);
@@ -124,7 +124,7 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
         // Fetch activity
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500);
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
             const actUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
             const actResult = await fetchTautulliApiJson(actUrl, controller.signal);
             clearTimeout(timeoutId);
@@ -187,8 +187,8 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
         // Fetch History
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500);
-            const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&length=15`;
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&length=10`;
             const histResult = await fetchTautulliApiJson(histUrl, controller.signal, { revalidate: 30 });
             clearTimeout(timeoutId);
 
@@ -233,7 +233,7 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
                     try {
                         const cleanBase = conn.uri.replace(/\/+$/, "");
                         const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 3500);
+                        const timeoutId = setTimeout(() => controller.abort(), 2000);
                         const sRes = await fetch(`${cleanBase}/status/sessions`, {
                             headers: {
                                 "Accept": "application/json",
@@ -438,9 +438,32 @@ export async function askAiServerMaster(
     history: AiChatMessage[] = [],
     user?: any
 ): Promise<AiAssistantResponse> {
-    const snapshot = await getUserDiagnosticSnapshot(user);
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+    // Quick diagnostic snapshot gathering with 2.5s maximum timeout
+    let snapshot: UserDiagnosticSnapshot;
+    try {
+        snapshot = await Promise.race([
+            getUserDiagnosticSnapshot(user),
+            new Promise<UserDiagnosticSnapshot>((_, reject) => 
+                setTimeout(() => reject(new Error("Telemetry timeout")), 2500)
+            )
+        ]);
+    } catch {
+        snapshot = {
+            username: user?.username || "Plex User",
+            email: user?.email,
+            role: user?.role || "USER",
+            activeStreamsCount: 0,
+            primaryActiveStream: null,
+            activeStreams: [],
+            recentDevices: [],
+            recentWatchHistory: [],
+            serversOnlineCount: 1,
+            detectedIssues: [],
+            generatedAt: new Date().toISOString()
+        };
+    }
 
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
     const modelName = settings?.aiModel || "gemini-2.5-flash";
@@ -468,8 +491,8 @@ ${snapshot.primaryActiveStream ? `
 - Auto-Detected Diagnostic Issues: ${snapshot.detectedIssues.length > 0 ? snapshot.detectedIssues.map(i => `[${i.severity.toUpperCase()}] ${i.title}: ${i.quickFix}`).join(" | ") : "None. Stream health is optimal."}
 
 CORE PLEX MASTER KNOWLEDGE & DIAGNOSTIC RULES:
-1. Roku "Auto Adjust Quality" Bug:
-   - Problem: Roku client tries to dynamically drop quality below the server's minimum bandwidth, causing transcoder errors, stuttering, or "Conversion failed: The transcoder exited due to an error".
+1. Roku "Auto Adjust Quality" Bug / "not enough bandwidth" / "minimum bandwidth of 103kbps":
+   - Problem: The Roku Plex app's "Auto Adjust Quality" algorithm tries to dynamically step down quality below the server's minimum transcode threshold (e.g. 103kbps or 200kbps), causing Plex to reject playback with "not enough bandwidth for any playback of this item. can not convert to below minimum bandwidth".
    - Fix: In Roku Plex App → Settings ⚙️ → Video → Turn "Auto Adjust Quality" OFF. Change "Remote Streaming" to "Original" (or Maximum). Set "Direct Play" to "Force" or "Auto".
 2. 2 Mbps (720p) Default Remote Limit:
    - Problem: Plex client default forces 2 Mbps / 720p cap, converting 4K/1080p to downscaled 720p with buffering.
@@ -491,49 +514,61 @@ INSTRUCTIONS:
 - If the issue cannot be resolved through client settings, encourage them to submit a Support Ticket via the Portalarr dashboard.`;
 
     // 1. Google Gemini Provider
-    if ((provider === "gemini" || provider === "google" || (!provider || provider === "default")) && (rawKey || process.env.GEMINI_API_KEY)) {
-        try {
-            const keyToUse = rawKey || process.env.GEMINI_API_KEY || "";
-            const activeModel = modelName || "gemini-2.5-flash";
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(keyToUse)}`;
+    const geminiKey = rawKey || process.env.GEMINI_API_KEY || "";
+    if ((provider === "gemini" || provider === "google" || (!provider || provider === "default")) && geminiKey) {
+        const candidateModels = Array.from(new Set([
+            ...(modelName ? [modelName] : []),
+            "gemini-2.5-flash",
+            "gemini-1.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-pro"
+        ]));
 
-            const contents: any[] = [];
-            // Add previous history
-            for (const h of history.slice(-6)) {
-                contents.push({
-                    role: h.role === "assistant" ? "model" : "user",
-                    parts: [{ text: h.content }]
-                });
-            }
-            contents.push({
-                role: "user",
-                parts: [{ text: question }]
-            });
+        for (const activeModel of candidateModels) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 6000);
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
 
-            const res = await fetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    system_instruction: { parts: [{ text: systemPrompt }] },
-                    contents: contents,
-                    generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
-                })
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (text) {
-                    return {
-                        success: true,
-                        answer: text.trim(),
-                        diagnostics: snapshot,
-                        providerUsed: `Gemini (${activeModel})`
-                    };
+                const contents: any[] = [];
+                for (const h of history.slice(-4)) {
+                    contents.push({
+                        role: h.role === "assistant" ? "model" : "user",
+                        parts: [{ text: h.content }]
+                    });
                 }
+                contents.push({
+                    role: "user",
+                    parts: [{ text: question }]
+                });
+
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        system_instruction: { parts: [{ text: systemPrompt }] },
+                        contents: contents,
+                        generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
+                    }),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text && text.trim().length > 10) {
+                        return {
+                            success: true,
+                            answer: text.trim(),
+                            diagnostics: snapshot,
+                            providerUsed: `Gemini (${activeModel})`
+                        };
+                    }
+                }
+            } catch (e: any) {
+                // Continue to next model or knowledge base fallback
             }
-        } catch (e: any) {
-            console.warn(`[AI-ASSISTANT-GEMINI] Gemini query failed: ${e.message}. Falling back to knowledge base.`);
         }
     }
 
@@ -541,10 +576,13 @@ INSTRUCTIONS:
     if (provider === "openai" && rawKey) {
         try {
             const activeModel = modelName || "gpt-4o-mini";
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+
             const messages: any[] = [
                 { role: "system", content: systemPrompt }
             ];
-            for (const h of history.slice(-6)) {
+            for (const h of history.slice(-4)) {
                 messages.push({ role: h.role, content: h.content });
             }
             messages.push({ role: "user", content: question });
@@ -560,13 +598,15 @@ INSTRUCTIONS:
                     messages: messages,
                     temperature: 0.2,
                     max_tokens: 1200
-                })
+                }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (res.ok) {
                 const data = await res.json();
                 const text = data.choices?.[0]?.message?.content;
-                if (text) {
+                if (text && text.trim().length > 10) {
                     return {
                         success: true,
                         answer: text.trim(),
@@ -576,11 +616,11 @@ INSTRUCTIONS:
                 }
             }
         } catch (e: any) {
-            console.warn(`[AI-ASSISTANT-OPENAI] OpenAI query failed: ${e.message}. Falling back to knowledge base.`);
+            // Fall back to knowledge base
         }
     }
 
-    // 3. Built-in Plex Master Knowledge Base & Heuristic Engine (Offline / Zero-Key Fallback)
+    // 3. Built-in Plex Master Knowledge Base & Heuristic Engine (Guaranteed Instant Response)
     const heuristicAnswer = resolvePlexMasterHeuristic(question, snapshot);
     return {
         success: true,
@@ -593,24 +633,43 @@ INSTRUCTIONS:
 function resolvePlexMasterHeuristic(question: string, snapshot: UserDiagnosticSnapshot): string {
     const q = question.toLowerCase();
     const primary = snapshot.primaryActiveStream;
-    const deviceName = primary?.player || snapshot.recentDevices[0] || "your device";
+    const deviceName = primary?.player || snapshot.recentDevices[0] || "your Roku / Plex device";
 
-    // 1. Roku Quality / Auto-adjust / Lower quality error
-    if (q.includes("roku") || q.includes("quality too low") || q.includes("auto adjust") || q.includes("transcoder exited") || q.includes("conversion failed")) {
-        return `### 📺 Roku Quality Adjustment & Transcode Error Fix
+    // 1. Roku Quality / Auto-adjust / Minimum bandwidth error (e.g. 103kbps error)
+    if (
+        q.includes("minimum bandwidth") || 
+        q.includes("103kbps") || 
+        q.includes("not enough bandwidth") || 
+        q.includes("can not convert") || 
+        q.includes("cannot convert") || 
+        q.includes("auto adjust") || 
+        q.includes("quality too low") || 
+        q.includes("roku") || 
+        q.includes("transcoder exited") || 
+        q.includes("conversion failed")
+    ) {
+        return `### 📺 Fix for: *"Not enough bandwidth for any playback / Can not convert below minimum bandwidth (103kbps)"*
 
-This issue occurs because the **Roku Plex app's "Auto Adjust Quality" feature** attempts to dynamically throttle the bitrate down to an unsupported low level when bandwidth fluctuates, causing the server transcoder to crash or reject the stream.
+This is a well-known **Roku Plex App bug** caused by the **"Auto Adjust Quality"** setting. 
 
-#### Step-by-Step Fix for Roku:
+#### 🔍 Why this happens:
+When bandwidth fluctuates even slightly, Roku's *Auto Adjust Quality* feature attempts to continuously downscale the stream below the server's hard minimum threshold (**103 kbps**). The Plex Media Server rejects this impossible bitrate and aborts the stream with this exact error.
+
+---
+
+#### 🛠️ Step-by-Step Fix (Takes 30 Seconds):
 1. **Open the Plex App** on your **${deviceName.includes("Roku") ? deviceName : "Roku device"}**.
-2. Navigate to your **Profile Avatar / Settings (Gear ⚙️)**.
-3. Select **Video Quality** (or **Video**).
-4. Turn **"Auto Adjust Quality" → OFF**.
-5. Set **"Remote Streaming" → Original** (or **Maximum**).
-6. Set **"Direct Play" → Force** (or **Auto**).
-7. Return to your movie or show and press Play!
+2. Go to your **Profile Avatar / Settings (Gear Icon ⚙️)**.
+3. Select **Video** (or **Video Quality**).
+4. Find **"Auto Adjust Quality"** and turn it **OFF** ❌.
+5. Set **"Remote Streaming Quality"** to **"Original"** (or **"Maximum"**) 🚀.
+6. Set **"Direct Play"** to **"Force"** (or **"Auto"**).
+7. Return to your movie or TV show and press **Play**.
 
-> **💡 Why this works:** Forcing *Original Quality* stops the server from re-encoding the video into 720p, letting your Roku play the video directly from disk with zero CPU load and highest picture clarity.`;
+---
+
+> **💡 Why this permanently fixes the problem:**  
+> Forcing **Original Quality** stops the server from attempting to transcode the video into lower bitrates, allowing your Roku to stream directly from disk with **100% native quality, zero buffering, and zero CPU load on the server**.`;
     }
 
     // 2. Buffering / Stuttering

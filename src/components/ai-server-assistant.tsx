@@ -108,7 +108,14 @@ export function AiServerAssistant() {
         }
 
         try {
-            const res = await askAiServerMasterAction(query, updatedHistory);
+            const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) => 
+                setTimeout(() => resolve({ success: false, error: "Request timed out. Please try again." }), 12000)
+            );
+            const res = await Promise.race([
+                askAiServerMasterAction(query, updatedHistory),
+                timeoutPromise
+            ]);
+
             if (res.success && res.answer) {
                 const assistantMsg: AiChatMessage = {
                     role: "assistant",
