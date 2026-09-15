@@ -265,14 +265,14 @@ export function KometaStudio() {
     const [simCodecPosition, setSimCodecPosition] = useState<string>("top-right");
     const [simAudioPosition, setSimAudioPosition] = useState<string>("top-left");
     const [simChannelsPosition, setSimChannelsPosition] = useState<string>("top-left");
-    const [simEditionPosition, setSimEditionPosition] = useState<string>("bottom-right");
+    const [simEditionPosition, setSimEditionPosition] = useState<string>("top-left");
     const [simStudioPosition, setSimStudioPosition] = useState<string>("bottom-left");
     const [simRatingPosition, setSimRatingPosition] = useState<string>("bottom-left");
-    const [simRatingsPosition, setSimRatingsPosition] = useState<string>("bottom-left");
+    const [simRatingsPosition, setSimRatingsPosition] = useState<string>("bottom-right");
 
     // Ribbons (Authentic Kometa Waterfall Priority)
     const [simShowRibbon, setSimShowRibbon] = useState(false);
-    const [simRibbonPosition, setSimRibbonPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left">("top-right");
+    const [simRibbonPosition, setSimRibbonPosition] = useState<"top-right" | "top-left" | "bottom-right" | "bottom-left">("bottom-right");
     const [simRibbonTheme, setSimRibbonTheme] = useState<"purple" | "emerald" | "crimson" | "gold" | "cyan" | "pink" | "glass" | "orange">("gold");
     const [simRibbonType, setSimRibbonType] = useState<string>("imdb_top_250");
     const [simRibbonText, setSimRibbonText] = useState("");
@@ -600,12 +600,61 @@ export function KometaStudio() {
         loadRulesForSection(selectedServerId, secKey);
     };
 
+    const applyRuleToSimulator = (targetRule: any) => {
+        if (!targetRule) return;
+        if (targetRule.showResolution !== undefined) setSimShowResolution(Boolean(targetRule.showResolution));
+        if (targetRule.showHdr !== undefined) setSimShowHdr(Boolean(targetRule.showHdr));
+        if (targetRule.showAudio !== undefined) setSimShowAudio(Boolean(targetRule.showAudio));
+        if (targetRule.showAudioChannels !== undefined) setSimShowChannels(Boolean(targetRule.showAudioChannels));
+        if (targetRule.showCodec !== undefined) setSimShowCodec(Boolean(targetRule.showCodec));
+        if (targetRule.showEdition !== undefined) setSimShowEdition(Boolean(targetRule.showEdition));
+        if (targetRule.showStudio !== undefined) setSimShowStudio(Boolean(targetRule.showStudio));
+        if (targetRule.showContentRating !== undefined) setSimShowRating(Boolean(targetRule.showContentRating));
+        if (targetRule.showRatings !== undefined) setSimRatings(Boolean(targetRule.showRatings));
+        if (targetRule.theme) setSimTheme(targetRule.theme as any);
+        if (targetRule.badgeScale !== undefined && targetRule.badgeScale !== null) setSimBadgeScale(targetRule.badgeScale);
+        if (targetRule.resolutionPosition) setSimResolutionPosition(targetRule.resolutionPosition);
+        if (targetRule.hdrPosition) setSimHdrPosition(targetRule.hdrPosition);
+        if (targetRule.audioPosition) setSimAudioPosition(targetRule.audioPosition);
+        if (targetRule.channelsPosition) setSimChannelsPosition(targetRule.channelsPosition);
+        if (targetRule.codecPosition) setSimCodecPosition(targetRule.codecPosition);
+        if (targetRule.editionPosition) setSimEditionPosition(targetRule.editionPosition);
+        if (targetRule.studioPosition) setSimStudioPosition(targetRule.studioPosition);
+        if (targetRule.contentRatingPosition || targetRule.ratingPosition) setSimRatingPosition(targetRule.contentRatingPosition || targetRule.ratingPosition);
+        if (targetRule.ratingsPosition) setSimRatingsPosition(targetRule.ratingsPosition);
+        if (targetRule.showRibbon !== undefined) setSimShowRibbon(Boolean(targetRule.showRibbon));
+        if (targetRule.ribbonPosition) setSimRibbonPosition(targetRule.ribbonPosition as any);
+        if (targetRule.ribbonTheme) setSimRibbonTheme(targetRule.ribbonTheme as any);
+        if (targetRule.ribbonType) setSimRibbonType(targetRule.ribbonType);
+        if (targetRule.ribbonText !== undefined && targetRule.ribbonText !== null) setSimRibbonText(targetRule.ribbonText);
+
+        if (targetRule.layerPriorityOrder) {
+            try {
+                const parsed = JSON.parse(targetRule.layerPriorityOrder);
+                if (parsed && typeof parsed === "object") {
+                    if (Array.isArray(parsed)) {
+                        setLayerPriorityOrder(parsed);
+                    } else {
+                        if (parsed.ribbonMode) setSimRibbonMode(parsed.ribbonMode);
+                        if (Array.isArray(parsed.tieredRibbons)) setSimTieredRibbons(parsed.tieredRibbons);
+                        if (parsed.maxRibbonTiers) setSimMaxRibbonTiers(parsed.maxRibbonTiers);
+                        if (parsed.dovetailResolutionHdr !== undefined) setSimDovetailResolutionHdr(parsed.dovetailResolutionHdr);
+                        if (Array.isArray(parsed.layerOrder)) setLayerPriorityOrder(parsed.layerOrder);
+                    }
+                }
+            } catch (e) {}
+        }
+    };
+
     const loadRulesForSection = async (srvId?: string, secKey?: string) => {
         setServerSectionsLoading(true);
         try {
             const res = await getOverlayRulesAction(srvId || selectedServerId, secKey || selectedSectionKey);
             if (res.success && res.rules) {
                 setOverlayRules(res.rules);
+                if (res.rules.length > 0) {
+                    applyRuleToSimulator(res.rules[0]);
+                }
             }
         } catch (e) {
             console.error("Failed loading rules:", e);
@@ -2147,17 +2196,18 @@ export function KometaStudio() {
             setSimShowChannels(Boolean(converted.showAudioChannels));
             setSimChannelsPosition(converted.channelsPosition || "top-left");
             setSimShowCodec(Boolean(converted.showCodec));
-            setSimCodecPosition(converted.codecPosition || "bottom-right");
+            setSimCodecPosition(converted.codecPosition || "top-right");
             setSimShowEdition(Boolean(converted.showEdition));
-            setSimEditionPosition(converted.editionPosition || "top-right");
+            setSimEditionPosition(converted.editionPosition || "top-left");
             setSimShowStudio(Boolean(converted.showStudio));
-            setSimStudioPosition(converted.studioPosition || "top-left");
+            setSimStudioPosition(converted.studioPosition || "bottom-left");
             setSimShowRating(Boolean(converted.showContentRating));
             setSimRatingPosition(converted.contentRatingPosition || "bottom-left");
             setSimRatings(Boolean(converted.showRatings));
+            setSimRatingsPosition(converted.ratingsPosition || "bottom-right");
             setSimShowRibbon(Boolean(converted.showRibbon));
-            setSimRibbonPosition(converted.ribbonPosition || "top-right");
-            setSimRibbonMode(converted.ribbonMode || "tiered");
+            setSimRibbonPosition(converted.ribbonPosition || "bottom-right");
+            setSimRibbonMode(converted.ribbonMode || "waterfall");
             setSimRibbonTheme(converted.ribbonTheme || "gold");
             setSimMaxRibbonTiers(converted.maxRibbonTiers || 3);
             if (Array.isArray(converted.tieredRibbons)) {

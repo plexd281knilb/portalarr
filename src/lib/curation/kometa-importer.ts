@@ -137,7 +137,7 @@ export function convertKometaLibraryToPortalarrOverlay(
 
     let showRibbon = false;
     let ribbonMode: "single" | "tiered" | "auto_stack" = "tiered";
-    let ribbonPosition = "top-right";
+    let ribbonPosition = "bottom-right";
     let ribbonTheme: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange" = "gold";
     let tieredRibbons: TieredRibbonItem[] = [];
 
@@ -145,7 +145,7 @@ export function convertKometaLibraryToPortalarrOverlay(
     let contentRatingPosition = "bottom-left";
 
     let showStudio = false;
-    let studioPosition = "top-left";
+    let studioPosition = "bottom-left";
 
     let showAudio = false;
     let audioPosition = "top-left";
@@ -154,10 +154,10 @@ export function convertKometaLibraryToPortalarrOverlay(
     let channelsPosition = "top-left";
 
     let showCodec = false;
-    let codecPosition = "bottom-right";
+    let codecPosition = "top-right";
 
     let showEdition = false;
-    let editionPosition = "top-right";
+    let editionPosition = "top-left";
 
     for (const ov of kometaLib.overlayFiles || []) {
         const def = (ov.defaultName || "").toLowerCase();
@@ -295,13 +295,13 @@ export function convertKometaLibraryToPortalarrOverlay(
         // 6. Video Codecs
         if (def.includes("codec")) {
             showCodec = true;
-            codecPosition = "bottom-right";
+            codecPosition = "top-right";
         }
 
         // 7. Edition
         if (def.includes("edition")) {
             showEdition = true;
-            editionPosition = "top-right";
+            editionPosition = "top-left";
         }
     }
 

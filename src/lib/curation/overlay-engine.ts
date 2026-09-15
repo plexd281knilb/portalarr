@@ -1840,10 +1840,10 @@ export async function applyOverlaysToPoster(
     const codecPos = options.codecPosition || options.videoPosition || fallbackPos;
     const audioPos = options.audioPosition || "top-left";
     const channelsPos = options.channelsPosition || options.audioPosition || "top-left";
-    const editionPos = options.editionPosition || "bottom-right";
-    const studioPos = options.studioPosition || options.editionPosition || "bottom-left";
+    const editionPos = options.editionPosition || "top-left";
+    const studioPos = options.studioPosition || "bottom-left";
     const contentRatingPos = options.contentRatingPosition || options.ratingPosition || "bottom-left";
-    const ratingsPos = options.ratingsPosition || options.ratingPosition || "bottom-left";
+    const ratingsPos = options.ratingsPosition || options.ratingPosition || "bottom-right";
 
     const buckets: Record<string, Array<{ buf: Buffer; w: number; h: number; layerKey: string }>> = {
         "top-right": [],
