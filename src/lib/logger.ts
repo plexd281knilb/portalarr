@@ -227,6 +227,10 @@ if (!globalLogger.consoleIntercepted) {
         if (rawFirstArg.includes("NODE_TLS_REJECT_UNAUTHORIZED")) return;
         if (args.length > 1 && String(args[1]).includes("NODE_TLS_REJECT_UNAUTHORIZED")) return;
 
+        // Filter out expected unauthorized session rejects from media app / server checks
+        if (rawFirstArg.includes("[GET-MEDIA-APPS-ERROR]") || rawFirstArg === "Error: Unauthorized") return;
+        if (args.length > 1 && (String(args[1]).includes("Error: Unauthorized") || String(args[1]) === "Unauthorized")) return;
+
         // 1. Strip timestamp prefixes (e.g. from prisma.ts or node console: "[2026-09-09 10:48:50]", "[10:48:50]", etc.)
         let cleanMsg = rawFirstArg
             .replace(/^\[\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\]\s*/i, "")

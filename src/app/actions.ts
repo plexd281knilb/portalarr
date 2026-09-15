@@ -1613,7 +1613,9 @@ export async function getMediaApps() {
         // Decrypt before sending to the UI
         return apps.map(app => ({ ...app, apiKey: decryptData(app.apiKey as string) }));
     } catch (e: any) {
-        console.error("[GET-MEDIA-APPS-ERROR]:", e);
+        if (e?.message !== "Unauthorized") {
+            console.error("[GET-MEDIA-APPS-ERROR]:", e);
+        }
         return [];
     }
 }
@@ -1663,20 +1665,20 @@ export async function removeMediaApp(id: string) {
 }
 
 export async function testMediaAppConfigAction(type: string, rawUrl: string, rawApiKey?: string) {
-    await verifyAdmin();
-    if (!rawUrl) return { success: false, error: "URL is required" };
-
-    let clean = cleanUrl(rawUrl.trim());
-    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-        clean = `http://${clean}`;
-    }
-
-    // Strip trailing /api, /api/v1, /api/v2, /api/v3 to get clean base URL
-    const cleanBase = clean.replace(/\/api(\/v?[123])?$/, "");
-    const apiKey = (rawApiKey || "").trim();
-    const appType = (type || "").toLowerCase();
-
     try {
+        await verifyAdmin();
+        if (!rawUrl) return { success: false, error: "URL is required" };
+
+        let clean = cleanUrl(rawUrl.trim());
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+            clean = `http://${clean}`;
+        }
+
+        // Strip trailing /api, /api/v1, /api/v2, /api/v3 to get clean base URL
+        const cleanBase = clean.replace(/\/api(\/v?[123])?$/, "");
+        const apiKey = (rawApiKey || "").trim();
+        const appType = (type || "").toLowerCase();
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 7000);
 
@@ -1826,37 +1828,43 @@ export async function testMediaAppConfigAction(type: string, rawUrl: string, raw
         logger.addLog("ERROR", cat, `Failed connection test to ${type || "App"}: ${lastError}`, `URL: ${cleanBase}`);
         return { success: false, error: lastError };
     } catch (e: any) {
-        const isDownloadClient = ["prowlarr", "sabnzbd", "qbittorrent", "nzbget"].includes(appType);
+        const isDownloadClient = ["prowlarr", "sabnzbd", "qbittorrent", "nzbget"].includes((type || "").toLowerCase());
         const cat: "DOWNLOAD" | "APPS" = isDownloadClient ? "DOWNLOAD" : "APPS";
         const errMsg = e.name === "AbortError" ? "Connection timed out after 7s" : (e.message || "Failed to connect");
-        logger.addLog("ERROR", cat, `Failed connection test to ${type || "App"}: ${errMsg}`, `URL: ${cleanBase}`);
+        if (e.message !== "Unauthorized") {
+            logger.addLog("ERROR", cat, `Failed connection test to ${type || "App"}: ${errMsg}`, `URL: ${rawUrl}`);
+        }
         return { success: false, error: errMsg };
     }
 }
 
 export async function testAppConnectionAction(id: string) {
-    await verifyAdmin();
-    const app = await prisma.mediaApp.findUnique({ where: { id } });
-    if (!app) return { success: false, error: "App not found" };
+    try {
+        await verifyAdmin();
+        const app = await prisma.mediaApp.findUnique({ where: { id } });
+        if (!app) return { success: false, error: "App not found" };
 
-    const apiKey = decryptData(app.apiKey as string);
-    const result = await testMediaAppConfigAction(app.type, app.url, apiKey);
-    if (result.success) {
-        return { success: true, message: `Successfully connected to ${app.name} (${app.type})!` };
+        const apiKey = decryptData(app.apiKey as string);
+        const result = await testMediaAppConfigAction(app.type, app.url, apiKey);
+        if (result.success) {
+            return { success: true, message: `Successfully connected to ${app.name} (${app.type})!` };
+        }
+        return result;
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to test app" };
     }
-    return result;
 }
 
 export async function testTautulliConfigAction(rawUrl: string, rawApiKey: string) {
-    await verifyAdmin();
-    if (!rawUrl || !rawApiKey) {
-        return { success: false, error: "URL and API Key are required to test connection." };
-    }
-
-    const cleanBase = cleanUrl(rawUrl).replace(/\/api\/v2\/?$/, "");
-    const apiKey = rawApiKey.trim();
-
     try {
+        await verifyAdmin();
+        if (!rawUrl || !rawApiKey) {
+            return { success: false, error: "URL and API Key are required to test connection." };
+        }
+
+        const cleanBase = cleanUrl(rawUrl).replace(/\/api\/v2\/?$/, "");
+        const apiKey = rawApiKey.trim();
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 7000);
 
@@ -1884,101 +1892,118 @@ export async function testTautulliConfigAction(rawUrl: string, rawApiKey: string
         const errMsg = e.name === "AbortError" 
             ? "Connection timed out after 7s. Please check host, port, or firewall." 
             : (e.message || "Failed to connect to Tautulli");
-        logger.addLog("ERROR", "TAUTULLI", `Failed to connect to Tautulli: ${errMsg}`, `URL: ${cleanBase} | Key: ${maskToken(apiKey)}`);
+        if (e.message !== "Unauthorized") {
+            logger.addLog("ERROR", "TAUTULLI", `Failed to connect to Tautulli: ${errMsg}`, `URL: ${rawUrl}`);
+        }
         return { success: false, error: errMsg };
     }
 }
 
 export async function testTautulliConnectionAction(id: string) {
-    await verifyAdmin();
-    const inst = await prisma.tautulliInstance.findUnique({ where: { id } });
-    if (!inst) return { success: false, error: "Tautulli instance not found" };
+    try {
+        await verifyAdmin();
+        const inst = await prisma.tautulliInstance.findUnique({ where: { id } });
+        if (!inst) return { success: false, error: "Tautulli instance not found" };
 
-    const apiKey = decryptData(inst.apiKey);
-    const result = await testTautulliConfigAction(inst.url, apiKey);
-    if (result.success) {
-        return { success: true, message: `Successfully connected to Tautulli instance "${inst.name}"!` };
+        const apiKey = decryptData(inst.apiKey);
+        const result = await testTautulliConfigAction(inst.url, apiKey);
+        if (result.success) {
+            return { success: true, message: `Successfully connected to Tautulli instance "${inst.name}"!` };
+        }
+        return result;
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to test Tautulli instance" };
     }
-    return result;
 }
 
 export async function testGlancesConfigAction(rawUrl: string) {
-    await verifyAdmin();
-    if (!rawUrl) return { success: false, error: "URL is required" };
+    try {
+        await verifyAdmin();
+        if (!rawUrl) return { success: false, error: "URL is required" };
 
-    let clean = cleanUrl(rawUrl.trim());
-    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-        clean = `http://${clean}`;
-    }
+        let clean = cleanUrl(rawUrl.trim());
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+            clean = `http://${clean}`;
+        }
 
-    // Strip trailing /api, /api/4, /api/3, /api/2 if user entered a subpath
-    const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
+        // Strip trailing /api, /api/4, /api/3, /api/2 if user entered a subpath
+        const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
 
-    // Test Glances endpoints across supported versions (v4, v3, v2)
-    const testEndpoints = [
-        "/api/4/cpu",
-        "/api/3/cpu",
-        "/api/2/cpu",
-        "/api/4/system",
-        "/api/3/system",
-        "/api/4/version",
-        "/api/3/version",
-        "/api/3/quicklook",
-        "/api/4/quicklook",
-        "/cpu",
-        "/version",
-        ""
-    ];
+        // Test Glances endpoints across supported versions (v4, v3, v2)
+        const testEndpoints = [
+            "/api/4/cpu",
+            "/api/3/cpu",
+            "/api/2/cpu",
+            "/api/4/system",
+            "/api/3/system",
+            "/api/4/version",
+            "/api/3/version",
+            "/api/3/quicklook",
+            "/api/4/quicklook",
+            "/cpu",
+            "/version",
+            ""
+        ];
 
-    let lastError = "Connection failed";
+        let lastError = "Connection failed";
 
-    for (const ep of testEndpoints) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
-            const targetUrl = ep ? `${baseGlances}${ep}` : baseGlances;
-            const res = await fetch(targetUrl, { signal: controller.signal, cache: "no-store" });
-            clearTimeout(timeoutId);
+        for (const ep of testEndpoints) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const targetUrl = ep ? `${baseGlances}${ep}` : baseGlances;
+                const res = await fetch(targetUrl, { signal: controller.signal, cache: "no-store" });
+                clearTimeout(timeoutId);
 
-            if (res.ok) {
-                logger.addLog("SUCCESS", "APPS", "Successfully connected to Glances server!", `URL: ${baseGlances}`);
-                return { success: true, message: "Successfully connected to Glances server!" };
-            }
-            if (res.status === 401 || res.status === 403) {
-                const authErr = `Authentication required (HTTP ${res.status}). Please check Glances credentials.`;
-                logger.addLog("ERROR", "APPS", `Glances: ${authErr}`, `URL: ${baseGlances}`);
-                return { success: false, error: authErr };
-            }
-            lastError = `HTTP ${res.status}: ${res.statusText || "Not Found"}`;
-        } catch (e: any) {
-            if (e.name === "AbortError") {
-                lastError = "Connection timed out after 4s";
-            } else {
-                lastError = e.message || "Connection failed";
+                if (res.ok) {
+                    logger.addLog("SUCCESS", "APPS", "Successfully connected to Glances server!", `URL: ${baseGlances}`);
+                    return { success: true, message: "Successfully connected to Glances server!" };
+                }
+                if (res.status === 401 || res.status === 403) {
+                    const authErr = `Authentication required (HTTP ${res.status}). Please check Glances credentials.`;
+                    logger.addLog("ERROR", "APPS", `Glances: ${authErr}`, `URL: ${baseGlances}`);
+                    return { success: false, error: authErr };
+                }
+                lastError = `HTTP ${res.status}: ${res.statusText || "Not Found"}`;
+            } catch (e: any) {
+                if (e.name === "AbortError") {
+                    lastError = "Connection timed out after 4s";
+                } else {
+                    lastError = e.message || "Connection failed";
+                }
             }
         }
-    }
 
-    logger.addLog("ERROR", "APPS", `Failed to connect to Glances server: ${lastError}`, `URL: ${baseGlances}`);
-    return { success: false, error: lastError };
+        logger.addLog("ERROR", "APPS", `Failed to connect to Glances server: ${lastError}`, `URL: ${baseGlances}`);
+        return { success: false, error: lastError };
+    } catch (e: any) {
+        if (e.message !== "Unauthorized") {
+            logger.addLog("ERROR", "APPS", `Failed to connect to Glances server: ${e.message}`, `URL: ${rawUrl}`);
+        }
+        return { success: false, error: e.message || "Failed to connect to Glances server" };
+    }
 }
 
 export async function testGlancesConnectionAction(id: string) {
-    await verifyAdmin();
-    const inst = await prisma.glancesInstance.findUnique({ where: { id } });
-    if (!inst) return { success: false, error: "Glances instance not found" };
+    try {
+        await verifyAdmin();
+        const inst = await prisma.glancesInstance.findUnique({ where: { id } });
+        if (!inst) return { success: false, error: "Glances instance not found" };
 
-    const result = await testGlancesConfigAction(inst.url);
-    if (result.success) {
-        return { success: true, message: `Successfully connected to Glances server "${inst.name}"!` };
+        const result = await testGlancesConfigAction(inst.url);
+        if (result.success) {
+            return { success: true, message: `Successfully connected to Glances server "${inst.name}"!` };
+        }
+        return result;
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to test Glances instance" };
     }
-    return result;
 }
 
 export async function validateDownloadsPathAction(pathStr: string) {
-    await verifyAdmin();
-    if (!pathStr) return { success: false, error: "Path is empty" };
     try {
+        await verifyAdmin();
+        if (!pathStr) return { success: false, error: "Path is empty" };
         if (!fs.existsSync(pathStr)) {
             logger.addLog("WARN", "DOWNLOAD", `Downloads directory does not exist: "${pathStr}"`);
             return { success: false, exists: false, error: `Directory "${pathStr}" does not exist on disk.` };
@@ -1987,7 +2012,9 @@ export async function validateDownloadsPathAction(pathStr: string) {
         logger.addLog("SUCCESS", "DOWNLOAD", `Downloads folder validated: "${pathStr}" (${entries.length} items found).`);
         return { success: true, exists: true, message: `Directory exists with ${entries.length} items.` };
     } catch (e: any) {
-        logger.addLog("ERROR", "DOWNLOAD", `Failed to access downloads folder "${pathStr}": ${e.message || "Cannot access directory"}`);
+        if (e.message !== "Unauthorized") {
+            logger.addLog("ERROR", "DOWNLOAD", `Failed to access downloads folder "${pathStr}": ${e.message || "Cannot access directory"}`);
+        }
         return { success: false, error: e.message || "Cannot access directory" };
     }
 }

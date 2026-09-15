@@ -71,9 +71,13 @@ export async function testArrConfig(url: string, apiKey: string) {
 
 export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
     try {
-        await verifySuperUserOrAdmin();
+        const session = await getSession();
+        if (!session || (session.role !== "ADMIN" && session.role !== "SUPER_USER")) {
+            return { success: false, error: "Unauthorized" };
+        }
+        const isAdmin = session.role === "ADMIN" || session.role === "SUPER_USER";
         const apps = await prisma.mediaApp.findMany({
-            where: { type, enabledForUsers: true }
+            where: isAdmin ? { type } : { type, enabledForUsers: true }
         });
         return {
             success: true,
