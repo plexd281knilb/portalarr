@@ -159,14 +159,16 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
     else if (studioRaw.includes("paramount")) detectedStudio = "Paramount+";
     else if (studioRaw.includes("hulu")) detectedStudio = "Hulu";
 
-    // Detect Content Rating
-    const crRaw = (metadata.contentRating || "").toUpperCase();
-    if (crRaw) {
-        if (crRaw.includes("PG-13") || crRaw.includes("TV-14")) detectedContentRating = "PG-13";
-        else if (crRaw.includes("PG") || crRaw.includes("TV-PG")) detectedContentRating = "PG";
-        else if (crRaw === "G" || crRaw.includes("TV-G") || crRaw.includes("TV-Y")) detectedContentRating = "G";
-        else if (crRaw.includes("NC-17")) detectedContentRating = "NC-17";
-        else if (crRaw.includes("TV-MA") || crRaw.includes("R")) detectedContentRating = "R";
+    // Detect Content Rating (clean out country prefixes like US:, GB:, etc.)
+    const rawCR = (metadata.contentRating || "").trim().toUpperCase();
+    const crClean = rawCR.replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\/]/i, "").trim();
+    if (crClean && !/NOT RATED|UNRATED|NR/i.test(crClean)) {
+        if (/PG-13|TV-14|13\+|12A|14A|FSK 12|\b12\b/i.test(crClean)) detectedContentRating = "PG-13";
+        else if (/NC-17|18\+|FSK 18|R18\+|\b18\b/i.test(crClean)) detectedContentRating = "NC-17";
+        else if (/TV-MA|\bR\b|RESTRICTED|FSK 16|MA15\+|\b15\b|\b16\b/i.test(crClean)) detectedContentRating = "R";
+        else if (/TV-PG|\bPG\b|FSK 6|\b6\b/i.test(crClean)) detectedContentRating = "PG";
+        else if (/TV-G|TV-Y|TV-Y7|\bG\b|\bU\b|FSK 0|\b0\b/i.test(crClean)) detectedContentRating = "G";
+        else detectedContentRating = crClean.replace(/^RATED\s+/i, "");
     }
 
     for (const m of rawMediaList) {
@@ -180,17 +182,39 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         else if (rawCodec.includes("prores")) detectedCodec = "ProRes";
         else if (rawCodec.includes("h264") || rawCodec.includes("avc") || rawCodec.includes("x264")) detectedCodec = "AVC";
 
-        let res: "4K" | "1080p" | "720p" | "SD" = "1080p";
-        if (rawRes === "4k" || width >= 3800 || height >= 2100) res = "4K";
-        else if (rawRes === "1080" || width >= 1900 || height >= 1000) res = "1080p";
-        else if (rawRes === "720" || width >= 1200 || height >= 700) res = "720p";
-        else if (rawRes === "sd" || rawRes === "480" || rawRes === "576") res = "SD";
+        const rawParts = Array.isArray(m.Part) ? m.Part : m.Part ? [m.Part] : [];
+        let maxStreamWidth = width;
+        let maxStreamHeight = height;
+        let streamResTitle = "";
 
-        if (!detectedRes || (res === "4K") || (res === "1080p" && detectedRes !== "4K")) {
+        for (const part of rawParts) {
+            const streams = Array.isArray(part.Stream) ? part.Stream : part.Stream ? [part.Stream] : [];
+            const videoStream = streams.find((s: any) => s.streamType === 1 || s.streamType === "1");
+            if (videoStream) {
+                const sW = parseInt(videoStream.width || "0", 10);
+                const sH = parseInt(videoStream.height || "0", 10);
+                if (sW > maxStreamWidth) maxStreamWidth = sW;
+                if (sH > maxStreamHeight) maxStreamHeight = sH;
+                const vDisplay = `${videoStream.displayTitle || ""} ${videoStream.extendedDisplayTitle || ""} ${videoStream.videoResolution || ""}`.toLowerCase();
+                streamResTitle += ` ${vDisplay}`;
+            }
+        }
+
+        let res: "4K" | "1080p" | "720p" | "SD" = "1080p";
+        const is4kRes = /4k|2160|uhd/i.test(rawRes) || /4k|2160/i.test(streamResTitle) || maxStreamWidth >= 3400 || (maxStreamWidth >= 2100 && maxStreamHeight >= 1400);
+        const is1080Res = !is4kRes && (/1080|fhd/i.test(rawRes) || /1080/i.test(streamResTitle) || (maxStreamWidth >= 1700 && maxStreamWidth < 3400) || (maxStreamHeight >= 700 && maxStreamHeight < 1400));
+        const is720Res = !is4kRes && !is1080Res && (/720|hd/i.test(rawRes) || /720/i.test(streamResTitle) || (maxStreamWidth >= 1100 && maxStreamWidth < 1700) || (maxStreamHeight >= 600 && maxStreamHeight < 700));
+        const isSdRes = !is4kRes && !is1080Res && !is720Res && (/sd|480|576/i.test(rawRes) || (maxStreamWidth > 0 && maxStreamWidth < 1100));
+
+        if (is4kRes) res = "4K";
+        else if (is1080Res) res = "1080p";
+        else if (is720Res) res = "720p";
+        else if (isSdRes) res = "SD";
+
+        if (!detectedRes || (res === "4K") || (res === "1080p" && detectedRes !== "4K") || (res === "720p" && detectedRes !== "4K" && detectedRes !== "1080p")) {
             detectedRes = res;
         }
 
-        const rawParts = Array.isArray(m.Part) ? m.Part : m.Part ? [m.Part] : [];
         let itemHdr: "Dolby Vision" | "HDR10+" | "HDR10" | "HDR" | "SDR" = "SDR";
         let itemAudioCodec = (m.audioCodec || "").toLowerCase();
         let itemAudioProfile = (m.audioProfile || "").toLowerCase();

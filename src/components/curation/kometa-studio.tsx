@@ -1912,7 +1912,49 @@ export function KometaStudio() {
         setApplyingOverlays(true);
         setOverlayMessage(null);
         try {
-            const res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey);
+            // Auto-save active studio options to rule first
+            const payload: any = {
+                serverId: selectedServerId,
+                sectionKey: selectedSectionKey,
+                theme: simTheme,
+                showResolution: simShowResolution,
+                showHdr: simShowHdr,
+                showAudio: simShowAudio,
+                showAudioChannels: simShowChannels,
+                showCodec: simShowCodec,
+                showEdition: simShowEdition,
+                showStudio: simShowStudio,
+                showContentRating: simShowRating,
+                showRatings: simRatings,
+                dovetailResolutionHdr: simDovetailResolutionHdr,
+                badgeScale: simBadgeScale,
+                position: simResolutionPosition,
+                videoPosition: simResolutionPosition,
+                audioPosition: simAudioPosition,
+                editionPosition: simEditionPosition,
+                ratingPosition: simRatingPosition,
+                resolutionPosition: simResolutionPosition,
+                hdrPosition: simHdrPosition,
+                channelsPosition: simChannelsPosition,
+                codecPosition: simCodecPosition,
+                studioPosition: simStudioPosition,
+                contentRatingPosition: simRatingPosition,
+                ratingsPosition: simRatingsPosition,
+                showRibbon: simShowRibbon,
+                ribbonMode: simRibbonMode,
+                ribbonPosition: simRibbonPosition,
+                ribbonTheme: simRibbonTheme,
+                ribbonType: simRibbonType,
+                ribbonText: simRibbonText,
+                tieredRibbons: simTieredRibbons,
+                maxRibbonTiers: simMaxRibbonTiers,
+                layerPriorityOrder: layerPriorityOrder
+            };
+
+            const saveRes = await saveOverlayRuleAction(payload);
+            const savedRuleId = saveRes.rule?.id;
+
+            const res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey, savedRuleId);
             if (res.success) {
                 setOverlayMessage({ success: true, text: res.message || "Overlays applied to library successfully!" });
             } else {

@@ -2365,108 +2365,139 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
             where: { enabled: true }
         });
 
-        // Fetch rule options
-        let overlayOpts: OverlayOptions = {
-            showResolution: true,
-            showHdr: true,
-            showAudio: true,
-            showAudioChannels: false,
-            showCodec: false,
-            showEdition: false,
-            showStudio: false,
-            showContentRating: false,
-            showRatings: false,
-            position: "top-right",
-            resolutionPosition: "top-right",
-            hdrPosition: "top-right",
-            codecPosition: "top-right",
-            audioPosition: "top-left",
-            channelsPosition: "top-left",
-            editionPosition: "bottom-right",
-            studioPosition: "bottom-left",
-            contentRatingPosition: "bottom-left",
-            ratingsPosition: "bottom-left",
-            theme: "glass",
-            customBadges: activeCustomBadges.map(cb => ({
-                id: cb.id,
-                name: cb.name,
-                category: cb.category,
-                matchRule: cb.matchRule,
-                filePath: cb.filePath,
-                position: cb.position,
-                width: cb.width,
-                height: cb.height,
-                opacity: cb.opacity
-            }))
-        };
-
-        if (ruleId) {
-            const rule = await prisma.mediaOverlayRule.findUnique({ where: { id: ruleId } });
-            if (rule) {
-                let ruleRibbonMode: "single" | "tiered" | "auto_stack" | "waterfall" = "single";
-                let ruleTieredRibbons: any[] | undefined;
-                let ruleMaxRibbonTiers = 3;
-                let ruleDovetail = true;
-
-                if (rule.layerPriorityOrder) {
-                    try {
-                        const parsed = JSON.parse(rule.layerPriorityOrder);
-                        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-                            if (parsed.ribbonMode) ruleRibbonMode = parsed.ribbonMode;
-                            if (parsed.tieredRibbons) ruleTieredRibbons = parsed.tieredRibbons;
-                            if (parsed.maxRibbonTiers) ruleMaxRibbonTiers = parsed.maxRibbonTiers;
-                            if (parsed.dovetailResolutionHdr !== undefined) ruleDovetail = parsed.dovetailResolutionHdr;
-                        }
-                    } catch (e) {}
+        const rule = ruleId
+            ? await prisma.mediaOverlayRule.findUnique({ where: { id: ruleId } })
+            : await prisma.mediaOverlayRule.findFirst({
+                where: {
+                    serverId,
+                    sectionKey
                 }
+            }) || await prisma.mediaOverlayRule.findFirst({
+                where: {
+                    serverId
+                }
+            });
 
-                overlayOpts = {
-                    showResolution: rule.showResolution,
-                    showHdr: rule.showHdr,
-                    showAudio: rule.showAudio,
-                    showAudioChannels: rule.showAudioChannels,
-                    showCodec: rule.showCodec,
-                    showEdition: rule.showEdition,
-                    showStudio: rule.showStudio,
-                    showContentRating: rule.showContentRating,
-                    showRatings: rule.showRatings,
-                    showLeavingSoon: rule.showLeavingSoon,
-                    position: (rule.position as any) || "top-right",
-                    videoPosition: (rule.videoPosition as any) || (rule.position as any) || "top-right",
-                    audioPosition: (rule.audioPosition as any) || "top-left",
-                    editionPosition: (rule.editionPosition as any) || "bottom-right",
-                    ratingPosition: (rule.ratingPosition as any) || "bottom-left",
-                    resolutionPosition: (rule.resolutionPosition as any) || (rule.videoPosition as any) || (rule.position as any) || "top-right",
-                    hdrPosition: (rule.hdrPosition as any) || (rule.videoPosition as any) || (rule.position as any) || "top-right",
-                    codecPosition: (rule.codecPosition as any) || (rule.videoPosition as any) || (rule.position as any) || "top-right",
-                    channelsPosition: (rule.channelsPosition as any) || (rule.audioPosition as any) || "top-left",
-                    studioPosition: (rule.studioPosition as any) || (rule.editionPosition as any) || "bottom-left",
-                    contentRatingPosition: (rule.contentRatingPosition as any) || (rule.ratingPosition as any) || "bottom-left",
-                    ratingsPosition: (rule.ratingsPosition as any) || (rule.ratingPosition as any) || "bottom-left",
-                    showRibbon: rule.showRibbon ?? false,
-                    ribbonMode: ruleRibbonMode,
-                    tieredRibbons: ruleTieredRibbons,
-                    maxRibbonTiers: ruleMaxRibbonTiers,
-                    ribbonPosition: (rule.ribbonPosition as any) || "top-right",
-                    ribbonTheme: (rule.ribbonTheme as any) || "purple",
-                    ribbonText: rule.ribbonText || undefined,
-                    ribbonType: (rule.ribbonType as any) || "auto_quality",
-                    theme: (rule.theme as any) || "glass",
-                    dovetailResolutionHdr: ruleDovetail,
-                    badgeScale: (rule.badgeScale as number) || 1.0,
-                    customBadges: activeCustomBadges.map(cb => ({
-                        id: cb.id,
-                        name: cb.name,
-                        category: cb.category,
-                        matchRule: cb.matchRule,
-                        filePath: cb.filePath,
-                        position: cb.position,
-                        width: cb.width,
-                        height: cb.height,
-                        opacity: cb.opacity
-                    }))
-                };
+        // Fetch rule options
+        let overlayOpts: OverlayOptions;
+
+        if (rule) {
+            let ruleRibbonMode: "single" | "tiered" | "auto_stack" | "waterfall" = "waterfall";
+            let ruleTieredRibbons: any[] | undefined;
+            let ruleMaxRibbonTiers = 3;
+            let ruleDovetail = true;
+
+            if (rule.layerPriorityOrder) {
+                try {
+                    const parsed = JSON.parse(rule.layerPriorityOrder);
+                    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                        if (parsed.ribbonMode) ruleRibbonMode = parsed.ribbonMode;
+                        if (parsed.tieredRibbons) ruleTieredRibbons = parsed.tieredRibbons;
+                        if (parsed.maxRibbonTiers) ruleMaxRibbonTiers = parsed.maxRibbonTiers;
+                        if (parsed.dovetailResolutionHdr !== undefined) ruleDovetail = parsed.dovetailResolutionHdr;
+                    }
+                } catch (e) {}
             }
+
+            overlayOpts = {
+                showResolution: rule.showResolution,
+                showHdr: rule.showHdr,
+                showAudio: rule.showAudio,
+                showAudioChannels: rule.showAudioChannels,
+                showCodec: rule.showCodec,
+                showEdition: rule.showEdition,
+                showStudio: rule.showStudio,
+                showContentRating: rule.showContentRating,
+                showRatings: rule.showRatings,
+                showLeavingSoon: rule.showLeavingSoon,
+                position: (rule.position as any) || "top-right",
+                videoPosition: (rule.videoPosition as any) || (rule.position as any) || "top-right",
+                audioPosition: (rule.audioPosition as any) || "top-left",
+                editionPosition: (rule.editionPosition as any) || "bottom-right",
+                ratingPosition: (rule.ratingPosition as any) || "bottom-left",
+                resolutionPosition: (rule.resolutionPosition as any) || (rule.videoPosition as any) || (rule.position as any) || "top-right",
+                hdrPosition: (rule.hdrPosition as any) || (rule.videoPosition as any) || (rule.position as any) || "top-right",
+                codecPosition: (rule.codecPosition as any) || (rule.videoPosition as any) || (rule.position as any) || "top-right",
+                channelsPosition: (rule.channelsPosition as any) || (rule.audioPosition as any) || "top-left",
+                studioPosition: (rule.studioPosition as any) || (rule.editionPosition as any) || "bottom-left",
+                contentRatingPosition: (rule.contentRatingPosition as any) || (rule.ratingPosition as any) || "bottom-left",
+                ratingsPosition: (rule.ratingsPosition as any) || (rule.ratingPosition as any) || "bottom-left",
+                showRibbon: rule.showRibbon ?? true,
+                ribbonMode: ruleRibbonMode,
+                tieredRibbons: ruleTieredRibbons || [
+                    { id: "tier-1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
+                    { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson", enabled: true },
+                    { id: "tier-3", type: "auto_quality", text: "4K UHD", theme: "purple", enabled: true },
+                    { id: "tier-4", type: "auto_edition", text: "SPECIAL EDITION", theme: "cyan", enabled: true }
+                ],
+                maxRibbonTiers: ruleMaxRibbonTiers,
+                ribbonPosition: (rule.ribbonPosition as any) || "top-right",
+                ribbonTheme: (rule.ribbonTheme as any) || "purple",
+                ribbonText: rule.ribbonText || undefined,
+                ribbonType: (rule.ribbonType as any) || "auto_quality",
+                theme: (rule.theme as any) || "glass",
+                dovetailResolutionHdr: ruleDovetail,
+                badgeScale: (rule.badgeScale as number) || 1.0,
+                customBadges: activeCustomBadges.map(cb => ({
+                    id: cb.id,
+                    name: cb.name,
+                    category: cb.category,
+                    matchRule: cb.matchRule,
+                    filePath: cb.filePath,
+                    position: cb.position,
+                    width: cb.width,
+                    height: cb.height,
+                    opacity: cb.opacity
+                }))
+            };
+        } else {
+            overlayOpts = {
+                showResolution: true,
+                showHdr: true,
+                showAudio: true,
+                showAudioChannels: false,
+                showCodec: false,
+                showEdition: false,
+                showStudio: false,
+                showContentRating: true,
+                showRatings: false,
+                showLeavingSoon: false,
+                position: "top-right",
+                resolutionPosition: "top-right",
+                hdrPosition: "top-right",
+                codecPosition: "top-right",
+                audioPosition: "top-left",
+                channelsPosition: "top-left",
+                editionPosition: "bottom-right",
+                studioPosition: "bottom-left",
+                contentRatingPosition: "bottom-left",
+                ratingsPosition: "bottom-left",
+                showRibbon: true,
+                ribbonMode: "waterfall",
+                ribbonPosition: "top-right",
+                ribbonTheme: "purple",
+                ribbonType: "auto_quality",
+                tieredRibbons: [
+                    { id: "tier-1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
+                    { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson", enabled: true },
+                    { id: "tier-3", type: "auto_quality", text: "4K UHD", theme: "purple", enabled: true },
+                    { id: "tier-4", type: "auto_edition", text: "SPECIAL EDITION", theme: "cyan", enabled: true }
+                ],
+                theme: "glass",
+                dovetailResolutionHdr: true,
+                badgeScale: 1.0,
+                customBadges: activeCustomBadges.map(cb => ({
+                    id: cb.id,
+                    name: cb.name,
+                    category: cb.category,
+                    matchRule: cb.matchRule,
+                    filePath: cb.filePath,
+                    position: cb.position,
+                    width: cb.width,
+                    height: cb.height,
+                    opacity: cb.opacity
+                }))
+            };
         }
 
         // Fetch library media items
@@ -2475,8 +2506,18 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
 
         let successCount = 0;
         for (const it of items) {
-            // Apply if item has quality badges, leaving soon, or custom badges are active
-            if (it.detectedBadges.resolution || it.detectedBadges.hdr || it.detectedBadges.audio || it.detectedBadges.edition || it.detectedBadges.studio || activeCustomBadges.length > 0) {
+            // Apply if item has quality badges, ratings, ribbon match, leaving soon, or custom badges are active
+            if (
+                it.detectedBadges.resolution ||
+                it.detectedBadges.hdr ||
+                it.detectedBadges.audio ||
+                it.detectedBadges.edition ||
+                it.detectedBadges.studio ||
+                it.detectedBadges.contentRating ||
+                overlayOpts.showRibbon ||
+                it.isLeavingSoon ||
+                activeCustomBadges.length > 0
+            ) {
                 const res = await backupAndApplyOverlay(serverUrl, token, serverId, it, overlayOpts);
                 if (res.success) successCount++;
             }

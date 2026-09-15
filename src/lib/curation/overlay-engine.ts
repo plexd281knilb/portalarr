@@ -1312,113 +1312,93 @@ export function generateKometaCornerRibbonSvg(
 ): string {
     const isTop = position.startsWith("top");
     const isRight = position.endsWith("right");
-    const rotation = (isTop && isRight) || (!isTop && !isRight) ? 45 : -45;
+    const isTopRight = isTop && isRight;
+    const isTopLeft = isTop && !isRight;
+    const isBottomRight = !isTop && isRight;
+    const isBottomLeft = !isTop && !isRight;
 
-    const gradients: Record<string, { start: string; mid: string; end: string; border: string; highlight: string; shadow: string; text: string }> = {
-        gold: { 
-            start: "#fef08a", 
-            mid: "#eab308", 
-            end: "#ca8a04", 
-            border: "#fef9c3", 
-            highlight: "rgba(255, 255, 255, 0.65)", 
-            shadow: "#713f12",
-            text: "#000000"
-        },
-        crimson: { 
-            start: "#fb7185", 
-            mid: "#e11d48", 
-            end: "#9f1239", 
-            border: "#fda4af", 
-            highlight: "rgba(255, 255, 255, 0.45)", 
-            shadow: "#4c0519",
-            text: "#ffffff"
-        },
-        emerald: { 
-            start: "#34d399", 
-            mid: "#059669", 
-            end: "#064e3b", 
-            border: "#a7f3d0", 
-            highlight: "rgba(255, 255, 255, 0.45)", 
-            shadow: "#022c22",
-            text: "#ffffff"
-        },
-        purple: { 
-            start: "#a5b4fc", 
-            mid: "#6366f1", 
-            end: "#3730a3", 
-            border: "#c7d2fe", 
-            highlight: "rgba(255, 255, 255, 0.45)", 
-            shadow: "#1e1b4b",
-            text: "#ffffff"
-        },
-        cyan: { 
-            start: "#67e8f9", 
-            mid: "#0284c7", 
-            end: "#075985", 
-            border: "#bae6fd", 
-            highlight: "rgba(255, 255, 255, 0.45)", 
-            shadow: "#082f49",
-            text: "#ffffff"
-        },
-        pink: { 
-            start: "#f472b6", 
-            mid: "#db2777", 
-            end: "#831843", 
-            border: "#fbcfe8", 
-            highlight: "rgba(255, 255, 255, 0.45)", 
-            shadow: "#500724",
-            text: "#ffffff"
-        },
-        glass: { 
-            start: "#475569", 
-            mid: "#1e293b", 
-            end: "#090d16", 
-            border: "#94a3b8", 
-            highlight: "rgba(255, 255, 255, 0.4)", 
-            shadow: "#020617",
-            text: "#f8fafc"
-        },
-        orange: { 
-            start: "#fdba74", 
-            mid: "#ea580c", 
-            end: "#9a3412", 
-            border: "#ffedd5", 
-            highlight: "rgba(255, 255, 255, 0.45)", 
-            shadow: "#431407",
-            text: "#ffffff"
-        }
+    const cleanText = (text || "FEATURED").trim().toUpperCase().slice(0, 30);
+    const isOscar = cleanText.includes("OSCAR") || cleanText.includes("ACADEMY");
+    const isTop250 = cleanText.includes("250") || cleanText.includes("IMDB");
+    const isCannes = cleanText.includes("CANNES") || cleanText.includes("PALME");
+    const isCriterion = cleanText.includes("CRITERION");
+    const isLeaving = cleanText.includes("LEAVING");
+
+    const subLabel = isOscar 
+        ? "🌿 ACADEMY AWARDS 🌿" 
+        : isTop250 
+            ? "⭐ ALL-TIME BEST ⭐" 
+            : isCannes 
+                ? "🌿 CANNES WINNER 🌿" 
+                : isCriterion 
+                    ? "SPECIAL EDITION" 
+                    : isLeaving 
+                        ? "⚠️ SOON" 
+                        : "★ OFFICIAL SELECTION ★";
+
+    const gradientThemeMap: Record<string, { start: string; mid: string; end: string; border: string; highlight: string; text: string; subText: string; shadow: string }> = {
+        gold: { start: "#fef08a", mid: "#f59e0b", end: "#b45309", border: "#fef9c3", highlight: "rgba(255,255,255,0.9)", text: "#0f172a", subText: "#1e293b", shadow: "rgba(0,0,0,0.5)" },
+        crimson: { start: "#fb7185", mid: "#e11d48", end: "#881337", border: "#fda4af", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#ffe4e6", shadow: "rgba(0,0,0,0.5)" },
+        emerald: { start: "#6ee7b7", mid: "#059669", end: "#064e3b", border: "#a7f3d0", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#d1fae5", shadow: "rgba(0,0,0,0.5)" },
+        purple: { start: "#c7d2fe", mid: "#6366f1", end: "#3730a3", border: "#e0e7ff", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#e0e7ff", shadow: "rgba(0,0,0,0.5)" },
+        cyan: { start: "#7dd3fc", mid: "#0284c7", end: "#075985", border: "#bae6fd", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#e0f2fe", shadow: "rgba(0,0,0,0.5)" },
+        pink: { start: "#fbcfe8", mid: "#db2777", end: "#831843", border: "#fce7f3", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#fdf2f8", shadow: "rgba(0,0,0,0.5)" },
+        glass: { start: "#94a3b8", mid: "#1e293b", end: "#020617", border: "#cbd5e1", highlight: "rgba(255,255,255,0.7)", text: "#f8fafc", subText: "#94a3b8", shadow: "rgba(0,0,0,0.6)" },
+        orange: { start: "#fed7aa", mid: "#ea580c", end: "#9a3412", border: "#ffedd5", highlight: "rgba(255,255,255,0.8)", text: "#ffffff", subText: "#ffedd5", shadow: "rgba(0,0,0,0.5)" }
     };
 
-    const g = gradients[theme] || gradients.purple;
-    const cleanText = (text || "FEATURED").trim().toUpperCase().slice(0, 30);
-    const gradId = `kometaRibbon_${theme}_${position}`;
+    const g = gradientThemeMap[theme] || gradientThemeMap.purple;
+    const gradId = `kometaRibbonGrad_${theme}_${position}`;
 
-    const stripeH = 48;
-    const tierY = 0;
-    const fontSize = cleanText.length > 20 ? 14 : cleanText.length > 15 ? 15.5 : 17;
+    let polygonPoints = "45,0 180,135 180,180 0,0";
+    let highlightLine = { x1: "50", y1: "0", x2: "180", y2: "130" };
+    let shadowLine = { x1: "10", y1: "0", x2: "180", y2: "170" };
+    let textTransform = "translate(100, 75) rotate(45)";
+
+    if (isTopLeft) {
+        polygonPoints = "135,0 0,135 0,180 180,0";
+        highlightLine = { x1: "130", y1: "0", x2: "0", y2: "130" };
+        shadowLine = { x1: "170", y1: "0", x2: "0", y2: "170" };
+        textTransform = "translate(80, 75) rotate(-45)";
+    } else if (isBottomRight) {
+        polygonPoints = "0,180 180,0 180,45 45,180";
+        highlightLine = { x1: "0", y1: "170", x2: "180", y2: "10" };
+        shadowLine = { x1: "0", y1: "130", x2: "180", y2: "50" };
+        textTransform = "translate(100, 105) rotate(-45)";
+    } else if (isBottomLeft) {
+        polygonPoints = "0,135 135,180 180,180 0,0";
+        highlightLine = { x1: "0", y1: "130", x2: "130", y2: "180" };
+        shadowLine = { x1: "0", y1: "170", x2: "170", y2: "180" };
+        textTransform = "translate(80, 105) rotate(45)";
+    }
+
+    const fontSize = cleanText.length > 20 ? 9.5 : cleanText.length > 14 ? 10.5 : 12;
 
     return `
-    <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+    <svg width="280" height="280" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
         <defs>
-            <linearGradient id="${gradId}" x1="0%" y1="0%" x2="0%" y2="100%">
+            <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stop-color="${g.start}" />
-                <stop offset="30%" stop-color="${g.mid}" />
-                <stop offset="85%" stop-color="${g.end}" />
-                <stop offset="100%" stop-color="${g.shadow}" />
+                <stop offset="45%" stop-color="${g.mid}" />
+                <stop offset="100%" stop-color="${g.end}" />
             </linearGradient>
-            <filter id="kometaDropShadow_${position}" x="-30%" y="-30%" width="160%" height="160%">
-                <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000000" flood-opacity="0.9"/>
+            <filter id="ribbonDropShadow_${position}" x="-25%" y="-25%" width="150%" height="150%">
+                <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.85"/>
             </filter>
         </defs>
-        <g transform="translate(200, 200) rotate(${rotation})">
-            <!-- Main Diagonal Ribbon Banner -->
-            <rect x="-350" y="${tierY - stripeH / 2}" width="700" height="${stripeH}" fill="url(#${gradId})" filter="url(#kometaDropShadow_${position})"/>
+        <g filter="url(#ribbonDropShadow_${position})">
+            <!-- Ribbon Solid Body -->
+            <polygon points="${polygonPoints}" fill="url(#${gradId})" />
             <!-- Top Specular Highlight Line -->
-            <line x1="-350" y1="${tierY - stripeH / 2 + 1.5}" x2="350" y2="${tierY - stripeH / 2 + 1.5}" stroke="${g.border}" stroke-width="1.5" opacity="0.9"/>
-            <!-- Bottom Border / Fold Line -->
-            <line x1="-350" y1="${tierY + stripeH / 2 - 1}" x2="350" y2="${tierY + stripeH / 2 - 1}" stroke="${g.shadow}" stroke-width="1.8" opacity="0.95"/>
-            <!-- Ribbon Text -->
-            <text x="0" y="${tierY + fontSize * 0.35}" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle" letter-spacing="2.2">${cleanText}</text>
+            <line x1="${highlightLine.x1}" y1="${highlightLine.y1}" x2="${highlightLine.x2}" y2="${highlightLine.y2}" stroke="${g.highlight}" stroke-width="1.8" />
+            <!-- Bottom Fold Shadow Line -->
+            <line x1="${shadowLine.x1}" y1="${shadowLine.y1}" x2="${shadowLine.x2}" y2="${shadowLine.y2}" stroke="${g.shadow}" stroke-width="2.2" />
+            
+            <!-- Crisp Typography -->
+            <g transform="${textTransform}">
+                <text x="0" y="0" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="${fontSize}" fill="${g.text}" text-anchor="middle" letter-spacing="2.2">${cleanText}</text>
+                <text x="0" y="11" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="7.5" fill="${g.subText}" text-anchor="middle" letter-spacing="1">${subLabel}</text>
+            </g>
         </g>
     </svg>`;
 }
@@ -1467,7 +1447,7 @@ export function evaluateBadgeCondition(
     if (!detected) return false;
 
     // 1. Resolution
-    if (c === "4k" || c === "2160p" || c === "uhd" || c === "ultra-hd" || c === "ultra hd") {
+    if (c === "4k" || c === "2160p" || c === "2160" || c === "uhd" || c === "ultra-hd" || c === "ultra hd") {
         return detected.resolution === "4K";
     }
     if (c === "1080p" || c === "1080" || c === "fhd") {
@@ -1548,19 +1528,19 @@ export function evaluateBadgeCondition(
     if (c === "dc") return (detected.studio || "").toLowerCase().includes("dc");
     if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
 
-    // 7. Ratings
+    // 7. Ratings / Content Ratings
     const cr = (detected.contentRating || "").toUpperCase();
-    if (c === "pg-13") return cr === "PG-13" || cr === "US:PG-13";
-    if (c === "nc-17") return cr === "NC-17" || cr === "US:NC-17";
-    if (c === "r") return cr === "R" || cr === "US:R";
-    if (c === "pg") return cr === "PG" || cr === "US:PG";
-    if (c === "g") return cr === "G" || cr === "US:G";
-    if (c === "tv-ma" || c === "tvma") return cr === "TV-MA" || cr === "US:TV-MA";
-    if (c === "tv-14" || c === "tv14") return cr === "TV-14" || cr === "US:TV-14";
-    if (c === "tv-pg" || c === "tvpg") return cr === "TV-PG" || cr === "US:TV-PG";
-    if (c === "tv-g" || c === "tvg") return cr === "TV-G" || cr === "US:TV-G";
-    if (c === "tv-y" || c === "tvy") return cr === "TV-Y" || cr === "US:TV-Y";
-    if (c === "tv-y7" || c === "tvy7") return cr === "TV-Y7" || cr === "US:TV-Y7";
+    if (c === "pg-13" || c === "pg13" || c === "12a" || c === "12" || c === "13+") return cr === "PG-13" || cr.includes("PG-13") || cr === "US:PG-13";
+    if (c === "nc-17" || c === "nc17" || c === "18" || c === "18+") return cr === "NC-17" || cr.includes("NC-17") || cr === "US:NC-17";
+    if (c === "r" || c === "restricted" || c === "15" || c === "16") return cr === "R" || cr === "US:R" || cr === "TV-MA";
+    if (c === "pg" || c === "tv-pg" || c === "6") return cr === "PG" || cr === "US:PG" || cr === "TV-PG";
+    if (c === "g" || c === "tv-g" || c === "u" || c === "0") return cr === "G" || cr === "US:G" || cr === "TV-G" || cr === "TV-Y";
+    if (c === "tv-ma" || c === "tvma") return cr === "TV-MA" || cr === "US:TV-MA" || cr === "R";
+    if (c === "tv-14" || c === "tv14") return cr === "TV-14" || cr === "US:TV-14" || cr === "PG-13";
+    if (c === "tv-pg" || c === "tvpg") return cr === "TV-PG" || cr === "US:TV-PG" || cr === "PG";
+    if (c === "tv-g" || c === "tvg") return cr === "TV-G" || cr === "US:TV-G" || cr === "G";
+    if (c === "tv-y" || c === "tvy") return cr === "TV-Y" || cr === "US:TV-Y" || cr === "G";
+    if (c === "tv-y7" || c === "tvy7") return cr === "TV-Y7" || cr === "US:TV-Y7" || cr === "PG";
 
     return false;
 }
@@ -1891,15 +1871,15 @@ export async function applyOverlaysToPoster(
         const combined = `${cat} ${rule} ${name} ${fName}`;
 
         const categories: string[] = [];
-        if (cat === "resolution" || /4k|2160|1080|720|480|576|sd|uhd|fhd/i.test(combined)) categories.push("resolution");
-        if (cat === "hdr" || /dv|hdr|dolby.*vision|plus/i.test(combined)) categories.push("hdr");
-        if (cat === "codec" || /hevc|av1|prores|avc|h264|h265|x264|x265/i.test(combined)) categories.push("codec");
-        if (cat === "audio" || /atmos|truehd|dts|flac|aac|eac3|ac3/i.test(combined)) categories.push("audio");
-        if (/7\.1|5\.1|2\.0|channels|surround/i.test(combined)) categories.push("channels");
-        if (cat === "edition" || /imax|criterion|director|extended|remux|theatrical|remaster/i.test(combined)) categories.push("edition");
-        if (cat === "studio" || /netflix|disney|hbo|apple|prime|paramount|marvel|dc|a24/i.test(combined)) categories.push("studio");
-        if (cat === "ratings" || /pg-13|nc-17|tv-ma|rated|pg|r|g/i.test(combined)) categories.push("contentRating");
-        if (cat === "ribbon") categories.push("ribbon");
+        if (cat === "resolution" || /\b(4k|2160p?|1080p?|720p?|480p?|576p?|sd|uhd|fhd)\b/i.test(combined)) categories.push("resolution");
+        if (cat === "hdr" || /\b(dv|dolby\s*vision|hdr10\+|hdr10|hdr|hdrplus)\b/i.test(combined)) categories.push("hdr");
+        if (cat === "codec" || /\b(hevc|av1|prores|avc|h\.?264|h\.?265|x264|x265)\b/i.test(combined)) categories.push("codec");
+        if (cat === "audio" || /\b(atmos|truehd|dts:?x|dts-hd|dts|flac|aac|eac3|ac3)\b/i.test(combined)) categories.push("audio");
+        if (/\b(7\.1|5\.1|2\.0|surround)\b/i.test(combined)) categories.push("channels");
+        if (cat === "edition" || /\b(imax|criterion|directors?[\s_-]?cut|extended|remux|theatrical|remastered?)\b/i.test(combined)) categories.push("edition");
+        if (cat === "studio" || /\b(netflix|disney\+?|hbo(?:\s*max)?|apple\s*tv\+?|prime(?:\s*video)?|paramount\+?|marvel|dc(?:\s*comics)?|a24)\b/i.test(combined)) categories.push("studio");
+        if (cat === "ratings" || cat === "contentrating" || cat === "rating" || /\b(pg-13|nc-17|tv-ma|tv-14|tv-pg|tv-g|rated\s+[a-z0-9-]+)\b/i.test(combined)) categories.push("contentRating");
+        if (cat === "ribbon" || /\b(ribbon|laurel|award|top_?250|cannes|oscar|emmy|bafta|certified_fresh|palme)\b/i.test(combined)) categories.push("ribbon");
 
         if (categories.length === 0 && cat && cat !== "custom") categories.push(cat);
         return categories;
@@ -2161,6 +2141,7 @@ export async function applyOverlaysToPoster(
         const isBRight = posKey.endsWith("right");
         const isBCenter = posKey.includes("center");
 
+        const isRibbonInSameCorner = Boolean(options.showRibbon) && (options.ribbonPosition || "top-right") === posKey;
         const bTopOffset = isBTop ? (options.showLeavingSoon ? 95 : 35) : (1500 - 35);
 
         if (isBCenter) {
@@ -2175,7 +2156,10 @@ export async function applyOverlaysToPoster(
                 curX += it.w + 12;
             }
         } else {
-            let currentX = isBRight ? 1000 - 35 : 35;
+            let currentX = isBRight 
+                ? (isRibbonInSameCorner ? 1000 - 280 - 40 : 1000 - 35) 
+                : (isRibbonInSameCorner ? 280 + 40 : 35);
+
             for (const it of items) {
                 const placeX = isBRight ? currentX - it.w : currentX;
                 const placeY = isBTop ? bTopOffset : bTopOffset - it.h;
