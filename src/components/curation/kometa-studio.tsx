@@ -731,6 +731,7 @@ export function KometaStudio() {
         { value: "cannes_winner", label: "🌿 Cannes Palme d'Or Winner", defaultText: "PALME D'OR", defaultTheme: "gold" as const },
         { value: "auto_quality", label: "📺 4K UHD / Dolby Vision Quality", defaultText: "4K UHD", defaultTheme: "purple" as const },
         { value: "auto_edition", label: "🏷️ Special / IMAX Edition", defaultText: "SPECIAL EDITION", defaultTheme: "cyan" as const },
+        { value: "leaving_soon", label: "⚠️ Leaving Soon (Plex Collection / Staged)", defaultText: "LEAVING SOON", defaultTheme: "crimson" as const },
         { value: "custom", label: "⚙️ Custom Rule / Condition", defaultText: "FEATURED", defaultTheme: "glass" as const }
     ];
 
@@ -876,6 +877,18 @@ export function KometaStudio() {
                 if (item) {
                     if (Boolean(item.detectedBadges?.edition || item.editionTitle)) isMatch = true;
                 } else if (Boolean(simFallback.edition)) {
+                    isMatch = true;
+                }
+            } else if (type === "leaving_soon") {
+                ruleLabel = "Leaving Soon Advisory";
+                if (item) {
+                    const isLeaving = Boolean(
+                        item.isLeavingSoon ||
+                        item.collections?.some((c: string) => /leaving[\s_-]?soon/i.test(c)) ||
+                        item.labels?.some((l: string) => /leaving[\s_-]?soon/i.test(l))
+                    );
+                    if (isLeaving) isMatch = true;
+                } else {
                     isMatch = true;
                 }
             } else if (type === "custom" || tier.matchRule) {

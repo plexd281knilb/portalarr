@@ -1027,6 +1027,9 @@ function generateBannerSvg(
 
     if (position === "corner") {
         const size = 520;
+        const len = escapedText.length;
+        const fontSize = len > 28 ? 18 : len > 22 ? 21 : len > 16 ? 24 : len > 10 ? 28 : 32;
+
         const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <linearGradient id="cornerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1044,9 +1047,10 @@ function generateBannerSvg(
                 <line x1="0" y1="0" x2="520" y2="520" stroke="${colors.border}" stroke-width="4" />
                 <line x1="60" y1="0" x2="520" y2="460" stroke="${colors.accent}" stroke-width="1.5" stroke-dasharray="8 4" opacity="0.7" />
             </g>
-            <text x="310" y="250" transform="rotate(45 310 250)" 
-                font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
-                font-size="30" 
+            <text x="290" y="230" transform="rotate(45 290 230)" 
+                dominant-baseline="central"
+                font-family="Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
+                font-size="${fontSize}" 
                 font-weight="900" 
                 letter-spacing="2" 
                 fill="${colors.text}" 
@@ -1094,8 +1098,9 @@ function generateBannerSvg(
         }
 
         <g filter="url(#textGlow)">
-            <text x="500" y="${isTop ? 105 : 110}" 
-                font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+            <text x="500" y="95" 
+                dominant-baseline="central"
+                font-family="Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
                 font-size="${fontSize}" 
                 font-weight="900" 
                 letter-spacing="${letterSpacing}" 
@@ -1147,7 +1152,8 @@ function generatePlaceholderBackdropSvg(title: string): string {
 
         <g filter="url(#posterGlow)">
             <text x="500" y="780" 
-                font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" 
+                dominant-baseline="central"
+                font-family="Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
                 font-size="44" 
                 font-weight="900" 
                 letter-spacing="1.5" 
@@ -1156,7 +1162,8 @@ function generatePlaceholderBackdropSvg(title: string): string {
                 ${escapedTitle}
             </text>
             <text x="500" y="830" 
-                font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" 
+                dominant-baseline="central"
+                font-family="Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
                 font-size="20" 
                 font-weight="600" 
                 letter-spacing="3" 
@@ -1284,18 +1291,43 @@ export async function applyOverlaysToPoster(
     let renderedRibbonCorner: string | null = null;
 
     // 1. Leaving Soon Banner / Ribbon
-    const isItemLeavingSoon = Boolean(mediaInfo.isLeavingSoon || mediaInfo.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) || mediaInfo.collections?.some(c => /leaving[\s_-]?soon/i.test(c)));
+    const isItemLeavingSoon = Boolean(
+        mediaInfo.isLeavingSoon || 
+        options.leavingSoonDays !== undefined || 
+        Boolean(options.placeholderText && options.showLeavingSoon) ||
+        mediaInfo.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) || 
+        mediaInfo.collections?.some(c => /leaving[\s_-]?soon/i.test(c))
+    );
     if (options.showLeavingSoon && isItemLeavingSoon) {
-        // Use stock fire ribbon or banner
+        const leavingText = options.placeholderText 
+            ? interpolateBannerVariables(options.placeholderText, {
+                days: options.leavingSoonDays,
+                date: options.digitalReleaseDate,
+                title: mediaInfo.title
+            })
+            : (options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays} DAYS` : "LEAVING SOON");
+
+        const bannerPos = options.placeholderPosition || (options.position === "top-right" || options.position === "top-left" ? "corner" : "bottom");
+        const bannerTheme = options.placeholderTheme || "crimson-red";
+
+        const bannerInfo = generateBannerSvg(leavingText, bannerTheme, bannerPos as any);
+        const bannerBuf = await sharp(Buffer.from(bannerInfo.svg)).toBuffer();
+        overlays.push({
+            input: bannerBuf,
+            top: Math.round(bannerInfo.top),
+            left: Math.round(bannerInfo.left)
+        });
+
+        // Add flame badge if available and banner is not corner
         const firePath = path.join(STOCK_KOMETA_DIR, "fire.png");
         const flamePath = path.join(STOCK_KOMETA_DIR, "flame.png");
         const iconPath = fs.existsSync(firePath) ? firePath : fs.existsSync(flamePath) ? flamePath : null;
-        if (iconPath) {
-            const iconBuf = await sharp(iconPath).resize(90, 90).toBuffer();
+        if (iconPath && bannerPos !== "corner") {
+            const iconBuf = await sharp(iconPath).resize(80, 80).toBuffer();
             overlays.push({
                 input: iconBuf,
-                top: 35,
-                left: 35
+                top: bannerPos === "top" ? 50 : 1500 - 130,
+                left: 50
             });
         }
     }
@@ -1343,17 +1375,21 @@ export async function applyOverlaysToPoster(
         if (winningRibbonName) {
             const ribbonRelPath = resolveStockRibbonPath(winningRibbonName, winningTheme);
             if (ribbonRelPath) {
-                const fullRibbonPath = path.join(STOCK_KOMETA_DIR, ribbonRelPath);
-                if (fs.existsSync(fullRibbonPath)) {
-                    let ribbonSharp = sharp(fullRibbonPath).resize(380, 380);
+                // If it's a blank ribbon (e.g. leaving_soon or custom text), render dynamic corner banner with text!
+                if (ribbonRelPath.includes("blank-") || winningRibbonName === "leaving_soon") {
+                    const ribbonText = winningRibbonName === "leaving_soon" 
+                        ? (options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays}D` : "LEAVING SOON") 
+                        : (options.ribbonText || winningRibbonName).toUpperCase();
 
-                    // Standard Kometa ribbon PNG is naturally in bottom-right
+                    const bannerInfo = generateBannerSvg(ribbonText, winningTheme === "gold" ? "amber-gold" : "crimson-red", "corner");
+                    let ribbonSharp = sharp(Buffer.from(bannerInfo.svg)).resize(380, 380);
+
                     if (rPos === "bottom-left") {
                         ribbonSharp = ribbonSharp.flop();
-                    } else if (rPos === "top-right") {
-                        ribbonSharp = ribbonSharp.flip();
                     } else if (rPos === "top-left") {
                         ribbonSharp = ribbonSharp.flip().flop();
+                    } else if (rPos === "bottom-right") {
+                        ribbonSharp = ribbonSharp.flip();
                     }
 
                     const ribbonBuf = await ribbonSharp.toBuffer();
@@ -1366,6 +1402,31 @@ export async function applyOverlaysToPoster(
                         left: rLeft
                     });
                     renderedRibbonCorner = rPos;
+                } else {
+                    const fullRibbonPath = path.join(STOCK_KOMETA_DIR, ribbonRelPath);
+                    if (fs.existsSync(fullRibbonPath)) {
+                        let ribbonSharp = sharp(fullRibbonPath).resize(380, 380);
+
+                        // Standard Kometa ribbon PNG is naturally in bottom-right
+                        if (rPos === "bottom-left") {
+                            ribbonSharp = ribbonSharp.flop();
+                        } else if (rPos === "top-right") {
+                            ribbonSharp = ribbonSharp.flip();
+                        } else if (rPos === "top-left") {
+                            ribbonSharp = ribbonSharp.flip().flop();
+                        }
+
+                        const ribbonBuf = await ribbonSharp.toBuffer();
+                        const rTop = rPos.startsWith("top") ? 0 : 1500 - 380;
+                        const rLeft = rPos.endsWith("right") ? 1000 - 380 : 0;
+
+                        overlays.push({
+                            input: ribbonBuf,
+                            top: rTop,
+                            left: rLeft
+                        });
+                        renderedRibbonCorner = rPos;
+                    }
                 }
             }
         }

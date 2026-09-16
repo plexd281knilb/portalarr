@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
 import { getPlexServers, getPlexCloudServersMap, resolveWorkingPlexServerConnection } from "@/lib/plex";
-import { getPlexLibraryMediaItems, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
+import { getPlexLibraryMediaItems, getPlexLibraryLabels, getPlexLibraryCollections, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 
 export * from "./parental-guide-types";
 import {
@@ -1039,13 +1039,14 @@ export async function getStoredParentalAdvisoriesForLibrary(
         if (!resolved || !resolved.serverUrl) return { items: [] };
 
         const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-        const mediaItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000);
+        const mediaItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000, undefined, false);
 
         const ratingKeys = mediaItems.map(m => m.ratingKey);
+        const serverIdCandidates = [serverId, resolved.serverId, "main"].filter(Boolean) as string[];
         const advisories = await prisma.mediaContentAdvisory.findMany({
             where: {
                 ratingKey: { in: ratingKeys },
-                serverId: resolved.serverId
+                serverId: { in: serverIdCandidates }
             }
         });
 
@@ -1322,12 +1323,33 @@ export async function getPlexLibraryTagsAudit(
         if (!resolved || !resolved.serverUrl) return { labels: [], genres: [], collections: [], totalItems: 0 };
 
         const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-        const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000);
+        const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000, undefined, false);
 
         const labelCounts: Record<string, number> = {};
         const genreCounts: Record<string, number> = {};
         const collectionCounts: Record<string, number> = {};
 
+        // 1. Fetch native Plex sharing/content labels directly from PMS
+        try {
+            const nativeLabels = await getPlexLibraryLabels(urlsToTry, resolved.token, sectionKey);
+            for (const nl of nativeLabels) {
+                if (nl.tag) {
+                    labelCounts[nl.tag] = nl.count;
+                }
+            }
+        } catch (e) {}
+
+        // 2. Fetch native Plex collections directly from PMS
+        try {
+            const nativeCollections = await getPlexLibraryCollections(urlsToTry, resolved.token, sectionKey);
+            for (const nc of nativeCollections) {
+                if (nc.title) {
+                    collectionCounts[nc.title] = nc.childCount || 1;
+                }
+            }
+        } catch (e) {}
+
+        // 3. Scan media items for genres, collections, and any embedded labels
         for (const item of items) {
             const itemLabels = item.labels || [];
             for (const l of itemLabels) {
@@ -1348,6 +1370,28 @@ export async function getPlexLibraryTagsAudit(
                 }
             }
         }
+
+        // 4. Also check SQLite mediaContentAdvisory for any parental tags applied to items in this library
+        try {
+            const serverIdCandidates = [serverId, resolved.serverId, "main"].filter(Boolean) as string[];
+            const advisories = await prisma.mediaContentAdvisory.findMany({
+                where: {
+                    ratingKey: { in: items.map(it => it.ratingKey) },
+                    serverId: { in: serverIdCandidates }
+                }
+            });
+            for (const adv of advisories) {
+                for (const cat of ["nudity", "violence", "profanity", "alcohol", "frightening"] as const) {
+                    const sev = (adv as any)[`${cat}Level`];
+                    if (sev && typeof sev === "string" && sev !== "None") {
+                        const tag = `IMDb: ${cat.charAt(0).toUpperCase() + cat.slice(1)} (${sev})`;
+                        if (!labelCounts[tag]) {
+                            labelCounts[tag] = (labelCounts[tag] || 0) + 1;
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
 
         const labels = Object.entries(labelCounts).map(([tag, count]) => ({
             tag,

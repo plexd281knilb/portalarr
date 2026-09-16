@@ -301,9 +301,21 @@ export function PruneStudio() {
     const [simPreviewDataUrl, setSimPreviewDataUrl] = useState<string | null>(null);
     const [simPreviewLoading, setSimPreviewLoading] = useState<boolean>(false);
 
+    const getInterpolatedSimText = (template: string) => {
+        if (!template) return "";
+        return template
+            .replace(/{date}/gi, simTemplateDate || "10/31/2026")
+            .replace(/{days}/gi, String(simTemplateDays ?? 14))
+            .replace(/{reason}/gi, simTemplateReason || "Unwatched for 180+ Days")
+            .replace(/{status}/gi, simTemplateStatus || "Leaving Soon")
+            .replace(/{title}/gi, simSelectedRealItem?.title || "Sample Media")
+            .replace(/{quality}/gi, simSelectedRealItem?.detectedBadges?.resolution || "4K UHD")
+            .replace(/{source}/gi, "Plex Library");
+    };
+
     const generatePrunePreview = async (
-        posterUrl: string | null,
-        title: string,
+        posterUrl: string | null = simSelectedRealItem ? simPosterUrl : null,
+        title: string = simSelectedRealItem?.title || "Sample Media",
         type = simBannerType,
         text = simBannerText,
         theme = simBannerTheme,
@@ -320,11 +332,11 @@ export function PruneStudio() {
                 bannerText: text,
                 bannerTheme: theme,
                 bannerPosition: position,
-                date,
-                formattedDate: date,
-                daysRemaining: days,
-                reason,
-                status
+                date: date || "10/31/2026",
+                formattedDate: date || "10/31/2026",
+                daysRemaining: days ?? 14,
+                reason: reason || "Unwatched for 180+ Days",
+                status: status || "Leaving Soon"
             });
             if (res.success && res.dataUrl) {
                 setSimPreviewDataUrl(res.dataUrl);
@@ -1178,7 +1190,7 @@ export function PruneStudio() {
                                                     simBannerTheme.includes("purple") ? "bg-purple-600" :
                                                     simBannerTheme.includes("blue") ? "bg-sky-600" : "bg-red-600"
                                                 }`}>
-                                                    {simBannerText.replace("{date}", simTemplateDate).replace("{days}", String(simTemplateDays)).replace("{reason}", simTemplateReason).replace("{status}", simTemplateStatus)}
+                                                    {getInterpolatedSimText(simBannerText)}
                                                 </div>
                                             </div>
                                         )}
@@ -1203,6 +1215,8 @@ export function PruneStudio() {
                                                 setSimBannerType(val);
                                                 const nextText = found?.defaultText || "LEAVING ON {date}";
                                                 setSimBannerText(nextText);
+                                                const nextTheme = found?.theme || simBannerTheme;
+                                                const nextPos = found?.pos || simBannerPosition;
                                                 if (found?.theme) setSimBannerTheme(found.theme);
                                                 if (found?.pos) setSimBannerPosition(found.pos);
                                                 generatePrunePreview(
@@ -1210,8 +1224,12 @@ export function PruneStudio() {
                                                     simSelectedRealItem?.title || "Sample Media",
                                                     val,
                                                     nextText,
-                                                    found?.theme || simBannerTheme,
-                                                    found?.pos || simBannerPosition
+                                                    nextTheme,
+                                                    nextPos,
+                                                    simTemplateDate,
+                                                    simTemplateDays,
+                                                    simTemplateReason,
+                                                    simTemplateStatus
                                                 );
                                             }}
                                         >
@@ -1240,7 +1258,13 @@ export function PruneStudio() {
                                                     simSelectedRealItem ? simPosterUrl : null,
                                                     simSelectedRealItem?.title || "Sample Media",
                                                     simBannerType,
-                                                    e.target.value
+                                                    e.target.value,
+                                                    simBannerTheme,
+                                                    simBannerPosition,
+                                                    simTemplateDate,
+                                                    simTemplateDays,
+                                                    simTemplateReason,
+                                                    simTemplateStatus
                                                 );
                                             }}
                                             className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
@@ -1282,7 +1306,12 @@ export function PruneStudio() {
                                                         simSelectedRealItem?.title || "Sample Media",
                                                         simBannerType,
                                                         simBannerText,
-                                                        val
+                                                        val,
+                                                        simBannerPosition,
+                                                        simTemplateDate,
+                                                        simTemplateDays,
+                                                        simTemplateReason,
+                                                        simTemplateStatus
                                                     );
                                                 }}
                                             >
@@ -1314,7 +1343,11 @@ export function PruneStudio() {
                                                         simBannerType,
                                                         simBannerText,
                                                         simBannerTheme,
-                                                        val
+                                                        val,
+                                                        simTemplateDate,
+                                                        simTemplateDays,
+                                                        simTemplateReason,
+                                                        simTemplateStatus
                                                     );
                                                 }}
                                             >
@@ -1349,7 +1382,10 @@ export function PruneStudio() {
                                                             simBannerText,
                                                             simBannerTheme,
                                                             simBannerPosition,
-                                                            e.target.value
+                                                            e.target.value,
+                                                            simTemplateDays,
+                                                            simTemplateReason,
+                                                            simTemplateStatus
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
@@ -1371,7 +1407,9 @@ export function PruneStudio() {
                                                             simBannerTheme,
                                                             simBannerPosition,
                                                             simTemplateDate,
-                                                            num
+                                                            num,
+                                                            simTemplateReason,
+                                                            simTemplateStatus
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
@@ -1392,7 +1430,8 @@ export function PruneStudio() {
                                                             simBannerPosition,
                                                             simTemplateDate,
                                                             simTemplateDays,
-                                                            e.target.value
+                                                            e.target.value,
+                                                            simTemplateStatus
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"

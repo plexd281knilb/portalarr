@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
                     const matchedItem = items.find(it => it.ratingKey === ratingKey);
                     if (matchedItem) {
                         const daysLeft = Math.max(1, Math.ceil((effectiveDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                        matchedItem.isLeavingSoon = true;
                         await backupAndApplyOverlay(
                             resolved.serverUrl,
                             token,
@@ -115,7 +116,10 @@ export async function POST(req: NextRequest) {
                             {
                                 showLeavingSoon: true,
                                 leavingSoonDays: daysLeft,
-                                position: "top-right"
+                                placeholderText: `LEAVING IN ${daysLeft} DAYS`,
+                                placeholderTheme: "crimson-red",
+                                placeholderPosition: "bottom",
+                                position: "bottom-center"
                             }
                         );
                     }

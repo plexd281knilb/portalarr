@@ -1016,7 +1016,38 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             }
         }
 
+        // Run Coming Soon placeholders if enabled
+        let placeholdersGenerated = 0;
+        if (collection.includePlaceholders) {
+            try {
+                const placeholderRes = await generateCollectionPlaceholdersInternal(collection);
+                if (placeholderRes.success) {
+                    placeholdersGenerated = placeholderRes.generatedCount;
+                }
+            } catch (pErr: any) {
+                console.warn("[COLL-SYNC] Error running auto-placeholders:", pErr.message);
+            }
+        } else {
+            try {
+                await cleanupAvailablePlaceholdersInternal(collection.serverId || undefined, collection.sectionKey || undefined);
+            } catch (pErr: any) {
+                console.warn("[COLL-SYNC] Error running placeholder cleanup:", pErr.message);
+            }
+        }
+
         if (matchingRatingKeys.length === 0) {
+            if (placeholdersGenerated > 0) {
+                return {
+                    success: true,
+                    message: `Generated ${placeholdersGenerated} Coming Soon placeholder(s) in share folder! Plex library scan initiated to add stubs to collection.`
+                };
+            }
+            if (collection.includePlaceholders) {
+                return {
+                    success: true,
+                    message: `Collection criteria evaluated (0 items currently in library, candidates checked for Coming Soon stubs).`
+                };
+            }
             return {
                 success: false,
                 error: "No matching library media found for collection query criteria.",
@@ -1056,26 +1087,6 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 ratingKey: syncResult.collectionRatingKey || undefined
             }
         });
-
-        // 6. If collection is configured to include placeholders, generate stubs in Coming Soon Shares folder
-        let placeholdersGenerated = 0;
-        if (collection.includePlaceholders) {
-            try {
-                const placeholderRes = await generateCollectionPlaceholdersInternal(collection);
-                if (placeholderRes.success) {
-                    placeholdersGenerated = placeholderRes.generatedCount;
-                }
-            } catch (pErr: any) {
-                console.warn("[COLL-SYNC] Error running auto-placeholders:", pErr.message);
-            }
-        } else {
-            // If placeholders disabled, still clean up any previously created placeholders now in library
-            try {
-                await cleanupAvailablePlaceholdersInternal(collection.serverId || undefined, collection.sectionKey || undefined);
-            } catch (pErr: any) {
-                console.warn("[COLL-SYNC] Error running placeholder cleanup:", pErr.message);
-            }
-        }
 
         logger.addLog("SUCCESS", "PLEX", `Successfully synced collection "${collection.title}" (${finalRatingKeys.length} items${placeholdersGenerated > 0 ? `, ${placeholdersGenerated} placeholders generated` : ""}) to Plex server "${resolved.serverName}"`);
 
@@ -1524,12 +1535,21 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
             ? JSON.parse(settings.enabledServersForCollections)
             : [];
 
-        const allCollections = await prisma.mediaCollection.findMany({
+        const serverIdCandidates = [serverId, resolved?.serverId, "main"].filter(Boolean) as string[];
+        let allCollections = await prisma.mediaCollection.findMany({
             where: {
-                ...(serverId ? { serverId } : {}),
-                ...(sectionKey ? { sectionKey } : {})
+                ...(serverId ? { serverId: { in: serverIdCandidates } } : {}),
+                ...(sectionKey ? { sectionKey: String(sectionKey) } : {})
             }
         });
+
+        if (allCollections.length === 0 && serverId) {
+            allCollections = await prisma.mediaCollection.findMany({
+                where: {
+                    serverId: { in: serverIdCandidates }
+                }
+            });
+        }
 
         const now = new Date();
         const curMonth = now.getMonth() + 1; // 1-12
@@ -3380,6 +3400,7 @@ export async function executePruneAction(
                     const mediaItems = await getPlexLibraryMediaItems(serverUrl, serverToken, it.sectionKey, 50);
                     const matched = mediaItems.find(m => m.ratingKey === it.ratingKey);
                     if (matched) {
+                        matched.isLeavingSoon = true;
                         await backupAndApplyOverlay(
                             serverUrl,
                             serverToken,
@@ -3388,8 +3409,10 @@ export async function executePruneAction(
                             {
                                 showLeavingSoon: true,
                                 leavingSoonDays: daysNotice,
-                                position: "top-right",
-                                theme: "glass"
+                                placeholderText: `LEAVING IN ${daysNotice} DAYS`,
+                                placeholderTheme: "crimson-red",
+                                placeholderPosition: "bottom",
+                                position: "bottom-center"
                             }
                         );
                     }
@@ -5529,12 +5552,12 @@ export async function getPlaceholderPreviewDataUrlAction(
             customText: options.bannerText || "NOT REQUESTED",
             theme: options.bannerTheme || "crimson-red",
             position: options.bannerPosition || "bottom",
-            daysRemaining: options.daysRemaining,
-            formattedDate: options.formattedDate,
-            date: options.date,
-            source: options.source,
-            status: options.status,
-            reason: options.reason
+            daysRemaining: options.daysRemaining ?? 14,
+            formattedDate: options.formattedDate || options.date || "10/31/2026",
+            date: options.date || options.formattedDate || "10/31/2026",
+            source: options.source || "Plex",
+            status: options.status || "Leaving Soon",
+            reason: options.reason || "Unwatched for 180+ Days"
         });
 
         const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
@@ -5779,7 +5802,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const resolved = await resolveWorkingPlexServerConnection(collection.serverId);
                 if (resolved && resolved.serverUrl) {
                     const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000);
+                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000, undefined, false);
                 }
             } catch (err: any) {
                 console.warn("[COLL-PLACEHOLDER] Failed fetching library items:", err.message);

@@ -900,12 +900,14 @@ export async function getPlexLibraryMediaItems(
     token: string,
     sectionKey: string | number,
     limit = 500,
-    sort?: string
+    sort?: string,
+    includeStreams = true
 ): Promise<PlexMediaStreamInfo[]> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let lastError: any = null;
     let lastUrlAttempted = "";
     const sortParam = sort ? `&sort=${encodeURIComponent(sort)}` : "";
+    const streamsParam = includeStreams ? "&includeStreams=1" : "";
 
     const deduplicateResults = (metadata: any[]): PlexMediaStreamInfo[] => {
         const seenKeys = new Set<string>();
@@ -922,8 +924,8 @@ export async function getPlexLibraryMediaItems(
     for (const cleanBase of urlsToTry) {
         if (!cleanBase) continue;
 
-        // 1. Try standard query with includeGuids=1&includeAdvanced=1&includeMeta=1&includeStreams=1
-        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&includeAdvanced=1&includeMeta=1&includeStreams=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
+        // 1. Try standard query with includeGuids=1&includeAdvanced=1&includeMeta=1
+        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&includeAdvanced=1&includeMeta=1${streamsParam}&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
         lastUrlAttempted = urlWithGuids;
         try {
             const controller = new AbortController();
@@ -964,7 +966,7 @@ export async function getPlexLibraryMediaItems(
         }
 
         // 2. Try fast fallback without includeGuids=1
-        const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeAdvanced=1&includeStreams=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
+        const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeAdvanced=1${streamsParam}&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
         lastUrlAttempted = fallbackUrl;
         try {
             const fbController = new AbortController();
@@ -1436,6 +1438,109 @@ export async function getPlexLibraryCollections(
     }
 
     return Array.from(discoveredMap.values());
+}
+
+/**
+ * Fetches all labels and their item counts for a Plex library section.
+ * Queries /library/sections/{key}/label directly from Plex Media Server,
+ * and retrieves accurate item counts for each label.
+ */
+export async function getPlexLibraryLabels(
+    serverUrlOrCandidates: string | string[],
+    token: string,
+    sectionKey: string | number
+): Promise<Array<{ tag: string; count: number }>> {
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    const discoveredLabels: Map<string, number> = new Map();
+    let workingBase = "";
+
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        try {
+            const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/label?X-Plex-Token=${encodeURIComponent(token)}`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(url, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                workingBase = cleanBase;
+                const text = await res.text();
+                const trimmed = text.trim();
+
+                if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                    try {
+                        const data = JSON.parse(trimmed);
+                        const dirs = data.MediaContainer?.Directory || data.MediaContainer?.Metadata || [];
+                        const list = Array.isArray(dirs) ? dirs : [dirs];
+                        for (const d of list) {
+                            const tag = String(d.title || d.tag || d.key || "").trim();
+                            if (tag) {
+                                const count = parseInt(d.size || d.count || "0", 10) || 1;
+                                discoveredLabels.set(tag, Math.max(discoveredLabels.get(tag) || 0, count));
+                            }
+                        }
+                    } catch (e) {}
+                } else if (trimmed.includes("<Directory") || trimmed.includes("<MediaContainer")) {
+                    const matches = trimmed.matchAll(/<Directory\b([^>]*?)(?:\/>|>.*?<\/Directory>)/gi);
+                    for (const m of matches) {
+                        const attrs = m[1] || "";
+                        const titleMatch = attrs.match(/\b(?:title|tag|key)=["']([^"']*)["']/i);
+                        const countMatch = attrs.match(/\b(?:size|count)=["']([^"']*)["']/i);
+                        if (titleMatch?.[1]) {
+                            const tag = titleMatch[1].trim();
+                            const count = countMatch?.[1] ? parseInt(countMatch[1], 10) : 1;
+                            discoveredLabels.set(tag, Math.max(discoveredLabels.get(tag) || 0, count));
+                        }
+                    }
+                }
+
+                if (discoveredLabels.size > 0) {
+                    break;
+                }
+            }
+        } catch (e) {}
+    }
+
+    // Query totalSize for each discovered label to get accurate counts
+    const finalBase = workingBase || urlsToTry[0];
+    const results: Array<{ tag: string; count: number }> = [];
+
+    if (finalBase && discoveredLabels.size > 0) {
+        await Promise.all(
+            Array.from(discoveredLabels.keys()).map(async (tag) => {
+                let count = discoveredLabels.get(tag) || 1;
+                try {
+                    const countUrl = `${finalBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?label=${encodeURIComponent(tag)}&X-Plex-Container-Start=0&X-Plex-Container-Size=0&X-Plex-Token=${encodeURIComponent(token)}`;
+                    const cRes = await fetch(countUrl, {
+                        headers: {
+                            "Accept": "application/json",
+                            "X-Plex-Token": token,
+                            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                        },
+                        cache: "no-store"
+                    });
+                    if (cRes.ok) {
+                        const cData = await cRes.json();
+                        if (cData.MediaContainer?.totalSize !== undefined) {
+                            count = parseInt(cData.MediaContainer.totalSize, 10);
+                        }
+                    }
+                } catch (e) {}
+                results.push({ tag, count });
+            })
+        );
+    }
+
+    return results.sort((a, b) => b.count - a.count);
 }
 
 /**
