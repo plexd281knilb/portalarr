@@ -1095,6 +1095,13 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             } catch (pErr: any) {
                 console.warn("[COLL-SYNC] Error running auto-placeholders:", pErr.message);
             }
+        } else {
+            // If placeholders disabled, still clean up any previously created placeholders now in library
+            try {
+                await cleanupAvailablePlaceholdersInternal(collection.serverId || undefined, collection.sectionKey || undefined);
+            } catch (pErr: any) {
+                console.warn("[COLL-SYNC] Error running placeholder cleanup:", pErr.message);
+            }
         }
 
         logger.addLog("SUCCESS", "PLEX", `Successfully synced collection "${collection.title}" (${finalRatingKeys.length} items${placeholdersGenerated > 0 ? `, ${placeholdersGenerated} placeholders generated` : ""}) to Plex server "${resolved.serverName}"`);
@@ -1671,6 +1678,13 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
 
                 results.push({ title: coll.title, active: false, action: shouldHide ? "Hidden from Plex Home (Out of Schedule/Season)" : "Demoted" });
             }
+        }
+
+        // Auto-cleanup any Coming Soon placeholders for media items that have now been acquired in Plex
+        try {
+            await cleanupAvailablePlaceholdersInternal(serverId, sectionKey);
+        } catch (cleanErr: any) {
+            console.warn("[CURATION-SYNC] Error in placeholder auto-cleanup:", cleanErr.message);
         }
 
         logger.addLog("INFO", "CURATION", `Evaluated ${scheduledCollections.length} scheduled & seasonal collections.`);
@@ -5726,6 +5740,13 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
             };
         }
 
+        // Auto-cleanup any previously created placeholders whose full media is now available in Plex
+        try {
+            await cleanupAvailablePlaceholdersInternal(collection.serverId || undefined, collection.sectionKey || undefined);
+        } catch (cleanErr: any) {
+            console.warn("[COLL-PLACEHOLDER] Error during placeholder auto-cleanup:", cleanErr.message);
+        }
+
         // 1. Fetch library items to know what is already present in Plex
         let libraryItems: any[] = [];
         if (collection.serverId && collection.sectionKey) {
@@ -5959,6 +5980,203 @@ export async function generateCollectionPlaceholdersAction(collectionId: string)
     } catch (e: any) {
         return { success: false, error: e.message, message: e.message };
     }
+}
+
+/**
+ * Scans Coming Soon share directories on disk, checks if any media items have now been
+ * downloaded / acquired into the Plex library, and automatically purges the placeholder
+ * directories (.strm, .disc, poster.png) and database tracking records.
+ */
+export async function cleanupAvailablePlaceholdersInternal(
+    targetServerId?: string,
+    sectionKey?: string
+): Promise<{ success: boolean; removedCount: number; removedItems: string[]; message: string }> {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const comingSoonShares: Record<string, string> = settings?.comingSoonShares 
+            ? JSON.parse(settings.comingSoonShares) 
+            : {};
+
+        // Gather all existing share directories to check
+        const shareDirectories = new Set<string>();
+        if (targetServerId && comingSoonShares[targetServerId] && fs.existsSync(comingSoonShares[targetServerId])) {
+            shareDirectories.add(comingSoonShares[targetServerId]);
+        }
+        for (const p of Object.values(comingSoonShares)) {
+            if (p && fs.existsSync(p)) {
+                shareDirectories.add(p);
+            }
+        }
+
+        if (shareDirectories.size === 0) {
+            return {
+                success: true,
+                removedCount: 0,
+                removedItems: [],
+                message: "No Coming Soon share directories configured or accessible on disk."
+            };
+        }
+
+        // 1. Fetch real Plex library media items across servers to build the "already acquired" index
+        const libraryTmdbIds = new Set<string>();
+        const libraryImdbIds = new Set<string>();
+        const libraryTitles = new Set<string>();
+        const libraryTitleYears = new Set<string>();
+
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (token) {
+            try {
+                const srvList = await getPlexServerList(token);
+                for (const srv of srvList) {
+                    if (targetServerId && srv.serverId !== targetServerId) continue;
+                    try {
+                        const resolved = await resolveWorkingPlexServerConnection(srv.serverId);
+                        if (!resolved || !resolved.serverUrl) continue;
+                        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                        const sections = await getPlexServerSections(token, srv.serverId);
+                        for (const sec of sections) {
+                            if (sectionKey && String(sec.key) !== String(sectionKey)) continue;
+                            if (sec.type !== "movie" && sec.type !== "show") continue;
+                            const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, String(sec.key), 1000);
+                            for (const it of items) {
+                                if (it.guids?.tmdb) libraryTmdbIds.add(String(it.guids.tmdb));
+                                if (it.guids?.imdb) libraryImdbIds.add(String(it.guids.imdb));
+                                if (it.title) {
+                                    const cleanT = it.title.toLowerCase().trim();
+                                    libraryTitles.add(cleanT);
+                                    if (it.year) {
+                                        libraryTitleYears.add(`${cleanT} (${it.year})`);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (srvErr: any) {
+                        console.warn(`[PLACEHOLDER-CLEANUP] Failed querying server ${srv.serverName || srv.serverId}:`, srvErr.message);
+                    }
+                }
+            } catch (err: any) {
+                console.warn("[PLACEHOLDER-CLEANUP] Error fetching servers for library check:", err.message);
+            }
+        }
+
+        let removedCount = 0;
+        const removedItems: string[] = [];
+
+        // 2. Iterate through each share folder on disk and inspect each placeholder folder
+        for (const shareDir of Array.from(shareDirectories)) {
+            try {
+                const entries = fs.readdirSync(shareDir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (!entry.isDirectory()) continue;
+                    const folderPath = path.join(shareDir, entry.name);
+
+                    // Check if it's a Portalarr placeholder directory
+                    const isMissingMarker = fs.existsSync(path.join(folderPath, ".portalarr-missing"));
+                    const files = fs.readdirSync(folderPath);
+                    const discFile = files.find(f => f.endsWith(".disc"));
+                    const strmFile = files.find(f => f.endsWith(".strm"));
+
+                    if (!isMissingMarker && !discFile && !strmFile) {
+                        // Not a placeholder created by Portalarr, do not delete
+                        continue;
+                    }
+
+                    // Extract metadata from .disc file if present
+                    let itemTmdbId = "";
+                    let itemTitle = "";
+                    let itemYear = "";
+
+                    if (discFile) {
+                        try {
+                            const discContent = fs.readFileSync(path.join(folderPath, discFile), "utf-8");
+                            const tmdbMatch = discContent.match(/TMDb ID:\s*(\d+)/i);
+                            if (tmdbMatch) itemTmdbId = tmdbMatch[1];
+                            const titleMatch = discContent.match(/Title:\s*(.+)/i);
+                            if (titleMatch) itemTitle = titleMatch[1].trim();
+                        } catch {}
+                    }
+
+                    // If not found in .disc, parse folder name e.g. "Dune Part Two (2024)"
+                    if (!itemTitle) {
+                        const yearMatch = entry.name.match(/\((\d{4})\)$/);
+                        if (yearMatch) {
+                            itemYear = yearMatch[1];
+                            itemTitle = entry.name.replace(/\(\d{4}\)$/, "").trim();
+                        } else {
+                            itemTitle = entry.name.trim();
+                        }
+                    }
+
+                    const cleanTitle = itemTitle.toLowerCase().trim();
+                    const titleWithYear = itemYear ? `${cleanTitle} (${itemYear})` : cleanTitle;
+
+                    // 3. Determine if media is now present in the Plex library
+                    let isAvailable = false;
+                    if (itemTmdbId && libraryTmdbIds.has(itemTmdbId)) {
+                        isAvailable = true;
+                    } else if (libraryTitleYears.has(titleWithYear)) {
+                        isAvailable = true;
+                    } else if (libraryTitles.has(cleanTitle) && !itemYear) {
+                        isAvailable = true;
+                    }
+
+                    if (isAvailable) {
+                        // Clean up placeholder directory on disk
+                        try {
+                            fs.rmSync(folderPath, { recursive: true, force: true });
+                            removedCount++;
+                            removedItems.push(itemTitle || entry.name);
+
+                            // Clean up DB advisory record if present
+                            if (itemTmdbId) {
+                                await prisma.mediaContentAdvisory.deleteMany({
+                                    where: {
+                                        ratingKey: `placeholder_tmdb_${itemTmdbId}`
+                                    }
+                                });
+                            }
+
+                            logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted Coming Soon placeholder for "${itemTitle || entry.name}" at "${folderPath}" because full media is now available in Plex.`);
+                        } catch (rmErr: any) {
+                            console.error(`[PLACEHOLDER-CLEANUP] Failed removing folder "${folderPath}":`, rmErr);
+                        }
+                    }
+                }
+            } catch (dirErr: any) {
+                console.warn(`[PLACEHOLDER-CLEANUP] Error scanning directory "${shareDir}":`, dirErr.message);
+            }
+        }
+
+        const msg = removedCount > 0 
+            ? `Cleaned up ${removedCount} acquired placeholder(s) (${removedItems.slice(0, 3).join(", ")}${removedItems.length > 3 ? "..." : ""}) from Coming Soon shares.`
+            : "All Coming Soon placeholders are up to date (no acquired media placeholders to remove).";
+
+        if (removedCount > 0) {
+            logger.addLog("SUCCESS", "CURATION", msg);
+        }
+
+        return {
+            success: true,
+            removedCount,
+            removedItems,
+            message: msg
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            removedCount: 0,
+            removedItems: [],
+            message: e.message || "Failed cleaning up placeholders."
+        };
+    }
+}
+
+/**
+ * Server action to manually trigger cleanup of placeholders for media that is now available in the library.
+ */
+export async function cleanupAvailablePlaceholdersAction(serverId?: string, sectionKey?: string) {
+    await verifyAdmin();
+    return await cleanupAvailablePlaceholdersInternal(serverId, sectionKey);
 }
 
 /**

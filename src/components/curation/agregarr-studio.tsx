@@ -89,6 +89,7 @@ import {
     getTmdbTrailerAction,
     saveComingSoonSharesAction,
     validateDirectoryPathAction,
+    cleanupAvailablePlaceholdersAction,
     getCurationSettingsAction,
     saveCurationSettingsAction,
     toggleCurationLibrarySectionAction,
@@ -246,6 +247,8 @@ export function AgregarrStudio() {
     const [savingShares, setSavingShares] = useState(false);
     const [sharesSavedMsg, setSharesSavedMsg] = useState(false);
     const [pathCheckResults, setPathCheckResults] = useState<Record<string, { checking: boolean; success?: boolean; msg?: string }>>({});
+    const [cleaningPlaceholders, setCleaningPlaceholders] = useState(false);
+    const [cleanupResultMsg, setCleanupResultMsg] = useState<{ success: boolean; text: string } | null>(null);
 
     // Automated Schedule & Enabled Library States
     const [curationSyncCollections, setCurationSyncCollections] = useState<boolean>(true);
@@ -349,6 +352,34 @@ export function AgregarrStudio() {
             });
         } finally {
             setRunningCollectionSync(false);
+        }
+    };
+
+    // Manual Trigger: Cleanup Acquired Placeholders from Coming Soon Shares
+    const handleCleanupPlaceholders = async () => {
+        setCleaningPlaceholders(true);
+        setCleanupResultMsg(null);
+        try {
+            const res = await cleanupAvailablePlaceholdersAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setCleanupResultMsg({
+                    success: true,
+                    text: res.message || `Cleaned up ${res.removedCount} acquired placeholder(s)!`
+                });
+            } else {
+                setCleanupResultMsg({
+                    success: false,
+                    text: res.message || "Failed cleaning placeholders."
+                });
+            }
+            setTimeout(() => setCleanupResultMsg(null), 6000);
+        } catch (err: any) {
+            setCleanupResultMsg({
+                success: false,
+                text: err.message || "Failed cleaning placeholders."
+            });
+        } finally {
+            setCleaningPlaceholders(false);
         }
     };
 
@@ -1952,23 +1983,50 @@ export function AgregarrStudio() {
                                 );
                             })}
 
-                            <Button
-                                type="button"
-                                size="sm"
-                                disabled={savingShares}
-                                onClick={async () => {
-                                    setSavingShares(true);
-                                    await saveComingSoonSharesAction(comingSoonShares);
-                                    setSavingShares(false);
-                                    setSharesSavedMsg(true);
-                                    setTimeout(() => setSharesSavedMsg(false), 3000);
-                                }}
-                                className="bg-amber-500 text-slate-950 font-bold text-xs gap-1.5"
-                            >
-                                <Save className="h-3.5 w-3.5" />
-                                <span>Save Share Paths</span>
-                            </Button>
-                            {sharesSavedMsg && <span className="text-xs text-emerald-400 font-bold ml-2">✓ Saved!</span>}
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={savingShares}
+                                    onClick={async () => {
+                                        setSavingShares(true);
+                                        await saveComingSoonSharesAction(comingSoonShares);
+                                        setSavingShares(false);
+                                        setSharesSavedMsg(true);
+                                        setTimeout(() => setSharesSavedMsg(false), 3000);
+                                    }}
+                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs gap-1.5 cursor-pointer"
+                                >
+                                    <Save className="h-3.5 w-3.5" />
+                                    <span>Save Share Paths</span>
+                                </Button>
+
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={cleaningPlaceholders}
+                                    onClick={handleCleanupPlaceholders}
+                                    className="border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs gap-1.5 cursor-pointer"
+                                    title="Scans Coming Soon shares and automatically removes placeholder folders for movies & shows that are now downloaded/in your Plex library"
+                                >
+                                    {cleaningPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <RotateCcw className="h-3.5 w-3.5 text-amber-400" />}
+                                    <span>Clean Acquired Placeholders</span>
+                                </Button>
+
+                                {sharesSavedMsg && <span className="text-xs text-emerald-400 font-bold ml-1">✓ Saved!</span>}
+                            </div>
+
+                            {cleanupResultMsg && (
+                                <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                                    cleanupResultMsg.success 
+                                        ? "bg-emerald-950/80 border border-emerald-800 text-emerald-300" 
+                                        : "bg-rose-950/80 border border-rose-800 text-rose-300"
+                                }`}>
+                                    {cleanupResultMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                                    <span>{cleanupResultMsg.text}</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Agregarr Banner & Poster Simulator Studio */}
