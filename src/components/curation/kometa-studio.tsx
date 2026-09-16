@@ -3022,7 +3022,7 @@ export function KometaStudio() {
                                 value={curationSyncSchedule} 
                                 onValueChange={val => setCurationSyncSchedule(val)}
                             >
-                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[155px]">
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[155px]" title="Timer Trigger Frequency">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -3042,7 +3042,7 @@ export function KometaStudio() {
                                 value={String(overlayBatchSize)} 
                                 onValueChange={val => setOverlayBatchSize(Number(val))}
                             >
-                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[120px] text-purple-300 font-semibold">
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[120px] text-purple-300 font-semibold" title="Batch Size Limit">
                                     <SelectValue placeholder="Batch Size" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -3060,15 +3060,15 @@ export function KometaStudio() {
                                 value={overlayBatchMode} 
                                 onValueChange={(val: any) => setOverlayBatchMode(val)}
                             >
-                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[170px] text-slate-200">
-                                    <SelectValue placeholder="Run Mode" />
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[185px] text-slate-200" title="Scan Scope & Recheck Policy">
+                                    <SelectValue placeholder="Scan Mode" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="incremental">⚡ Hourly (Skip Up-to-Date)</SelectItem>
-                                    <SelectItem value="daily_recheck">🌙 Daily Recheck (&gt;24h)</SelectItem>
-                                    <SelectItem value="weekly_recheck">📅 Weekly Recheck (&gt;7d)</SelectItem>
-                                    <SelectItem value="monthly_recheck">🗓️ Monthly Recheck (&gt;30d)</SelectItem>
-                                    <SelectItem value="force_all">🔄 Force Recheck All</SelectItem>
+                                    <SelectItem value="incremental">⚡ Incremental (New &amp; Upgrades)</SelectItem>
+                                    <SelectItem value="daily_recheck">🌙 Daily Recheck (&gt;24h Old)</SelectItem>
+                                    <SelectItem value="weekly_recheck">📅 Weekly Recheck (&gt;7d Old)</SelectItem>
+                                    <SelectItem value="monthly_recheck">🗓️ Monthly Recheck (&gt;30d Old)</SelectItem>
+                                    <SelectItem value="force_all">🔄 Force Recheck (All Items)</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -3165,15 +3165,15 @@ export function KometaStudio() {
                                     </SelectContent>
                                 </Select>
                                 <Select value={overlayBatchMode} onValueChange={(val: any) => setOverlayBatchMode(val)}>
-                                    <SelectTrigger className="h-8 bg-transparent border-0 text-xs w-[130px] text-slate-300 font-medium focus:ring-0">
+                                    <SelectTrigger className="h-8 bg-transparent border-0 text-xs w-[145px] text-slate-300 font-medium focus:ring-0" title="Scan Mode & Recheck Scope">
                                         <SelectValue placeholder="Mode" />
                                     </SelectTrigger>
                                     <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                        <SelectItem value="incremental">⚡ Hourly (Skip Up-to-Date)</SelectItem>
-                                        <SelectItem value="daily_recheck">🌙 Daily Recheck</SelectItem>
-                                        <SelectItem value="weekly_recheck">📅 Weekly Recheck</SelectItem>
-                                        <SelectItem value="monthly_recheck">🗓️ Monthly Recheck</SelectItem>
-                                        <SelectItem value="force_all">🔄 Force Recheck All</SelectItem>
+                                        <SelectItem value="incremental">⚡ Incremental (New &amp; Upgrades)</SelectItem>
+                                        <SelectItem value="daily_recheck">🌙 Daily Recheck (&gt;24h Old)</SelectItem>
+                                        <SelectItem value="weekly_recheck">📅 Weekly Recheck (&gt;7d Old)</SelectItem>
+                                        <SelectItem value="monthly_recheck">🗓️ Monthly Recheck (&gt;30d Old)</SelectItem>
+                                        <SelectItem value="force_all">🔄 Force Recheck (All)</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <Button
