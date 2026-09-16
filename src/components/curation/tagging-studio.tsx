@@ -227,6 +227,7 @@ export function TaggingStudio() {
                     appliedTagsSummary: res.appliedTagsSummary
                 });
                 await loadAdvisoryItems();
+                await loadAuditData();
             } else {
                 setParentalResult({
                     success: false,
@@ -256,6 +257,7 @@ export function TaggingStudio() {
                     clearedCount: res.clearedCount
                 });
                 await loadAdvisoryItems();
+                await loadAuditData();
             } else {
                 setParentalResult({
                     success: false,
@@ -285,6 +287,7 @@ export function TaggingStudio() {
                     message: `Applied "${customRule.tagName}" (${customRule.field}) to ${res.taggedCount} items (${res.skippedCount} skipped).`,
                     taggedCount: res.taggedCount
                 });
+                await loadAuditData();
             } else {
                 setCustomResult({
                     success: false,

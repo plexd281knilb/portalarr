@@ -78,22 +78,61 @@ export function formatParentalTag(
     }
 }
 
-/**
- * Parses whether a tag string is an existing parental rating tag created by Portalarr.
- */
 export function isParentalTag(tag: string, prefix = "IMDb"): boolean {
     if (!tag) return false;
     const cleanPrefix = (prefix || "IMDb").trim().toLowerCase();
-    const tLower = tag.toLowerCase();
+    const tLower = tag.toLowerCase().trim();
 
-    if (tLower.startsWith(`${cleanPrefix}-`) || tLower.startsWith(`${cleanPrefix}:`)) return true;
+    // 1. Matches prefix variants (e.g. "IMDb-", "IMDb: ", "IMDb - ", "IMDb", etc.)
+    if (cleanPrefix && (
+        tLower.startsWith(`${cleanPrefix}-`) ||
+        tLower.startsWith(`${cleanPrefix}:`) ||
+        tLower.startsWith(`${cleanPrefix} `) ||
+        tLower.startsWith(`${cleanPrefix}/`) ||
+        tLower.startsWith(`${cleanPrefix}_`) ||
+        tLower === cleanPrefix
+    )) {
+        return true;
+    }
 
-    const categories = ["nudity", "violence", "profanity", "alcohol", "frightening", "sex & nudity", "violence & gore", "drugs"];
+    // 2. Matches generic standard prefixes
+    if (
+        tLower.startsWith("imdb-") ||
+        tLower.startsWith("imdb:") ||
+        tLower.startsWith("imdb ") ||
+        tLower.startsWith("imdb/") ||
+        tLower.startsWith("imdb_") ||
+        tLower.startsWith("parents guide") ||
+        tLower.startsWith("parental guide") ||
+        tLower.startsWith("advisory:") ||
+        tLower.startsWith("advisory-")
+    ) {
+        return true;
+    }
+
+    // 3. Matches category + severity patterns (with any spacing or punctuation)
+    const categories = [
+        "nudity", "violence", "profanity", "alcohol", "frightening",
+        "sex & nudity", "violence & gore", "drugs", "substance", "intense", "frightening scenes"
+    ];
     const severities = ["none", "mild", "moderate", "severe"];
+
+    const hasCategory = categories.some(cat => tLower.includes(cat));
+    const hasSeverity = severities.some(sev => tLower.includes(sev));
+
+    if (hasCategory && hasSeverity) {
+        return true;
+    }
 
     for (const sev of severities) {
         for (const cat of categories) {
-            if (tLower === `${sev} ${cat}` || tLower === `${cat} (${sev})` || tLower === `${cat}: ${sev}`) {
+            if (
+                tLower === `${sev} ${cat}` ||
+                tLower === `${cat} (${sev})` ||
+                tLower === `${cat}: ${sev}` ||
+                tLower === `${cat} - ${sev}` ||
+                tLower === `${cat} / ${sev}`
+            ) {
                 return true;
             }
         }
