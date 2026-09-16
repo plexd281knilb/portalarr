@@ -209,6 +209,25 @@ export function KometaStudio() {
     const [simShowRating, setSimShowRating] = useState(false);
     const [simRatings, setSimRatings] = useState(false);
     const [simBadgeScale, setSimBadgeScale] = useState<number>(1.0);
+    const DEFAULT_CATEGORY_SCALES: Record<string, number> = {
+        resolution: 1.0,
+        hdr: 1.0,
+        codec: 1.0,
+        audio: 1.0,
+        channels: 1.0,
+        edition: 1.0,
+        studio: 1.0,
+        contentRating: 1.0,
+        ratings: 1.0,
+        ribbon: 1.0
+    };
+    const [simCategoryScales, setSimCategoryScales] = useState<Record<string, number>>(DEFAULT_CATEGORY_SCALES);
+    const setSimCategoryScale = (category: string, scale: number) => {
+        setSimCategoryScales(prev => ({
+            ...prev,
+            [category]: Math.max(0.4, Math.min(2.0, Number(scale.toFixed(2))))
+        }));
+    };
     const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson">("glass");
     const [seedingBadges, setSeedingBadges] = useState(false);
     const [syncingOfficialBadges, setSyncingOfficialBadges] = useState(false);
@@ -637,6 +656,19 @@ export function KometaStudio() {
         if (targetRule.ribbonMode) setSimRibbonMode(targetRule.ribbonMode as any);
         if (targetRule.dovetailResolutionHdr !== undefined) setSimDovetailResolutionHdr(Boolean(targetRule.dovetailResolutionHdr));
 
+        if (targetRule.categoryScales) {
+            try {
+                const parsed = typeof targetRule.categoryScales === "string"
+                    ? JSON.parse(targetRule.categoryScales)
+                    : targetRule.categoryScales;
+                if (parsed && typeof parsed === "object") {
+                    setSimCategoryScales({ ...DEFAULT_CATEGORY_SCALES, ...parsed });
+                }
+            } catch (e) {}
+        } else {
+            setSimCategoryScales(DEFAULT_CATEGORY_SCALES);
+        }
+
         if (targetRule.layerPriorityOrder) {
             try {
                 const parsed = typeof targetRule.layerPriorityOrder === "string"
@@ -967,63 +999,67 @@ export function KometaStudio() {
         if (c === "imax") return (detected.edition || "").toLowerCase().includes("imax");
         if (c === "criterion") return (detected.edition || "").toLowerCase().includes("criterion");
         if (c === "remux") return (detected.edition || "").toLowerCase().includes("remux");
-        if (c === "directors_cut" || c === "director") return (detected.edition || "").toLowerCase().includes("director");
+        if (c === "directors_cut" || c === "director" || c === "directors") return (detected.edition || "").toLowerCase().includes("director");
         if (c === "extended") return (detected.edition || "").toLowerCase().includes("extended");
         if (c === "theatrical") return (detected.edition || "").toLowerCase().includes("theatrical");
         if (c === "remastered" || c === "remaster") return (detected.edition || "").toLowerCase().includes("remaster");
+        if (c === "unrated") return (detected.edition || "").toLowerCase().includes("unrated");
+        if (c === "uncut") return (detected.edition || "").toLowerCase().includes("uncut");
+        if (c === "special") return (detected.edition || "").toLowerCase().includes("special") || (detected.edition || "").toLowerCase().includes("collector") || (detected.edition || "").toLowerCase().includes("ultimate") || (detected.edition || "").toLowerCase().includes("anniversary") || (detected.edition || "").toLowerCase().includes("definitive");
 
         if (c === "netflix") return (detected.studio || "").toLowerCase().includes("netflix");
         if (c === "disney") return (detected.studio || "").toLowerCase().includes("disney");
-        if (c === "hbo" || c === "max") return (detected.studio || "").toLowerCase().includes("hbo") || (detected.studio || "").toLowerCase().includes("max");
+        if (c === "hbo" || c === "max") return (detected.studio || "").toLowerCase().includes("hbo") || /\bmax\b/i.test(detected.studio || "");
         if (c === "apple" || c === "apple_tv") return (detected.studio || "").toLowerCase().includes("apple");
         if (c === "amazon" || c === "prime") return (detected.studio || "").toLowerCase().includes("amazon") || (detected.studio || "").toLowerCase().includes("prime");
         if (c === "paramount") return (detected.studio || "").toLowerCase().includes("paramount");
         if (c === "peacock") return (detected.studio || "").toLowerCase().includes("peacock");
         if (c === "hulu") return (detected.studio || "").toLowerCase().includes("hulu");
         if (c === "crunchyroll") return (detected.studio || "").toLowerCase().includes("crunchyroll");
+        if (c === "amc") return (detected.studio || "").toLowerCase().includes("amc");
         if (c === "marvel") return (detected.studio || "").toLowerCase().includes("marvel");
         if (c === "dc") return (detected.studio || "").toLowerCase().includes("dc");
         if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
 
         // Content / Age Ratings
         const rawCr = (detected.contentRating || "").trim();
-        const crClean = rawCr.toUpperCase().replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\-_/]/i, "").replace(/[^A-Z0-9]/g, "");
-        const condClean = c.replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\-_/]/i, "").replace(/^rated[\s\-_]*/i, "").replace(/[^a-z0-9]/g, "");
+        const crClean = rawCr.toUpperCase().replace(/^(US|GB|UK|DE|CA|AU|FR|ES|IT|NZ)[:\-_/]?/i, "").replace(/^RATED[\s\-_]*/i, "").replace(/[^A-Z0-9]/g, "");
+        const condClean = c.replace(/^(US|GB|UK|DE|CA|AU|FR|ES|IT|NZ)[:\-_/]?/i, "").replace(/^RATED[\s\-_]*/i, "").replace(/[^a-z0-9]/g, "");
 
-        if (condClean === "pg13" || condClean === "13+" || condClean === "12a" || condClean === "12") {
-            return crClean === "PG13" || crClean === "13+" || crClean === "12A" || crClean === "12" || rawCr.includes("PG-13");
+        if (condClean === "pg13" || condClean === "13+" || condClean === "12a" || condClean === "12" || condClean === "pg13c") {
+            return crClean === "PG13" || crClean === "13+" || crClean === "12A" || crClean === "12" || rawCr.includes("PG-13") || rawCr.includes("13");
         }
-        if (condClean === "nc17" || condClean === "18+" || condClean === "r18+") {
-            return crClean === "NC17" || crClean === "18+" || crClean === "R18" || rawCr.includes("NC-17");
+        if (condClean === "nc17" || condClean === "18+" || condClean === "r18+" || condClean === "nc17c") {
+            return crClean === "NC17" || crClean === "18+" || crClean === "R18" || rawCr.includes("NC-17") || rawCr.includes("18");
         }
-        if (condClean === "r" || condClean === "restricted" || condClean === "15" || condClean === "16") {
+        if (condClean === "r" || condClean === "rc" || condClean === "restricted" || condClean === "15" || condClean === "16") {
             return crClean === "R" || crClean === "15" || crClean === "16" || rawCr === "R" || rawCr === "US:R";
         }
-        if (condClean === "pg" || condClean === "6") {
+        if (condClean === "pg" || condClean === "pgc" || condClean === "6") {
             return crClean === "PG" || crClean === "6" || rawCr === "PG" || rawCr === "US:PG";
         }
-        if (condClean === "g" || condClean === "u" || condClean === "0") {
+        if (condClean === "g" || condClean === "gc" || condClean === "u" || condClean === "0") {
             return crClean === "G" || crClean === "U" || crClean === "0" || rawCr === "G" || rawCr === "US:G";
         }
-        if (condClean === "tvma") {
-            return crClean === "TVMA" || rawCr === "TV-MA" || rawCr.includes("TV-MA");
+        if (condClean === "tvma" || condClean === "tvmac") {
+            return crClean === "TVMA" || rawCr === "TV-MA" || rawCr.includes("TV-MA") || rawCr.includes("MA");
         }
-        if (condClean === "tv14") {
-            return crClean === "TV14" || rawCr === "TV-14" || rawCr.includes("TV-14");
+        if (condClean === "tv14" || condClean === "tv14c") {
+            return crClean === "TV14" || rawCr === "TV-14" || rawCr.includes("TV-14") || rawCr.includes("14");
         }
-        if (condClean === "tvpg") {
+        if (condClean === "tvpg" || condClean === "tvpgc") {
             return crClean === "TVPG" || rawCr === "TV-PG" || rawCr.includes("TV-PG");
         }
-        if (condClean === "tvg") {
+        if (condClean === "tvg" || condClean === "tvgc") {
             return crClean === "TVG" || rawCr === "TV-G" || rawCr.includes("TV-G");
         }
-        if (condClean === "tvy") {
+        if (condClean === "tvy" || condClean === "tvyc") {
             return crClean === "TVY" || rawCr === "TV-Y" || rawCr.includes("TV-Y");
         }
-        if (condClean === "tvy7") {
+        if (condClean === "tvy7" || condClean === "tvy7c") {
             return crClean === "TVY7" || rawCr === "TV-Y7" || rawCr.includes("TV-Y7");
         }
-        if (condClean === "nr" || condClean === "unrated" || condClean === "notrated") {
+        if (condClean === "nr" || condClean === "nrc" || condClean === "unrated" || condClean === "notrated") {
             return crClean === "NR" || crClean === "UNRATED" || crClean === "NOTRATED" || /NOT RATED|UNRATED|NR/i.test(rawCr);
         }
         if (condClean && crClean && condClean === crClean) {
@@ -1130,10 +1166,10 @@ export function KometaStudio() {
         if (/\b(7\.1|5\.1|2\.0|channels|surround)\b/i.test(combined)) {
             categories.add("channels");
         }
-        if (fName.includes("_edition_") || /\b(imax|criterion|director|extended|theatrical|remux|remaster|uncut|unrated|collector|definitive|anniversary)\b/i.test(combined)) {
+        if (fName.includes("_edition_") || /\b(imax|criterion|director|directors|extended|theatrical|remux|remaster|uncut|unrated|collector|definitive|anniversary)\b/i.test(combined)) {
             categories.add("edition");
         }
-        if (fName.includes("_streaming_") || fName.includes("_studio_") || /\b(netflix|disney|hbo|max|apple|prime|amazon|paramount|peacock|hulu|crunchyroll|amc|discovery|hayu|tubi|filmin|crave|itvx|a24|marvel|dc)\b/i.test(combined)) {
+        if ((fName.includes("_streaming_") || fName.includes("_studio_") || /\b(netflix|disney|hbo|max|apple|prime|amazon|paramount|peacock|hulu|crunchyroll|amc|discovery|hayu|tubi|filmin|crave|itvx|a24|marvel|dc)\b/i.test(combined)) && !categories.has("edition")) {
             categories.add("studio");
         }
         if (fName.includes("_cr_") || /\b(usg|uspg|uspg-13|uspg13|usr|usnc-17|usnc17|usnr|ustv-ma|ustvma|ustv-14|ustv14|ustv-pg|ustvpg|pg-13|pg13|nc-17|nc17|tv-ma|tvma|tv-14|tv14|tv-pg|tvpg|tv-y7|tv-y|tv-g|rated\s+[a-z0-9-]+)\b/i.test(combined)) {
@@ -1292,41 +1328,59 @@ export function KometaStudio() {
 
         const simDetected = {
             resolution: simShowResolution ? (realRes || "4K") : undefined,
-            hdr: simShowHdr ? (realHdr || (simSelectedRealItem ? undefined : "DV")) : undefined,
-            codec: simShowCodec ? (realCodec || (simSelectedRealItem ? undefined : "HEVC")) : undefined,
-            audio: simShowAudio ? (realAudio || (simSelectedRealItem ? undefined : "ATMOS")) : undefined,
-            audioChannels: simShowChannels ? (realChannels || (simSelectedRealItem ? undefined : "7.1")) : undefined,
-            edition: simShowEdition ? (realEdition || (simSelectedRealItem ? undefined : "IMAX")) : undefined,
-            studio: simShowStudio ? (realStudio || (simSelectedRealItem ? undefined : "HBO")) : undefined,
-            contentRating: simShowRating ? (realRating || (simSelectedRealItem ? undefined : "PG-13")) : undefined
+            hdr: simShowHdr ? (realHdr || "DV") : undefined,
+            codec: simShowCodec ? (realCodec || "HEVC") : undefined,
+            audio: simShowAudio ? (realAudio || "ATMOS") : undefined,
+            audioChannels: simShowChannels ? (realChannels || "7.1") : undefined,
+            edition: simShowEdition ? (realEdition || "IMAX") : undefined,
+            studio: simShowStudio ? (realStudio || "HBO") : undefined,
+            contentRating: simShowRating ? (realRating || "PG-13") : undefined
         };
 
-        const renderCustomOrVectorBadge = (badge: any, vectorFallbackJsx: React.ReactNode) => {
-            if (!badge) return vectorFallbackJsx;
+        const renderCustomOrVectorBadge = (badge: any, vectorFallbackJsx: React.ReactNode, category: string) => {
+            const catScale = simCategoryScales[category] ?? 1.0;
+            const effectiveScale = (simBadgeScale || 1.0) * catScale;
+            const origin = pos.includes("left") ? "left center" : pos.includes("right") ? "right center" : "center";
+
+            if (badge) {
+                return (
+                    <div 
+                        key={`custom-badge-${badge.id}`} 
+                        className="transition-all duration-200 drop-shadow-2xl flex items-center justify-center pointer-events-auto"
+                        style={{ 
+                            transform: `scale(${effectiveScale})`, 
+                            transformOrigin: origin 
+                        }}
+                    >
+                        <img 
+                            src={`/api/curation/badges/${encodeURIComponent(badge.id)}`}
+                            alt={badge.name}
+                            className="max-h-7 max-w-[125px] object-contain drop-shadow-md"
+                            onError={(e) => {
+                                const el = e.currentTarget;
+                                el.style.display = "none";
+                                if (el.nextElementSibling) {
+                                    (el.nextElementSibling as HTMLElement).style.display = "flex";
+                                }
+                            }}
+                        />
+                        <div style={{ display: "none" }}>
+                            {vectorFallbackJsx}
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div 
-                    key={`custom-badge-${badge.id}`} 
+                    key={`vector-badge-${category}-${pos}`}
                     className="transition-all duration-200 drop-shadow-2xl flex items-center justify-center pointer-events-auto"
                     style={{ 
-                        transform: `scale(${simBadgeScale || 1.0})`, 
-                        transformOrigin: pos.includes("left") ? "left center" : pos.includes("right") ? "right center" : "center" 
+                        transform: `scale(${effectiveScale})`, 
+                        transformOrigin: origin 
                     }}
                 >
-                    <img 
-                        src={`/api/curation/badges/${encodeURIComponent(badge.id)}`}
-                        alt={badge.name}
-                        className="max-h-7 max-w-[125px] object-contain drop-shadow-md"
-                        onError={(e) => {
-                            const el = e.currentTarget;
-                            el.style.display = "none";
-                            if (el.nextElementSibling) {
-                                (el.nextElementSibling as HTMLElement).style.display = "flex";
-                            }
-                        }}
-                    />
-                    <div style={{ display: "none" }}>
-                        {vectorFallbackJsx}
-                    </div>
+                    {vectorFallbackJsx}
                 </div>
             );
         };
@@ -1380,7 +1434,7 @@ export function KometaStudio() {
             items.push({
                 key: "resolution",
                 category: "resolution",
-                jsx: renderCustomOrVectorBadge(matchingDovetailCustom, dovetailVectorJsx)
+                jsx: renderCustomOrVectorBadge(matchingDovetailCustom, dovetailVectorJsx, "resolution")
             });
         } else {
             // Independent Resolution
@@ -1397,7 +1451,7 @@ export function KometaStudio() {
                 items.push({
                     key: "resolution",
                     category: "resolution",
-                    jsx: renderCustomOrVectorBadge(matchingResCustom, resVectorJsx)
+                    jsx: renderCustomOrVectorBadge(matchingResCustom, resVectorJsx, "resolution")
                 });
             }
             // Independent HDR
@@ -1414,7 +1468,7 @@ export function KometaStudio() {
                 items.push({
                     key: "hdr",
                     category: "hdr",
-                    jsx: renderCustomOrVectorBadge(matchingHdrCustom, hdrVectorJsx)
+                    jsx: renderCustomOrVectorBadge(matchingHdrCustom, hdrVectorJsx, "hdr")
                 });
             }
         }
@@ -1437,7 +1491,7 @@ export function KometaStudio() {
             items.push({
                 key: "codec",
                 category: "codec",
-                jsx: renderCustomOrVectorBadge(matchingCodecCustom, codecVectorJsx)
+                jsx: renderCustomOrVectorBadge(matchingCodecCustom, codecVectorJsx, "codec")
             });
         }
 
@@ -1459,7 +1513,7 @@ export function KometaStudio() {
             items.push({
                 key: "audio",
                 category: "audio",
-                jsx: renderCustomOrVectorBadge(matchingAudioCustom, audioVectorJsx)
+                jsx: renderCustomOrVectorBadge(matchingAudioCustom, audioVectorJsx, "audio")
             });
         }
 
@@ -1481,7 +1535,7 @@ export function KometaStudio() {
             items.push({
                 key: "channels",
                 category: "channels",
-                jsx: renderCustomOrVectorBadge(matchingChannelsCustom, channelsVectorJsx)
+                jsx: renderCustomOrVectorBadge(matchingChannelsCustom, channelsVectorJsx, "channels")
             });
         }
 
@@ -1503,7 +1557,7 @@ export function KometaStudio() {
             items.push({
                 key: "edition",
                 category: "edition",
-                jsx: renderCustomOrVectorBadge(matchingEditionCustom, editionVectorJsx)
+                jsx: renderCustomOrVectorBadge(matchingEditionCustom, editionVectorJsx, "edition")
             });
         }
 
@@ -1525,7 +1579,7 @@ export function KometaStudio() {
             items.push({
                 key: "studio",
                 category: "studio",
-                jsx: renderCustomOrVectorBadge(matchingStudioCustom, studioVectorJsx)
+                jsx: renderCustomOrVectorBadge(matchingStudioCustom, studioVectorJsx, "studio")
             });
         }
 
@@ -1547,7 +1601,7 @@ export function KometaStudio() {
             items.push({
                 key: "contentRating",
                 category: "contentRating",
-                jsx: renderCustomOrVectorBadge(matchingRatingCustom, ratingVectorJsx)
+                jsx: renderCustomOrVectorBadge(matchingRatingCustom, ratingVectorJsx, "contentRating")
             });
         }
 
@@ -1571,7 +1625,7 @@ export function KometaStudio() {
             items.push({
                 key: "ratings",
                 category: "ratings",
-                jsx: renderCustomOrVectorBadge(matchingRatingsCustom, ratingsVectorJsx)
+                jsx: renderCustomOrVectorBadge(matchingRatingsCustom, ratingsVectorJsx, "ratings")
             });
         }
 
@@ -1611,9 +1665,18 @@ export function KometaStudio() {
             )
         );
 
+        const ribbonCatScale = simCategoryScales.ribbon ?? 1.0;
+        const effectiveRibbonScale = (simBadgeScale || 1.0) * ribbonCatScale;
+        const ribbonOrigin = isTop 
+            ? (isRight ? "top right" : "top left")
+            : (isRight ? "bottom right" : "bottom left");
+
         if (matchingRibbonCustom) {
             return (
-                <div className={`absolute ${positionClasses[simRibbonPosition] || "top-0 right-0"} w-28 h-28 overflow-hidden pointer-events-none z-30 drop-shadow-2xl`}>
+                <div 
+                    className={`absolute ${positionClasses[simRibbonPosition] || "top-0 right-0"} w-28 h-28 overflow-hidden pointer-events-none z-30 drop-shadow-2xl transition-all duration-200`}
+                    style={{ transform: `scale(${effectiveRibbonScale})`, transformOrigin: ribbonOrigin }}
+                >
                     <img 
                         src={`/api/curation/badges/${encodeURIComponent(matchingRibbonCustom.id)}`}
                         alt={matchingRibbonCustom.name}
@@ -1685,7 +1748,10 @@ export function KometaStudio() {
         }
 
         return (
-            <div className={`absolute ${positionClasses[simRibbonPosition] || "top-0 right-0"} w-28 h-28 overflow-hidden pointer-events-none z-30 drop-shadow-2xl`}>
+            <div 
+                className={`absolute ${positionClasses[simRibbonPosition] || "top-0 right-0"} w-28 h-28 overflow-hidden pointer-events-none z-30 drop-shadow-2xl transition-all duration-200`}
+                style={{ transform: `scale(${effectiveRibbonScale})`, transformOrigin: ribbonOrigin }}
+            >
                 <svg width="112" height="112" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
                     <defs>
                         <linearGradient id={`simRibbonGrad_${theme}`} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1731,15 +1797,24 @@ export function KometaStudio() {
             position: string;
         }> = [];
 
+        const realRes = simSelectedRealItem?.detectedBadges?.resolution || simSelectedRealItem?.media?.[0]?.videoResolution;
+        const realHdr = simSelectedRealItem?.detectedBadges?.hdr || (simSelectedRealItem?.media?.[0]?.hdrFormat !== "SDR" ? simSelectedRealItem?.media?.[0]?.hdrFormat : undefined);
+        const realCodec = simSelectedRealItem?.detectedBadges?.codec || simSelectedRealItem?.media?.[0]?.videoCodec;
+        const realAudio = simSelectedRealItem?.detectedBadges?.audio || simSelectedRealItem?.media?.[0]?.audioProfile || simSelectedRealItem?.media?.[0]?.audioCodec;
+        const realChannels = simSelectedRealItem?.detectedBadges?.audioChannels || (simSelectedRealItem?.media?.[0]?.audioChannels ? `${simSelectedRealItem.media[0].audioChannels}` : undefined);
+        const realEdition = simSelectedRealItem?.editionTitle || simSelectedRealItem?.detectedBadges?.edition;
+        const realStudio = simSelectedRealItem?.detectedBadges?.studio || simSelectedRealItem?.studio;
+        const realRating = simSelectedRealItem?.detectedBadges?.contentRating || simSelectedRealItem?.contentRating;
+
         const simDetected = {
-            resolution: simShowResolution ? "4K" : undefined,
-            hdr: simShowHdr ? "DV" : undefined,
-            codec: simShowCodec ? "HEVC" : undefined,
-            audio: simShowAudio ? "ATMOS" : undefined,
-            audioChannels: simShowChannels ? "7.1" : undefined,
-            edition: simShowEdition ? "IMAX" : undefined,
-            studio: simShowStudio ? "HBO" : undefined,
-            contentRating: simShowRating ? "PG-13" : undefined
+            resolution: simShowResolution ? (realRes || "4K") : undefined,
+            hdr: simShowHdr ? (realHdr || "DV") : undefined,
+            codec: simShowCodec ? (realCodec || "HEVC") : undefined,
+            audio: simShowAudio ? (realAudio || "ATMOS") : undefined,
+            audioChannels: simShowChannels ? (realChannels || "7.1") : undefined,
+            edition: simShowEdition ? (realEdition || "IMAX") : undefined,
+            studio: simShowStudio ? (realStudio || "HBO") : undefined,
+            contentRating: simShowRating ? (realRating || "PG-13") : undefined
         };
 
         const isDovetailed = simDovetailResolutionHdr && 
@@ -1760,68 +1835,75 @@ export function KometaStudio() {
             });
         } else {
             if (simShowResolution) {
+                const resVal = simDetected.resolution === "4K" ? "4K UHD" : (simDetected.resolution || "4K UHD");
                 if (matchingResCustom) {
-                    layers.push({ category: "Resolution", value: "4K UHD", sourceType: "custom", sourceName: matchingResCustom.name, position: simResolutionPosition });
+                    layers.push({ category: "Resolution", value: resVal, sourceType: "custom", sourceName: matchingResCustom.name, position: simResolutionPosition });
                 } else {
-                    layers.push({ category: "Resolution", value: "4K UHD", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme})`, position: simResolutionPosition });
+                    layers.push({ category: "Resolution", value: resVal, sourceType: "builtin", sourceName: `Kometa SVG (${simTheme})`, position: simResolutionPosition });
                 }
             }
 
             if (simShowHdr) {
+                const hdrVal = simDetected.hdr === "DV" ? "Dolby Vision" : (simDetected.hdr || "Dolby Vision");
                 if (matchingHdrCustom) {
-                    layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "custom", sourceName: matchingHdrCustom.name, position: simHdrPosition });
+                    layers.push({ category: "HDR / DV", value: hdrVal, sourceType: "custom", sourceName: matchingHdrCustom.name, position: simHdrPosition });
                 } else {
-                    layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme})`, position: simHdrPosition });
+                    layers.push({ category: "HDR / DV", value: hdrVal, sourceType: "builtin", sourceName: `Kometa SVG (${simTheme})`, position: simHdrPosition });
                 }
             }
         }
 
         if (simShowCodec) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("codec") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const codecVal = simDetected.codec ? `${simDetected.codec}` : "HEVC (H.265)";
             if (matchingCustom) {
-                layers.push({ category: "Video Codec", value: "HEVC (H.265)", sourceType: "custom", sourceName: matchingCustom.name, position: simCodecPosition });
+                layers.push({ category: "Video Codec", value: codecVal, sourceType: "custom", sourceName: matchingCustom.name, position: simCodecPosition });
             } else {
-                layers.push({ category: "Video Codec", value: "HEVC (H.265)", sourceType: "builtin", sourceName: "Kometa SVG", position: simCodecPosition });
+                layers.push({ category: "Video Codec", value: codecVal, sourceType: "builtin", sourceName: "Kometa SVG", position: simCodecPosition });
             }
         }
 
         if (simShowAudio) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("audio") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const audioVal = simDetected.audio ? `${simDetected.audio}` : "Dolby Atmos";
             if (matchingCustom) {
-                layers.push({ category: "Audio Format", value: "Dolby Atmos", sourceType: "custom", sourceName: matchingCustom.name, position: simAudioPosition });
+                layers.push({ category: "Audio Format", value: audioVal, sourceType: "custom", sourceName: matchingCustom.name, position: simAudioPosition });
             } else {
-                layers.push({ category: "Audio Format", value: "Dolby Atmos", sourceType: "builtin", sourceName: "Kometa SVG", position: simAudioPosition });
+                layers.push({ category: "Audio Format", value: audioVal, sourceType: "builtin", sourceName: "Kometa SVG", position: simAudioPosition });
             }
         }
 
         if (simShowChannels) {
-            layers.push({ category: "Audio Channels", value: "7.1 Surround", sourceType: "builtin", sourceName: "Kometa SVG", position: simChannelsPosition });
+            layers.push({ category: "Audio Channels", value: simDetected.audioChannels ? `${simDetected.audioChannels} Surround` : "7.1 Surround", sourceType: "builtin", sourceName: "Kometa SVG", position: simChannelsPosition });
         }
 
         if (simShowEdition) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("edition") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const editionVal = simDetected.edition || "IMAX Enhanced";
             if (matchingCustom) {
-                layers.push({ category: "Edition / Cut", value: "IMAX Enhanced", sourceType: "custom", sourceName: matchingCustom.name, position: simEditionPosition });
+                layers.push({ category: "Edition / Cut", value: editionVal, sourceType: "custom", sourceName: matchingCustom.name, position: simEditionPosition });
             } else {
-                layers.push({ category: "Edition / Cut", value: "IMAX Enhanced", sourceType: "builtin", sourceName: "Kometa SVG", position: simEditionPosition });
+                layers.push({ category: "Edition / Cut", value: editionVal, sourceType: "builtin", sourceName: "Kometa SVG", position: simEditionPosition });
             }
         }
 
         if (simShowStudio) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("studio") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const studioVal = simDetected.studio || "HBO Max";
             if (matchingCustom) {
-                layers.push({ category: "Studio / Network", value: "HBO Max", sourceType: "custom", sourceName: matchingCustom.name, position: simStudioPosition });
+                layers.push({ category: "Studio / Network", value: studioVal, sourceType: "custom", sourceName: matchingCustom.name, position: simStudioPosition });
             } else {
-                layers.push({ category: "Studio / Network", value: "HBO Max", sourceType: "builtin", sourceName: "Kometa SVG", position: simStudioPosition });
+                layers.push({ category: "Studio / Network", value: studioVal, sourceType: "builtin", sourceName: "Kometa SVG", position: simStudioPosition });
             }
         }
 
         if (simShowRating) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("contentRating") && doesCustomBadgeMatchDetected(cb, simDetected));
+            const ratingVal = simDetected.contentRating || "PG-13";
             if (matchingCustom) {
-                layers.push({ category: "Age Rating", value: "PG-13", sourceType: "custom", sourceName: matchingCustom.name, position: simRatingPosition });
+                layers.push({ category: "Age Rating", value: ratingVal, sourceType: "custom", sourceName: matchingCustom.name, position: simRatingPosition });
             } else {
-                layers.push({ category: "Age Rating", value: "PG-13", sourceType: "builtin", sourceName: "Kometa SVG", position: simRatingPosition });
+                layers.push({ category: "Age Rating", value: ratingVal, sourceType: "builtin", sourceName: "Kometa SVG", position: simRatingPosition });
             }
         }
 
@@ -2025,6 +2107,7 @@ export function KometaStudio() {
                 ribbonText: simRibbonText,
                 tieredRibbons: simTieredRibbons,
                 maxRibbonTiers: simMaxRibbonTiers,
+                categoryScales: simCategoryScales,
                 layerPriorityOrder: layerPriorityOrder
             };
 
@@ -2090,6 +2173,7 @@ export function KometaStudio() {
                 ribbonText: simRibbonText,
                 tieredRibbons: simTieredRibbons,
                 maxRibbonTiers: simMaxRibbonTiers,
+                categoryScales: simCategoryScales,
                 layerPriorityOrder: layerPriorityOrder
             };
 
@@ -3275,21 +3359,40 @@ export function KometaStudio() {
                                             <span className="font-semibold text-slate-200">📺 Resolution (4K / 1080p)</span>
                                             <Switch checked={simShowResolution} onCheckedChange={setSimShowResolution} />
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
-                                            <span className="text-xs text-slate-400 font-medium">Position:</span>
-                                            <Select value={simResolutionPosition} onValueChange={setSimResolutionPosition}>
-                                                <SelectTrigger className="h-7 w-36 bg-slate-950 border-slate-750 text-xs font-medium">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                                <Select value={simResolutionPosition} onValueChange={setSimResolutionPosition}>
+                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
+                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.resolution ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("resolution", parseFloat(e.target.value))}
+                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                    />
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                        {Math.round((simCategoryScales.resolution ?? 1.0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3299,21 +3402,40 @@ export function KometaStudio() {
                                             <span className="font-semibold text-slate-200">✨ HDR / Dolby Vision</span>
                                             <Switch checked={simShowHdr} onCheckedChange={setSimShowHdr} />
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
-                                            <span className="text-xs text-slate-400 font-medium">Position:</span>
-                                            <Select value={simHdrPosition} onValueChange={setSimHdrPosition}>
-                                                <SelectTrigger className="h-7 w-36 bg-slate-950 border-slate-750 text-xs font-medium">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                                <Select value={simHdrPosition} onValueChange={setSimHdrPosition}>
+                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
+                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.hdr ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("hdr", parseFloat(e.target.value))}
+                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                    />
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                        {Math.round((simCategoryScales.hdr ?? 1.0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3323,21 +3445,40 @@ export function KometaStudio() {
                                             <span className="font-semibold text-slate-200">🎞️ Video Codec (HEVC / AV1)</span>
                                             <Switch checked={simShowCodec} onCheckedChange={setSimShowCodec} />
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
-                                            <span className="text-xs text-slate-400 font-medium">Position:</span>
-                                            <Select value={simCodecPosition} onValueChange={setSimCodecPosition}>
-                                                <SelectTrigger className="h-7 w-36 bg-slate-950 border-slate-750 text-xs font-medium">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                                <Select value={simCodecPosition} onValueChange={setSimCodecPosition}>
+                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
+                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.codec ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("codec", parseFloat(e.target.value))}
+                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                    />
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                        {Math.round((simCategoryScales.codec ?? 1.0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3347,21 +3488,40 @@ export function KometaStudio() {
                                             <span className="font-semibold text-slate-200">🔊 Audio Codec (Atmos / DTS)</span>
                                             <Switch checked={simShowAudio} onCheckedChange={setSimShowAudio} />
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
-                                            <span className="text-xs text-slate-400 font-medium">Position:</span>
-                                            <Select value={simAudioPosition} onValueChange={setSimAudioPosition}>
-                                                <SelectTrigger className="h-7 w-36 bg-slate-950 border-slate-750 text-xs font-medium">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                                <Select value={simAudioPosition} onValueChange={setSimAudioPosition}>
+                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
+                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.audio ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("audio", parseFloat(e.target.value))}
+                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                    />
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                        {Math.round((simCategoryScales.audio ?? 1.0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3371,21 +3531,40 @@ export function KometaStudio() {
                                             <span className="font-semibold text-slate-200">🎛️ Surround Channels (7.1)</span>
                                             <Switch checked={simShowChannels} onCheckedChange={setSimShowChannels} />
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
-                                            <span className="text-xs text-slate-400 font-medium">Position:</span>
-                                            <Select value={simChannelsPosition} onValueChange={setSimChannelsPosition}>
-                                                <SelectTrigger className="h-7 w-36 bg-slate-950 border-slate-750 text-xs font-medium">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                                <Select value={simChannelsPosition} onValueChange={setSimChannelsPosition}>
+                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
+                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.channels ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("channels", parseFloat(e.target.value))}
+                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                    />
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                        {Math.round((simCategoryScales.channels ?? 1.0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3395,21 +3574,40 @@ export function KometaStudio() {
                                             <span className="font-semibold text-slate-200">🏷️ Edition Cuts (IMAX Enhanced)</span>
                                             <Switch checked={simShowEdition} onCheckedChange={setSimShowEdition} />
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
-                                            <span className="text-xs text-slate-400 font-medium">Position:</span>
-                                            <Select value={simEditionPosition} onValueChange={setSimEditionPosition}>
-                                                <SelectTrigger className="h-7 w-36 bg-slate-950 border-slate-750 text-xs font-medium">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                                <Select value={simEditionPosition} onValueChange={setSimEditionPosition}>
+                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
+                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.edition ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("edition", parseFloat(e.target.value))}
+                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                    />
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                        {Math.round((simCategoryScales.edition ?? 1.0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3419,21 +3617,40 @@ export function KometaStudio() {
                                             <span className="font-semibold text-slate-200">🏢 Studio / Network (HBO)</span>
                                             <Switch checked={simShowStudio} onCheckedChange={setSimShowStudio} />
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
-                                            <span className="text-xs text-slate-400 font-medium">Position:</span>
-                                            <Select value={simStudioPosition} onValueChange={setSimStudioPosition}>
-                                                <SelectTrigger className="h-7 w-36 bg-slate-950 border-slate-750 text-xs font-medium">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                                <Select value={simStudioPosition} onValueChange={setSimStudioPosition}>
+                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
+                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.studio ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("studio", parseFloat(e.target.value))}
+                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                    />
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                        {Math.round((simCategoryScales.studio ?? 1.0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3443,21 +3660,40 @@ export function KometaStudio() {
                                             <span className="font-semibold text-slate-200">🔞 Age Ratings (PG-13 / R)</span>
                                             <Switch checked={simShowRating} onCheckedChange={setSimShowRating} />
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
-                                            <span className="text-xs text-slate-400 font-medium">Position:</span>
-                                            <Select value={simRatingPosition} onValueChange={setSimRatingPosition}>
-                                                <SelectTrigger className="h-7 w-36 bg-slate-950 border-slate-750 text-xs font-medium">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                                <Select value={simRatingPosition} onValueChange={setSimRatingPosition}>
+                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
+                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.contentRating ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("contentRating", parseFloat(e.target.value))}
+                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                    />
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                        {Math.round((simCategoryScales.contentRating ?? 1.0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3467,21 +3703,40 @@ export function KometaStudio() {
                                             <span className="font-semibold text-slate-200">⭐ Community Ratings (IMDb / Rotten Tomatoes)</span>
                                             <Switch checked={simRatings} onCheckedChange={setSimRatings} />
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800/70">
-                                            <span className="text-xs text-slate-400 font-medium">Position:</span>
-                                            <Select value={simRatingsPosition} onValueChange={setSimRatingsPosition}>
-                                                <SelectTrigger className="h-7 w-36 bg-slate-950 border-slate-750 text-xs font-medium">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                                <Select value={simRatingsPosition} onValueChange={setSimRatingsPosition}>
+                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="top-right">Top-Right</SelectItem>
+                                                        <SelectItem value="top-left">Top-Left</SelectItem>
+                                                        <SelectItem value="top-center">Top-Center</SelectItem>
+                                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
+                                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
+                                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
+                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.ratings ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("ratings", parseFloat(e.target.value))}
+                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                    />
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                        {Math.round((simCategoryScales.ratings ?? 1.0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -3502,11 +3757,11 @@ export function KometaStudio() {
                                 {simShowRibbon && (
                                     <div className="space-y-4 pt-1">
                                         {/* Top Config Row */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                                             <div className="space-y-1.5 min-w-0">
-                                                <label className="text-xs font-bold text-slate-300">Ribbon Evaluation Mode</label>
+                                                <label className="text-xs font-bold text-slate-300 block truncate">Ribbon Evaluation Mode</label>
                                                 <Select value={simRibbonMode} onValueChange={(val: any) => setSimRibbonMode(val)}>
-                                                    <SelectTrigger className="h-8.5 w-full bg-slate-900 border-slate-700 text-xs">
+                                                    <SelectTrigger className="h-9 w-full bg-slate-900 border-slate-700 text-xs truncate [&>span]:truncate [&>span]:block">
                                                         <SelectValue placeholder="Select mode..." />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3517,9 +3772,9 @@ export function KometaStudio() {
                                             </div>
 
                                             <div className="space-y-1.5 min-w-0">
-                                                <label className="text-xs font-bold text-slate-300">Ribbon Placement Corner</label>
+                                                <label className="text-xs font-bold text-slate-300 block truncate">Ribbon Placement Corner</label>
                                                 <Select value={simRibbonPosition} onValueChange={(val: any) => setSimRibbonPosition(val)}>
-                                                    <SelectTrigger className="h-8.5 w-full bg-slate-900 border-slate-700 text-xs">
+                                                    <SelectTrigger className="h-9 w-full bg-slate-900 border-slate-700 text-xs truncate [&>span]:truncate [&>span]:block">
                                                         <SelectValue placeholder="Select corner..." />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3529,6 +3784,24 @@ export function KometaStudio() {
                                                         <SelectItem value="bottom-left">Bottom-Left (45° Diagonal)</SelectItem>
                                                     </SelectContent>
                                                 </Select>
+                                            </div>
+
+                                            <div className="space-y-1.5 min-w-0">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-xs font-bold text-slate-300 block truncate">Ribbon Scale Size</label>
+                                                    <span className="text-[11px] font-mono font-bold text-amber-300">{Math.round((simCategoryScales.ribbon ?? 1.0) * 100)}%</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 h-9">
+                                                    <input
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="1.5"
+                                                        step="0.05"
+                                                        value={simCategoryScales.ribbon ?? 1.0}
+                                                        onChange={(e) => setSimCategoryScale("ribbon", parseFloat(e.target.value))}
+                                                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
 

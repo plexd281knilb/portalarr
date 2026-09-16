@@ -2073,14 +2073,29 @@ export async function getCustomBadgesAction() {
             });
         }
 
-        // Auto-heal any badges with outdated or truncated match rules (in memory during retrieval)
+        // Auto-heal any badges with outdated or truncated match rules & categories (and persist corrections)
         for (const b of badges) {
             const inferred = inferBadgeCategoryAndRule(b.filePath || "", b.name || "");
-            if (inferred.suggestedMatchRule && (!b.matchRule || ((b.matchRule === "4k" || b.matchRule === "1080p") && inferred.suggestedMatchRule !== b.matchRule))) {
-                b.matchRule = inferred.suggestedMatchRule;
-                if (!b.category || b.category === "custom") {
-                    b.category = inferred.category;
-                }
+            let needsUpdate = false;
+            let newCat = b.category;
+            let newRule = b.matchRule;
+
+            if (inferred.category && inferred.category !== "custom" && (b.category === "custom" || b.category !== inferred.category)) {
+                newCat = inferred.category;
+                needsUpdate = true;
+            }
+            if (inferred.suggestedMatchRule && (!b.matchRule || b.matchRule === "auto" || b.matchRule === "special" || (inferred.category === "contentRating" && b.matchRule !== inferred.suggestedMatchRule))) {
+                newRule = inferred.suggestedMatchRule;
+                needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+                b.category = newCat;
+                b.matchRule = newRule;
+                await prisma.customBadge.update({
+                    where: { id: b.id },
+                    data: { category: newCat, matchRule: newRule }
+                }).catch(() => {});
             }
         }
 
@@ -2331,6 +2346,7 @@ export async function saveOverlayRuleAction(data: {
     showRatings?: boolean;
     showLeavingSoon?: boolean;
     badgeScale?: number;
+    categoryScales?: string | Record<string, number>;
     customBadgeIds?: string[];
     layerPriorityOrder?: string[] | string | any;
     enabled?: boolean;
@@ -2362,6 +2378,12 @@ export async function saveOverlayRuleAction(data: {
         const generatedName = (data.name && data.name.trim())
             ? data.name.trim()
             : (data.sectionKey ? `Section #${data.sectionKey} Overlay Rule` : `Server ${data.serverId} Overlay Rule`);
+
+        const serializedCategoryScales = typeof data.categoryScales === "object" && data.categoryScales !== null
+            ? JSON.stringify(data.categoryScales)
+            : typeof data.categoryScales === "string"
+                ? data.categoryScales
+                : null;
 
         const ruleData = {
             name: generatedName,
@@ -2398,6 +2420,7 @@ export async function saveOverlayRuleAction(data: {
             showRatings: data.showRatings ?? false,
             showLeavingSoon: data.showLeavingSoon ?? true,
             badgeScale: data.badgeScale ?? 1.0,
+            categoryScales: serializedCategoryScales,
             customBadgeIds: data.customBadgeIds ? JSON.stringify(data.customBadgeIds) : null,
             layerPriorityOrder: serializedLayerOrder,
             enabled: data.enabled ?? true
@@ -2498,6 +2521,13 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
                 } catch (e) {}
             }
 
+            let ruleCategoryScales: Record<string, number> | undefined;
+            if ((rule as any).categoryScales) {
+                try {
+                    ruleCategoryScales = typeof (rule as any).categoryScales === "string" ? JSON.parse((rule as any).categoryScales) : (rule as any).categoryScales;
+                } catch (e) {}
+            }
+
             overlayOpts = {
                 showResolution: rule.showResolution,
                 showHdr: rule.showHdr,
@@ -2537,6 +2567,7 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
                 theme: (rule.theme as any) || "glass",
                 dovetailResolutionHdr: ruleDovetail,
                 badgeScale: (rule.badgeScale as number) || 1.0,
+                categoryScales: ruleCategoryScales,
                 customBadges: activeCustomBadges.map(cb => ({
                     id: cb.id,
                     name: cb.name,
@@ -3595,6 +3626,7 @@ export async function applyOverlayToSingleItemAction(
         showRatings?: boolean;
         showLeavingSoon?: boolean;
         badgeScale?: number;
+        categoryScales?: Record<string, number> | string;
         customBadgeIds?: string[];
         layerPriorityOrder?: string[];
     }
@@ -3622,6 +3654,10 @@ export async function applyOverlayToSingleItemAction(
         const activeBadges = (options?.customBadgeIds && options.customBadgeIds.length > 0)
             ? allCustomBadges.filter(cb => options.customBadgeIds!.includes(cb.id))
             : allCustomBadges;
+
+        const effectiveCategoryScales = typeof options?.categoryScales === "string"
+            ? (() => { try { return JSON.parse(options.categoryScales as string); } catch { return undefined; } })()
+            : options?.categoryScales;
 
         const res = await backupAndApplyOverlay(
             serverUrl,
@@ -3652,6 +3688,7 @@ export async function applyOverlayToSingleItemAction(
                 theme: (options?.theme as any) || "glass",
                 dovetailResolutionHdr: options?.dovetailResolutionHdr ?? true,
                 badgeScale: options?.badgeScale ?? 1.0,
+                categoryScales: effectiveCategoryScales,
                 showResolution: options?.showResolution ?? true,
                 showHdr: options?.showHdr ?? true,
                 showAudio: options?.showAudio ?? true,
@@ -4140,27 +4177,73 @@ function inferBadgeCategoryAndRule(filePath: string, filename: string): {
     }
 
     // 2. Content & Age Ratings (MPAA, TV Guidelines, International Ratings)
-    if (fullLower.includes("/cr/") || fullLower.includes("content_rating") || fullLower.includes("contentrating") || /rated|pg-13|pg13|tv-ma|tvma|tv-14|tv14|tv-pg|tvpg|tv-g|tvg|tv-y|tvy|nc-17|nc17|mpaa/i.test(fullLower)) {
-        let rule = baseLower.replace(/^us[_-]?|^gb[_-]?|^uk[_-]?|^de[_-]?|^au[_-]?|^ca[_-]?|^nz[_-]?|^rated[_-]?/i, "").trim();
-        rule = rule.replace(/_/g, "-");
-        if (rule === "pg13") rule = "pg-13";
-        else if (rule === "tvma") rule = "tv-ma";
-        else if (rule === "tv14") rule = "tv-14";
-        else if (rule === "tvpg") rule = "tv-pg";
-        else if (rule === "tvg") rule = "tv-g";
-        else if (rule === "tvy7" || rule === "tv-y-7") rule = "tv-y7";
-        else if (rule === "tvy") rule = "tv-y";
-        else if (rule === "nc17") rule = "nc-17";
-        else if (rule === "notrated" || rule === "unrated") rule = "nr";
+    if (
+        fullLower.includes("/cr/") ||
+        fullLower.includes("_cr_") ||
+        fullLower.includes("content_rating") ||
+        fullLower.includes("contentrating") ||
+        /\b(rated|pg-13|pg13|tv-ma|tvma|tv-14|tv14|tv-pg|tvpg|tv-g|tvg|tv-y|tvy|nc-17|nc17|mpaa)\b/i.test(fullLower) ||
+        /official_kometa_cr_/i.test(fullLower)
+    ) {
+        const cleanName = baseLower
+            .replace(/^official[_-]kometa[_-]cr[_-]/i, "")
+            .replace(/^kometa[_-]cr[_-]/i, "")
+            .replace(/^builtin[_-]badge[_-]cr[_-]/i, "")
+            .replace(/^(us|gb|uk|de|ca|au|fr|es|it|nz)[_-]?/i, "")
+            .replace(/^rated[_-]?/i, "")
+            .replace(/_png$/i, "")
+            .trim();
+
+        let rule = cleanName;
+        if (/pg[\s_-]?13c?/i.test(cleanName)) rule = "pg-13";
+        else if (/tv[\s_-]?ma[\s_-]?c?/i.test(cleanName)) rule = "tv-ma";
+        else if (/tv[\s_-]?14[\s_-]?c?/i.test(cleanName)) rule = "tv-14";
+        else if (/tv[\s_-]?pg[\s_-]?c?/i.test(cleanName)) rule = "tv-pg";
+        else if (/tv[\s_-]?g[\s_-]?c?/i.test(cleanName)) rule = "tv-g";
+        else if (/tv[\s_-]?y[\s_-]?7[\s_-]?c?/i.test(cleanName)) rule = "tv-y7";
+        else if (/tv[\s_-]?y[\s_-]?c?/i.test(cleanName)) rule = "tv-y";
+        else if (/nc[\s_-]?17[\s_-]?c?/i.test(cleanName)) rule = "nc-17";
+        else if (/^rc?$|^rated[\s_-]?r$/i.test(cleanName)) rule = "r";
+        else if (/^pgc?$|^rated[\s_-]?pg$/i.test(cleanName)) rule = "pg";
+        else if (/^gc?$|^rated[\s_-]?g$/i.test(cleanName)) rule = "g";
+        else if (/nrc?$|not[\s_-]?rated|unrated/i.test(cleanName)) rule = "nr";
+        else rule = cleanName.replace(/c$/, "").replace(/_/g, "-");
 
         return {
             category: "contentRating",
             suggestedPosition: "bottom-left",
-            suggestedMatchRule: rule || baseLower.replace(/[^a-z0-9-]/g, "")
+            suggestedMatchRule: rule
         };
     }
 
-    // 3. Ratings & Critical Scores (IMDb, RT, Metacritic, MAL, Trakt)
+    // 3. Special Editions & Cuts (IMAX, Criterion, Extended, Director's Cut) - MUST BE BEFORE STUDIO to prevent "imax" matching "max"
+    if (
+        fullLower.includes("edition") ||
+        /\b(imax|criterion|remux|director|directors|extended|theatrical|uncut|unrated|remastered|restored|special|anniversary|collector|ultimate|definitive|diamond|platinum|coda|blackchrome)\b/i.test(fullLower) ||
+        /official_kometa_edition_/i.test(fullLower)
+    ) {
+        let rule = "special";
+        if (/imax/i.test(baseLower)) rule = "imax";
+        else if (/criterion/i.test(baseLower)) rule = "criterion";
+        else if (/director/i.test(baseLower)) rule = "directors_cut";
+        else if (/extended/i.test(baseLower)) rule = "extended";
+        else if (/theatrical/i.test(baseLower)) rule = "theatrical";
+        else if (/unrated/i.test(baseLower)) rule = "unrated";
+        else if (/uncut/i.test(baseLower)) rule = "uncut";
+        else if (/remaster/i.test(baseLower)) rule = "remastered";
+        else if (/remux/i.test(baseLower)) rule = "remux";
+        else if (/collector/i.test(baseLower)) rule = "collector";
+        else if (/ultimate/i.test(baseLower)) rule = "ultimate";
+        else if (/anniversary/i.test(baseLower)) rule = "anniversary";
+        else if (/definitive/i.test(baseLower)) rule = "definitive";
+        return {
+            category: "edition",
+            suggestedPosition: "bottom-right",
+            suggestedMatchRule: rule
+        };
+    }
+
+    // 4. Ratings & Critical Scores (IMDb, RT, Metacritic, MAL, Trakt)
     if (fullLower.includes("/rating/") || fullLower.includes("audience") || /score|tomato|rotten|imdb|metacritic|tmdb|trakt|letterboxd|anidb|omdb|mal\b/i.test(fullLower)) {
         let rule = "imdb";
         if (/imdbtop250/i.test(baseLower)) rule = "imdb_top_250";
@@ -4185,12 +4268,17 @@ function inferBadgeCategoryAndRule(filePath: string, filename: string): {
         };
     }
 
-    // 4. Streaming Networks & Studios (Netflix, Disney+, Max, Apple TV+, etc.)
-    if (fullLower.includes("streaming") || fullLower.includes("studio") || fullLower.includes("network") || /netflix|disney|hbo|max|apple|prime|amazon|paramount|hulu|peacock|crunchyroll|amc|discovery|hayu|tubi|filmin|crave|itvx|a24|marvel|dc\b/i.test(fullLower)) {
+    // 5. Streaming Networks & Studios (Netflix, Disney+, Max, Apple TV+, etc.)
+    if (
+        fullLower.includes("streaming") ||
+        fullLower.includes("studio") ||
+        fullLower.includes("network") ||
+        /\b(netflix|disney|hbo|max|apple|prime|amazon|paramount|hulu|peacock|crunchyroll|amc|discovery|hayu|tubi|filmin|crave|itvx|a24|marvel|dc)\b/i.test(fullLower)
+    ) {
         let rule = "netflix";
         if (/netflix/i.test(baseLower)) rule = "netflix";
         else if (/disney/i.test(baseLower)) rule = "disney";
-        else if (/hbo|max/i.test(baseLower)) rule = "hbo";
+        else if (/hbo|\bmax\b/i.test(baseLower)) rule = "hbo";
         else if (/apple/i.test(baseLower)) rule = "apple_tv";
         else if (/prime|amazon/i.test(baseLower)) rule = "amazon";
         else if (/paramount/i.test(baseLower)) rule = "paramount";
@@ -4204,29 +4292,6 @@ function inferBadgeCategoryAndRule(filePath: string, filename: string): {
         return {
             category: "studio",
             suggestedPosition: "bottom-left",
-            suggestedMatchRule: rule
-        };
-    }
-
-    // 5. Special Editions & Cuts (IMAX, Criterion, Extended, Director's Cut)
-    if (fullLower.includes("edition") || /imax|criterion|remux|director|extended|theatrical|uncut|unrated|remastered|restored|special|anniversary|collector|ultimate|definitive|diamond|platinum|coda|blackchrome/i.test(fullLower)) {
-        let rule = "special";
-        if (/imax/i.test(baseLower)) rule = "imax";
-        else if (/criterion/i.test(baseLower)) rule = "criterion";
-        else if (/director/i.test(baseLower)) rule = "directors_cut";
-        else if (/extended/i.test(baseLower)) rule = "extended";
-        else if (/theatrical/i.test(baseLower)) rule = "theatrical";
-        else if (/unrated/i.test(baseLower)) rule = "unrated";
-        else if (/uncut/i.test(baseLower)) rule = "uncut";
-        else if (/remaster/i.test(baseLower)) rule = "remastered";
-        else if (/remux/i.test(baseLower)) rule = "remux";
-        else if (/collector/i.test(baseLower)) rule = "collector";
-        else if (/ultimate/i.test(baseLower)) rule = "ultimate";
-        else if (/anniversary/i.test(baseLower)) rule = "anniversary";
-        else if (/definitive/i.test(baseLower)) rule = "definitive";
-        return {
-            category: "edition",
-            suggestedPosition: "bottom-right",
             suggestedMatchRule: rule
         };
     }

@@ -943,6 +943,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     ["showStudio", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showStudio" BOOLEAN NOT NULL DEFAULT 0;`],
                     ["showContentRating", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showContentRating" BOOLEAN NOT NULL DEFAULT 0;`],
                     ["badgeScale", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "badgeScale" REAL DEFAULT 1.0;`],
+                    ["categoryScales", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "categoryScales" TEXT;`],
                     ["customBadgeIds", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "customBadgeIds" TEXT;`],
                     ["layerPriorityOrder", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "layerPriorityOrder" TEXT;`]
                 ];

@@ -51,6 +51,17 @@ export interface OverlayOptions {
     ratingPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
     ratingsPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
     badgeScale?: number;
+    categoryScales?: Record<string, number>;
+    resolutionScale?: number;
+    hdrScale?: number;
+    codecScale?: number;
+    audioScale?: number;
+    channelsScale?: number;
+    editionScale?: number;
+    studioScale?: number;
+    contentRatingScale?: number;
+    ratingsScale?: number;
+    ribbonScale?: number;
     
     showRibbon?: boolean;
     ribbonMode?: "single" | "tiered" | "auto_stack" | "waterfall";
@@ -520,61 +531,68 @@ export function evaluateBadgeCondition(
     if (c === "imax") return (detected.edition || "").toLowerCase().includes("imax");
     if (c === "criterion") return (detected.edition || "").toLowerCase().includes("criterion");
     if (c === "remux") return (detected.edition || "").toLowerCase().includes("remux");
-    if (c === "directors_cut" || c === "director") return (detected.edition || "").toLowerCase().includes("director");
+    if (c === "directors_cut" || c === "director" || c === "directors") return (detected.edition || "").toLowerCase().includes("director");
     if (c === "extended") return (detected.edition || "").toLowerCase().includes("extended");
     if (c === "theatrical") return (detected.edition || "").toLowerCase().includes("theatrical");
     if (c === "remastered" || c === "remaster") return (detected.edition || "").toLowerCase().includes("remaster");
+    if (c === "unrated") return (detected.edition || "").toLowerCase().includes("unrated");
+    if (c === "uncut") return (detected.edition || "").toLowerCase().includes("uncut");
+    if (c === "special") return (detected.edition || "").toLowerCase().includes("special") || (detected.edition || "").toLowerCase().includes("collector") || (detected.edition || "").toLowerCase().includes("ultimate") || (detected.edition || "").toLowerCase().includes("anniversary") || (detected.edition || "").toLowerCase().includes("definitive");
 
     // 6. Studios
     if (c === "netflix") return (detected.studio || "").toLowerCase().includes("netflix");
     if (c === "disney") return (detected.studio || "").toLowerCase().includes("disney");
-    if (c === "hbo" || c === "max") return (detected.studio || "").toLowerCase().includes("hbo") || (detected.studio || "").toLowerCase().includes("max");
+    if (c === "hbo" || c === "max") return (detected.studio || "").toLowerCase().includes("hbo") || /\bmax\b/i.test(detected.studio || "");
     if (c === "apple" || c === "apple_tv") return (detected.studio || "").toLowerCase().includes("apple");
     if (c === "amazon" || c === "prime") return (detected.studio || "").toLowerCase().includes("amazon") || (detected.studio || "").toLowerCase().includes("prime");
     if (c === "paramount") return (detected.studio || "").toLowerCase().includes("paramount");
+    if (c === "peacock") return (detected.studio || "").toLowerCase().includes("peacock");
+    if (c === "hulu") return (detected.studio || "").toLowerCase().includes("hulu");
+    if (c === "crunchyroll") return (detected.studio || "").toLowerCase().includes("crunchyroll");
+    if (c === "amc") return (detected.studio || "").toLowerCase().includes("amc");
     if (c === "marvel") return (detected.studio || "").toLowerCase().includes("marvel");
     if (c === "dc") return (detected.studio || "").toLowerCase().includes("dc");
     if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
 
     // 7. Ratings / Content Ratings
     const rawCr = (detected.contentRating || "").trim();
-    const crClean = rawCr.toUpperCase().replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\-_/]/i, "").replace(/[^A-Z0-9]/g, "");
-    const condClean = c.replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\-_/]/i, "").replace(/^rated[\s\-_]*/i, "").replace(/[^a-z0-9]/g, "");
+    const crClean = rawCr.toUpperCase().replace(/^(US|GB|UK|DE|CA|AU|FR|ES|IT|NZ)[:\-_/]?/i, "").replace(/^RATED[\s\-_]*/i, "").replace(/[^A-Z0-9]/g, "");
+    const condClean = c.replace(/^(US|GB|UK|DE|CA|AU|FR|ES|IT|NZ)[:\-_/]?/i, "").replace(/^RATED[\s\-_]*/i, "").replace(/[^a-z0-9]/g, "");
 
-    if (condClean === "pg13" || condClean === "13+" || condClean === "12a" || condClean === "12") {
-        return crClean === "PG13" || crClean === "13+" || crClean === "12A" || crClean === "12" || rawCr.includes("PG-13");
+    if (condClean === "pg13" || condClean === "13+" || condClean === "12a" || condClean === "12" || condClean === "pg13c") {
+        return crClean === "PG13" || crClean === "13+" || crClean === "12A" || crClean === "12" || rawCr.includes("PG-13") || rawCr.includes("13");
     }
-    if (condClean === "nc17" || condClean === "18+" || condClean === "r18+") {
-        return crClean === "NC17" || crClean === "18+" || crClean === "R18" || rawCr.includes("NC-17");
+    if (condClean === "nc17" || condClean === "18+" || condClean === "r18+" || condClean === "nc17c") {
+        return crClean === "NC17" || crClean === "18+" || crClean === "R18" || rawCr.includes("NC-17") || rawCr.includes("18");
     }
-    if (condClean === "r" || condClean === "restricted" || condClean === "15" || condClean === "16") {
+    if (condClean === "r" || condClean === "rc" || condClean === "restricted" || condClean === "15" || condClean === "16") {
         return crClean === "R" || crClean === "15" || crClean === "16" || rawCr === "R" || rawCr === "US:R";
     }
-    if (condClean === "pg" || condClean === "6") {
+    if (condClean === "pg" || condClean === "pgc" || condClean === "6") {
         return crClean === "PG" || crClean === "6" || rawCr === "PG" || rawCr === "US:PG";
     }
-    if (condClean === "g" || condClean === "u" || condClean === "0") {
+    if (condClean === "g" || condClean === "gc" || condClean === "u" || condClean === "0") {
         return crClean === "G" || crClean === "U" || crClean === "0" || rawCr === "G" || rawCr === "US:G";
     }
-    if (condClean === "tvma") {
-        return crClean === "TVMA" || rawCr === "TV-MA" || rawCr.includes("TV-MA");
+    if (condClean === "tvma" || condClean === "tvmac") {
+        return crClean === "TVMA" || rawCr === "TV-MA" || rawCr.includes("TV-MA") || rawCr.includes("MA");
     }
-    if (condClean === "tv14") {
-        return crClean === "TV14" || rawCr === "TV-14" || rawCr.includes("TV-14");
+    if (condClean === "tv14" || condClean === "tv14c") {
+        return crClean === "TV14" || rawCr === "TV-14" || rawCr.includes("TV-14") || rawCr.includes("14");
     }
-    if (condClean === "tvpg") {
+    if (condClean === "tvpg" || condClean === "tvpgc") {
         return crClean === "TVPG" || rawCr === "TV-PG" || rawCr.includes("TV-PG");
     }
-    if (condClean === "tvg") {
+    if (condClean === "tvg" || condClean === "tvgc") {
         return crClean === "TVG" || rawCr === "TV-G" || rawCr.includes("TV-G");
     }
-    if (condClean === "tvy") {
+    if (condClean === "tvy" || condClean === "tvyc") {
         return crClean === "TVY" || rawCr === "TV-Y" || rawCr.includes("TV-Y");
     }
-    if (condClean === "tvy7") {
+    if (condClean === "tvy7" || condClean === "tvy7c") {
         return crClean === "TVY7" || rawCr === "TV-Y7" || rawCr.includes("TV-Y7");
     }
-    if (condClean === "nr" || condClean === "unrated" || condClean === "notrated") {
+    if (condClean === "nr" || condClean === "nrc" || condClean === "unrated" || condClean === "notrated") {
         return crClean === "NR" || crClean === "UNRATED" || crClean === "NOTRATED" || /NOT RATED|UNRATED|NR/i.test(rawCr);
     }
     if (condClean && crClean && condClean === crClean) {
@@ -1133,20 +1151,54 @@ export async function applyOverlaysToPoster(
         const fName = path.basename(cb.filePath || "").toLowerCase();
         const combined = `${cat} ${rule} ${name} ${fName}`;
 
-        const categories: string[] = [];
-        if (cat === "resolution" || /\b(4k|2160p?|1080p?|720p?|480p?|576p?|sd|uhd|fhd)\b/i.test(combined)) categories.push("resolution");
-        if (cat === "hdr" || /\b(dv|dolby\s*vision|hdr10\+|hdr10|hdr|hdrplus)\b/i.test(combined)) categories.push("hdr");
-        if (cat === "codec" || /\b(hevc|av1|prores|avc|h\.?264|h\.?265|x264|x265)\b/i.test(combined)) categories.push("codec");
-        if (cat === "audio" || /\b(atmos|truehd|dts:?x|dts-hd|dts|flac|aac|eac3|ac3)\b/i.test(combined)) categories.push("audio");
-        if (/\b(7\.1|5\.1|2\.0|surround)\b/i.test(combined)) categories.push("channels");
-        if (cat === "edition" || /\b(imax|criterion|directors?[\s_-]?cut|extended|remux|theatrical|remastered?)\b/i.test(combined)) categories.push("edition");
-        if (cat === "studio" || /\b(netflix|disney\+?|hbo(?:\s*max)?|apple\s*tv\+?|prime(?:\s*video)?|paramount\+?|marvel|dc(?:\s*comics)?|a24)\b/i.test(combined)) categories.push("studio");
-        if (cat === "contentrating" || cat === "content_rating" || cat === "age_rating" || cat === "agerating" || cat === "cr" || cat === "mpaa" || /\b(usg|uspg|uspg-13|uspg13|usr|usnc-17|usnc17|usnr|ustv-ma|ustvma|ustv-14|ustv14|ustv-pg|ustvpg|pg-13|pg13|nc-17|nc17|tv-ma|tvma|tv-14|tv14|tv-pg|tvpg|tv-y7|tv-y|tv-g|rated\s+[a-z0-9-]+)\b/i.test(combined)) categories.push("contentRating");
-        if (cat === "ratings" || cat === "rating" || /\b(imdb|criticfresh|audiencefresh|criticrotten|audiencerotten|metacritic|tmdb|trakt|letterboxd|mdblist)\b/i.test(combined)) categories.push("ratings");
-        if (cat === "ribbon" || /\b(ribbon|laurel|award|top_?250|cannes|oscar|emmy|bafta|certified_fresh|palme)\b/i.test(combined)) categories.push("ribbon");
+        const categories = new Set<string>();
+        if (cat === "resolution") categories.add("resolution");
+        if (cat === "hdr") categories.add("hdr");
+        if (cat === "codec") categories.add("codec");
+        if (cat === "audio") categories.add("audio");
+        if (cat === "channels") categories.add("channels");
+        if (cat === "edition") categories.add("edition");
+        if (cat === "studio") categories.add("studio");
+        if (cat === "contentrating" || cat === "content_rating" || cat === "cr" || cat === "age_rating" || cat === "agerating" || cat === "mpaa") categories.add("contentRating");
+        if (cat === "ratings" || cat === "rating" || cat === "audience") categories.add("ratings");
+        if (cat === "ribbon" || cat === "banner") categories.add("ribbon");
 
-        if (categories.length === 0 && cat && cat !== "custom") categories.push(cat);
-        return categories;
+        if (fName.includes("_resolution_") || /\b(4k|2160p?|1080p?|720p?|480p?|576p?|sd|uhd|fhd)\b/i.test(rule) || /\b(4k|2160p?|1080p?|720p?|480p?|576p?|sd|uhd|fhd)\b/i.test(name)) {
+            categories.add("resolution");
+        }
+        if (fName.includes("_hdr_") || /\b(dv|dolby\s*vision|hdr10\+|hdr10|hdr|hlg|sdr)\b/i.test(rule) || /\b(dv|dolby\s*vision|hdr10\+|hdr10|hdr|hlg|sdr)\b/i.test(name)) {
+            categories.add("hdr");
+        }
+        if (fName.includes("_codec_") || /\b(hevc|h265|x265|av1|prores|avc|h264|x264|vc1|mpeg2)\b/i.test(combined)) {
+            categories.add("codec");
+        }
+        if (fName.includes("_audio_codec_") || /\b(atmos|truehd|dts:x|dts-x|dts-hd|dtshd|dts-ma|dts|flac|aac|eac3|ac3|pcm|opus|mp3)\b/i.test(combined)) {
+            categories.add("audio");
+        }
+        if (/\b(7\.1|5\.1|2\.0|channels|surround)\b/i.test(combined)) {
+            categories.add("channels");
+        }
+        if (fName.includes("_edition_") || /\b(imax|criterion|director|directors|extended|theatrical|remux|remaster|uncut|unrated|collector|definitive|anniversary)\b/i.test(combined)) {
+            categories.add("edition");
+        }
+        if ((fName.includes("_streaming_") || fName.includes("_studio_") || /\b(netflix|disney|hbo|max|apple|prime|amazon|paramount|peacock|hulu|crunchyroll|amc|discovery|hayu|tubi|filmin|crave|itvx|a24|marvel|dc)\b/i.test(combined)) && !categories.has("edition")) {
+            categories.add("studio");
+        }
+        if (fName.includes("_cr_") || /\b(usg|uspg|uspg-13|uspg13|usr|usnc-17|usnc17|usnr|ustv-ma|ustvma|ustv-14|ustv14|ustv-pg|ustvpg|pg-13|pg13|nc-17|nc17|tv-ma|tvma|tv-14|tv14|tv-pg|tvpg|tv-y7|tv-y|tv-g|rated\s+[a-z0-9-]+)\b/i.test(combined)) {
+            categories.add("contentRating");
+        }
+        if (fName.includes("_rating_") || /\b(imdb|criticfresh|audiencefresh|criticrotten|audiencerotten|metacritic|tmdb|trakt|letterboxd|mdblist|anidb|mal)\b/i.test(combined)) {
+            categories.add("ratings");
+        }
+        if (fName.includes("_ribbon_") || /\b(oscar|cannes|golden|emmy|bafta|sundance|berlinale|venice|spirit|rottenverified)\b/i.test(combined)) {
+            categories.add("ribbon");
+        }
+
+        if (categories.size === 0 && cat && cat !== "custom") {
+            categories.add(cat);
+        }
+
+        return Array.from(categories);
     }
 
     // 4. Resolve Independent Positions and Buckets for All Badges
@@ -1180,6 +1232,22 @@ export async function applyOverlaysToPoster(
 
     const appliedCategories = new Set<string>();
 
+    const getCategoryScale = (category: string): number => {
+        const catMap = options.categoryScales || {};
+        if (category === "resolution") return catMap.resolution ?? options.resolutionScale ?? 1.0;
+        if (category === "hdr") return catMap.hdr ?? options.hdrScale ?? 1.0;
+        if (category === "codec") return catMap.codec ?? options.codecScale ?? 1.0;
+        if (category === "audio") return catMap.audio ?? options.audioScale ?? 1.0;
+        if (category === "channels") return catMap.channels ?? options.channelsScale ?? 1.0;
+        if (category === "edition") return catMap.edition ?? options.editionScale ?? 1.0;
+        if (category === "studio") return catMap.studio ?? options.studioScale ?? 1.0;
+        if (category === "contentRating") return catMap.contentRating ?? options.contentRatingScale ?? 1.0;
+        if (category === "ratings") return catMap.ratings ?? options.ratingsScale ?? 1.0;
+        if (category === "ribbon") return catMap.ribbon ?? options.ribbonScale ?? 1.0;
+        if (catMap[category] !== undefined) return catMap[category];
+        return 1.0;
+    };
+
     // Process active custom badges
     if (options.customBadges && Array.isArray(options.customBadges)) {
         const sortedCustomBadges = [...options.customBadges].sort((a, b) => {
@@ -1196,7 +1264,11 @@ export async function applyOverlaysToPoster(
             if (badgeCats.length > 0 && badgeCats.every(c => appliedCategories.has(c))) continue;
 
             try {
-                const scale = options.badgeScale || 1.0;
+                const primaryLayerKey = badgeCats[0] || "custom";
+                const catScale = getCategoryScale(primaryLayerKey);
+                const masterScale = options.badgeScale || 1.0;
+                const effectiveScale = masterScale * catScale;
+
                 const rawW = cb.width || 240;
                 const rawH = cb.height || 48;
                 const isFullPoster = rawW >= 800 && rawH >= 1200;
@@ -1212,8 +1284,8 @@ export async function applyOverlaysToPoster(
                     if (cat === "contentRating") hasCustomContentRating = true;
                 }
 
-                const cbWidth = Math.round(rawW * scale);
-                const cbHeight = Math.round(rawH * scale);
+                const cbWidth = Math.round(rawW * effectiveScale);
+                const cbHeight = Math.round(rawH * effectiveScale);
 
                 if (isFullPoster) {
                     let fullBuf = await sharp(cb.filePath).resize(1000, 1500, { fit: "cover" }).toBuffer();
@@ -1242,7 +1314,6 @@ export async function applyOverlaysToPoster(
                         cbBuffer = await sharp(cbBuffer).ensureAlpha().linear(cb.opacity, 0).toBuffer();
                     }
 
-                    const primaryLayerKey = badgeCats[0] || "custom";
                     buckets[cbPos]?.push({ buf: cbBuffer, w: cbWidth, h: cbHeight, layerKey: primaryLayerKey });
                 }
             } catch (err) {
@@ -1264,7 +1335,10 @@ export async function applyOverlaysToPoster(
         if (!fs.existsSync(fullPath)) return false;
 
         try {
-            const scale = options.badgeScale || 1.0;
+            const catScale = getCategoryScale(layerKey);
+            const masterScale = options.badgeScale || 1.0;
+            const effectiveScale = masterScale * catScale;
+
             const meta = await sharp(fullPath).metadata();
             const srcW = meta.width || targetW;
             const srcH = meta.height || targetH;
@@ -1277,9 +1351,9 @@ export async function applyOverlaysToPoster(
                 w = Math.round(targetH * aspect);
             }
 
-            if (scale !== 1.0 && scale > 0.1) {
-                w = Math.round(w * scale);
-                h = Math.round(h * scale);
+            if (effectiveScale !== 1.0 && effectiveScale > 0.1) {
+                w = Math.round(w * effectiveScale);
+                h = Math.round(h * effectiveScale);
             }
 
             const buf = await sharp(fullPath)
