@@ -845,7 +845,9 @@ export function interpolateBannerText(
 }
 
 // Backward compatibility stub generators
-export function generatePlaceholderRibbonSvg(type: string, options: any = {}): string { return ""; }
+export function generatePlaceholderRibbonSvg(type: string, options: any = {}): string { 
+    return generateBannerSvg(options.customText || type, options.theme || "indigo-purple", options.position || "corner").svg; 
+}
 export function generateLeavingSoonRibbonSvg(days?: number): string { return ""; }
 export function generateDigitalReleaseRibbonSvg(days: number, date?: string): string { return ""; }
 export function generateDovetailedResolutionHdrBadgeSvg(res: string, hdr?: string | null, theme?: string): string { return ""; }
@@ -920,6 +922,293 @@ async function resolvePosterBuffer(posterUrl: string | null | undefined, title?:
     return null;
 }
 
+function getBannerThemeColors(theme?: string): {
+    grad1: string;
+    grad2: string;
+    grad3: string;
+    border: string;
+    text: string;
+    accent: string;
+} {
+    const t = (theme || "indigo-purple").toLowerCase();
+    if (t.includes("crimson") || t.includes("red")) {
+        return {
+            grad1: "#ef4444",
+            grad2: "#b91c1c",
+            grad3: "#450a0a",
+            border: "#f87171",
+            text: "#ffffff",
+            accent: "#fca5a5"
+        };
+    }
+    if (t.includes("gold") || t.includes("amber") || t.includes("yellow")) {
+        return {
+            grad1: "#fbbf24",
+            grad2: "#d97706",
+            grad3: "#78350f",
+            border: "#fde68a",
+            text: "#ffffff",
+            accent: "#fef3c7"
+        };
+    }
+    if (t.includes("green") || t.includes("emerald")) {
+        return {
+            grad1: "#34d399",
+            grad2: "#059669",
+            grad3: "#064e3b",
+            border: "#6ee7b7",
+            text: "#ffffff",
+            accent: "#a7f3d0"
+        };
+    }
+    if (t.includes("blue") || t.includes("cyan")) {
+        return {
+            grad1: "#38bdf8",
+            grad2: "#0284c7",
+            grad3: "#0c4a6e",
+            border: "#7dd3fc",
+            text: "#ffffff",
+            accent: "#bae6fd"
+        };
+    }
+    if (t.includes("cyber") || t.includes("neon")) {
+        return {
+            grad1: "#06b6d4",
+            grad2: "#d946ef",
+            grad3: "#4a044e",
+            border: "#67e8f9",
+            text: "#ffffff",
+            accent: "#f0abfc"
+        };
+    }
+    if (t.includes("netflix")) {
+        return {
+            grad1: "#e50914",
+            grad2: "#990000",
+            grad3: "#400000",
+            border: "#ff4d4d",
+            text: "#ffffff",
+            accent: "#ff9999"
+        };
+    }
+    if (t.includes("glass") || t.includes("slate") || t.includes("frosted")) {
+        return {
+            grad1: "#334155",
+            grad2: "#0f172a",
+            grad3: "#020617",
+            border: "#94a3b8",
+            text: "#f8fafc",
+            accent: "#e2e8f0"
+        };
+    }
+    // Default: Indigo-Purple
+    return {
+        grad1: "#a855f7",
+        grad2: "#6366f1",
+        grad3: "#312e81",
+        border: "#c084fc",
+        text: "#ffffff",
+        accent: "#e9d5ff"
+    };
+}
+
+function generateBannerSvg(
+    text: string,
+    theme: string,
+    position: "top" | "bottom" | "corner" = "bottom"
+): { svg: string; width: number; height: number; top: number; left: number } {
+    const colors = getBannerThemeColors(theme);
+    const escapedText = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+
+    if (position === "corner") {
+        const size = 520;
+        const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="cornerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="${colors.grad1}" />
+                    <stop offset="50%" stop-color="${colors.grad2}" />
+                    <stop offset="100%" stop-color="${colors.grad3}" />
+                </linearGradient>
+                <filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.85" />
+                </filter>
+            </defs>
+            <g filter="url(#ribbonShadow)">
+                <polygon points="120,0 520,400 520,520 0,0" fill="url(#cornerGrad)" />
+                <line x1="120" y1="0" x2="520" y2="400" stroke="${colors.border}" stroke-width="4" />
+                <line x1="0" y1="0" x2="520" y2="520" stroke="${colors.border}" stroke-width="4" />
+                <line x1="60" y1="0" x2="520" y2="460" stroke="${colors.accent}" stroke-width="1.5" stroke-dasharray="8 4" opacity="0.7" />
+            </g>
+            <text x="310" y="250" transform="rotate(45 310 250)" 
+                font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+                font-size="30" 
+                font-weight="900" 
+                letter-spacing="2" 
+                fill="${colors.text}" 
+                text-anchor="middle">
+                ${escapedText}
+            </text>
+        </svg>`;
+        return { svg, width: size, height: size, top: 0, left: 1000 - size };
+    }
+
+    const width = 1000;
+    const height = 180;
+    const isTop = position === "top";
+    const topPos = isTop ? 0 : 1500 - height;
+
+    const fontSize = escapedText.length > 34 ? 30 : escapedText.length > 22 ? 38 : 46;
+    const letterSpacing = escapedText.length > 28 ? 2 : 3.5;
+
+    const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="bannerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="${isTop ? colors.grad3 : colors.grad1}" stop-opacity="0.96" />
+                <stop offset="50%" stop-color="${colors.grad2}" stop-opacity="0.95" />
+                <stop offset="100%" stop-color="${isTop ? colors.grad1 : colors.grad3}" stop-opacity="0.98" />
+            </linearGradient>
+            <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="${colors.border}" stop-opacity="0.2" />
+                <stop offset="25%" stop-color="${colors.accent}" stop-opacity="0.9" />
+                <stop offset="50%" stop-color="#ffffff" stop-opacity="1" />
+                <stop offset="75%" stop-color="${colors.accent}" stop-opacity="0.9" />
+                <stop offset="100%" stop-color="${colors.border}" stop-opacity="0.2" />
+            </linearGradient>
+            <filter id="textGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.9" />
+            </filter>
+        </defs>
+        
+        <rect x="0" y="0" width="${width}" height="${height}" fill="url(#bannerGrad)" />
+        
+        ${isTop 
+            ? `<line x1="0" y1="${height - 3}" x2="${width}" y2="${height - 3}" stroke="url(#lineGrad)" stroke-width="5" />
+               <line x1="50" y1="${height - 10}" x2="${width - 50}" y2="${height - 10}" stroke="${colors.accent}" stroke-width="1.5" stroke-dasharray="10 5" opacity="0.6" />`
+            : `<line x1="0" y1="3" x2="${width}" y2="3" stroke="url(#lineGrad)" stroke-width="5" />
+               <line x1="50" y1="10" x2="${width - 50}" y2="10" stroke="${colors.accent}" stroke-width="1.5" stroke-dasharray="10 5" opacity="0.6" />`
+        }
+
+        <g filter="url(#textGlow)">
+            <text x="500" y="${isTop ? 105 : 110}" 
+                font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+                font-size="${fontSize}" 
+                font-weight="900" 
+                letter-spacing="${letterSpacing}" 
+                fill="${colors.text}" 
+                text-anchor="middle">
+                ${escapedText}
+            </text>
+        </g>
+    </svg>`;
+
+    return { svg, width, height, top: topPos, left: 0 };
+}
+
+function generatePlaceholderBackdropSvg(title: string): string {
+    const escapedTitle = (title || "UPCOMING RELEASE")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+
+    return `<svg width="1000" height="1500" viewBox="0 0 1000 1500" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <radialGradient id="bgGrad" cx="50%" cy="42%" r="65%">
+                <stop offset="0%" stop-color="#1e293b" />
+                <stop offset="60%" stop-color="#0f172a" />
+                <stop offset="100%" stop-color="#020617" />
+            </radialGradient>
+            <linearGradient id="gridGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.1" />
+                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.05" />
+            </linearGradient>
+            <filter id="posterGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#000000" flood-opacity="0.8" />
+            </filter>
+        </defs>
+        
+        <rect width="1000" height="1500" fill="url(#bgGrad)" />
+        <rect width="1000" height="1500" fill="url(#gridGrad)" />
+
+        <g opacity="0.18" transform="translate(375, 460)">
+            <circle cx="125" cy="125" r="110" fill="none" stroke="#f8fafc" stroke-width="12" />
+            <circle cx="125" cy="125" r="35" fill="none" stroke="#f8fafc" stroke-width="8" />
+            <circle cx="125" cy="60" r="16" fill="#f8fafc" />
+            <circle cx="125" cy="190" r="16" fill="#f8fafc" />
+            <circle cx="60" cy="125" r="16" fill="#f8fafc" />
+            <circle cx="190" cy="125" r="16" fill="#f8fafc" />
+        </g>
+
+        <g filter="url(#posterGlow)">
+            <text x="500" y="780" 
+                font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" 
+                font-size="44" 
+                font-weight="900" 
+                letter-spacing="1.5" 
+                fill="#f8fafc" 
+                text-anchor="middle">
+                ${escapedTitle}
+            </text>
+            <text x="500" y="830" 
+                font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" 
+                font-size="20" 
+                font-weight="600" 
+                letter-spacing="3" 
+                fill="#94a3b8" 
+                text-anchor="middle">
+                PORTALARR PREVIEW
+            </text>
+        </g>
+    </svg>`;
+}
+
+/**
+ * Interpolates template tokens such as {date}, {days}, {title}, {source}, {status}, {reason} in custom banner strings.
+ */
+export function interpolateBannerVariables(
+    template: string,
+    vars: {
+        date?: string;
+        days?: number | string;
+        title?: string;
+        source?: string;
+        status?: string;
+        reason?: string;
+        quality?: string;
+    } = {}
+): string {
+    if (!template) return "";
+    let res = template;
+    if (vars.date !== undefined && vars.date !== null) {
+        res = res.replace(/{date}/gi, String(vars.date));
+    }
+    if (vars.days !== undefined && vars.days !== null) {
+        res = res.replace(/{days}/gi, String(vars.days));
+    }
+    if (vars.title !== undefined && vars.title !== null) {
+        res = res.replace(/{title}/gi, String(vars.title));
+    }
+    if (vars.source !== undefined && vars.source !== null) {
+        res = res.replace(/{source}/gi, String(vars.source));
+    }
+    if (vars.status !== undefined && vars.status !== null) {
+        res = res.replace(/{status}/gi, String(vars.status));
+    }
+    if (vars.reason !== undefined && vars.reason !== null) {
+        res = res.replace(/{reason}/gi, String(vars.reason));
+    }
+    if (vars.quality !== undefined && vars.quality !== null) {
+        res = res.replace(/{quality}/gi, String(vars.quality));
+    }
+    return res;
+}
+
 /**
  * Generates a full high-resolution composited placeholder poster with custom banner / ribbon using Sharp.
  */
@@ -947,32 +1236,33 @@ export async function generatePlaceholderPosterBuffer(
     if (baseBuffer) {
         pipeline = sharp(baseBuffer).resize(width, height, { fit: "cover" });
     } else {
-        pipeline = sharp({
-            create: {
-                width,
-                height,
-                channels: 4,
-                background: { r: 15, g: 23, b: 42, alpha: 1 }
-            }
-        });
+        const bgSvg = generatePlaceholderBackdropSvg(title);
+        pipeline = sharp(Buffer.from(bgSvg)).resize(width, height);
     }
 
-    const type = options.type || "not_requested";
-    const ribbonTheme = (type === "not_requested" || type.includes("leaving")) ? "red" : "yellow";
-    const ribbonPath = resolveStockRibbonPath(type, ribbonTheme);
+    const rawText = options.customText || options.type?.replace(/_/g, " ").toUpperCase() || "COMING SOON";
+    const interpolatedText = interpolateBannerVariables(rawText, {
+        date: options.date || options.formattedDate,
+        days: options.daysRemaining,
+        title,
+        source: options.source,
+        status: options.status,
+        reason: options.reason
+    }).trim().toUpperCase();
 
-    const composites: any[] = [];
-    if (ribbonPath) {
-        const fullRibbon = path.join(STOCK_KOMETA_DIR, ribbonPath);
-        if (fs.existsSync(fullRibbon)) {
-            const ribbonBuf = await sharp(fullRibbon).resize(380, 380).toBuffer();
-            composites.push({
-                input: ribbonBuf,
-                top: height - 380,
-                left: width - 380
-            });
+    const bannerPos = options.position || "bottom";
+    const bannerTheme = options.theme || "indigo-purple";
+
+    const bannerInfo = generateBannerSvg(interpolatedText, bannerTheme, bannerPos);
+    const bannerBuffer = await sharp(Buffer.from(bannerInfo.svg)).toBuffer();
+
+    const composites = [
+        {
+            input: bannerBuffer,
+            top: Math.round(bannerInfo.top),
+            left: Math.round(bannerInfo.left)
         }
-    }
+    ];
 
     return await pipeline.composite(composites).jpeg({ quality: 92 }).toBuffer();
 }

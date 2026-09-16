@@ -44,7 +44,9 @@ import {
     getTmdbStreamingProviderMedia,
     getDisneyTrending,
     getNetflixTrending,
-    TmdbMediaItem
+    getTmdbVideos,
+    TmdbMediaItem,
+    TmdbVideoItem
 } from "@/lib/curation/tmdb";
 import { 
     getTraktTrendingMovies, 
@@ -125,6 +127,7 @@ export async function getCurationSettingsAction() {
         enabledServersForOverlays: settings?.enabledServersForOverlays ? JSON.parse(settings.enabledServersForOverlays) : [],
         enabledServersForCollections: settings?.enabledServersForCollections ? JSON.parse(settings.enabledServersForCollections) : [],
         enabledServersForPruning: settings?.enabledServersForPruning ? JSON.parse(settings.enabledServersForPruning) : [],
+        enabledServersForTagging: settings?.enabledServersForTagging ? JSON.parse(settings.enabledServersForTagging) : [],
         comingSoonShares: settings?.comingSoonShares ? JSON.parse(settings.comingSoonShares) : {},
         serverStorageConfig: settings?.serverStorageConfig ? JSON.parse(settings.serverStorageConfig) : {},
 
@@ -214,9 +217,9 @@ export async function isSectionEnabledInList(list: string[] | undefined | null, 
  * Strictly scopes modifications to the specified server without altering any other servers.
  */
 export async function toggleCurationLibrarySectionAction(
-    pageType: "kometa" | "agregarr" | "prune",
+    pageType: "kometa" | "agregarr" | "prune" | "tagging",
     serverId: string,
-    sectionKey: string,
+    sectionKey: string | number,
     enabled: boolean,
     allServerSections?: string[]
 ) {
@@ -228,7 +231,9 @@ export async function toggleCurationLibrarySectionAction(
             ? "enabledServersForOverlays"
             : pageType === "agregarr"
                 ? "enabledServersForCollections"
-                : "enabledServersForPruning";
+                : pageType === "tagging"
+                    ? "enabledServersForTagging"
+                    : "enabledServersForPruning";
 
         let currentList: string[] = settings?.[fieldName] ? JSON.parse(settings[fieldName] as string) : [];
         const strSecKey = String(sectionKey);
@@ -317,7 +322,7 @@ export async function toggleCurationLibrarySectionAction(
  * Toggle ALL library sections for a specific server (Enable All / Disable All).
  */
 export async function toggleAllCurationServerSectionsAction(
-    pageType: "kometa" | "agregarr" | "prune",
+    pageType: "kometa" | "agregarr" | "prune" | "tagging",
     serverId: string,
     enableAll: boolean,
     allServerSections?: string[]
@@ -330,7 +335,9 @@ export async function toggleAllCurationServerSectionsAction(
             ? "enabledServersForOverlays"
             : pageType === "agregarr"
                 ? "enabledServersForCollections"
-                : "enabledServersForPruning";
+                : pageType === "tagging"
+                    ? "enabledServersForTagging"
+                    : "enabledServersForPruning";
 
         let currentList: string[] = settings?.[fieldName] ? JSON.parse(settings[fieldName] as string) : [];
 
@@ -403,6 +410,7 @@ export async function saveCurationSettingsAction(data: {
     enabledServersForOverlays?: string[];
     enabledServersForCollections?: string[];
     enabledServersForPruning?: string[];
+    enabledServersForTagging?: string[];
     comingSoonShares?: Record<string, string>;
     serverStorageConfig?: Record<string, any>;
     placeholderTheatricalNoticeDays?: number;
@@ -455,6 +463,7 @@ export async function saveCurationSettingsAction(data: {
         if (data.enabledServersForOverlays !== undefined) updatePayload.enabledServersForOverlays = JSON.stringify(data.enabledServersForOverlays);
         if (data.enabledServersForCollections !== undefined) updatePayload.enabledServersForCollections = JSON.stringify(data.enabledServersForCollections);
         if (data.enabledServersForPruning !== undefined) updatePayload.enabledServersForPruning = JSON.stringify(data.enabledServersForPruning);
+        if (data.enabledServersForTagging !== undefined) updatePayload.enabledServersForTagging = JSON.stringify(data.enabledServersForTagging);
         if (data.comingSoonShares !== undefined) updatePayload.comingSoonShares = JSON.stringify(data.comingSoonShares);
         if (data.serverStorageConfig !== undefined) updatePayload.serverStorageConfig = JSON.stringify(data.serverStorageConfig);
 
@@ -724,6 +733,8 @@ export async function saveMediaCollectionAction(data: {
     posterUrl?: string;
     autoSync?: boolean;
     syncInterval?: string;
+    maxItems?: number;
+    excludedLabels?: string;
     orderIndex?: number;
     promotedToHome?: boolean;
     promotedToRecommended?: boolean;
@@ -756,6 +767,8 @@ export async function saveMediaCollectionAction(data: {
             posterUrl: data.posterUrl,
             autoSync: data.autoSync ?? true,
             syncInterval: data.syncInterval || "daily",
+            maxItems: data.maxItems !== undefined ? data.maxItems : 0,
+            excludedLabels: data.excludedLabels !== undefined ? data.excludedLabels : "",
             orderIndex: data.orderIndex ?? 0,
             promotedToHome: data.promotedToHome ?? true,
             promotedToRecommended: data.promotedToRecommended ?? true,
@@ -888,8 +901,23 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             }
         }
 
-        // 1. Fetch library media items
-        const libraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 1000);
+        // 1. Fetch library media items and filter out any excluded labels
+        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 1000);
+        
+        const excludedList = (collection.excludedLabels || "")
+            .split(",")
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean);
+
+        const libraryItems = excludedList.length > 0
+            ? rawLibraryItems.filter(it => {
+                const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
+                const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
+                const isExcluded = itLabels.some((l: string) => excludedList.includes(l)) || 
+                                   itCollections.some((c: string) => excludedList.includes(c));
+                return !isExcluded;
+            })
+            : rawLibraryItems;
 
         // 2. Resolve matching rating keys based on collection source type
         const matchingRatingKeys: string[] = [];
@@ -1020,13 +1048,18 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             };
         }
 
-        // 3. Sync to Plex with Sort Prefix and Home Promotion
+        // 3. Enforce Max Item count if specified
+        const finalRatingKeys = (collection.maxItems && collection.maxItems > 0)
+            ? matchingRatingKeys.slice(0, collection.maxItems)
+            : matchingRatingKeys;
+
+        // 4. Sync to Plex with Sort Prefix and Home Promotion
         const syncResult = await syncPlexCollection(
             urlsToTry,
             token,
             collection.sectionKey || "",
             collection.title,
-            matchingRatingKeys,
+            finalRatingKeys,
             {
                 summary: collection.summary || undefined,
                 sortTitle: `${collection.sortPrefix || "!00_"}${collection.title}`,
@@ -1038,23 +1071,23 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             }
         );
 
-        // 4. Update local DB with item count and synced time
+        // 5. Update local DB with item count and synced time
         await prisma.mediaCollection.update({
             where: { id: collection.id },
             data: {
-                itemCount: matchingRatingKeys.length,
+                itemCount: finalRatingKeys.length,
                 lastSyncedAt: new Date(),
                 ratingKey: syncResult.collectionRatingKey || undefined
             }
         });
 
-        logger.addLog("SUCCESS", "PLEX", `Successfully synced collection "${collection.title}" (${matchingRatingKeys.length} items) to Plex server "${resolved.serverName}"`);
+        logger.addLog("SUCCESS", "PLEX", `Successfully synced collection "${collection.title}" (${finalRatingKeys.length} items) to Plex server "${resolved.serverName}"`);
 
         return {
             success: true,
-            itemCount: matchingRatingKeys.length,
+            itemCount: finalRatingKeys.length,
             collectionRatingKey: syncResult.collectionRatingKey,
-            message: `Synced "${collection.title}" with ${matchingRatingKeys.length} items to Plex!`
+            message: `Synced "${collection.title}" with ${finalRatingKeys.length} items to Plex!`
         };
     } catch (e: any) {
         logger.addLog("ERROR", "PLEX", `Sync collection "${collectionId}" failed: ${e.message}`);
@@ -1074,6 +1107,8 @@ export async function previewCollectionMatchingAction(
         mediaType?: string;
         title?: string;
         type?: string;
+        maxItems?: number;
+        excludedLabels?: string;
     }
 ) {
     await verifyAdmin();
@@ -1085,7 +1120,22 @@ export async function previewCollectionMatchingAction(
         const token = resolved.token;
 
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-        const libraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 500);
+        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 500);
+
+        const excludedList = (collectionConfig.excludedLabels || "")
+            .split(",")
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean);
+
+        const libraryItems = excludedList.length > 0
+            ? rawLibraryItems.filter(it => {
+                const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
+                const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
+                const isExcluded = itLabels.some((l: string) => excludedList.includes(l)) || 
+                                   itCollections.some((c: string) => excludedList.includes(c));
+                return !isExcluded;
+            })
+            : rawLibraryItems;
 
         let matchedItems: any[] = [];
         let executionMethod = "";
@@ -1209,12 +1259,16 @@ export async function previewCollectionMatchingAction(
             }
         }
 
+        const effectiveMatches = (collectionConfig.maxItems && collectionConfig.maxItems > 0)
+            ? matchedItems.slice(0, collectionConfig.maxItems)
+            : matchedItems;
+
         return {
             success: true,
-            totalEvaluated: libraryItems.length,
-            matchCount: matchedItems.length,
+            totalEvaluated: rawLibraryItems.length,
+            matchCount: effectiveMatches.length,
             executionMethod,
-            sampleMatches: matchedItems.slice(0, 18).map(m => ({
+            sampleMatches: effectiveMatches.slice(0, 18).map(m => ({
                 ratingKey: m.ratingKey,
                 title: m.title,
                 year: m.year,
@@ -1356,6 +1410,8 @@ export async function toggleCollectionVisibilityAction(
  */
 export async function updateCollectionPlacementAction(data: {
     id: string;
+    maxItems?: number;
+    excludedLabels?: string;
     promotedToHome?: boolean;
     promotedToSharedHome?: boolean;
     promotedToRecommended?: boolean;
@@ -1382,6 +1438,8 @@ export async function updateCollectionPlacementAction(data: {
         const updated = await prisma.mediaCollection.update({
             where: { id: data.id },
             data: {
+                maxItems: data.maxItems !== undefined ? data.maxItems : collection.maxItems,
+                excludedLabels: data.excludedLabels !== undefined ? data.excludedLabels : collection.excludedLabels,
                 promotedToHome: data.promotedToHome ?? collection.promotedToHome,
                 promotedToSharedHome: data.promotedToSharedHome ?? collection.promotedToSharedHome,
                 promotedToRecommended: data.promotedToRecommended ?? collection.promotedToRecommended,
@@ -4173,6 +4231,84 @@ export async function applyParentalTagsToLibraryAction(
 }
 
 /**
+ * Server action to run automated parental tagging sync across enabled sections or a single server/section.
+ */
+export async function runParentalTagsSyncAction(serverId?: string, sectionKey?: string) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const enabledServersForTagging: string[] = settings?.enabledServersForTagging
+            ? JSON.parse(settings.enabledServersForTagging)
+            : [];
+
+        const details: string[] = [];
+        let totalTagged = 0;
+        let totalEvaluated = 0;
+
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        const serversWithSections = await getPlexServerLibrarySections(token, settings?.mainPlexUrl || undefined, serverId);
+        
+        for (const srv of serversWithSections) {
+            if (serverId && srv.serverId !== serverId) continue;
+            for (const sec of srv.sections || []) {
+                const sKey = String(sec.key);
+                if (sectionKey && sKey !== String(sectionKey)) continue;
+
+                const isSecEnabled = isSectionEnabledInList(enabledServersForTagging, srv.serverId, sKey);
+                if (!isSecEnabled) {
+                    details.push(`Skipped "${sec.title}" on ${srv.serverName} (Disabled for tagging).`);
+                    continue;
+                }
+
+                try {
+                    const res = await applyParentalTagsToLibrary(srv.serverId, sKey);
+                    if (res.success) {
+                        totalTagged += res.taggedCount || 0;
+                        totalEvaluated += res.totalEvaluated || 0;
+                        details.push(`Tagged ${res.taggedCount || 0}/${res.totalEvaluated || 0} items in "${sec.title}" (${srv.serverName}).`);
+                    } else if (res.error) {
+                        details.push(`Library "${sec.title}": ${res.error}`);
+                    }
+                } catch (err: any) {
+                    details.push(`Error tagging "${sec.title}": ${err.message}`);
+                }
+            }
+        }
+
+        const nowIso = new Date().toISOString();
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                curationLastRunAt: nowIso,
+                curationLastRunStatus: JSON.stringify({
+                    type: "tagging",
+                    totalTagged,
+                    totalEvaluated,
+                    timestamp: nowIso,
+                    details
+                })
+            }
+        });
+
+        return {
+            success: true,
+            totalTagged,
+            totalEvaluated,
+            timestamp: nowIso,
+            details
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            error: e.message || "Failed running parental tags sync."
+        };
+    }
+}
+
+/**
  * Server action to clear all IMDb Parental Advisory Tags from a library section.
  */
 export async function clearParentalTagsFromLibraryAction(
@@ -5085,6 +5221,23 @@ export async function getPlaceholderPreviewDataUrlAction(
 }
 
 /**
+ * Server action to fetch YouTube trailer and video links for a TMDb media item.
+ */
+export async function getTmdbTrailerAction(tmdbId: number, mediaType: "movie" | "tv" = "movie") {
+    try {
+        const videos = await getTmdbVideos(tmdbId, mediaType);
+        const trailer = videos.find(v => v.type === "Trailer") || videos[0] || null;
+        return {
+            success: true,
+            trailer,
+            videos
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message, videos: [] };
+    }
+}
+
+/**
  * Server action to create/deploy a placeholder item for a title not currently in the Plex library.
  * Writes to the configured coming soon share folder and saves the advisory record.
  */
@@ -5123,6 +5276,20 @@ export async function createPlaceholderItemAction(
         const bannerTheme = itemData.bannerTheme || "crimson-red";
         const bannerPosition = itemData.bannerPosition || "bottom";
 
+        // Lookup official YouTube trailer for the title to write .strm and attach trailer metadata
+        let trailerKey = "";
+        let trailerUrl = "";
+        try {
+            const videos = await getTmdbVideos(itemData.tmdbId, itemData.mediaType);
+            if (videos && videos.length > 0) {
+                const primaryTrailer = videos.find(v => v.type === "Trailer") || videos[0];
+                if (primaryTrailer) {
+                    trailerKey = primaryTrailer.key;
+                    trailerUrl = primaryTrailer.url;
+                }
+            }
+        } catch (e) {}
+
         // Generate high-resolution composite placeholder poster
         const posterBuffer = await generatePlaceholderPosterBuffer(itemData.posterPath, itemData.title, {
             type: bannerType,
@@ -5154,13 +5321,19 @@ export async function createPlaceholderItemAction(
             const posterFilePath = path.join(targetDir, "poster.png");
             fs.writeFileSync(posterFilePath, posterBuffer);
 
-            // Save lightweight stub file (.strm or .disc)
+            // If YouTube trailer exists, save .strm file with YouTube stream URL so Plex can play it
+            if (trailerUrl) {
+                const strmFile = path.join(targetDir, `${cleanTitle}${yearStr}.strm`);
+                fs.writeFileSync(strmFile, trailerUrl);
+            }
+
+            // Save lightweight stub file (.disc)
             const stubFile = path.join(targetDir, `${cleanTitle}${yearStr}.disc`);
-            fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nCreated: ${new Date().toISOString()}\n`);
+            fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nTrailer: ${trailerUrl || "None"}\nCreated: ${new Date().toISOString()}\n`);
 
             shareSaved = true;
             createdFolderPath = targetDir;
-            logger.addLog("SUCCESS", "CURATION", `Created coming soon placeholder on disk for "${itemData.title}" at "${targetDir}"`);
+            logger.addLog("SUCCESS", "CURATION", `Created coming soon placeholder on disk for "${itemData.title}" at "${targetDir}"${trailerUrl ? " with YouTube trailer .strm" : ""}`);
         }
 
         // Save record into MediaContentAdvisory for tracking and display
@@ -5186,6 +5359,8 @@ export async function createPlaceholderItemAction(
                     year: itemData.year,
                     posterPath: itemData.posterPath,
                     sharePath: createdFolderPath || null,
+                    trailerKey: trailerKey || null,
+                    trailerUrl: trailerUrl || null,
                     createdAt: new Date().toISOString()
                 })
             },
@@ -5205,6 +5380,8 @@ export async function createPlaceholderItemAction(
                     year: itemData.year,
                     posterPath: itemData.posterPath,
                     sharePath: createdFolderPath || null,
+                    trailerKey: trailerKey || null,
+                    trailerUrl: trailerUrl || null,
                     createdAt: new Date().toISOString()
                 })
             }
@@ -5219,9 +5396,11 @@ export async function createPlaceholderItemAction(
             shareSaved,
             folderPath: createdFolderPath,
             dataUrl,
-            message: shareSaved
-                ? `Created placeholder card & deployed to Coming Soon share for "${itemData.title}"!`
-                : `Created "${bannerText}" placeholder card for "${itemData.title}"!`
+            trailerUrl: trailerUrl || null,
+            trailerKey: trailerKey || null,
+            message: shareSaved 
+                ? `Created placeholder "${itemData.title}" on disk${trailerUrl ? " with YouTube trailer" : ""}!` 
+                : `Generated placeholder poster for "${itemData.title}".`
         };
     } catch (e: any) {
         return { success: false, error: e.message };

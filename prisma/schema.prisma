@@ -115,6 +115,7 @@ model Settings {
   parentalTagTarget                String?   @default("labels") // "labels" (Plex Sharing Labels), "genres" (Plex Genres), "both"
   parentalMinSeverity              String?   @default("Mild") // "Severe", "Moderate", "Mild", "None"
   parentalCategories               String?   @default("[\"nudity\",\"violence\",\"profanity\",\"alcohol\",\"frightening\"]") // JSON array
+  enabledServersForTagging         String?   // JSON array of enabled server:section pairs for parental tagging
 
   // Payment Email Scraper & Verification Controls
   paymentEmailAutoScan             Boolean   @default(true)
@@ -336,6 +337,8 @@ model MediaCollection {
   posterUrl            String?
   ratingKey            String?
   itemCount            Int       @default(0)
+  maxItems             Int?      @default(0) // 0 = unlimited / all items
+  excludedLabels       String?   @default("") // Comma-separated labels to exclude (e.g. "trailers, coming soon")
   autoSync             Boolean   @default(true)
   syncInterval         String    @default("daily")
   lastSyncedAt         DateTime?

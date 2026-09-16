@@ -53,7 +53,8 @@ import {
     Monitor,
     Shield,
     ShieldCheck,
-    ShieldAlert
+    ShieldAlert,
+    Play
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,6 +84,7 @@ import {
     getTrendingAndPlaceholderMediaAction,
     getPlaceholderPreviewDataUrlAction,
     createPlaceholderItemAction,
+    getTmdbTrailerAction,
     saveComingSoonSharesAction,
     validateDirectoryPathAction,
     getCurationSettingsAction,
@@ -162,6 +164,8 @@ export function AgregarrStudio() {
     const [inspectShared, setInspectShared] = useState(true);
     const [inspectRecommended, setInspectRecommended] = useState(true);
     const [inspectMode, setInspectMode] = useState<string>("default");
+    const [inspectMaxItems, setInspectMaxItems] = useState<number>(0);
+    const [inspectExcludedLabels, setInspectExcludedLabels] = useState<string>("");
 
     // Comprehensive Placement & Visibility Modal States (Where collections show up in Plex)
     const [placementModalOpen, setPlacementModalOpen] = useState(false);
@@ -180,6 +184,8 @@ export function AgregarrStudio() {
     const [placementEndMonth, setPlacementEndMonth] = useState(11);
     const [placementEndDay, setPlacementEndDay] = useState(5);
     const [placementSeasonalAction, setPlacementSeasonalAction] = useState<string>("promote_hide");
+    const [placementMaxItems, setPlacementMaxItems] = useState<number>(0);
+    const [placementExcludedLabels, setPlacementExcludedLabels] = useState<string>("");
     const [savingPlacement, setSavingPlacement] = useState(false);
     const [placementSavedMsg, setPlacementSavedMsg] = useState<string | null>(null);
 
@@ -190,6 +196,14 @@ export function AgregarrStudio() {
     const [newCollMode, setNewCollMode] = useState<string>("default");
     const [newCollActiveDays, setNewCollActiveDays] = useState<string>("all");
     const [newCollActiveTimeRange, setNewCollActiveTimeRange] = useState<string>("all_day");
+    const [newCollMaxItems, setNewCollMaxItems] = useState<number>(0);
+    const [newCollExcludedLabels, setNewCollExcludedLabels] = useState<string>("");
+
+    // YouTube Trailer Player Modal States
+    const [trailerModalOpen, setTrailerModalOpen] = useState(false);
+    const [trailerLoading, setTrailerLoading] = useState(false);
+    const [activeTrailer, setActiveTrailer] = useState<any | null>(null);
+    const [activeTrailerTitle, setActiveTrailerTitle] = useState<string>("");
 
     // Trending Media & Placeholder Hub States
     const [trendingCategory, setTrendingCategory] = useState<"all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "digital" | "theatrical">("all");
@@ -534,6 +548,8 @@ export function AgregarrStudio() {
         setPlacementEndMonth(coll.scheduleEndMonth || 11);
         setPlacementEndDay(coll.scheduleEndDay || 5);
         setPlacementSeasonalAction(coll.seasonalAction || "promote_hide");
+        setPlacementMaxItems(coll.maxItems || 0);
+        setPlacementExcludedLabels(coll.excludedLabels || "");
         setPlacementSavedMsg(null);
         setPlacementModalOpen(true);
     };
@@ -559,7 +575,9 @@ export function AgregarrStudio() {
                 scheduleStartDay: placementIsSeasonal ? Number(placementStartDay) : null,
                 scheduleEndMonth: placementIsSeasonal ? Number(placementEndMonth) : null,
                 scheduleEndDay: placementIsSeasonal ? Number(placementEndDay) : null,
-                seasonalAction: placementSeasonalAction
+                seasonalAction: placementSeasonalAction,
+                maxItems: Number(placementMaxItems),
+                excludedLabels: placementExcludedLabels
             });
 
             if (res.success) {
@@ -657,6 +675,8 @@ export function AgregarrStudio() {
         setInspectShared(true);
         setInspectRecommended(true);
         setInspectMode(preset.defaultCollectionMode || "default");
+        setInspectMaxItems(0);
+        setInspectExcludedLabels("trailers, coming_soon");
         setInspectModalOpen(true);
         setPreviewLoading(true);
         setPreviewData(null);
@@ -666,7 +686,9 @@ export function AgregarrStudio() {
                 sourceQuery: preset.sourceQuery,
                 mediaType: preset.mediaType,
                 title: preset.title,
-                type: preset.type
+                type: preset.type,
+                maxItems: 0,
+                excludedLabels: "trailers, coming_soon"
             });
             if (res.success) {
                 setPreviewData(res as any);
@@ -708,7 +730,9 @@ export function AgregarrStudio() {
                 scheduleStartDay: preset.scheduleStartDay,
                 scheduleEndMonth: preset.scheduleEndMonth,
                 scheduleEndDay: preset.scheduleEndDay,
-                seasonalAction: preset.seasonalAction
+                seasonalAction: preset.seasonalAction,
+                maxItems: Number(inspectMaxItems),
+                excludedLabels: inspectExcludedLabels
             });
 
             if (res.success && res.collection) {
@@ -718,6 +742,26 @@ export function AgregarrStudio() {
             }
         } catch (e) {
             console.error("Failed installing preset:", e);
+        }
+    };
+
+    // YouTube Trailer Watcher
+    const handleWatchTrailer = async (tmdbId: number, mediaType: "movie" | "tv" = "movie", title: string) => {
+        setActiveTrailerTitle(title);
+        setTrailerLoading(true);
+        setActiveTrailer(null);
+        setTrailerModalOpen(true);
+        try {
+            const res = await getTmdbTrailerAction(tmdbId, mediaType);
+            if (res.success && res.trailer) {
+                setActiveTrailer(res.trailer);
+            } else {
+                setActiveTrailer(null);
+            }
+        } catch (e) {
+            console.error("Failed fetching trailer:", e);
+        } finally {
+            setTrailerLoading(false);
         }
     };
 
@@ -1369,6 +1413,16 @@ export function AgregarrStudio() {
                                                                 <span className="capitalize">{coll.activeTimeRange.replace("_", " ")}</span>
                                                             </Badge>
                                                         )}
+                                                        {coll.maxItems && coll.maxItems > 0 && (
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-900/60 bg-amber-950/40 text-amber-300 gap-1 font-mono shrink-0">
+                                                                <span>Limit: {coll.maxItems}</span>
+                                                            </Badge>
+                                                        )}
+                                                        {coll.excludedLabels && (
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-rose-900/60 bg-rose-950/30 text-rose-300 gap-1 font-mono shrink-0" title={`Excludes: ${coll.excludedLabels}`}>
+                                                                <span>Excludes: {coll.excludedLabels.split(",").slice(0, 2).join(", ")}{coll.excludedLabels.split(",").length > 2 ? "..." : ""}</span>
+                                                            </Badge>
+                                                        )}
                                                     </div>
                                                     <p className="text-[11px] text-slate-400 truncate max-w-[420px]">
                                                         {coll.summary || coll.sourceQuery || "No summary configured."}
@@ -1633,15 +1687,27 @@ export function AgregarrStudio() {
                                                     </p>
                                                 </div>
 
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    onClick={() => handleOpenPlaceholderModal(item)}
-                                                    className="w-full h-7 text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 gap-1 cursor-pointer"
-                                                >
-                                                    <Tag className="h-3 w-3" />
-                                                    <span>{item.inLibrary ? "Overlay Banner" : "Create Placeholder"}</span>
-                                                </Button>
+                                                <div className="flex gap-1.5 pt-1">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => handleWatchTrailer(item.id, item.mediaType || "movie", item.title)}
+                                                        className="h-7 px-2 text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 gap-1 cursor-pointer shrink-0"
+                                                        title="Watch Official YouTube Trailer"
+                                                    >
+                                                        <Play className="h-3 w-3 text-rose-500 fill-rose-500" />
+                                                        <span className="hidden sm:inline">Trailer</span>
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => handleOpenPlaceholderModal(item)}
+                                                        className="flex-1 h-7 text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 gap-1 cursor-pointer"
+                                                    >
+                                                        <Tag className="h-3 w-3" />
+                                                        <span>{item.inLibrary ? "Overlay" : "Placeholder"}</span>
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -1675,29 +1741,43 @@ export function AgregarrStudio() {
                                         alt={item.title}
                                         className="w-16 h-24 object-cover rounded-lg shadow-md shrink-0"
                                     />
-                                    <div className="space-y-1.5 flex-1 overflow-hidden">
-                                        <h4 className="font-bold text-white text-xs truncate" title={item.title}>{item.title}</h4>
-                                        <div className="flex flex-col gap-1 text-[10px]">
-                                            {item.releaseDate && (
-                                                <span className="text-amber-300 flex items-center gap-1 font-mono">
-                                                    🍿 Theatrical: {item.releaseDate}
-                                                </span>
-                                            )}
-                                            {item.digitalReleaseDate && (
-                                                <span className="text-cyan-300 flex items-center gap-1 font-mono">
-                                                    ⚡ Digital: {item.digitalReleaseDate}
-                                                </span>
-                                            )}
+                                    <div className="space-y-1.5 flex-1 overflow-hidden flex flex-col justify-between">
+                                        <div>
+                                            <h4 className="font-bold text-white text-xs truncate" title={item.title}>{item.title}</h4>
+                                            <div className="flex flex-col gap-1 text-[10px] mt-1">
+                                                {item.releaseDate && (
+                                                    <span className="text-amber-300 flex items-center gap-1 font-mono">
+                                                        🍿 Theatrical: {item.releaseDate}
+                                                    </span>
+                                                )}
+                                                {item.digitalReleaseDate && (
+                                                    <span className="text-cyan-300 flex items-center gap-1 font-mono">
+                                                        ⚡ Digital: {item.digitalReleaseDate}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            onClick={() => handleOpenPlaceholderModal(item)}
-                                            className="h-6 text-[10px] bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 font-bold px-2 gap-1 cursor-pointer"
-                                        >
-                                            <Tag className="h-2.5 w-2.5" />
-                                            <span>Deploy Card</span>
-                                        </Button>
+                                        <div className="flex items-center gap-1.5 pt-1">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() => handleWatchTrailer(item.id, item.mediaType || "movie", item.title)}
+                                                className="h-6 text-[10px] bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 font-bold px-2 gap-1 cursor-pointer"
+                                                title="Watch YouTube Trailer"
+                                            >
+                                                <Play className="h-2.5 w-2.5 text-rose-500 fill-rose-500" />
+                                                <span>Trailer</span>
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() => handleOpenPlaceholderModal(item)}
+                                                className="h-6 text-[10px] bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 font-bold px-2 gap-1 cursor-pointer flex-1"
+                                            >
+                                                <Tag className="h-2.5 w-2.5" />
+                                                <span>Deploy Card</span>
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -2235,6 +2315,101 @@ export function AgregarrStudio() {
                                 </Select>
                             </div>
                         </div>
+
+                        {/* Item Count Limit (maxItems) */}
+                        <div className="space-y-2 p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <Sliders className="h-3.5 w-3.5 text-amber-400" /> Collection Item Limit (Max Items)
+                                </Label>
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                    {inspectMaxItems > 0 ? `${inspectMaxItems} items maximum` : "Unlimited items"}
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400">
+                                Control how many items appear in this collection (e.g. top 5, 10, or 20 trending items). 0 means unlimited.
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={500}
+                                    value={inspectMaxItems}
+                                    onChange={(e) => setInspectMaxItems(parseInt(e.target.value, 10) || 0)}
+                                    className="h-8 text-xs bg-slate-900 border-slate-700 w-24 font-bold font-mono text-white"
+                                />
+                                <div className="flex flex-wrap items-center gap-1">
+                                    {[
+                                        { label: "5", val: 5 },
+                                        { label: "10", val: 10 },
+                                        { label: "15", val: 15 },
+                                        { label: "20", val: 20 },
+                                        { label: "25", val: 25 },
+                                        { label: "50", val: 50 },
+                                        { label: "Unlimited", val: 0 }
+                                    ].map(preset => (
+                                        <button
+                                            key={preset.label}
+                                            type="button"
+                                            onClick={() => setInspectMaxItems(preset.val)}
+                                            className={`px-2 py-1 rounded text-[10px] font-bold border transition-all cursor-pointer ${
+                                                inspectMaxItems === preset.val
+                                                    ? "bg-amber-500 text-slate-950 border-amber-400 font-black shadow-sm"
+                                                    : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                                            }`}
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Excluded Labels */}
+                        <div className="space-y-2 p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <Tag className="h-3.5 w-3.5 text-rose-400" /> Excluded Plex Labels
+                                </Label>
+                                <span className="text-[10px] text-slate-400 font-mono">Ignore matching media</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400">
+                                Exclude media items tagged with these Plex labels (e.g. placeholder trailers, leaving soon, extras).
+                            </p>
+                            <Input
+                                value={inspectExcludedLabels}
+                                onChange={(e) => setInspectExcludedLabels(e.target.value)}
+                                placeholder="e.g. trailers, coming_soon, leaving_soon, extras"
+                                className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-600"
+                            />
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span className="text-[10px] text-slate-500">Quick chips:</span>
+                                {["trailers", "coming_soon", "leaving_soon", "extras", "sample", "archive"].map(tag => {
+                                    const isSelected = inspectExcludedLabels.toLowerCase().includes(tag);
+                                    return (
+                                        <button
+                                            key={tag}
+                                            type="button"
+                                            onClick={() => {
+                                                const list = inspectExcludedLabels ? inspectExcludedLabels.split(",").map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+                                                if (list.includes(tag)) {
+                                                    setInspectExcludedLabels(list.filter(s => s !== tag).join(", "));
+                                                } else {
+                                                    setInspectExcludedLabels([...list, tag].join(", "));
+                                                }
+                                            }}
+                                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm"
+                                                    : "bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300 hover:border-slate-700"
+                                            }`}
+                                        >
+                                            {isSelected ? "✓ " : "+ "}{tag}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
 
                     <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
@@ -2553,6 +2728,101 @@ export function AgregarrStudio() {
                             )}
                         </div>
 
+                        {/* Section 6: Collection Item Limit (maxItems) */}
+                        <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <Sliders className="h-3.5 w-3.5 text-amber-400" /> Collection Item Limit (Max Items)
+                                </Label>
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                    {placementMaxItems > 0 ? `${placementMaxItems} items maximum` : "Unlimited items"}
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400">
+                                Control how many items appear in this collection (e.g. top 5, 10, or 20 trending items). 0 means unlimited.
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={500}
+                                    value={placementMaxItems}
+                                    onChange={(e) => setPlacementMaxItems(parseInt(e.target.value, 10) || 0)}
+                                    className="h-8 text-xs bg-slate-900 border-slate-700 w-24 font-bold font-mono text-white"
+                                />
+                                <div className="flex flex-wrap items-center gap-1">
+                                    {[
+                                        { label: "5", val: 5 },
+                                        { label: "10", val: 10 },
+                                        { label: "15", val: 15 },
+                                        { label: "20", val: 20 },
+                                        { label: "25", val: 25 },
+                                        { label: "50", val: 50 },
+                                        { label: "Unlimited", val: 0 }
+                                    ].map(preset => (
+                                        <button
+                                            key={preset.label}
+                                            type="button"
+                                            onClick={() => setPlacementMaxItems(preset.val)}
+                                            className={`px-2 py-1 rounded text-[10px] font-bold border transition-all cursor-pointer ${
+                                                placementMaxItems === preset.val
+                                                    ? "bg-amber-500 text-slate-950 border-amber-400 font-black shadow-sm"
+                                                    : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                                            }`}
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 7: Excluded Plex Labels */}
+                        <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <Tag className="h-3.5 w-3.5 text-rose-400" /> Excluded Plex Labels
+                                </Label>
+                                <span className="text-[10px] text-slate-400 font-mono">Ignore matching media</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400">
+                                Exclude media items tagged with these Plex labels (e.g. placeholder trailers, leaving soon, extras). Items with these labels will never be added to this collection.
+                            </p>
+                            <Input
+                                value={placementExcludedLabels}
+                                onChange={(e) => setPlacementExcludedLabels(e.target.value)}
+                                placeholder="e.g. trailers, coming_soon, leaving_soon, extras"
+                                className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-600"
+                            />
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span className="text-[10px] text-slate-500">Quick chips:</span>
+                                {["trailers", "coming_soon", "leaving_soon", "extras", "sample", "archive"].map(tag => {
+                                    const isSelected = placementExcludedLabels.toLowerCase().includes(tag);
+                                    return (
+                                        <button
+                                            key={tag}
+                                            type="button"
+                                            onClick={() => {
+                                                const list = placementExcludedLabels ? placementExcludedLabels.split(",").map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+                                                if (list.includes(tag)) {
+                                                    setPlacementExcludedLabels(list.filter(s => s !== tag).join(", "));
+                                                } else {
+                                                    setPlacementExcludedLabels([...list, tag].join(", "));
+                                                }
+                                            }}
+                                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm"
+                                                    : "bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300 hover:border-slate-700"
+                                            }`}
+                                        >
+                                            {isSelected ? "✓ " : "+ "}{tag}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                         {placementSavedMsg && (
                             <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
                                 <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
@@ -2795,6 +3065,77 @@ export function AgregarrStudio() {
                         >
                             {generatingPlaceholder ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Tag className="h-3.5 w-3.5" />}
                             <span>Create &amp; Deploy Card</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* YouTube Trailer Player Modal */}
+            <Dialog open={trailerModalOpen} onOpenChange={setTrailerModalOpen}>
+                <DialogContent className="max-w-4xl bg-slate-950 border-slate-800 text-slate-100 p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between">
+                        <div className="space-y-0.5">
+                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <Play className="h-4 w-4 text-rose-500 fill-rose-500" />
+                                <span>{activeTrailerTitle || "Official Trailer"}</span>
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-slate-400">
+                                {activeTrailer?.name || "Official YouTube Trailer / Teaser Preview"}
+                            </DialogDescription>
+                        </div>
+                        {activeTrailer?.type && (
+                            <Badge className="bg-rose-950 text-rose-300 border border-rose-800 text-xs font-mono">
+                                {activeTrailer.type.toUpperCase()}
+                            </Badge>
+                        )}
+                    </DialogHeader>
+
+                    <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-2xl my-2">
+                        {trailerLoading ? (
+                            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
+                                <Loader2 className="h-8 w-8 animate-spin text-rose-500" />
+                                <span className="text-xs font-medium">Fetching official trailer from TMDb &amp; YouTube...</span>
+                            </div>
+                        ) : activeTrailer?.key ? (
+                            <iframe
+                                className="w-full h-full border-0"
+                                src={`https://www.youtube-nocookie.com/embed/${activeTrailer.key}?autoplay=1&rel=0&modestbranding=1`}
+                                title={activeTrailerTitle}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full gap-3 p-6 text-center text-slate-400">
+                                <div className="p-3 rounded-full bg-slate-900 border border-slate-800 text-rose-400">
+                                    <Play className="h-8 w-8" />
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-bold text-white">No Official Trailer Found</p>
+                                    <p className="text-xs text-slate-400 max-w-sm">
+                                        TMDb does not have an official trailer registered for "{activeTrailerTitle}".
+                                    </p>
+                                </div>
+                                <a
+                                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(activeTrailerTitle + " official trailer")}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md"
+                                >
+                                    <Play className="h-3.5 w-3.5 fill-white" /> Search on YouTube
+                                </a>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setTrailerModalOpen(false)}
+                            className="border-slate-800 text-slate-300 hover:text-white"
+                        >
+                            Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>

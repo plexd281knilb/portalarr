@@ -407,3 +407,51 @@ export async function getNetflixTrending(isKids = false, page = 1): Promise<Tmdb
     return await getTmdbStreamingProviderMedia(8, { isKids, mediaType: "both", page, minVotes: 10 });
 }
 
+export interface TmdbVideoItem {
+    id: string;
+    key: string;
+    name: string;
+    site: string;
+    type: string;
+    official: boolean;
+    url: string;
+    embedUrl: string;
+}
+
+/**
+ * Get YouTube trailer and teaser videos for a movie or TV show
+ */
+export async function getTmdbVideos(tmdbId: number, mediaType: "movie" | "tv" = "movie"): Promise<TmdbVideoItem[]> {
+    try {
+        const endpoint = mediaType === "tv" ? `/tv/${tmdbId}/videos` : `/movie/${tmdbId}/videos`;
+        const data = await tmdbFetch(endpoint);
+        if (!data?.results || !Array.isArray(data.results)) return [];
+
+        const youtubeVideos = data.results
+            .filter((v: any) => v.site === "YouTube" && v.key)
+            .map((v: any) => ({
+                id: v.id,
+                key: v.key,
+                name: v.name || "Trailer",
+                site: v.site,
+                type: v.type || "Trailer",
+                official: Boolean(v.official),
+                url: `https://www.youtube.com/watch?v=${v.key}`,
+                embedUrl: `https://www.youtube.com/embed/${v.key}`
+            }));
+
+        // Sort: Official Trailers first -> Trailers -> Teasers/Clips -> others
+        return youtubeVideos.sort((a: any, b: any) => {
+            const isTrailerA = a.type.toLowerCase().includes("trailer");
+            const isTrailerB = b.type.toLowerCase().includes("trailer");
+            if (isTrailerA && !isTrailerB) return -1;
+            if (!isTrailerA && isTrailerB) return 1;
+            if (a.official && !b.official) return -1;
+            if (!a.official && b.official) return 1;
+            return 0;
+        });
+    } catch {
+        return [];
+    }
+}
+

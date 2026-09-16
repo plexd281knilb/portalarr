@@ -376,6 +376,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["parentalTagTarget", `ALTER TABLE "Settings" ADD COLUMN "parentalTagTarget" TEXT DEFAULT 'labels';`],
                 ["parentalMinSeverity", `ALTER TABLE "Settings" ADD COLUMN "parentalMinSeverity" TEXT DEFAULT 'Mild';`],
                 ["parentalCategories", `ALTER TABLE "Settings" ADD COLUMN "parentalCategories" TEXT DEFAULT '["nudity","violence","profanity","alcohol","frightening"]';`],
+                ["enabledServersForTagging", `ALTER TABLE "Settings" ADD COLUMN "enabledServersForTagging" TEXT;`],
                 ["paymentEmailAutoScan", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailAutoScan" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["paymentEmailScanInterval", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailScanInterval" INTEGER DEFAULT 15;`],
                 ["paymentLastScanAt", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanAt" DATETIME;`],
@@ -823,6 +824,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "posterUrl" TEXT,
                     "ratingKey" TEXT,
                     "itemCount" INTEGER NOT NULL DEFAULT 0,
+                    "maxItems" INTEGER DEFAULT 0,
+                    "excludedLabels" TEXT DEFAULT '',
                     "autoSync" BOOLEAN NOT NULL DEFAULT 1,
                     "syncInterval" TEXT NOT NULL DEFAULT 'daily',
                     "lastSyncedAt" DATETIME,
@@ -849,6 +852,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                 const colTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaCollection");`);
                 const collCols = colTableInfo.map((c: any) => c.name);
                 const collAddCols: [string, string][] = [
+                    ["maxItems", `ALTER TABLE "MediaCollection" ADD COLUMN "maxItems" INTEGER DEFAULT 0;`],
+                    ["excludedLabels", `ALTER TABLE "MediaCollection" ADD COLUMN "excludedLabels" TEXT DEFAULT '';`],
                     ["orderIndex", `ALTER TABLE "MediaCollection" ADD COLUMN "orderIndex" INTEGER NOT NULL DEFAULT 0;`],
                     ["promotedToHome", `ALTER TABLE "MediaCollection" ADD COLUMN "promotedToHome" BOOLEAN NOT NULL DEFAULT 1;`],
                     ["promotedToRecommended", `ALTER TABLE "MediaCollection" ADD COLUMN "promotedToRecommended" BOOLEAN NOT NULL DEFAULT 1;`],

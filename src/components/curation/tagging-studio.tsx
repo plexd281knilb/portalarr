@@ -24,7 +24,13 @@ import {
     Zap,
     Check,
     X,
-    Loader2
+    Loader2,
+    Clock,
+    Clock3,
+    Calendar,
+    CalendarClock,
+    SlidersHorizontal,
+    Settings2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,7 +48,12 @@ import {
     getStoredParentalAdvisoriesForLibraryAction,
     applyCustomTagRuleAction,
     clearCustomTagFromLibraryAction,
-    getPlexLibraryTagsAuditAction
+    getPlexLibraryTagsAuditAction,
+    getCurationSettingsAction,
+    saveCurationSettingsAction,
+    toggleCurationLibrarySectionAction,
+    toggleAllCurationServerSectionsAction,
+    runParentalTagsSyncAction
 } from "@/app/curation-actions";
 import {
     ParentalCategoryKey,
@@ -68,6 +79,19 @@ export function TaggingStudio() {
     const [selectedServerId, setSelectedServerId] = useState<string>("");
     const [selectedSectionKey, setSelectedSectionKey] = useState<string>("");
     const [serverSectionsLoading, setServerSectionsLoading] = useState(false);
+
+    // Automated Schedule & Enabled Library States
+    const [curationSyncParentalTags, setCurationSyncParentalTags] = useState<boolean>(true);
+    const [curationSyncSchedule, setCurationSyncSchedule] = useState<string>("every_6_hours");
+    const [curationLastRunAt, setCurationLastRunAt] = useState<string | null>(null);
+    const [curationLastRunStatus, setCurationLastRunStatus] = useState<any | null>(null);
+    const [enabledServersForTagging, setEnabledServersForTagging] = useState<string[]>([]);
+    const [taggingBatchSize, setTaggingBatchSize] = useState<number>(200);
+    const [taggingBatchMode, setTaggingBatchMode] = useState<string>("incremental");
+    const [savingSchedule, setSavingSchedule] = useState(false);
+    const [scheduleSavedMsg, setScheduleSavedMsg] = useState(false);
+    const [runningTaggingSync, setRunningTaggingSync] = useState(false);
+    const [taggingSyncResult, setTaggingSyncResult] = useState<{ success: boolean; text: string; details?: string[] } | null>(null);
 
     // Parental Tagging State
     const [parentalOptions, setParentalOptions] = useState<ParentalTaggingOptions>({
@@ -124,9 +148,137 @@ export function TaggingStudio() {
     }>({ labels: [], genres: [], collections: [], totalItems: 0 });
     const [auditLoading, setAuditLoading] = useState(false);
 
-    // Initial Load: Fetch Plex Servers and Sections
+    // Check if a section is enabled for tagging
+    const isSectionEnabled = (srvId: string, secKey: string): boolean => {
+        if (!enabledServersForTagging || enabledServersForTagging.length === 0) return true;
+        if (enabledServersForTagging.includes(`disabled:${srvId}`) || enabledServersForTagging.includes(`${srvId}:none`)) return false;
+        if (enabledServersForTagging.includes(`disabled:${srvId}:${secKey}`)) return false;
+        const compoundKey = `${srvId}:${secKey}`;
+        if (enabledServersForTagging.includes(compoundKey)) return true;
+        const hasServerEntries = enabledServersForTagging.some(k => k === srvId || k.startsWith(`${srvId}:`) || k.startsWith(`disabled:${srvId}`));
+        if (hasServerEntries) {
+            if (enabledServersForTagging.includes(srvId) && !enabledServersForTagging.some(k => k.startsWith(`${srvId}:`))) return true;
+            return false;
+        }
+        return true;
+    };
+
+    // Toggle a section enabled/disabled for tagging
+    const handleToggleSection = async (secKey: string) => {
+        const currentlyEnabled = isSectionEnabled(selectedServerId, secKey);
+        const nextEnabled = !currentlyEnabled;
+        const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+
+        try {
+            const res = await toggleCurationLibrarySectionAction("tagging", selectedServerId, secKey, nextEnabled, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForTagging(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed toggling section tagging state:", e);
+        }
+    };
+
+    // Toggle ALL sections on the selected server for Tagging (Enable All / Disable All)
+    const handleToggleAllSectionsOnServer = async (enableAll: boolean) => {
+        const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+        try {
+            const res = await toggleAllCurationServerSectionsAction("tagging", selectedServerId, enableAll, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForTagging(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed toggling all server sections for tagging:", e);
+        }
+    };
+
+    // Save schedule settings
+    const handleSaveSchedule = async () => {
+        setSavingSchedule(true);
+        setScheduleSavedMsg(false);
+        try {
+            const res = await saveCurationSettingsAction({
+                curationSyncParentalTags,
+                curationSyncSchedule
+            });
+            if (res.success) {
+                setScheduleSavedMsg(true);
+                setTimeout(() => setScheduleSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving tagging schedule:", e);
+        } finally {
+            setSavingSchedule(false);
+        }
+    };
+
+    // Run Tagging Sync Now
+    const handleRunTaggingSync = async (srvId?: string, secKey?: string) => {
+        setRunningTaggingSync(true);
+        setTaggingSyncResult(null);
+        try {
+            const res = await runParentalTagsSyncAction(srvId || selectedServerId, secKey || selectedSectionKey);
+            if (res.success) {
+                setTaggingSyncResult({
+                    success: true,
+                    text: `Tagging Sync Completed: ${res.totalTagged ?? 0} items tagged (${res.totalEvaluated ?? 0} evaluated).`,
+                    details: res.details
+                });
+                if (selectedServerId && selectedSectionKey) {
+                    loadAdvisoryItems();
+                    loadAuditData();
+                }
+            } else {
+                setTaggingSyncResult({
+                    success: false,
+                    text: res.error || "Failed running tagging sync."
+                });
+            }
+        } catch (e: any) {
+            setTaggingSyncResult({
+                success: false,
+                text: e.message || "An error occurred during tagging sync."
+            });
+        } finally {
+            setRunningTaggingSync(false);
+        }
+    };
+
+    // Initial Load: Fetch Plex Servers, Sections, and Curation Settings
     useEffect(() => {
-        loadServers();
+        const loadInitialData = async () => {
+            setLoading(true);
+            try {
+                const srvRes = await getPlexServersAndSectionsAction();
+                if (srvRes.success && srvRes.servers && srvRes.servers.length > 0) {
+                    setServers(srvRes.servers);
+                    const firstServer = srvRes.servers[0];
+                    setSelectedServerId(firstServer.serverId);
+                    if (firstServer.sections && firstServer.sections.length > 0) {
+                        setSelectedSectionKey(String(firstServer.sections[0].key));
+                    }
+                }
+
+                const settingsRes = await getCurationSettingsAction();
+                if (settingsRes.success) {
+                    setCurationSyncParentalTags(settingsRes.parentalTaggingEnabled ?? true);
+                    setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
+                    setCurationLastRunAt(settingsRes.curationLastRunAt || null);
+                    setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
+                    if (settingsRes.enabledServersForTagging) {
+                        setEnabledServersForTagging(settingsRes.enabledServersForTagging);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed loading tagging studio data:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadInitialData();
     }, []);
 
     // When Server or Section changes, load relevant data
@@ -140,39 +292,32 @@ export function TaggingStudio() {
         }
     }, [selectedServerId, selectedSectionKey, subTab]);
 
-    async function loadServers() {
-        setLoading(true);
-        try {
-            const res = await getPlexServersAndSectionsAction();
-            if (res.success && res.servers && res.servers.length > 0) {
-                setServers(res.servers);
-                const firstServer = res.servers[0];
-                setSelectedServerId(firstServer.serverId);
-                if (firstServer.sections.length > 0) {
-                    setSelectedSectionKey(String(firstServer.sections[0].key));
-                }
-            }
-        } catch (e) {
-            console.error("Failed loading servers:", e);
-        } finally {
-            setLoading(false);
-        }
-    }
-
     async function handleServerChange(newServerId: string) {
         setSelectedServerId(newServerId);
-        setServerSectionsLoading(true);
-        try {
-            const res = await getPlexServerSectionsAction(newServerId);
-            if (res.success && res.sections && res.sections.length > 0) {
-                setSelectedSectionKey(String(res.sections[0].key));
-            } else {
-                setSelectedSectionKey("");
+        const srv = servers.find(s => s.serverId === newServerId);
+        let srvSections = srv?.sections || [];
+
+        if (srvSections.length === 0) {
+            setServerSectionsLoading(true);
+            try {
+                const res = await getPlexServerSectionsAction(newServerId);
+                if (res.success && res.sections && res.sections.length > 0) {
+                    srvSections = res.sections as any;
+                    setServers(prev => prev.map(s => s.serverId === newServerId ? { ...s, sections: (res.sections as any) || [] } : s));
+                }
+            } catch (e) {
+                console.error("Failed loading sections for server:", e);
+            } finally {
+                setServerSectionsLoading(false);
             }
-        } catch (e) {
-            console.error("Failed loading sections for server:", e);
-        } finally {
-            setServerSectionsLoading(false);
+        }
+
+        if (srvSections.length > 0) {
+            const hasExisting = srvSections.some((sec: any) => String(sec.key) === selectedSectionKey);
+            const nextSecKey = hasExisting ? selectedSectionKey : String(srvSections[0].key);
+            setSelectedSectionKey(nextSecKey);
+        } else {
+            setSelectedSectionKey("");
         }
     }
 
@@ -335,6 +480,7 @@ export function TaggingStudio() {
     }
 
     const currentServer = servers.find(s => s.serverId === selectedServerId);
+    const currentSections = currentServer?.sections || [];
     const filteredAdvisories = advisoryItems.filter(item => 
         item.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -350,93 +496,327 @@ export function TaggingStudio() {
                 description="Apply automated IMDb Parental Guide tags (Nudity, Violence, Profanity, Alcohol/Drugs, Frightening) for restricted Plex Home profiles, and build custom rule-based auto-taggers."
             />
 
-            {/* Server & Library Selection Header */}
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 bg-slate-900/80 border border-slate-800 rounded-2xl shadow-md">
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                    {/* Server Select */}
-                    <div className="flex items-center gap-2">
-                        <Label className="text-xs font-semibold text-slate-400">Server:</Label>
-                        <Select
-                            value={selectedServerId}
-                            onValueChange={handleServerChange}
-                            disabled={loading || servers.length === 0}
-                        >
-                            <SelectTrigger className="w-[180px] sm:w-[220px] bg-slate-950/80 border-slate-700 text-xs font-bold text-slate-200">
-                                <SelectValue placeholder="Select Server" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
-                                {servers.map(srv => (
-                                    <SelectItem key={srv.serverId} value={srv.serverId} className="text-xs font-medium cursor-pointer">
-                                        {srv.serverName}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+            {/* Static Server & Library Section Navigator */}
+            {servers.length > 0 && (
+                <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                    <div className="p-4 space-y-3.5">
+                        {/* Plex Servers Static Tabs */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
+                                <Tv className="h-4 w-4 text-emerald-400" />
+                                <span>Plex Server:</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                {servers.map(s => {
+                                    const isSelected = s.serverId === selectedServerId;
+                                    const secCount = s.sections?.length || 0;
+                                    return (
+                                        <button
+                                            key={s.serverId}
+                                            type="button"
+                                            onClick={() => handleServerChange(s.serverId)}
+                                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/60 border border-emerald-400/50 ring-1 ring-emerald-400/40 font-black'
+                                                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                            }`}
+                                        >
+                                            <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white shadow-sm' : 'bg-emerald-400'}`} />
+                                            <span>{s.serverName || "Plex Server"}</span>
+                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-emerald-800 text-white bg-emerald-700' : 'border-slate-700 text-slate-400'}`}>
+                                                {secCount} {secCount === 1 ? 'lib' : 'libs'}
+                                            </Badge>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Library Sections Static Tabs */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
+                                <Film className="h-4 w-4 text-emerald-400" />
+                                <span>Library Sections:</span>
+                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                {serverSectionsLoading ? (
+                                    <div className="flex items-center gap-2 text-xs text-emerald-400 py-1 font-medium">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
+                                    </div>
+                                ) : currentSections.length === 0 ? (
+                                    <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
+                                ) : (
+                                    currentSections.map((sec: any) => {
+                                        const isSelected = String(sec.key) === selectedSectionKey;
+                                        const isMovie = sec.type === "movie" || sec.title?.toLowerCase().includes("movie");
+                                        const isShow = sec.type === "show" || sec.title?.toLowerCase().includes("show") || sec.title?.toLowerCase().includes("tv");
+                                        const isSecEnabled = isSectionEnabled(selectedServerId, String(sec.key));
+
+                                        return (
+                                            <div
+                                                key={sec.key}
+                                                className={`flex items-center rounded-xl transition-all border shadow-sm ${
+                                                    isSelected
+                                                        ? 'bg-emerald-600/20 border-emerald-400/60 ring-1 ring-emerald-400/40'
+                                                        : 'bg-slate-800/80 border-slate-700/70 hover:border-slate-600'
+                                                }`}
+                                            >
+                                                {/* Library Tab Selector Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedSectionKey(String(sec.key))}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-l-xl transition-all cursor-pointer ${
+                                                        isSelected
+                                                            ? 'text-emerald-200'
+                                                            : 'text-slate-300 hover:text-white'
+                                                    }`}
+                                                >
+                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
+                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
+                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                                                    <span>{sec.title}</span>
+                                                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${isSelected ? 'bg-emerald-500/30 text-emerald-100' : 'bg-slate-900 text-slate-400'}`}>
+                                                        #{sec.key}
+                                                    </span>
+                                                </button>
+
+                                                {/* Independent ON / OFF Toggle Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleToggleSection(String(sec.key));
+                                                    }}
+                                                    title={isSecEnabled ? `Tagging ACTIVE on "${sec.title}" (Click to exclude)` : `Tagging EXCLUDED on "${sec.title}" (Click to enable)`}
+                                                    className={`px-2 py-1 text-[10px] font-extrabold transition-all border-l flex items-center gap-1 rounded-r-xl cursor-pointer ${
+                                                        isSecEnabled 
+                                                            ? isSelected
+                                                                ? 'bg-emerald-500/30 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/40'
+                                                                : 'bg-emerald-500/20 text-emerald-300 border-slate-700 hover:bg-emerald-500/30'
+                                                            : 'bg-slate-900/90 text-slate-500 border-slate-700 hover:text-slate-300 hover:bg-slate-800'
+                                                    }`}
+                                                >
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${isSecEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                                                    <span>{isSecEnabled ? 'ON' : 'OFF'}</span>
+                                                </button>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Active Library Control Bar */}
+                        {currentSections.length > 0 && selectedSectionKey && (
+                            <div className="mt-2 pt-3 border-t border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-slate-950/70 p-3 rounded-xl border border-slate-800/90">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-lg border shrink-0 ${
+                                        isSectionEnabled(selectedServerId, selectedSectionKey)
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                                    }`}>
+                                        {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-xs font-black text-white">
+                                                {currentServer?.serverName} &rarr; {currentSections.find(s => String(s.key) === selectedSectionKey)?.title || `Library #${selectedSectionKey}`}
+                                            </span>
+                                            <Badge className={`text-[10px] font-bold ${
+                                                isSectionEnabled(selectedServerId, selectedSectionKey)
+                                                    ? 'bg-emerald-600 text-white'
+                                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                            }`}>
+                                                {isSectionEnabled(selectedServerId, selectedSectionKey) ? '🟢 TAGGING ACTIVE' : '⚪ EXCLUDED / DISABLED'}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                            {isSectionEnabled(selectedServerId, selectedSectionKey)
+                                                ? 'This library section will automatically receive IMDb parental guide tags and custom tag rules.'
+                                                : 'This library section is excluded and will be skipped during automated tagging sync.'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-wrap shrink-0 w-full md:w-auto justify-end">
+                                    {/* Primary Switch */}
+                                    <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+                                        <Label htmlFor="sec-master-toggle-tagging" className="text-xs font-bold text-slate-300 cursor-pointer">
+                                            {isSectionEnabled(selectedServerId, selectedSectionKey) ? 'Enabled' : 'Disabled'}
+                                        </Label>
+                                        <Switch
+                                            id="sec-master-toggle-tagging"
+                                            checked={isSectionEnabled(selectedServerId, selectedSectionKey)}
+                                            onCheckedChange={() => handleToggleSection(selectedSectionKey)}
+                                        />
+                                    </div>
+
+                                    {/* Batch Server Controls */}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleToggleAllSectionsOnServer(true)}
+                                        className="h-8 text-xs border-slate-800 bg-slate-900 text-slate-300 hover:text-white"
+                                    >
+                                        Enable All
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleToggleAllSectionsOnServer(false)}
+                                        className="h-8 text-xs border-slate-800 bg-slate-900 text-slate-400 hover:text-rose-300"
+                                    >
+                                        Disable All
+                                    </Button>
+
+                                    {/* Scoped Runner for Selected Library */}
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={runningTaggingSync}
+                                        onClick={() => handleRunTaggingSync(selectedServerId, selectedSectionKey)}
+                                        className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-950/40 cursor-pointer"
+                                    >
+                                        {runningTaggingSync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Zap className="h-3.5 w-3.5 mr-1.5 text-white" />}
+                                        <span>Tag Library #{selectedSectionKey}</span>
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </Card>
+            )}
+
+            {/* Automated Tagging & Parental Guides Schedule & Automation Card */}
+            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <CardContent className="p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
+                    <div className="space-y-1 max-w-xl">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Clock className="h-4 w-4 text-emerald-400" />
+                            <span className="font-bold text-white text-sm">Tagging &amp; Parental Guides Schedule &amp; Automation</span>
+                            <Badge variant="outline" className={`text-[10px] font-semibold ${curationSyncParentalTags ? 'border-emerald-500/40 text-emerald-300 bg-emerald-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                {curationSyncParentalTags ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
+                            </Badge>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                            Automatically fetches IMDb parental guide advisories and synchronizes content rating labels, genres, and custom tags across enabled libraries on a recurring schedule.
+                        </p>
+                        {curationLastRunAt && (
+                            <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                                <Clock3 className="h-3 w-3 text-emerald-400" />
+                                Last automated run: <span className="text-slate-300 font-mono">{new Date(curationLastRunAt).toLocaleString()}</span>
+                            </p>
+                        )}
                     </div>
 
-                    {/* Library Section Select */}
-                    <div className="flex items-center gap-2">
-                        <Label className="text-xs font-semibold text-slate-400">Library:</Label>
-                        <Select
-                            value={selectedSectionKey}
-                            onValueChange={setSelectedSectionKey}
-                            disabled={serverSectionsLoading || !currentServer || currentServer.sections.length === 0}
+                    <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                        <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                            <span className="text-[11px] font-bold text-slate-200">Timer</span>
+                            <Switch 
+                                checked={curationSyncParentalTags}
+                                onCheckedChange={checked => setCurationSyncParentalTags(checked)}
+                            />
+                        </div>
+
+                        <div className="space-y-0.5">
+                            <Select 
+                                value={curationSyncSchedule} 
+                                onValueChange={val => setCurationSyncSchedule(val)}
+                            >
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8 w-[155px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
+                                    <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
+                                    <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
+                                    <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                    <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
+                                    <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <Button 
+                            size="sm"
+                            onClick={handleSaveSchedule}
+                            disabled={savingSchedule}
+                            variant="outline"
+                            className="border-slate-700 text-slate-300 hover:text-white text-xs h-8 px-3 cursor-pointer"
                         >
-                            <SelectTrigger className="w-[180px] sm:w-[220px] bg-slate-950/80 border-slate-700 text-xs font-bold text-slate-200">
-                                <SelectValue placeholder={serverSectionsLoading ? "Loading..." : "Select Library"} />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
-                                {currentServer?.sections.map(sec => (
-                                    <SelectItem key={sec.key} value={String(sec.key)} className="text-xs font-medium cursor-pointer">
-                                        {sec.type === "movie" ? "🎬 " : "📺 "} {sec.title}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+                            {scheduleSavedMsg ? "Saved!" : "Save Schedule"}
+                        </Button>
+
+                        <Button 
+                            size="sm"
+                            onClick={() => handleRunTaggingSync()}
+                            disabled={runningTaggingSync}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-emerald-950/40 cursor-pointer"
+                        >
+                            {runningTaggingSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                            <span>Run Batch Sync Now</span>
+                        </Button>
                     </div>
-                </div>
+                </CardContent>
 
-                {/* Sub-Tabs Selector */}
-                <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800/80 self-stretch md:self-auto overflow-x-auto">
-                    <button
-                        type="button"
-                        onClick={() => setSubTab("parental")}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            subTab === "parental"
-                                ? "bg-emerald-600 text-white shadow-md shadow-emerald-950/40"
-                                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-                        }`}
-                    >
-                        <Shield className="h-3.5 w-3.5 text-emerald-300" />
-                        <span>IMDb Parental Guide</span>
-                    </button>
+                {taggingSyncResult && (
+                    <div className={`p-3 text-xs border-t ${taggingSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
+                        {taggingSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                        <div className="space-y-0.5">
+                            <span className="font-bold">{taggingSyncResult.text}</span>
+                            {taggingSyncResult.details && taggingSyncResult.details.length > 0 && (
+                                <p className="text-[11px] opacity-80">{taggingSyncResult.details.join(" • ")}</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </Card>
 
-                    <button
-                        type="button"
-                        onClick={() => setSubTab("custom_rules")}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            subTab === "custom_rules"
-                                ? "bg-emerald-600 text-white shadow-md shadow-emerald-950/40"
-                                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-                        }`}
-                    >
-                        <Sliders className="h-3.5 w-3.5 text-emerald-300" />
-                        <span>Custom Tag Rules</span>
-                    </button>
+            {/* Sub-Tabs Selector */}
+            <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md overflow-x-auto">
+                <button
+                    type="button"
+                    onClick={() => setSubTab("parental")}
+                    className={`flex-1 min-w-[180px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        subTab === "parental"
+                            ? "bg-emerald-600 text-white shadow-md font-black"
+                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    }`}
+                >
+                    <Shield className="h-4 w-4" />
+                    <span>IMDb Parental Guide</span>
+                </button>
 
-                    <button
-                        type="button"
-                        onClick={() => setSubTab("audit")}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            subTab === "audit"
-                                ? "bg-emerald-600 text-white shadow-md shadow-emerald-950/40"
-                                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-                        }`}
-                    >
-                        <Tag className="h-3.5 w-3.5 text-emerald-300" />
-                        <span>Tag Audit &amp; Cleanup</span>
-                    </button>
-                </div>
+                <button
+                    type="button"
+                    onClick={() => setSubTab("custom_rules")}
+                    className={`flex-1 min-w-[180px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        subTab === "custom_rules"
+                            ? "bg-emerald-600 text-white shadow-md font-black"
+                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    }`}
+                >
+                    <Sliders className="h-4 w-4" />
+                    <span>Custom Tag Rules</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setSubTab("audit")}
+                    className={`flex-1 min-w-[180px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        subTab === "audit"
+                            ? "bg-emerald-600 text-white shadow-md font-black"
+                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    }`}
+                >
+                    <Tag className="h-4 w-4" />
+                    <span>Tag Audit &amp; Cleanup</span>
+                </button>
             </div>
 
             {/* TAB 1: IMDb Parental Guide */}
