@@ -537,18 +537,49 @@ export function evaluateBadgeCondition(
     if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
 
     // 7. Ratings / Content Ratings
-    const cr = (detected.contentRating || "").toUpperCase();
-    if (c === "pg-13" || c === "pg13" || c === "12a" || c === "12" || c === "13+") return cr === "PG-13" || cr.includes("PG-13") || cr === "US:PG-13";
-    if (c === "nc-17" || c === "nc17" || c === "18" || c === "18+") return cr === "NC-17" || cr.includes("NC-17") || cr === "US:NC-17";
-    if (c === "r" || c === "restricted" || c === "15" || c === "16") return cr === "R" || cr === "US:R" || cr === "TV-MA";
-    if (c === "pg" || c === "tv-pg" || c === "6") return cr === "PG" || cr === "US:PG" || cr === "TV-PG";
-    if (c === "g" || c === "tv-g" || c === "u" || c === "0") return cr === "G" || cr === "US:G" || cr === "TV-G" || cr === "TV-Y";
-    if (c === "tv-ma" || c === "tvma") return cr === "TV-MA" || cr === "US:TV-MA" || cr === "R";
-    if (c === "tv-14" || c === "tv14") return cr === "TV-14" || cr === "US:TV-14" || cr === "PG-13";
-    if (c === "tv-pg" || c === "tvpg") return cr === "TV-PG" || cr === "US:TV-PG" || cr === "PG";
-    if (c === "tv-g" || c === "tvg") return cr === "TV-G" || cr === "US:TV-G" || cr === "G";
-    if (c === "tv-y" || c === "tvy") return cr === "TV-Y" || cr === "US:TV-Y" || cr === "G";
-    if (c === "tv-y7" || c === "tvy7") return cr === "TV-Y7" || cr === "US:TV-Y7" || cr === "PG";
+    const rawCr = (detected.contentRating || "").trim();
+    const crClean = rawCr.toUpperCase().replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\-_/]/i, "").replace(/[^A-Z0-9]/g, "");
+    const condClean = c.replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\-_/]/i, "").replace(/^rated[\s\-_]*/i, "").replace(/[^a-z0-9]/g, "");
+
+    if (condClean === "pg13" || condClean === "13+" || condClean === "12a" || condClean === "12") {
+        return crClean === "PG13" || crClean === "13+" || crClean === "12A" || crClean === "12" || rawCr.includes("PG-13");
+    }
+    if (condClean === "nc17" || condClean === "18+" || condClean === "r18+") {
+        return crClean === "NC17" || crClean === "18+" || crClean === "R18" || rawCr.includes("NC-17");
+    }
+    if (condClean === "r" || condClean === "restricted" || condClean === "15" || condClean === "16") {
+        return crClean === "R" || crClean === "15" || crClean === "16" || rawCr === "R" || rawCr === "US:R";
+    }
+    if (condClean === "pg" || condClean === "6") {
+        return crClean === "PG" || crClean === "6" || rawCr === "PG" || rawCr === "US:PG";
+    }
+    if (condClean === "g" || condClean === "u" || condClean === "0") {
+        return crClean === "G" || crClean === "U" || crClean === "0" || rawCr === "G" || rawCr === "US:G";
+    }
+    if (condClean === "tvma") {
+        return crClean === "TVMA" || rawCr === "TV-MA" || rawCr.includes("TV-MA");
+    }
+    if (condClean === "tv14") {
+        return crClean === "TV14" || rawCr === "TV-14" || rawCr.includes("TV-14");
+    }
+    if (condClean === "tvpg") {
+        return crClean === "TVPG" || rawCr === "TV-PG" || rawCr.includes("TV-PG");
+    }
+    if (condClean === "tvg") {
+        return crClean === "TVG" || rawCr === "TV-G" || rawCr.includes("TV-G");
+    }
+    if (condClean === "tvy") {
+        return crClean === "TVY" || rawCr === "TV-Y" || rawCr.includes("TV-Y");
+    }
+    if (condClean === "tvy7") {
+        return crClean === "TVY7" || rawCr === "TV-Y7" || rawCr.includes("TV-Y7");
+    }
+    if (condClean === "nr" || condClean === "unrated" || condClean === "notrated") {
+        return crClean === "NR" || crClean === "UNRATED" || crClean === "NOTRATED" || /NOT RATED|UNRATED|NR/i.test(rawCr);
+    }
+    if (condClean && crClean && condClean === crClean) {
+        return true;
+    }
 
     return false;
 }
@@ -941,6 +972,7 @@ export async function applyOverlaysToPoster(
     // Standardize base image size to 1000x1500 (standard high-DPI 2:3 vertical poster)
     const baseImage = sharp(originalBuffer).resize(1000, 1500, { fit: "cover" });
     const overlays: { input: Buffer | string; top?: number; left?: number }[] = [];
+    let renderedRibbonCorner: string | null = null;
 
     // 1. Leaving Soon Banner / Ribbon
     const isItemLeavingSoon = Boolean(mediaInfo.isLeavingSoon || mediaInfo.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) || mediaInfo.collections?.some(c => /leaving[\s_-]?soon/i.test(c)));
@@ -1024,6 +1056,7 @@ export async function applyOverlaysToPoster(
                         top: rTop,
                         left: rLeft
                     });
+                    renderedRibbonCorner = rPos;
                 }
             }
         }
@@ -1055,7 +1088,7 @@ export async function applyOverlaysToPoster(
         } else if (rawRule) {
             tokens = [rawRule];
         } else {
-            const baseName = rawName || rawFile.replace(/\.[^/.]+$/, "");
+            const baseName = `${rawName} ${rawFile.replace(/\.[^/.]+$/, "")}`.toLowerCase();
             const inferredTokens: string[] = [];
             if (/4k|2160/i.test(baseName)) inferredTokens.push("4k");
             else if (/1080/i.test(baseName)) inferredTokens.push("1080p");
@@ -1072,6 +1105,20 @@ export async function applyOverlaysToPoster(
             if (/7\.1/i.test(baseName)) inferredTokens.push("7.1");
             else if (/5\.1/i.test(baseName)) inferredTokens.push("5.1");
 
+            // Infer Content / Age Ratings
+            if (/uspg-13|uspg13|pg-13|pg13/i.test(baseName)) inferredTokens.push("pg-13");
+            else if (/ustv-ma|ustvma|tv-ma|tvma/i.test(baseName)) inferredTokens.push("tv-ma");
+            else if (/ustv-14|ustv14|tv-14|tv14/i.test(baseName)) inferredTokens.push("tv-14");
+            else if (/ustv-pg|ustvpg|tv-pg|tvpg/i.test(baseName)) inferredTokens.push("tv-pg");
+            else if (/ustv-g|ustvg|tv-g|tvg/i.test(baseName)) inferredTokens.push("tv-g");
+            else if (/ustv-y7|ustvy7|tv-y7|tvy7/i.test(baseName)) inferredTokens.push("tv-y7");
+            else if (/ustv-y|ustvy|tv-y|tvy/i.test(baseName)) inferredTokens.push("tv-y");
+            else if (/usnc-17|usnc17|nc-17|nc17/i.test(baseName)) inferredTokens.push("nc-17");
+            else if (/usr|\brated[\s_-]?r\b|\br\.png\b/i.test(baseName)) inferredTokens.push("r");
+            else if (/uspg|\brated[\s_-]?pg\b|\bpg\.png\b/i.test(baseName)) inferredTokens.push("pg");
+            else if (/usg|\brated[\s_-]?g\b|\bg\.png\b/i.test(baseName)) inferredTokens.push("g");
+            else if (/usnr|unrated|not[\s_-]?rated/i.test(baseName)) inferredTokens.push("nr");
+
             tokens = inferredTokens;
         }
 
@@ -1080,9 +1127,9 @@ export async function applyOverlaysToPoster(
     }
 
     function getCustomBadgeCategories(cb: { category?: string; matchRule?: string | null; name?: string; filePath?: string }): string[] {
-        const cat = (cb.category || "").toLowerCase();
-        const rule = (cb.matchRule || "").toLowerCase();
-        const name = (cb.name || "").toLowerCase();
+        const cat = (cb.category || "").toLowerCase().trim();
+        const rule = (cb.matchRule || "").toLowerCase().trim();
+        const name = (cb.name || "").toLowerCase().trim();
         const fName = path.basename(cb.filePath || "").toLowerCase();
         const combined = `${cat} ${rule} ${name} ${fName}`;
 
@@ -1094,7 +1141,8 @@ export async function applyOverlaysToPoster(
         if (/\b(7\.1|5\.1|2\.0|surround)\b/i.test(combined)) categories.push("channels");
         if (cat === "edition" || /\b(imax|criterion|directors?[\s_-]?cut|extended|remux|theatrical|remastered?)\b/i.test(combined)) categories.push("edition");
         if (cat === "studio" || /\b(netflix|disney\+?|hbo(?:\s*max)?|apple\s*tv\+?|prime(?:\s*video)?|paramount\+?|marvel|dc(?:\s*comics)?|a24)\b/i.test(combined)) categories.push("studio");
-        if (cat === "ratings" || cat === "contentrating" || cat === "rating" || /\b(pg-13|nc-17|tv-ma|tv-14|tv-pg|tv-g|rated\s+[a-z0-9-]+)\b/i.test(combined)) categories.push("contentRating");
+        if (cat === "contentrating" || cat === "content_rating" || cat === "age_rating" || cat === "agerating" || cat === "cr" || cat === "mpaa" || /\b(usg|uspg|uspg-13|uspg13|usr|usnc-17|usnc17|usnr|ustv-ma|ustvma|ustv-14|ustv14|ustv-pg|ustvpg|pg-13|pg13|nc-17|nc17|tv-ma|tvma|tv-14|tv14|tv-pg|tvpg|tv-y7|tv-y|tv-g|rated\s+[a-z0-9-]+)\b/i.test(combined)) categories.push("contentRating");
+        if (cat === "ratings" || cat === "rating" || /\b(imdb|criticfresh|audiencefresh|criticrotten|audiencerotten|metacritic|tmdb|trakt|letterboxd|mdblist)\b/i.test(combined)) categories.push("ratings");
         if (cat === "ribbon" || /\b(ribbon|laurel|award|top_?250|cannes|oscar|emmy|bafta|certified_fresh|palme)\b/i.test(combined)) categories.push("ribbon");
 
         if (categories.length === 0 && cat && cat !== "custom") categories.push(cat);
@@ -1356,8 +1404,10 @@ export async function applyOverlaysToPoster(
         const isBRight = posKey.endsWith("right");
         const isBCenter = posKey.includes("center");
 
-        const isRibbonInSameCorner = Boolean(options.showRibbon) && (options.ribbonPosition || "bottom-right") === posKey;
-        const bTopOffset = isBTop ? 35 : (1500 - 35);
+        const isRibbonInSameCorner = Boolean(renderedRibbonCorner) && renderedRibbonCorner === posKey;
+        const bTopOffset = isBTop 
+            ? (isRibbonInSameCorner ? 280 : 35) 
+            : (isRibbonInSameCorner ? (1500 - 280) : (1500 - 35));
 
         if (isBCenter) {
             let totalW = items.reduce((acc, it) => acc + it.w + 14, 0) - 14;
@@ -1372,10 +1422,8 @@ export async function applyOverlaysToPoster(
             }
         } else {
             // Stack items vertically in each corner with clean spacing
-            let currentY = isBTop ? bTopOffset : bTopOffset;
-            const currentX = isBRight
-                ? (isRibbonInSameCorner && !isBTop ? 1000 - 35 : 1000 - 35)
-                : 35;
+            let currentY = bTopOffset;
+            const currentX = isBRight ? 1000 - 35 : 35;
 
             for (const it of items) {
                 const placeX = isBRight ? currentX - it.w : currentX;

@@ -323,7 +323,6 @@ export function KometaStudio() {
     const [badgeUploadFile, setBadgeUploadFile] = useState<File | null>(null);
     const [badgeName, setBadgeName] = useState("");
     const [badgeCategory, setBadgeCategory] = useState("resolution");
-    const [badgePosition, setBadgePosition] = useState("top-right");
     const [badgeMatchRule, setBadgeMatchRule] = useState("");
     const [uploadingBadge, setUploadingBadge] = useState(false);
     const [badgeUploadError, setBadgeUploadError] = useState<string | null>(null);
@@ -986,20 +985,50 @@ export function KometaStudio() {
         if (c === "dc") return (detected.studio || "").toLowerCase().includes("dc");
         if (c === "a24") return (detected.studio || "").toLowerCase().includes("a24");
 
-        const cr = (detected.contentRating || "").toUpperCase().replace(/^US[:\-_]?/i, "").replace(/[^A-Z0-9]/g, "");
-        const condClean = c.replace(/^US[:\-_]?/i, "").replace(/[^a-z0-9]/g, "");
-        if (condClean === "pg13") return cr === "PG13" || cr === "PG-13";
-        if (condClean === "nc17") return cr === "NC17" || cr === "NC-17";
-        if (condClean === "r") return cr === "R";
-        if (condClean === "pg") return cr === "PG";
-        if (condClean === "g") return cr === "G";
-        if (condClean === "nr" || condClean === "unrated") return cr === "NR" || cr === "UNRATED" || cr === "NOTRATED";
-        if (condClean === "tvma") return cr === "TVMA" || cr === "TV-MA";
-        if (condClean === "tv14") return cr === "TV14" || cr === "TV-14";
-        if (condClean === "tvpg") return cr === "TVPG" || cr === "TV-PG";
-        if (condClean === "tvg") return cr === "TVG" || cr === "TV-G";
-        if (condClean === "tvy") return cr === "TVY" || cr === "TV-Y";
-        if (condClean === "tvy7") return cr === "TVY7" || cr === "TV-Y7";
+        // Content / Age Ratings
+        const rawCr = (detected.contentRating || "").trim();
+        const crClean = rawCr.toUpperCase().replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\-_/]/i, "").replace(/[^A-Z0-9]/g, "");
+        const condClean = c.replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\-_/]/i, "").replace(/^rated[\s\-_]*/i, "").replace(/[^a-z0-9]/g, "");
+
+        if (condClean === "pg13" || condClean === "13+" || condClean === "12a" || condClean === "12") {
+            return crClean === "PG13" || crClean === "13+" || crClean === "12A" || crClean === "12" || rawCr.includes("PG-13");
+        }
+        if (condClean === "nc17" || condClean === "18+" || condClean === "r18+") {
+            return crClean === "NC17" || crClean === "18+" || crClean === "R18" || rawCr.includes("NC-17");
+        }
+        if (condClean === "r" || condClean === "restricted" || condClean === "15" || condClean === "16") {
+            return crClean === "R" || crClean === "15" || crClean === "16" || rawCr === "R" || rawCr === "US:R";
+        }
+        if (condClean === "pg" || condClean === "6") {
+            return crClean === "PG" || crClean === "6" || rawCr === "PG" || rawCr === "US:PG";
+        }
+        if (condClean === "g" || condClean === "u" || condClean === "0") {
+            return crClean === "G" || crClean === "U" || crClean === "0" || rawCr === "G" || rawCr === "US:G";
+        }
+        if (condClean === "tvma") {
+            return crClean === "TVMA" || rawCr === "TV-MA" || rawCr.includes("TV-MA");
+        }
+        if (condClean === "tv14") {
+            return crClean === "TV14" || rawCr === "TV-14" || rawCr.includes("TV-14");
+        }
+        if (condClean === "tvpg") {
+            return crClean === "TVPG" || rawCr === "TV-PG" || rawCr.includes("TV-PG");
+        }
+        if (condClean === "tvg") {
+            return crClean === "TVG" || rawCr === "TV-G" || rawCr.includes("TV-G");
+        }
+        if (condClean === "tvy") {
+            return crClean === "TVY" || rawCr === "TV-Y" || rawCr.includes("TV-Y");
+        }
+        if (condClean === "tvy7") {
+            return crClean === "TVY7" || rawCr === "TV-Y7" || rawCr.includes("TV-Y7");
+        }
+        if (condClean === "nr" || condClean === "unrated" || condClean === "notrated") {
+            return crClean === "NR" || crClean === "UNRATED" || crClean === "NOTRATED" || /NOT RATED|UNRATED|NR/i.test(rawCr);
+        }
+        if (condClean && crClean && condClean === crClean) {
+            return true;
+        }
 
         if (c === "imdb_top_250" || c === "imdb" || c === "imdbtop250") return true;
         if (c === "rt_fresh" || c === "criticfresh" || c === "audiencefresh") return true;
@@ -1028,7 +1057,7 @@ export function KometaStudio() {
         } else if (rawRule) {
             tokens = [rawRule];
         } else {
-            const baseName = rawName || rawFile.replace(/\.[^/.]+$/, "");
+            const baseName = `${rawName} ${rawFile.replace(/\.[^/.]+$/, "")}`.toLowerCase();
             const inferredTokens: string[] = [];
             if (/4k|2160/i.test(baseName)) inferredTokens.push("4k");
             else if (/1080/i.test(baseName)) inferredTokens.push("1080p");
@@ -1044,6 +1073,20 @@ export function KometaStudio() {
             if (/truehd/i.test(baseName)) inferredTokens.push("truehd");
             if (/7\.1/i.test(baseName)) inferredTokens.push("7.1");
             else if (/5\.1/i.test(baseName)) inferredTokens.push("5.1");
+
+            // Infer Content / Age Ratings
+            if (/uspg-13|uspg13|pg-13|pg13/i.test(baseName)) inferredTokens.push("pg-13");
+            else if (/ustv-ma|ustvma|tv-ma|tvma/i.test(baseName)) inferredTokens.push("tv-ma");
+            else if (/ustv-14|ustv14|tv-14|tv14/i.test(baseName)) inferredTokens.push("tv-14");
+            else if (/ustv-pg|ustvpg|tv-pg|tvpg/i.test(baseName)) inferredTokens.push("tv-pg");
+            else if (/ustv-g|ustvg|tv-g|tvg/i.test(baseName)) inferredTokens.push("tv-g");
+            else if (/ustv-y7|ustvy7|tv-y7|tvy7/i.test(baseName)) inferredTokens.push("tv-y7");
+            else if (/ustv-y|ustvy|tv-y|tvy/i.test(baseName)) inferredTokens.push("tv-y");
+            else if (/usnc-17|usnc17|nc-17|nc17/i.test(baseName)) inferredTokens.push("nc-17");
+            else if (/usr|\brated[\s_-]?r\b|\br\.png\b/i.test(baseName)) inferredTokens.push("r");
+            else if (/uspg|\brated[\s_-]?pg\b|\bpg\.png\b/i.test(baseName)) inferredTokens.push("pg");
+            else if (/usg|\brated[\s_-]?g\b|\bg\.png\b/i.test(baseName)) inferredTokens.push("g");
+            else if (/usnr|unrated|not[\s_-]?rated/i.test(baseName)) inferredTokens.push("nr");
 
             tokens = inferredTokens;
         }
@@ -1068,7 +1111,7 @@ export function KometaStudio() {
         if (cat === "channels") categories.add("channels");
         if (cat === "edition") categories.add("edition");
         if (cat === "studio") categories.add("studio");
-        if (cat === "contentrating" || cat === "cr" || cat === "age_rating") categories.add("contentRating");
+        if (cat === "contentrating" || cat === "content_rating" || cat === "cr" || cat === "age_rating" || cat === "agerating" || cat === "mpaa") categories.add("contentRating");
         if (cat === "ratings" || cat === "rating" || cat === "audience") categories.add("ratings");
         if (cat === "ribbon" || cat === "banner") categories.add("ribbon");
 
@@ -1093,7 +1136,7 @@ export function KometaStudio() {
         if (fName.includes("_streaming_") || fName.includes("_studio_") || /\b(netflix|disney|hbo|max|apple|prime|amazon|paramount|peacock|hulu|crunchyroll|amc|discovery|hayu|tubi|filmin|crave|itvx|a24|marvel|dc)\b/i.test(combined)) {
             categories.add("studio");
         }
-        if (fName.includes("_cr_") || /\b(usg|uspg|uspg-13|uspg13|usr|usnc-17|usnc17|usnr|ustv-ma|ustvma|ustv-14|ustv14|ustv-pg|ustvpg|pg-13|nc-17|tv-ma|tv-14|tv-pg|tv-y7|tv-y|tv-g)\b/i.test(combined)) {
+        if (fName.includes("_cr_") || /\b(usg|uspg|uspg-13|uspg13|usr|usnc-17|usnc17|usnr|ustv-ma|ustvma|ustv-14|ustv14|ustv-pg|ustvpg|pg-13|pg13|nc-17|nc17|tv-ma|tvma|tv-14|tv14|tv-pg|tvpg|tv-y7|tv-y|tv-g|rated\s+[a-z0-9-]+)\b/i.test(combined)) {
             categories.add("contentRating");
         }
         if (fName.includes("_rating_") || /\b(imdb|criticfresh|audiencefresh|criticrotten|audiencerotten|metacritic|tmdb|trakt|letterboxd|mdblist|anidb|mal)\b/i.test(combined)) {
@@ -1672,6 +1715,12 @@ export function KometaStudio() {
         );
     };
 
+    const isSimulatorRibbonInCorner = (corner: string) => {
+        if (!simShowRibbon) return false;
+        const win = getActiveSimulatorRibbon();
+        return Boolean(win && win.text && simRibbonPosition === corner);
+    };
+
     // Calculate active overlays breakdown for the Live Simulator
     const getSimulatedLayersBreakdown = () => {
         const layers: Array<{
@@ -1712,7 +1761,7 @@ export function KometaStudio() {
         } else {
             if (simShowResolution) {
                 if (matchingResCustom) {
-                    layers.push({ category: "Resolution", value: "4K UHD", sourceType: "custom", sourceName: matchingResCustom.name, position: matchingResCustom.position || simResolutionPosition });
+                    layers.push({ category: "Resolution", value: "4K UHD", sourceType: "custom", sourceName: matchingResCustom.name, position: simResolutionPosition });
                 } else {
                     layers.push({ category: "Resolution", value: "4K UHD", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme})`, position: simResolutionPosition });
                 }
@@ -1720,7 +1769,7 @@ export function KometaStudio() {
 
             if (simShowHdr) {
                 if (matchingHdrCustom) {
-                    layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "custom", sourceName: matchingHdrCustom.name, position: matchingHdrCustom.position || simHdrPosition });
+                    layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "custom", sourceName: matchingHdrCustom.name, position: simHdrPosition });
                 } else {
                     layers.push({ category: "HDR / DV", value: "Dolby Vision", sourceType: "builtin", sourceName: `Kometa SVG (${simTheme})`, position: simHdrPosition });
                 }
@@ -1730,7 +1779,7 @@ export function KometaStudio() {
         if (simShowCodec) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("codec") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Video Codec", value: "HEVC (H.265)", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simCodecPosition });
+                layers.push({ category: "Video Codec", value: "HEVC (H.265)", sourceType: "custom", sourceName: matchingCustom.name, position: simCodecPosition });
             } else {
                 layers.push({ category: "Video Codec", value: "HEVC (H.265)", sourceType: "builtin", sourceName: "Kometa SVG", position: simCodecPosition });
             }
@@ -1739,7 +1788,7 @@ export function KometaStudio() {
         if (simShowAudio) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("audio") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Audio Format", value: "Dolby Atmos", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simAudioPosition });
+                layers.push({ category: "Audio Format", value: "Dolby Atmos", sourceType: "custom", sourceName: matchingCustom.name, position: simAudioPosition });
             } else {
                 layers.push({ category: "Audio Format", value: "Dolby Atmos", sourceType: "builtin", sourceName: "Kometa SVG", position: simAudioPosition });
             }
@@ -1752,7 +1801,7 @@ export function KometaStudio() {
         if (simShowEdition) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("edition") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Edition / Cut", value: "IMAX Enhanced", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simEditionPosition });
+                layers.push({ category: "Edition / Cut", value: "IMAX Enhanced", sourceType: "custom", sourceName: matchingCustom.name, position: simEditionPosition });
             } else {
                 layers.push({ category: "Edition / Cut", value: "IMAX Enhanced", sourceType: "builtin", sourceName: "Kometa SVG", position: simEditionPosition });
             }
@@ -1761,7 +1810,7 @@ export function KometaStudio() {
         if (simShowStudio) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("studio") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Studio / Network", value: "HBO Max", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simStudioPosition });
+                layers.push({ category: "Studio / Network", value: "HBO Max", sourceType: "custom", sourceName: matchingCustom.name, position: simStudioPosition });
             } else {
                 layers.push({ category: "Studio / Network", value: "HBO Max", sourceType: "builtin", sourceName: "Kometa SVG", position: simStudioPosition });
             }
@@ -1770,7 +1819,7 @@ export function KometaStudio() {
         if (simShowRating) {
             const matchingCustom = customBadges.find(cb => cb.enabled && getCustomBadgeCategoriesClient(cb).includes("contentRating") && doesCustomBadgeMatchDetected(cb, simDetected));
             if (matchingCustom) {
-                layers.push({ category: "Age Rating", value: "PG-13", sourceType: "custom", sourceName: matchingCustom.name, position: matchingCustom.position || simRatingPosition });
+                layers.push({ category: "Age Rating", value: "PG-13", sourceType: "custom", sourceName: matchingCustom.name, position: simRatingPosition });
             } else {
                 layers.push({ category: "Age Rating", value: "PG-13", sourceType: "builtin", sourceName: "Kometa SVG", position: simRatingPosition });
             }
@@ -1832,8 +1881,8 @@ export function KometaStudio() {
                     detectedValue: detected.resolution,
                     priority: matchingRes ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
                     badgeName: matchingRes ? matchingRes.name : `Built-in ${detected.resolution} SVG`,
-                    position: matchingRes?.position || simResolutionPosition,
-                    isCustom: !matchingRes
+                    position: simResolutionPosition,
+                    isCustom: Boolean(matchingRes)
                 });
             }
 
@@ -1843,8 +1892,8 @@ export function KometaStudio() {
                     detectedValue: detected.hdr === "DV" ? "Dolby Vision" : detected.hdr,
                     priority: matchingHdr ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
                     badgeName: matchingHdr ? matchingHdr.name : `Built-in ${detected.hdr} SVG`,
-                    position: matchingHdr?.position || simHdrPosition,
-                    isCustom: !matchingHdr
+                    position: simHdrPosition,
+                    isCustom: Boolean(matchingHdr)
                 });
             }
         }
@@ -1856,8 +1905,8 @@ export function KometaStudio() {
                 detectedValue: detected.audio,
                 priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
                 badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.audio} SVG`,
-                position: matchingCustom?.position || simAudioPosition,
-                isCustom: !matchingCustom
+                position: simAudioPosition,
+                isCustom: Boolean(matchingCustom)
             });
         }
 
@@ -1879,8 +1928,8 @@ export function KometaStudio() {
                 detectedValue: detected.codec,
                 priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
                 badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.codec} SVG`,
-                position: matchingCustom?.position || simCodecPosition,
-                isCustom: !matchingCustom
+                position: simCodecPosition,
+                isCustom: Boolean(matchingCustom)
             });
         }
 
@@ -1891,8 +1940,8 @@ export function KometaStudio() {
                 detectedValue: detected.edition,
                 priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
                 badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.edition} SVG`,
-                position: matchingCustom?.position || simEditionPosition,
-                isCustom: !matchingCustom
+                position: simEditionPosition,
+                isCustom: Boolean(matchingCustom)
             });
         }
 
@@ -1903,8 +1952,8 @@ export function KometaStudio() {
                 detectedValue: detected.studio,
                 priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
                 badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.studio} SVG`,
-                position: matchingCustom?.position || simStudioPosition,
-                isCustom: !matchingCustom
+                position: simStudioPosition,
+                isCustom: Boolean(matchingCustom)
             });
         }
 
@@ -1915,8 +1964,20 @@ export function KometaStudio() {
                 detectedValue: detected.contentRating,
                 priority: matchingCustom ? "Priority 1 (Custom Override)" : "Priority 2 (Built-in SVG)",
                 badgeName: matchingCustom ? matchingCustom.name : `Built-in ${detected.contentRating} SVG`,
-                position: matchingCustom?.position || simRatingPosition,
-                isCustom: !matchingCustom
+                position: simRatingPosition,
+                isCustom: Boolean(matchingCustom)
+            });
+        }
+
+        if (simShowRibbon) {
+            const win = evaluateWaterfallRibbonClient(item, simTieredRibbons, {});
+            decisions.push({
+                property: "Corner Ribbon (Waterfall)",
+                detectedValue: win ? `${win.text} (Priority #${win.priority})` : "No qualifying tier",
+                priority: "Priority 2 (Built-in SVG)",
+                badgeName: win ? `Waterfall Ribbon (${win.theme})` : "None",
+                position: simRibbonPosition,
+                isCustom: false
             });
         }
 
@@ -2299,7 +2360,6 @@ export function KometaStudio() {
             formData.append("file", badgeUploadFile);
             formData.append("name", badgeName || badgeUploadFile.name.replace(/\.[^/.]+$/, ""));
             formData.append("category", badgeCategory);
-            formData.append("position", badgePosition);
             if (badgeMatchRule) formData.append("matchRule", badgeMatchRule);
 
             const res = await uploadCustomBadgeAction(formData);
@@ -2338,13 +2398,6 @@ export function KometaStudio() {
             const res = await getCustomBadgesAction();
             if (res.success && res.badges) setCustomBadges(res.badges);
         }
-    };
-
-    const handleUpdateCustomBadgePosition = async (id: string, newPosition: string) => {
-        setCustomBadges(prev => prev.map(b => b.id === id ? { ...b, position: newPosition } : b));
-        try {
-            await saveCustomBadgeAction({ id, position: newPosition });
-        } catch (e) {}
     };
 
     const handleToggleSelectCustomBadge = (id: string) => {
@@ -3089,12 +3142,12 @@ export function KometaStudio() {
                                 {renderSimulatorCornerRibbon()}
 
                                 {/* Top-Right Position */}
-                                <div className="absolute top-2.5 right-2.5 flex flex-col items-end gap-1.5 z-20 pointer-events-none">
+                                <div className={`absolute ${isSimulatorRibbonInCorner("top-right") ? "top-[88px]" : "top-2.5"} right-2.5 flex flex-col items-end gap-1.5 z-20 pointer-events-none transition-all duration-300`}>
                                     {getActiveBadgesForPosition("top-right")}
                                 </div>
 
                                 {/* Top-Left Position */}
-                                <div className="absolute top-2.5 left-2.5 flex flex-col items-start gap-1.5 z-20 pointer-events-none">
+                                <div className={`absolute ${isSimulatorRibbonInCorner("top-left") ? "top-[88px]" : "top-2.5"} left-2.5 flex flex-col items-start gap-1.5 z-20 pointer-events-none transition-all duration-300`}>
                                     {getActiveBadgesForPosition("top-left")}
                                 </div>
 
@@ -3104,12 +3157,12 @@ export function KometaStudio() {
                                 </div>
 
                                 {/* Bottom-Left Position */}
-                                <div className="absolute bottom-2.5 left-2.5 flex flex-col items-start gap-1.5 z-20 pointer-events-none">
+                                <div className={`absolute ${isSimulatorRibbonInCorner("bottom-left") ? "bottom-[88px]" : "bottom-2.5"} left-2.5 flex flex-col items-start gap-1.5 z-20 pointer-events-none transition-all duration-300`}>
                                     {getActiveBadgesForPosition("bottom-left")}
                                 </div>
 
                                 {/* Bottom-Right Position */}
-                                <div className="absolute bottom-2.5 right-2.5 flex flex-col items-end gap-1.5 z-20 pointer-events-none">
+                                <div className={`absolute ${isSimulatorRibbonInCorner("bottom-right") ? "bottom-[88px]" : "bottom-2.5"} right-2.5 flex flex-col items-end gap-1.5 z-20 pointer-events-none transition-all duration-300`}>
                                     {getActiveBadgesForPosition("bottom-right")}
                                 </div>
 
@@ -4190,29 +4243,20 @@ export function KometaStudio() {
                                                     {/* Card Footer Controls */}
                                                     <div className="flex items-center justify-between gap-2.5 pt-2.5 border-t border-slate-900 text-xs" onClick={e => e.stopPropagation()}>
                                                         <div className="flex items-center gap-1.5">
-                                                            <span className="text-slate-400 font-medium">Pos:</span>
-                                                            <Select 
-                                                                value={badge.position || "top-right"} 
-                                                                onValueChange={(val) => handleUpdateCustomBadgePosition(badge.id, val)}
-                                                            >
-                                                                <SelectTrigger className="h-7 w-28 bg-slate-900 border-slate-750 text-xs py-0 px-2 font-mono">
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="top-right">Top-Right</SelectItem>
-                                                                    <SelectItem value="top-left">Top-Left</SelectItem>
-                                                                    <SelectItem value="top-center">Top-Center</SelectItem>
-                                                                    <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                                                    <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                                                    <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-
-                                                        <div className="flex items-center gap-1.5">
-                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-800 text-slate-400 font-mono">
+                                                            <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-slate-800 text-slate-400 font-mono bg-slate-900">
                                                                 {badge.fileType ? badge.fileType.toUpperCase() : "SVG"}
                                                             </Badge>
+                                                            {badge.width && badge.height && (
+                                                                <span className="text-[10px] font-mono text-slate-500">
+                                                                    {badge.width}&times;{badge.height}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-[10px] font-bold ${isEnabled ? "text-emerald-400" : "text-slate-500"}`}>
+                                                                {isEnabled ? "Active" : "Disabled"}
+                                                            </span>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleDeleteCustomBadge(badge.id)}
@@ -4522,42 +4566,27 @@ export function KometaStudio() {
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <Label className="text-xs text-slate-200">Category</Label>
-                                <Select value={badgeCategory} onValueChange={setBadgeCategory}>
-                                    <SelectTrigger className="bg-slate-950 border-slate-800 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="resolution">Resolution</SelectItem>
-                                        <SelectItem value="hdr">HDR / Dolby Vision</SelectItem>
-                                        <SelectItem value="audio">Audio Codec</SelectItem>
-                                        <SelectItem value="codec">Video Codec</SelectItem>
-                                        <SelectItem value="edition">Edition Cut</SelectItem>
-                                        <SelectItem value="studio">Studio Logo</SelectItem>
-                                        <SelectItem value="contentRating">Age Rating</SelectItem>
-                                        <SelectItem value="custom">General Custom</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-1">
-                                <Label className="text-xs text-slate-200">Target Position</Label>
-                                <Select value={badgePosition} onValueChange={setBadgePosition}>
-                                    <SelectTrigger className="bg-slate-950 border-slate-800 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="top-right">Top-Right</SelectItem>
-                                        <SelectItem value="top-left">Top-Left</SelectItem>
-                                        <SelectItem value="top-center">Top-Center</SelectItem>
-                                        <SelectItem value="bottom-right">Bottom-Right</SelectItem>
-                                        <SelectItem value="bottom-left">Bottom-Left</SelectItem>
-                                        <SelectItem value="bottom-center">Bottom-Center</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-200">Category</Label>
+                            <Select value={badgeCategory} onValueChange={setBadgeCategory}>
+                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="resolution">Resolution</SelectItem>
+                                    <SelectItem value="hdr">HDR / Dolby Vision</SelectItem>
+                                    <SelectItem value="audio">Audio Codec</SelectItem>
+                                    <SelectItem value="channels">Surround Channels</SelectItem>
+                                    <SelectItem value="codec">Video Codec</SelectItem>
+                                    <SelectItem value="edition">Edition Cut</SelectItem>
+                                    <SelectItem value="studio">Studio Logo</SelectItem>
+                                    <SelectItem value="contentRating">Age Rating</SelectItem>
+                                    <SelectItem value="ratings">Critic &amp; Scores</SelectItem>
+                                    <SelectItem value="ribbon">Ribbon Banner</SelectItem>
+                                    <SelectItem value="custom">General Custom</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-[10px] text-slate-500">Badge position is governed per category in the "Comprehensive Poster Badge Toggles &amp; Positions" section.</p>
                         </div>
 
                         <div className="space-y-1">

@@ -187,12 +187,23 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
     const rawCR = (metadata.contentRating || "").trim().toUpperCase();
     const crClean = rawCR.replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\/]/i, "").trim();
     if (crClean && !/NOT RATED|UNRATED|NR/i.test(crClean)) {
-        if (/PG-13|TV-14|13\+|12A|14A|FSK 12|\b12\b/i.test(crClean)) detectedContentRating = "PG-13";
-        else if (/NC-17|18\+|FSK 18|R18\+|\b18\b/i.test(crClean)) detectedContentRating = "NC-17";
-        else if (/TV-MA|\bR\b|RESTRICTED|FSK 16|MA15\+|\b15\b|\b16\b/i.test(crClean)) detectedContentRating = "R";
-        else if (/TV-PG|\bPG\b|FSK 6|\b6\b/i.test(crClean)) detectedContentRating = "PG";
-        else if (/TV-G|TV-Y|TV-Y7|\bG\b|\bU\b|FSK 0|\b0\b/i.test(crClean)) detectedContentRating = "G";
+        if (/^TV-MA$|\bTV-MA\b/i.test(crClean)) detectedContentRating = "TV-MA";
+        else if (/^TV-14$|\bTV-14\b/i.test(crClean)) detectedContentRating = "TV-14";
+        else if (/^TV-PG$|\bTV-PG\b/i.test(crClean)) detectedContentRating = "TV-PG";
+        else if (/^TV-G$|\bTV-G\b/i.test(crClean)) detectedContentRating = "TV-G";
+        else if (/^TV-Y7$|\bTV-Y7\b/i.test(crClean)) detectedContentRating = "TV-Y7";
+        else if (/^TV-Y$|\bTV-Y\b/i.test(crClean)) detectedContentRating = "TV-Y";
+        else if (/^PG-13$|\bPG-13\b|13\+|12A|14A/i.test(crClean)) detectedContentRating = "PG-13";
+        else if (/^NC-17$|\bNC-17\b|18\+|FSK 18|R18\+/i.test(crClean)) detectedContentRating = "NC-17";
+        else if (/^R$|\bR\b|RESTRICTED|FSK 16|MA15\+/i.test(crClean)) detectedContentRating = "R";
+        else if (/^PG$|\bPG\b|FSK 6/i.test(crClean)) detectedContentRating = "PG";
+        else if (/^G$|\bG\b|\bU\b|FSK 0/i.test(crClean)) detectedContentRating = "G";
+        else if (/\b18\b/i.test(crClean)) detectedContentRating = "18";
+        else if (/\b15\b/i.test(crClean)) detectedContentRating = "15";
+        else if (/\b12\b/i.test(crClean)) detectedContentRating = "12";
         else detectedContentRating = crClean.replace(/^RATED\s+/i, "");
+    } else if (/NOT RATED|UNRATED|NR/i.test(crClean)) {
+        detectedContentRating = "NR";
     }
 
     for (const m of rawMediaList) {

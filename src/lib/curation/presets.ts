@@ -1088,6 +1088,26 @@ export const DEFAULT_BUILTIN_BADGE_DEFINITIONS: BuiltinBadgeDefinition[] = [
         svgContent: `<svg width="100" height="46" viewBox="0 0 100 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="96" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#38bdf8" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="92" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="50" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="15" fill="#7dd3fc" text-anchor="middle">PG</text></svg>`
     },
     {
+        id: "builtin_badge_cr_us_g",
+        name: "Rated G",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "g",
+        width: 100,
+        height: 46,
+        svgContent: `<svg width="100" height="46" viewBox="0 0 100 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="96" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#22c55e" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="92" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="50" y="29" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="18" fill="#4ade80" text-anchor="middle">G</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_nc17",
+        name: "Rated NC-17",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "nc-17",
+        width: 120,
+        height: 46,
+        svgContent: `<svg width="120" height="46" viewBox="0 0 120 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="116" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#b91c1c" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="112" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="60" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14" fill="#f87171" text-anchor="middle">NC-17</text></svg>`
+    },
+    {
         id: "builtin_badge_cr_us_tv_ma",
         name: "TV-MA",
         category: "contentRating",
@@ -1096,5 +1116,65 @@ export const DEFAULT_BUILTIN_BADGE_DEFINITIONS: BuiltinBadgeDefinition[] = [
         width: 120,
         height: 46,
         svgContent: `<svg width="120" height="46" viewBox="0 0 120 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="116" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#dc2626" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="112" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="60" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="#fca5a5" text-anchor="middle">TV-MA</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_tv_14",
+        name: "TV-14",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "tv-14",
+        width: 120,
+        height: 46,
+        svgContent: `<svg width="120" height="46" viewBox="0 0 120 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="116" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#ea580c" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="112" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="60" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="#fdba74" text-anchor="middle">TV-14</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_tv_pg",
+        name: "TV-PG",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "tv-pg",
+        width: 120,
+        height: 46,
+        svgContent: `<svg width="120" height="46" viewBox="0 0 120 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="116" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#0284c7" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="112" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="60" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="#7dd3fc" text-anchor="middle">TV-PG</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_tv_g",
+        name: "TV-G",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "tv-g",
+        width: 110,
+        height: 46,
+        svgContent: `<svg width="110" height="46" viewBox="0 0 110 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="106" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#16a34a" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="102" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="55" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="#86efac" text-anchor="middle">TV-G</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_tv_y7",
+        name: "TV-Y7",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "tv-y7",
+        width: 110,
+        height: 46,
+        svgContent: `<svg width="110" height="46" viewBox="0 0 110 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="106" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#0d9488" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="102" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="55" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="#5eead4" text-anchor="middle">TV-Y7</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_tv_y",
+        name: "TV-Y",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "tv-y",
+        width: 100,
+        height: 46,
+        svgContent: `<svg width="100" height="46" viewBox="0 0 100 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="96" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#0891b2" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="92" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="50" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="13.5" fill="#67e8f9" text-anchor="middle">TV-Y</text></svg>`
+    },
+    {
+        id: "builtin_badge_cr_us_nr",
+        name: "Not Rated (NR)",
+        category: "contentRating",
+        position: "bottom-left",
+        matchRule: "nr",
+        width: 100,
+        height: 46,
+        svgContent: `<svg width="100" height="46" viewBox="0 0 100 46" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="96" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="#64748b" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="92" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="50" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14" fill="#cbd5e1" text-anchor="middle">NR</text></svg>`
     }
 ];

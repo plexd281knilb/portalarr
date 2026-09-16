@@ -1987,7 +1987,19 @@ export async function uploadCustomBadgeAction(formData: FormData) {
         const file = formData.get("file") as File | null;
         const name = (formData.get("name") as string) || "Custom Badge";
         const category = (formData.get("category") as string) || "custom";
-        const position = (formData.get("position") as string) || "top-right";
+        const defaultCategoryPos: Record<string, string> = {
+            contentRating: "bottom-left",
+            studio: "bottom-left",
+            edition: "top-left",
+            audio: "top-left",
+            channels: "top-left",
+            ratings: "bottom-right",
+            ribbon: "top-left",
+            resolution: "top-right",
+            hdr: "top-right",
+            codec: "top-right"
+        };
+        const position = (formData.get("position") as string) || defaultCategoryPos[category] || "top-right";
         const matchRule = (formData.get("matchRule") as string) || null;
         const width = parseInt(formData.get("width") as string) || 140;
         const height = parseInt(formData.get("height") as string) || 46;
@@ -4127,12 +4139,24 @@ function inferBadgeCategoryAndRule(filePath: string, filename: string): {
         };
     }
 
-    // 2. Content & Age Ratings (MPAA, TV Guidelines)
-    if (fullLower.includes("/cr/") || fullLower.includes("content_rating") || fullLower.includes("contentrating")) {
+    // 2. Content & Age Ratings (MPAA, TV Guidelines, International Ratings)
+    if (fullLower.includes("/cr/") || fullLower.includes("content_rating") || fullLower.includes("contentrating") || /rated|pg-13|pg13|tv-ma|tvma|tv-14|tv14|tv-pg|tvpg|tv-g|tvg|tv-y|tvy|nc-17|nc17|mpaa/i.test(fullLower)) {
+        let rule = baseLower.replace(/^us[_-]?|^gb[_-]?|^uk[_-]?|^de[_-]?|^au[_-]?|^ca[_-]?|^nz[_-]?|^rated[_-]?/i, "").trim();
+        rule = rule.replace(/_/g, "-");
+        if (rule === "pg13") rule = "pg-13";
+        else if (rule === "tvma") rule = "tv-ma";
+        else if (rule === "tv14") rule = "tv-14";
+        else if (rule === "tvpg") rule = "tv-pg";
+        else if (rule === "tvg") rule = "tv-g";
+        else if (rule === "tvy7" || rule === "tv-y-7") rule = "tv-y7";
+        else if (rule === "tvy") rule = "tv-y";
+        else if (rule === "nc17") rule = "nc-17";
+        else if (rule === "notrated" || rule === "unrated") rule = "nr";
+
         return {
             category: "contentRating",
             suggestedPosition: "bottom-left",
-            suggestedMatchRule: baseLower.replace(/[^a-z0-9]/g, "")
+            suggestedMatchRule: rule || baseLower.replace(/[^a-z0-9-]/g, "")
         };
     }
 
