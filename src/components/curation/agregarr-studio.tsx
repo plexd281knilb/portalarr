@@ -78,6 +78,8 @@ import {
     deleteMediaCollectionAction,
     reorderPlexCollectionsAction,
     toggleCollectionVisibilityAction,
+    toggleCollectionPlaceholdersAction,
+    generateCollectionPlaceholdersAction,
     updateCollectionPlacementAction,
     syncSeasonalAndScheduledCollectionsAction,
     previewCollectionMatchingAction,
@@ -166,6 +168,7 @@ export function AgregarrStudio() {
     const [inspectMode, setInspectMode] = useState<string>("default");
     const [inspectMaxItems, setInspectMaxItems] = useState<number>(0);
     const [inspectExcludedLabels, setInspectExcludedLabels] = useState<string>("");
+    const [inspectIncludePlaceholders, setInspectIncludePlaceholders] = useState<boolean>(false);
 
     // Comprehensive Placement & Visibility Modal States (Where collections show up in Plex)
     const [placementModalOpen, setPlacementModalOpen] = useState(false);
@@ -186,8 +189,13 @@ export function AgregarrStudio() {
     const [placementSeasonalAction, setPlacementSeasonalAction] = useState<string>("promote_hide");
     const [placementMaxItems, setPlacementMaxItems] = useState<number>(0);
     const [placementExcludedLabels, setPlacementExcludedLabels] = useState<string>("");
+    const [placementIncludePlaceholders, setPlacementIncludePlaceholders] = useState<boolean>(false);
     const [savingPlacement, setSavingPlacement] = useState(false);
     const [placementSavedMsg, setPlacementSavedMsg] = useState<string | null>(null);
+
+    // Collection Level Direct Placeholder Generation Loading States
+    const [generatingCollPlaceholdersId, setGeneratingCollPlaceholdersId] = useState<string | null>(null);
+    const [collPlaceholderMsg, setCollPlaceholderMsg] = useState<{ id: string; success: boolean; text: string } | null>(null);
 
     // Create Modal Placement Controls
     const [newCollPromotedHome, setNewCollPromotedHome] = useState(true);
@@ -198,6 +206,7 @@ export function AgregarrStudio() {
     const [newCollActiveTimeRange, setNewCollActiveTimeRange] = useState<string>("all_day");
     const [newCollMaxItems, setNewCollMaxItems] = useState<number>(0);
     const [newCollExcludedLabels, setNewCollExcludedLabels] = useState<string>("");
+    const [newCollIncludePlaceholders, setNewCollIncludePlaceholders] = useState<boolean>(false);
 
     // YouTube Trailer Player Modal States
     const [trailerModalOpen, setTrailerModalOpen] = useState(false);
@@ -550,6 +559,7 @@ export function AgregarrStudio() {
         setPlacementSeasonalAction(coll.seasonalAction || "promote_hide");
         setPlacementMaxItems(coll.maxItems || 0);
         setPlacementExcludedLabels(coll.excludedLabels || "");
+        setPlacementIncludePlaceholders(Boolean(coll.includePlaceholders));
         setPlacementSavedMsg(null);
         setPlacementModalOpen(true);
     };
@@ -577,7 +587,8 @@ export function AgregarrStudio() {
                 scheduleEndDay: placementIsSeasonal ? Number(placementEndDay) : null,
                 seasonalAction: placementSeasonalAction,
                 maxItems: Number(placementMaxItems),
-                excludedLabels: placementExcludedLabels
+                excludedLabels: placementExcludedLabels,
+                includePlaceholders: placementIncludePlaceholders
             });
 
             if (res.success) {
@@ -591,6 +602,37 @@ export function AgregarrStudio() {
             console.error("Failed saving placement:", err);
         } finally {
             setSavingPlacement(false);
+        }
+    };
+
+    // 1-Click Toggle for Collection Placeholders
+    const handleTogglePlaceholders = async (collId: string, currentState: boolean) => {
+        const nextState = !currentState;
+        setCollections(prev => prev.map(c => c.id === collId ? { ...c, includePlaceholders: nextState } : c));
+        try {
+            await toggleCollectionPlaceholdersAction(collId, nextState);
+        } catch (err) {
+            console.error("Failed toggling placeholders:", err);
+            loadCollections();
+        }
+    };
+
+    // 1-Click Manual Trigger for Collection Coming Soon Placeholders
+    const handleGenerateCollectionPlaceholders = async (collId: string) => {
+        setGeneratingCollPlaceholdersId(collId);
+        setCollPlaceholderMsg(null);
+        try {
+            const res: any = await generateCollectionPlaceholdersAction(collId);
+            if (res.success) {
+                setCollPlaceholderMsg({ id: collId, success: true, text: res.message || "Generated Coming Soon placeholders in share folder!" });
+                setTimeout(() => setCollPlaceholderMsg(null), 6000);
+            } else {
+                setCollPlaceholderMsg({ id: collId, success: false, text: res.error || res.message || "Failed generating placeholders." });
+            }
+        } catch (err: any) {
+            setCollPlaceholderMsg({ id: collId, success: false, text: err.message || "Failed generating placeholders." });
+        } finally {
+            setGeneratingCollPlaceholdersId(null);
         }
     };
 
@@ -675,8 +717,9 @@ export function AgregarrStudio() {
         setInspectShared(true);
         setInspectRecommended(true);
         setInspectMode(preset.defaultCollectionMode || "default");
-        setInspectMaxItems(0);
-        setInspectExcludedLabels("trailers, coming_soon");
+        setInspectMaxItems(preset.defaultMaxItems || 0);
+        setInspectExcludedLabels(preset.defaultExcludedLabels || "trailers, coming_soon");
+        setInspectIncludePlaceholders(Boolean(preset.defaultIncludePlaceholders));
         setInspectModalOpen(true);
         setPreviewLoading(true);
         setPreviewData(null);
@@ -687,8 +730,8 @@ export function AgregarrStudio() {
                 mediaType: preset.mediaType,
                 title: preset.title,
                 type: preset.type,
-                maxItems: 0,
-                excludedLabels: "trailers, coming_soon"
+                maxItems: preset.defaultMaxItems || 0,
+                excludedLabels: preset.defaultExcludedLabels || "trailers, coming_soon"
             });
             if (res.success) {
                 setPreviewData(res as any);
@@ -732,7 +775,8 @@ export function AgregarrStudio() {
                 scheduleEndDay: preset.scheduleEndDay,
                 seasonalAction: preset.seasonalAction,
                 maxItems: Number(inspectMaxItems),
-                excludedLabels: inspectExcludedLabels
+                excludedLabels: inspectExcludedLabels,
+                includePlaceholders: inspectIncludePlaceholders
             });
 
             if (res.success && res.collection) {
@@ -771,12 +815,14 @@ export function AgregarrStudio() {
         setPlaceholderSuccessMsg(null);
         setPlaceholderModalOpen(true);
 
-        const bannerText = item.inTheaters ? "IN THEATERS" : item.digitalReleaseDate ? "NOW STREAMING" : "NOT REQUESTED";
-        const bannerType = item.inTheaters ? "in_theaters" : item.digitalReleaseDate ? "now_streaming" : "not_requested";
+        const bannerText = item.suggestedBannerText || (item.inTheaters ? "IN THEATERS" : item.digitalReleaseDate ? "NOW STREAMING" : "NOT REQUESTED");
+        const bannerType = item.suggestedBannerType || (item.inTheaters ? "in_theaters" : item.digitalReleaseDate ? "now_streaming" : "not_requested");
+        const bannerTheme = item.suggestedBannerTheme || (item.arrStatus === "COMING_SOON" ? "amber-gold" : item.arrStatus === "NOT_REQUESTED" ? "crimson-red" : "indigo-purple");
 
         setPlaceholderModalBannerText(bannerText);
         setPlaceholderModalBannerType(bannerType);
-        generatePlaceholderPreview(item.posterPath, item.title, bannerType, bannerText, placeholderModalBannerTheme, placeholderModalBannerPosition);
+        setPlaceholderModalBannerTheme(bannerTheme);
+        generatePlaceholderPreview(item.posterPath, item.title, bannerType, bannerText, bannerTheme, placeholderModalBannerPosition);
     };
 
     const generatePlaceholderPreview = async (
@@ -1423,10 +1469,24 @@ export function AgregarrStudio() {
                                                                 <span>Excludes: {coll.excludedLabels.split(",").slice(0, 2).join(", ")}{coll.excludedLabels.split(",").length > 2 ? "..." : ""}</span>
                                                             </Badge>
                                                         )}
+                                                        {coll.includePlaceholders && (
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/60 bg-amber-950/40 text-amber-300 gap-1 font-mono shrink-0" title="Coming Soon placeholders and trailer stubs enabled">
+                                                                <Sparkles className="h-2.5 w-2.5 text-amber-400" />
+                                                                <span>Placeholders: ON</span>
+                                                            </Badge>
+                                                        )}
                                                     </div>
                                                     <p className="text-[11px] text-slate-400 truncate max-w-[420px]">
                                                         {coll.summary || coll.sourceQuery || "No summary configured."}
                                                     </p>
+                                                    {collPlaceholderMsg && collPlaceholderMsg.id === coll.id && (
+                                                        <div className={`mt-1 p-1.5 rounded-md text-[10px] font-semibold flex items-center gap-1.5 ${
+                                                            collPlaceholderMsg.success ? "bg-emerald-950/60 text-emerald-300 border border-emerald-800/60" : "bg-rose-950/60 text-rose-300 border border-rose-800/60"
+                                                        }`}>
+                                                            {collPlaceholderMsg.success ? <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" /> : <XCircle className="h-3 w-3 text-rose-400 shrink-0" />}
+                                                            <span className="truncate">{collPlaceholderMsg.text}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -1479,6 +1539,23 @@ export function AgregarrStudio() {
                                                         <span>Recs</span>
                                                     </button>
 
+                                                    {/* 1-Click Placeholders Toggle Button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleTogglePlaceholders(coll.id, Boolean(coll.includePlaceholders))}
+                                                        title={coll.includePlaceholders 
+                                                            ? "Coming Soon Placeholders: ENABLED (Click to disable). Missing items will generate trailer stubs & banners in your Coming Soon share." 
+                                                            : "Coming Soon Placeholders: DISABLED (Click to enable). When enabled, missing items generate trailer stubs & banners in your Coming Soon share."}
+                                                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
+                                                            coll.includePlaceholders
+                                                                ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm"
+                                                                : "bg-slate-950/60 text-slate-500 border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-300"
+                                                        }`}
+                                                    >
+                                                        <Sparkles className="h-3 w-3 text-amber-400" />
+                                                        <span>{coll.includePlaceholders ? "Placeholders" : "No Stubs"}</span>
+                                                    </button>
+
                                                     {/* Library Browsing Mode Selector */}
                                                     <div className="flex items-center gap-1 pl-1 border-l border-slate-800" title="Library Tab Display Mode">
                                                         <span className="text-[10px] text-slate-400 font-semibold px-1">Lib:</span>
@@ -1498,6 +1575,26 @@ export function AgregarrStudio() {
                                                         </Select>
                                                     </div>
                                                 </div>
+
+                                                {/* Generate Stubs Action (if placeholders active) */}
+                                                {coll.includePlaceholders && (
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={generatingCollPlaceholdersId === coll.id}
+                                                        onClick={() => handleGenerateCollectionPlaceholders(coll.id)}
+                                                        className="text-[11px] h-8 px-2.5 gap-1 border-amber-500/40 bg-amber-950/20 hover:bg-amber-900/40 text-amber-300"
+                                                        title="Generate / update Coming Soon placeholder trailers and banners in share folder now"
+                                                    >
+                                                        {generatingCollPlaceholdersId === coll.id ? (
+                                                            <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
+                                                        ) : (
+                                                            <Tag className="h-3 w-3 text-amber-400" />
+                                                        )}
+                                                        <span className="hidden sm:inline">Gen Stubs</span>
+                                                    </Button>
+                                                )}
 
                                                 {/* Placement Details & Actions */}
                                                 <Button
@@ -1662,17 +1759,14 @@ export function AgregarrStudio() {
                                                     alt={item.title}
                                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                                 />
-                                                {/* In Library Badge */}
+                                                {/* Smart Status Badge */}
                                                 <div className="absolute top-2 left-2 z-10">
-                                                    {item.inLibrary ? (
-                                                        <Badge className="bg-emerald-600/90 text-white text-[9px] font-black px-1.5 py-0.5 border-none shadow-md">
-                                                            ✓ IN LIBRARY
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge className="bg-rose-600/90 text-white text-[9px] font-black px-1.5 py-0.5 border-none shadow-md">
-                                                            MISSING
-                                                        </Badge>
-                                                    )}
+                                                    <Badge className={`${item.statusBadgeColor || (item.inLibrary ? "bg-emerald-600" : "bg-rose-600")}/95 text-white text-[9px] font-black px-1.5 py-0.5 border-none shadow-md gap-1 flex items-center`}>
+                                                        {item.arrStatus === "COMING_SOON" && <Clock className="h-2.5 w-2.5" />}
+                                                        {item.arrStatus === "MONITORED_RELEASED" && <Zap className="h-2.5 w-2.5" />}
+                                                        {item.arrStatus === "NOT_REQUESTED" && <Flame className="h-2.5 w-2.5" />}
+                                                        <span>{item.statusBadgeText || (item.inLibrary ? "✓ IN LIBRARY" : "NOT REQUESTED")}</span>
+                                                    </Badge>
                                                 </div>
                                             </div>
 
@@ -1736,11 +1830,18 @@ export function AgregarrStudio() {
                         {trendingMedia.filter(m => m.releaseDate || m.digitalReleaseDate).slice(0, 18).map(item => {
                             return (
                                 <div key={item.id} className="flex gap-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                                    <img
-                                        src={item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : "/placeholder-poster.png"}
-                                        alt={item.title}
-                                        className="w-16 h-24 object-cover rounded-lg shadow-md shrink-0"
-                                    />
+                                    <div className="relative shrink-0">
+                                        <img
+                                            src={item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : "/placeholder-poster.png"}
+                                            alt={item.title}
+                                            className="w-16 h-24 object-cover rounded-lg shadow-md"
+                                        />
+                                        <div className="absolute top-1 left-1">
+                                            <Badge className={`${item.statusBadgeColor || (item.inLibrary ? "bg-emerald-600" : "bg-rose-600")}/95 text-white text-[8px] font-bold px-1 py-0 border-none shadow-sm`}>
+                                                {item.statusBadgeText || (item.inLibrary ? "IN LIBRARY" : "UPCOMING")}
+                                            </Badge>
+                                        </div>
+                                    </div>
                                     <div className="space-y-1.5 flex-1 overflow-hidden flex flex-col justify-between">
                                         <div>
                                             <h4 className="font-bold text-white text-xs truncate" title={item.title}>{item.title}</h4>
@@ -2410,6 +2511,24 @@ export function AgregarrStudio() {
                                 })}
                             </div>
                         </div>
+
+                        {/* Coming Soon Placeholders & Trailer Stubs */}
+                        <div className="space-y-2 p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
+                                    </Label>
+                                    <p className="text-[10px] text-slate-400">
+                                        Automatically generate lightweight trailer stubs and composite banners in your Coming Soon share for missing unacquired titles in this collection.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={inspectIncludePlaceholders}
+                                    onCheckedChange={setInspectIncludePlaceholders}
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
@@ -2820,6 +2939,24 @@ export function AgregarrStudio() {
                                         </button>
                                     );
                                 })}
+                            </div>
+                        </div>
+
+                        {/* Section 8: Coming Soon Placeholders & Trailer Stubs */}
+                        <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
+                                    </Label>
+                                    <p className="text-[10px] text-slate-400">
+                                        When enabled, items in this collection missing from your library will automatically generate trailer stubs (.strm), poster banners, and metadata in your Coming Soon share.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={placementIncludePlaceholders}
+                                    onCheckedChange={setPlacementIncludePlaceholders}
+                                />
                             </div>
                         </div>
 

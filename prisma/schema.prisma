@@ -339,6 +339,7 @@ model MediaCollection {
   itemCount            Int       @default(0)
   maxItems             Int?      @default(0) // 0 = unlimited / all items
   excludedLabels       String?   @default("") // Comma-separated labels to exclude (e.g. "trailers, coming soon")
+  includePlaceholders  Boolean?  @default(false) // Generate coming soon placeholder stubs & trailers on disk
   autoSync             Boolean   @default(true)
   syncInterval         String    @default("daily")
   lastSyncedAt         DateTime?

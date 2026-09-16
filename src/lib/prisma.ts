@@ -826,6 +826,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "itemCount" INTEGER NOT NULL DEFAULT 0,
                     "maxItems" INTEGER DEFAULT 0,
                     "excludedLabels" TEXT DEFAULT '',
+                    "includePlaceholders" BOOLEAN DEFAULT 0,
                     "autoSync" BOOLEAN NOT NULL DEFAULT 1,
                     "syncInterval" TEXT NOT NULL DEFAULT 'daily',
                     "lastSyncedAt" DATETIME,
@@ -854,6 +855,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 const collAddCols: [string, string][] = [
                     ["maxItems", `ALTER TABLE "MediaCollection" ADD COLUMN "maxItems" INTEGER DEFAULT 0;`],
                     ["excludedLabels", `ALTER TABLE "MediaCollection" ADD COLUMN "excludedLabels" TEXT DEFAULT '';`],
+                    ["includePlaceholders", `ALTER TABLE "MediaCollection" ADD COLUMN "includePlaceholders" BOOLEAN DEFAULT 0;`],
                     ["orderIndex", `ALTER TABLE "MediaCollection" ADD COLUMN "orderIndex" INTEGER NOT NULL DEFAULT 0;`],
                     ["promotedToHome", `ALTER TABLE "MediaCollection" ADD COLUMN "promotedToHome" BOOLEAN NOT NULL DEFAULT 1;`],
                     ["promotedToRecommended", `ALTER TABLE "MediaCollection" ADD COLUMN "promotedToRecommended" BOOLEAN NOT NULL DEFAULT 1;`],

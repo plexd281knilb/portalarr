@@ -15,6 +15,9 @@ export interface CollectionPreset {
     defaultCollectionMode?: "default" | "hide" | "hideItems" | "showItems";
     defaultActiveDays?: string;
     defaultActiveTimeRange?: string;
+    defaultIncludePlaceholders?: boolean;
+    defaultMaxItems?: number;
+    defaultExcludedLabels?: string;
     isSeasonal?: boolean;
     scheduleStartMonth?: number; // 1-12
     scheduleStartDay?: number;   // 1-31

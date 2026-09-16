@@ -93,6 +93,7 @@ import {
     convertKometaLibraryToPortalarrOverlay,
     ParsedKometaConfig
 } from "@/lib/curation/kometa-importer";
+import { getEnabledArrInstances, arrApiGet } from "@/app/arr-actions";
 
 // Verify admin permissions
 async function verifyAdmin() {
@@ -735,6 +736,7 @@ export async function saveMediaCollectionAction(data: {
     syncInterval?: string;
     maxItems?: number;
     excludedLabels?: string;
+    includePlaceholders?: boolean;
     orderIndex?: number;
     promotedToHome?: boolean;
     promotedToRecommended?: boolean;
@@ -769,6 +771,7 @@ export async function saveMediaCollectionAction(data: {
             syncInterval: data.syncInterval || "daily",
             maxItems: data.maxItems !== undefined ? data.maxItems : 0,
             excludedLabels: data.excludedLabels !== undefined ? data.excludedLabels : "",
+            includePlaceholders: data.includePlaceholders !== undefined ? data.includePlaceholders : false,
             orderIndex: data.orderIndex ?? 0,
             promotedToHome: data.promotedToHome ?? true,
             promotedToRecommended: data.promotedToRecommended ?? true,
@@ -1081,13 +1084,27 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             }
         });
 
-        logger.addLog("SUCCESS", "PLEX", `Successfully synced collection "${collection.title}" (${finalRatingKeys.length} items) to Plex server "${resolved.serverName}"`);
+        // 6. If collection is configured to include placeholders, generate stubs in Coming Soon Shares folder
+        let placeholdersGenerated = 0;
+        if (collection.includePlaceholders) {
+            try {
+                const placeholderRes = await generateCollectionPlaceholdersInternal(collection);
+                if (placeholderRes.success) {
+                    placeholdersGenerated = placeholderRes.generatedCount;
+                }
+            } catch (pErr: any) {
+                console.warn("[COLL-SYNC] Error running auto-placeholders:", pErr.message);
+            }
+        }
+
+        logger.addLog("SUCCESS", "PLEX", `Successfully synced collection "${collection.title}" (${finalRatingKeys.length} items${placeholdersGenerated > 0 ? `, ${placeholdersGenerated} placeholders generated` : ""}) to Plex server "${resolved.serverName}"`);
 
         return {
             success: true,
             itemCount: finalRatingKeys.length,
+            placeholdersGenerated,
             collectionRatingKey: syncResult.collectionRatingKey,
-            message: `Synced "${collection.title}" with ${finalRatingKeys.length} items to Plex!`
+            message: `Synced "${collection.title}" with ${finalRatingKeys.length} items to Plex${placeholdersGenerated > 0 ? ` (+${placeholdersGenerated} Coming Soon trailers & placeholders generated)` : ""}!`
         };
     } catch (e: any) {
         logger.addLog("ERROR", "PLEX", `Sync collection "${collectionId}" failed: ${e.message}`);
@@ -1406,12 +1423,38 @@ export async function toggleCollectionVisibilityAction(
 }
 
 /**
+ * 1-click toggle for collection placeholder generation
+ */
+export async function toggleCollectionPlaceholdersAction(collectionId: string, includePlaceholders: boolean) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
+        if (!collection) return { success: false, error: "Collection not found." };
+
+        const updated = await prisma.mediaCollection.update({
+            where: { id: collectionId },
+            data: { includePlaceholders: Boolean(includePlaceholders) }
+        });
+
+        return { 
+            success: true, 
+            collection: updated, 
+            message: `Coming soon placeholders ${includePlaceholders ? "enabled" : "disabled"} for "${updated.title}".` 
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
  * Full placement, visibility & scheduling configuration update for a collection
  */
 export async function updateCollectionPlacementAction(data: {
     id: string;
     maxItems?: number;
     excludedLabels?: string;
+    includePlaceholders?: boolean;
     promotedToHome?: boolean;
     promotedToSharedHome?: boolean;
     promotedToRecommended?: boolean;
@@ -1440,6 +1483,7 @@ export async function updateCollectionPlacementAction(data: {
             data: {
                 maxItems: data.maxItems !== undefined ? data.maxItems : collection.maxItems,
                 excludedLabels: data.excludedLabels !== undefined ? data.excludedLabels : collection.excludedLabels,
+                includePlaceholders: data.includePlaceholders !== undefined ? data.includePlaceholders : collection.includePlaceholders,
                 promotedToHome: data.promotedToHome ?? collection.promotedToHome,
                 promotedToSharedHome: data.promotedToSharedHome ?? collection.promotedToSharedHome,
                 promotedToRecommended: data.promotedToRecommended ?? collection.promotedToRecommended,
@@ -5062,9 +5106,150 @@ export async function importLocalKometaAssetsAction(folderPath?: string) {
     }
 }
 
+export interface ArrItemStatus {
+    id: number;
+    title: string;
+    tmdbId?: number;
+    tvdbId?: number;
+    imdbId?: string;
+    monitored: boolean;
+    hasFile: boolean;
+    status?: string;
+    isReleased: boolean;
+    digitalRelease?: string;
+    physicalRelease?: string;
+    inCinemas?: string;
+    appType: "radarr" | "sonarr";
+    appName: string;
+}
+
+/**
+ * Fast multi-instance indexer for Radarr and Sonarr
+ */
+export async function getArrMonitoredIndex(): Promise<{
+    moviesByTmdb: Map<string, ArrItemStatus>;
+    moviesByImdb: Map<string, ArrItemStatus>;
+    moviesByTitle: Map<string, ArrItemStatus>;
+    seriesByTvdb: Map<string, ArrItemStatus>;
+    seriesByImdb: Map<string, ArrItemStatus>;
+    seriesByTitle: Map<string, ArrItemStatus>;
+}> {
+    const moviesByTmdb = new Map<string, ArrItemStatus>();
+    const moviesByImdb = new Map<string, ArrItemStatus>();
+    const moviesByTitle = new Map<string, ArrItemStatus>();
+    const seriesByTvdb = new Map<string, ArrItemStatus>();
+    const seriesByImdb = new Map<string, ArrItemStatus>();
+    const seriesByTitle = new Map<string, ArrItemStatus>();
+
+    const now = new Date();
+
+    try {
+        const radarrRes = await getEnabledArrInstances("radarr");
+        if (radarrRes.success && radarrRes.data) {
+            for (const app of radarrRes.data) {
+                try {
+                    const movies = await arrApiGet(app, "/api/v3/movie");
+                    if (Array.isArray(movies)) {
+                        for (const m of movies) {
+                            const digitalDate = m.digitalRelease ? new Date(m.digitalRelease) : null;
+                            const physicalDate = m.physicalRelease ? new Date(m.physicalRelease) : null;
+                            const cinemasDate = m.inCinemas ? new Date(m.inCinemas) : null;
+
+                            const isReleased = Boolean(
+                                m.isAvailable ||
+                                m.status === "released" ||
+                                (digitalDate && digitalDate <= now) ||
+                                (physicalDate && physicalDate <= now) ||
+                                (cinemasDate && cinemasDate <= now) ||
+                                m.hasFile
+                            );
+
+                            const statusObj: ArrItemStatus = {
+                                id: m.id,
+                                title: m.title,
+                                tmdbId: m.tmdbId,
+                                imdbId: m.imdbId,
+                                monitored: Boolean(m.monitored),
+                                hasFile: Boolean(m.hasFile),
+                                status: m.status,
+                                isReleased,
+                                digitalRelease: m.digitalRelease,
+                                physicalRelease: m.physicalRelease,
+                                inCinemas: m.inCinemas,
+                                appType: "radarr",
+                                appName: app.name
+                            };
+
+                            if (m.tmdbId) moviesByTmdb.set(String(m.tmdbId), statusObj);
+                            if (m.imdbId) moviesByImdb.set(m.imdbId.trim().toLowerCase(), statusObj);
+                            if (m.title) moviesByTitle.set(m.title.trim().toLowerCase(), statusObj);
+                        }
+                    }
+                } catch (appErr: any) {
+                    console.warn(`[ARR-INDEX] Failed fetching movies from Radarr "${app.name}":`, appErr.message);
+                }
+            }
+        }
+    } catch (e: any) {
+        console.warn("[ARR-INDEX] Failed resolving Radarr instances:", e.message);
+    }
+
+    try {
+        const sonarrRes = await getEnabledArrInstances("sonarr");
+        if (sonarrRes.success && sonarrRes.data) {
+            for (const app of sonarrRes.data) {
+                try {
+                    const series = await arrApiGet(app, "/api/v3/series");
+                    if (Array.isArray(series)) {
+                        for (const s of series) {
+                            const firstAiredDate = s.firstAired ? new Date(s.firstAired) : null;
+                            const hasFile = Boolean(s.statistics?.episodeFileCount && s.statistics.episodeFileCount > 0);
+                            const isReleased = Boolean(
+                                (firstAiredDate && firstAiredDate <= now) ||
+                                s.status !== "upcoming" ||
+                                hasFile
+                            );
+
+                            const statusObj: ArrItemStatus = {
+                                id: s.id,
+                                title: s.title,
+                                tvdbId: s.tvdbId,
+                                imdbId: s.imdbId,
+                                monitored: Boolean(s.monitored),
+                                hasFile,
+                                status: s.status,
+                                isReleased,
+                                appType: "sonarr",
+                                appName: app.name
+                            };
+
+                            if (s.tvdbId) seriesByTvdb.set(String(s.tvdbId), statusObj);
+                            if (s.imdbId) seriesByImdb.set(s.imdbId.trim().toLowerCase(), statusObj);
+                            if (s.title) seriesByTitle.set(s.title.trim().toLowerCase(), statusObj);
+                        }
+                    }
+                } catch (appErr: any) {
+                    console.warn(`[ARR-INDEX] Failed fetching series from Sonarr "${app.name}":`, appErr.message);
+                }
+            }
+        }
+    } catch (e: any) {
+        console.warn("[ARR-INDEX] Failed resolving Sonarr instances:", e.message);
+    }
+
+    return {
+        moviesByTmdb,
+        moviesByImdb,
+        moviesByTitle,
+        seriesByTvdb,
+        seriesByImdb,
+        seriesByTitle
+    };
+}
+
 /**
  * Server action to fetch trending media (All, Disney, Disney Kids, Netflix, Netflix Kids, Digital, Theatrical)
- * and compare with the selected Plex library to identify "In Library" vs "Not Requested / Missing".
+ * and compare with Plex and Radarr/Sonarr to identify "In Library", "Monitored (Coming Soon)", or "Released but Not Requested".
  */
 export async function getTrendingAndPlaceholderMediaAction(
     serverId?: string,
@@ -5104,7 +5289,7 @@ export async function getTrendingAndPlaceholderMediaAction(
             };
         }
 
-        // Check against Plex Library if serverId and sectionKey are provided
+        // 1. Check against Plex Library if serverId and sectionKey are provided
         let libraryItems: any[] = [];
         if (serverId && sectionKey) {
             try {
@@ -5121,6 +5306,18 @@ export async function getTrendingAndPlaceholderMediaAction(
         const libraryTmdbIds = new Set(libraryItems.map(it => it.guids?.tmdb).filter(Boolean));
         const libraryImdbIds = new Set(libraryItems.map(it => it.guids?.imdb).filter(Boolean));
         const libraryTitles = new Map(libraryItems.map(it => [it.title?.toLowerCase().trim(), it]));
+
+        // 2. Query Radarr and Sonarr index
+        const arrIndex = await getArrMonitoredIndex();
+        const now = new Date();
+
+        const formatNiceDate = (dStr?: string) => {
+            if (!dStr) return "";
+            try {
+                const d = new Date(dStr);
+                return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            } catch { return dStr; }
+        };
 
         let inLibraryCount = 0;
         const enrichedItems = trendingItems.map(item => {
@@ -5140,6 +5337,82 @@ export async function getTrendingAndPlaceholderMediaAction(
 
             const inLibrary = Boolean(match);
             if (inLibrary) inLibraryCount++;
+
+            // Radarr / Sonarr matching
+            let arrItem: ArrItemStatus | undefined;
+            if (item.mediaType === "tv") {
+                arrItem = (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                          (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
+            } else {
+                arrItem = arrIndex.moviesByTmdb.get(tmdbStr) ||
+                          (item.imdbId ? arrIndex.moviesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                          (item.title ? arrIndex.moviesByTitle.get(item.title.toLowerCase().trim()) : undefined);
+            }
+
+            const inRadarr = arrItem?.appType === "radarr";
+            const inSonarr = arrItem?.appType === "sonarr";
+            const isMonitored = Boolean(arrItem?.monitored);
+            const arrHasFile = Boolean(arrItem?.hasFile);
+
+            // Release state
+            const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
+            const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : null;
+            const theDate = item.theatricalReleaseDate ? new Date(item.theatricalReleaseDate) : null;
+            const isReleased = Boolean(item.inTheaters || (relDate && relDate <= now) || (digDate && digDate <= now) || (theDate && theDate <= now) || arrItem?.isReleased);
+
+            // Smart Banner Suggestion Logic
+            let arrStatus: "NOT_REQUESTED" | "COMING_SOON" | "MONITORED_RELEASED" | "IN_LIBRARY" | "UPCOMING_UNREQUESTED";
+            let suggestedBannerType = "not_requested";
+            let suggestedBannerText = "NOT REQUESTED";
+            let suggestedBannerTheme = "crimson-red";
+            let statusBadgeText = "NOT REQUESTED";
+            let statusBadgeColor = "rose";
+
+            if (inLibrary) {
+                arrStatus = "IN_LIBRARY";
+                suggestedBannerType = "in_library";
+                suggestedBannerText = "IN LIBRARY";
+                suggestedBannerTheme = "emerald-green";
+                statusBadgeText = "✓ IN LIBRARY";
+                statusBadgeColor = "emerald";
+            } else if (isMonitored && !isReleased) {
+                // Requested / monitored in Radarr or Sonarr, but not released yet -> COMING SOON
+                arrStatus = "COMING_SOON";
+                suggestedBannerType = "countdown";
+                const appLabel = inRadarr ? "RADARR" : inSonarr ? "SONARR" : "ARR";
+                suggestedBannerText = item.digitalReleaseDate 
+                    ? `DIGITAL RELEASE • ${formatNiceDate(item.digitalReleaseDate)}`
+                    : `MONITORED IN ${appLabel} • COMING SOON`;
+                suggestedBannerTheme = "amber-gold";
+                statusBadgeText = inRadarr ? "IN RADARR (COMING SOON)" : inSonarr ? "IN SONARR (COMING SOON)" : "COMING SOON";
+                statusBadgeColor = "amber";
+            } else if (isMonitored && isReleased) {
+                // Monitored in Radarr/Sonarr and already released -> DOWNLOADING SOON
+                arrStatus = "MONITORED_RELEASED";
+                suggestedBannerType = "now_streaming";
+                suggestedBannerText = "DOWNLOADING SOON";
+                suggestedBannerTheme = "emerald-green";
+                statusBadgeText = inRadarr ? "IN RADARR (DOWNLOADING)" : inSonarr ? "IN SONARR (DOWNLOADING)" : "DOWNLOADING";
+                statusBadgeColor = "cyan";
+            } else if (isReleased && !isMonitored) {
+                // Released (in theaters or past release date) but NOT requested in Radarr or Sonarr -> RELEASED BUT NOT REQUESTED
+                arrStatus = "NOT_REQUESTED";
+                suggestedBannerType = "not_requested";
+                suggestedBannerText = "TRENDING • NOT REQUESTED";
+                suggestedBannerTheme = "crimson-red";
+                statusBadgeText = "NOT REQUESTED";
+                statusBadgeColor = "rose";
+            } else {
+                // Unmonitored and unreleased -> UPCOMING UNREQUESTED
+                arrStatus = "UPCOMING_UNREQUESTED";
+                suggestedBannerType = "coming_soon";
+                suggestedBannerText = item.digitalReleaseDate
+                    ? `STREAMING SOON • ${formatNiceDate(item.digitalReleaseDate)}`
+                    : "COMING SOON • NOT REQUESTED";
+                suggestedBannerTheme = "indigo-purple";
+                statusBadgeText = "UPCOMING (NOT REQUESTED)";
+                statusBadgeColor = "purple";
+            }
 
             const releaseYear = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
 
@@ -5162,7 +5435,19 @@ export async function getTrendingAndPlaceholderMediaAction(
                 imdbId: item.imdbId,
                 inLibrary,
                 libraryRatingKey: match?.ratingKey,
-                detectedBadges: match?.detectedBadges
+                detectedBadges: match?.detectedBadges,
+                // Arr & Monitored Telemetry
+                inRadarr,
+                inSonarr,
+                isMonitored,
+                arrHasFile,
+                arrStatus,
+                isReleased,
+                suggestedBannerType,
+                suggestedBannerText,
+                suggestedBannerTheme,
+                statusBadgeText,
+                statusBadgeColor
             };
         });
 
@@ -5270,7 +5555,12 @@ export async function createPlaceholderItemAction(
             ? JSON.parse(settings.comingSoonShares) 
             : {};
         
-        const sharePath = comingSoonShares[serverId];
+        let sharePath = (serverId && comingSoonShares[serverId]) ? comingSoonShares[serverId] : "";
+        if (!sharePath || !fs.existsSync(sharePath)) {
+            const valid = Object.values(comingSoonShares).find(p => p && fs.existsSync(p));
+            if (valid) sharePath = valid;
+        }
+
         const bannerText = itemData.bannerText?.trim() || "NOT REQUESTED";
         const bannerType = itemData.bannerType || "not_requested";
         const bannerTheme = itemData.bannerTheme || "crimson-red";
@@ -5330,6 +5620,10 @@ export async function createPlaceholderItemAction(
             // Save lightweight stub file (.disc)
             const stubFile = path.join(targetDir, `${cleanTitle}${yearStr}.disc`);
             fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nTrailer: ${trailerUrl || "None"}\nCreated: ${new Date().toISOString()}\n`);
+
+            // Immunity marker (.portalarr-missing)
+            const immunityMarker = path.join(targetDir, ".portalarr-missing");
+            fs.writeFileSync(immunityMarker, "portalarr-placeholder");
 
             shareSaved = true;
             createdFolderPath = targetDir;
@@ -5400,10 +5694,270 @@ export async function createPlaceholderItemAction(
             trailerKey: trailerKey || null,
             message: shareSaved 
                 ? `Created placeholder "${itemData.title}" on disk${trailerUrl ? " with YouTube trailer" : ""}!` 
-                : `Generated placeholder poster for "${itemData.title}".`
+                : `Generated placeholder poster for "${itemData.title}". (Note: Configure Coming Soon Share folder to write .strm trailer files to disk).`
         };
     } catch (e: any) {
         return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Internal worker to batch-generate Coming Soon placeholder trailers & banner posters for missing items in a collection.
+ */
+export async function generateCollectionPlaceholdersInternal(collection: any): Promise<{ success: boolean; generatedCount: number; message: string; error?: string }> {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const comingSoonShares: Record<string, string> = settings?.comingSoonShares 
+            ? JSON.parse(settings.comingSoonShares) 
+            : {};
+
+        const serverId = collection.serverId || "main";
+        let sharePath = (serverId && comingSoonShares[serverId]) ? comingSoonShares[serverId] : "";
+        if (!sharePath || !fs.existsSync(sharePath)) {
+            const valid = Object.values(comingSoonShares).find(p => p && fs.existsSync(p));
+            if (valid) sharePath = valid;
+        }
+
+        if (!sharePath || !fs.existsSync(sharePath)) {
+            return {
+                success: false,
+                generatedCount: 0,
+                message: `Coming Soon share folder is not configured or does not exist on disk for server "${serverId}". Please set and validate a share directory under Coming Soon Shares Configuration.`
+            };
+        }
+
+        // 1. Fetch library items to know what is already present in Plex
+        let libraryItems: any[] = [];
+        if (collection.serverId && collection.sectionKey) {
+            try {
+                const resolved = await resolveWorkingPlexServerConnection(collection.serverId);
+                if (resolved && resolved.serverUrl) {
+                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 1000);
+                }
+            } catch (err: any) {
+                console.warn("[COLL-PLACEHOLDER] Failed fetching library items:", err.message);
+            }
+        }
+
+        const libraryTmdbIds = new Set(libraryItems.map(it => it.guids?.tmdb).filter(Boolean));
+        const libraryImdbIds = new Set(libraryItems.map(it => it.guids?.imdb).filter(Boolean));
+        const libraryTitles = new Set(libraryItems.map(it => it.title?.toLowerCase().trim()).filter(Boolean));
+
+        // 2. Fetch candidates from Collection Source Query
+        let candidateItems: any[] = [];
+        const tmdbKey = settings?.tmdbApiKey || "";
+
+        if (collection.sourceType === "tmdb") {
+            if (collection.sourceQuery?.startsWith("collection:")) {
+                const collId = collection.sourceQuery.replace("collection:", "");
+                const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
+                if (tmdbRes.ok) {
+                    const data = await tmdbRes.json();
+                    candidateItems = (data.parts || []).map((p: any) => ({
+                        id: p.id,
+                        title: p.title,
+                        overview: p.overview,
+                        posterPath: p.poster_path,
+                        backdropPath: p.backdrop_path,
+                        mediaType: "movie" as const,
+                        releaseDate: p.release_date
+                    }));
+                }
+            } else if (collection.sourceQuery?.startsWith("company:")) {
+                const compId = collection.sourceQuery.replace("company:", "");
+                const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
+                if (tmdbRes.ok) {
+                    const data = await tmdbRes.json();
+                    candidateItems = (data.results || []).map((p: any) => ({
+                        id: p.id,
+                        title: p.title,
+                        overview: p.overview,
+                        posterPath: p.poster_path,
+                        backdropPath: p.backdrop_path,
+                        mediaType: "movie" as const,
+                        releaseDate: p.release_date
+                    }));
+                }
+            } else if (collection.sourceQuery?.startsWith("network:")) {
+                const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
+                const shows = await getTmdbNetworkShows(netId);
+                candidateItems = shows.map(s => ({
+                    id: s.id,
+                    title: s.title,
+                    overview: s.overview,
+                    posterPath: s.posterPath,
+                    backdropPath: s.backdropPath,
+                    mediaType: "tv" as const,
+                    releaseDate: s.releaseDate
+                }));
+            } else if (collection.sourceQuery?.startsWith("provider:")) {
+                const parts = collection.sourceQuery.split(":");
+                const provId = parseInt(parts[1], 10) || 8;
+                const isKids = parts.length > 2 && parts[2] === "kids";
+                const providerMedia = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+                candidateItems = providerMedia;
+            } else if (collection.sourceQuery === "digital_releases") {
+                candidateItems = await getTmdbUpcomingMovies();
+            } else {
+                candidateItems = await getTmdbTrending("all", "week");
+            }
+        } else if (collection.sourceType === "trakt") {
+            if (collection.sourceQuery === "trending") {
+                const trending = await getTraktTrendingMovies(40);
+                candidateItems = trending.map((t: any) => ({
+                    id: t.tmdbId || t.id,
+                    title: t.title,
+                    mediaType: "movie" as const,
+                    releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                    imdbId: t.imdbId
+                }));
+            } else if (collection.sourceQuery) {
+                const listData = await getTraktUserList(collection.sourceQuery);
+                if (listData?.items) {
+                    candidateItems = listData.items.map((t: any) => ({
+                        id: t.tmdbId || t.id,
+                        title: t.title,
+                        mediaType: "movie" as const,
+                        releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                        imdbId: t.imdbId
+                    }));
+                }
+            }
+        } else if (collection.sourceType === "mdblist") {
+            if (collection.sourceQuery) {
+                const items = await getMdblistItems(collection.sourceQuery);
+                if (items && items.length > 0) {
+                    candidateItems = items.map((t: any) => ({
+                        id: t.tmdbId || t.id,
+                        title: t.title,
+                        mediaType: "movie" as const,
+                        releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                        imdbId: t.imdbId
+                    }));
+                }
+            }
+        }
+
+        // 3. Filter candidate items to only those MISSING from the library
+        const missingCandidates = candidateItems.filter(item => {
+            const tmdbStr = String(item.id);
+            const inLib = libraryTmdbIds.has(tmdbStr) || 
+                          (item.imdbId && libraryImdbIds.has(item.imdbId)) ||
+                          (item.title && libraryTitles.has(item.title.toLowerCase().trim()));
+            return !inLib;
+        });
+
+        // Limit count if maxItems is set
+        const maxPlaceholders = collection.maxItems && collection.maxItems > 0 ? collection.maxItems : 20;
+        const itemsToGenerate = missingCandidates.slice(0, maxPlaceholders);
+
+        if (itemsToGenerate.length === 0) {
+            return {
+                success: true,
+                generatedCount: 0,
+                message: `All ${candidateItems.length} items in collection "${collection.title}" already exist in your library!`
+            };
+        }
+
+        // 4. Query Radarr and Sonarr monitored index
+        const arrIndex = await getArrMonitoredIndex();
+        const now = new Date();
+        let generatedCount = 0;
+
+        for (const item of itemsToGenerate) {
+            try {
+                const tmdbStr = String(item.id);
+                let arrItem: ArrItemStatus | undefined;
+                if (item.mediaType === "tv") {
+                    arrItem = (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                              (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
+                } else {
+                    arrItem = arrIndex.moviesByTmdb.get(tmdbStr) ||
+                              (item.imdbId ? arrIndex.moviesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                              (item.title ? arrIndex.moviesByTitle.get(item.title.toLowerCase().trim()) : undefined);
+                }
+
+                const inRadarr = arrItem?.appType === "radarr";
+                const inSonarr = arrItem?.appType === "sonarr";
+                const isMonitored = Boolean(arrItem?.monitored);
+
+                const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
+                const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : null;
+                const theDate = item.theatricalReleaseDate ? new Date(item.theatricalReleaseDate) : null;
+                const isReleased = Boolean(item.inTheaters || (relDate && relDate <= now) || (digDate && digDate <= now) || (theDate && theDate <= now) || arrItem?.isReleased);
+
+                let bannerText = "NOT REQUESTED";
+                let bannerTheme = "crimson-red";
+                let bannerType = "not_requested";
+
+                if (isMonitored && !isReleased) {
+                    const appLabel = inRadarr ? "RADARR" : inSonarr ? "SONARR" : "ARR";
+                    bannerText = item.digitalReleaseDate
+                        ? `DIGITAL RELEASE • ${new Date(item.digitalReleaseDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                        : `MONITORED IN ${appLabel} • COMING SOON`;
+                    bannerTheme = "amber-gold";
+                    bannerType = "countdown";
+                } else if (isMonitored && isReleased) {
+                    bannerText = "DOWNLOADING SOON";
+                    bannerTheme = "emerald-green";
+                    bannerType = "now_streaming";
+                } else if (isReleased && !isMonitored) {
+                    bannerText = "TRENDING • NOT REQUESTED";
+                    bannerTheme = "crimson-red";
+                    bannerType = "not_requested";
+                } else {
+                    bannerText = item.digitalReleaseDate
+                        ? `STREAMING SOON • ${new Date(item.digitalReleaseDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                        : "COMING SOON • NOT REQUESTED";
+                    bannerTheme = "indigo-purple";
+                    bannerType = "coming_soon";
+                }
+
+                const year = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
+
+                await createPlaceholderItemAction(serverId, collection.sectionKey || "", {
+                    tmdbId: item.id,
+                    title: item.title,
+                    year,
+                    mediaType: item.mediaType || "movie",
+                    posterPath: item.posterPath || null,
+                    overview: item.overview,
+                    bannerText,
+                    bannerType,
+                    bannerTheme,
+                    bannerPosition: "bottom"
+                });
+
+                generatedCount++;
+            } catch (itemErr: any) {
+                console.warn(`[COLL-PLACEHOLDER] Error generating placeholder for "${item.title}":`, itemErr.message);
+            }
+        }
+
+        logger.addLog("SUCCESS", "CURATION", `Generated ${generatedCount} placeholders for collection "${collection.title}" in coming soon share "${sharePath}".`);
+
+        return {
+            success: true,
+            generatedCount,
+            message: `Generated ${generatedCount} placeholder trailers & banner posters for collection "${collection.title}" in your Coming Soon share!`
+        };
+    } catch (e: any) {
+        return { success: false, generatedCount: 0, message: e.message, error: e.message };
+    }
+}
+
+/**
+ * Server action to manually trigger placeholder generation for a collection
+ */
+export async function generateCollectionPlaceholdersAction(collectionId: string) {
+    await verifyAdmin();
+    try {
+        const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
+        if (!collection) return { success: false, error: "Collection not found.", message: "Collection not found." };
+        return await generateCollectionPlaceholdersInternal(collection);
+    } catch (e: any) {
+        return { success: false, error: e.message, message: e.message };
     }
 }
 
