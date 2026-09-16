@@ -23,6 +23,7 @@ import {
 } from "@/lib/curation/plex-analyzer";
 import { 
     backupAndApplyOverlay, 
+    computeMediaOverlayHash,
     restoreItemOriginalArtwork, 
     restoreAllOriginalArtworks, 
     OverlayOptions,
@@ -2473,7 +2474,15 @@ export async function saveOverlayRuleAction(data: {
     }
 }
 
-export async function applyOverlaysToLibraryInternal(serverId: string, sectionKey: string, ruleId?: string) {
+export async function applyOverlaysToLibraryInternal(
+    serverId: string, 
+    sectionKey: string, 
+    ruleId?: string,
+    batchOptions?: {
+        batchSize?: number;
+        mode?: "incremental" | "daily_recheck" | "weekly_recheck" | "monthly_recheck" | "force_all";
+    }
+) {
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
@@ -2630,9 +2639,9 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
             };
         }
 
-        // Fetch library media items
+        // Fetch library media items across the whole library section
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-        const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 200);
+        const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 2500);
 
         // Map leaving soon flags from content advisories
         const leavingSoonAdvisories = await prisma.mediaContentAdvisory.findMany({
@@ -2643,25 +2652,130 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
         }).catch(() => []);
         const leavingSoonKeys = new Set(leavingSoonAdvisories.map(a => String(a.ratingKey)));
 
-        let successCount = 0;
+        // Retrieve existing artwork backups for this server to track applied hashes and timestamps
+        const existingBackups = await prisma.mediaArtBackup.findMany({
+            where: { serverId }
+        }).catch(() => []);
+        const backupMap = new Map(existingBackups.map(b => [String(b.ratingKey), b]));
+
+        const batchSize = Math.max(10, Math.min(batchOptions?.batchSize || 200, 500));
+        const mode = batchOptions?.mode || "incremental";
+
+        // Categorize items
+        interface CandidateItem {
+            item: PlexMediaStreamInfo;
+            isNew: boolean;
+            isUpgrade: boolean;
+            reason: string;
+            priority: number;
+        }
+
+        const candidatesNeedingUpdate: CandidateItem[] = [];
+        let alreadyUpToDateCount = 0;
+
         for (const it of items) {
             if (leavingSoonKeys.has(String(it.ratingKey))) {
                 it.isLeavingSoon = true;
             }
-            // Apply if item has quality badges, ratings, ribbon match, leaving soon, or custom badges are active
-            if (
-                it.detectedBadges.resolution ||
-                it.detectedBadges.hdr ||
-                it.detectedBadges.audio ||
-                it.detectedBadges.edition ||
-                it.detectedBadges.studio ||
-                it.detectedBadges.contentRating ||
+
+            const hasOverlayOpportunity = Boolean(
+                it.detectedBadges?.resolution ||
+                it.detectedBadges?.hdr ||
+                it.detectedBadges?.audio ||
+                it.detectedBadges?.edition ||
+                it.detectedBadges?.studio ||
+                it.detectedBadges?.contentRating ||
                 overlayOpts.showRibbon ||
                 it.isLeavingSoon ||
                 activeCustomBadges.length > 0
-            ) {
-                const res = await backupAndApplyOverlay(serverUrl, token, serverId, it, overlayOpts);
-                if (res.success) successCount++;
+            );
+
+            if (!hasOverlayOpportunity) {
+                continue;
+            }
+
+            const currentHash = computeMediaOverlayHash(it, overlayOpts);
+            const backup = backupMap.get(String(it.ratingKey));
+
+            let needsUpdate = false;
+            let reason = "";
+            let priority = 3; // 1 = upgrade (e.g. 480p->1080p), 2 = new item, 3 = recheck
+
+            if (!backup) {
+                needsUpdate = true;
+                reason = "new_item";
+                priority = 2;
+            } else if (backup.mediaHash && backup.mediaHash !== currentHash) {
+                // Media attributes changed (e.g. upgraded resolution, HDR added, audio improved)
+                needsUpdate = true;
+                reason = "media_upgraded";
+                priority = 1;
+            } else if (!backup.mediaHash) {
+                // Legacy backup without hash tracking
+                needsUpdate = true;
+                reason = "initial_hash_sync";
+                priority = 2;
+            } else if (mode === "force_all") {
+                needsUpdate = true;
+                reason = "force_recheck";
+                priority = 3;
+            } else if (mode === "daily_recheck") {
+                const ageMs = Date.now() - new Date(backup.updatedAt).getTime();
+                if (ageMs > 24 * 60 * 60 * 1000) {
+                    needsUpdate = true;
+                    reason = "daily_recheck";
+                    priority = 3;
+                }
+            } else if (mode === "weekly_recheck") {
+                const ageMs = Date.now() - new Date(backup.updatedAt).getTime();
+                if (ageMs > 7 * 24 * 60 * 60 * 1000) {
+                    needsUpdate = true;
+                    reason = "weekly_recheck";
+                    priority = 3;
+                }
+            } else if (mode === "monthly_recheck") {
+                const ageMs = Date.now() - new Date(backup.updatedAt).getTime();
+                if (ageMs > 30 * 24 * 60 * 60 * 1000) {
+                    needsUpdate = true;
+                    reason = "monthly_recheck";
+                    priority = 3;
+                }
+            }
+
+            if (needsUpdate) {
+                candidatesNeedingUpdate.push({
+                    item: it,
+                    isNew: !backup,
+                    isUpgrade: Boolean(backup && backup.mediaHash && backup.mediaHash !== currentHash),
+                    reason,
+                    priority
+                });
+            } else {
+                alreadyUpToDateCount++;
+            }
+        }
+
+        // Sort candidates: Media Upgrades first (highest priority), then New Items, then Recheck items
+        candidatesNeedingUpdate.sort((a, b) => a.priority - b.priority);
+
+        // Take only up to batchSize items for this batch execution
+        const batchToProcess = candidatesNeedingUpdate.slice(0, batchSize);
+        const remainingInQueue = Math.max(0, candidatesNeedingUpdate.length - batchToProcess.length);
+
+        let successCount = 0;
+        let newBadgedCount = 0;
+        let upgradedCount = 0;
+
+        for (const candidate of batchToProcess) {
+            const it = candidate.item;
+            const res = await backupAndApplyOverlay(serverUrl, token, serverId, it, overlayOpts, true);
+            if (res.success) {
+                successCount++;
+                if (res.upgraded || candidate.isUpgrade) {
+                    upgradedCount++;
+                } else {
+                    newBadgedCount++;
+                }
             }
         }
 
@@ -2669,26 +2783,54 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
             await prisma.mediaOverlayRule.update({
                 where: { id: ruleId },
                 data: {
-                    itemCount: successCount,
+                    itemCount: (alreadyUpToDateCount + successCount),
                     lastAppliedAt: new Date()
                 }
-            });
+            }).catch(() => {});
         }
+
+        const modeLabel = mode === "incremental" 
+            ? "Hourly Incremental" 
+            : mode === "daily_recheck" 
+                ? "Daily Recheck" 
+                : mode === "weekly_recheck" 
+                    ? "Weekly Recheck" 
+                    : mode === "monthly_recheck"
+                        ? "Monthly Recheck"
+                        : "Full Library Recheck";
+
+        const message = `[${modeLabel}] Updated ${successCount} item(s) (${newBadgedCount} new, ${upgradedCount} upgraded/swapped). ${alreadyUpToDateCount} items already up to date.${remainingInQueue > 0 ? ` ${remainingInQueue} remaining to process in next batch run.` : ""}`;
+
+        logger.addLog("INFO", "CURATION", message);
 
         return {
             success: true,
             appliedCount: successCount,
+            newBadgedCount,
+            upgradedCount,
+            skippedCount: alreadyUpToDateCount,
             totalEvaluated: items.length,
-            message: `Applied poster overlays & badges to ${successCount} items on Plex.`
+            remainingInQueue,
+            batchSize,
+            mode,
+            message
         };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
 }
 
-export async function applyOverlaysToLibraryAction(serverId: string, sectionKey: string, ruleId?: string) {
+export async function applyOverlaysToLibraryAction(
+    serverId: string, 
+    sectionKey: string, 
+    ruleId?: string,
+    batchOptions?: {
+        batchSize?: number;
+        mode?: "incremental" | "daily_recheck" | "weekly_recheck" | "monthly_recheck" | "force_all";
+    }
+) {
     await verifyAdmin();
-    return await applyOverlaysToLibraryInternal(serverId, sectionKey, ruleId);
+    return await applyOverlaysToLibraryInternal(serverId, sectionKey, ruleId, batchOptions);
 }
 
 export async function revertLibraryOverlaysAction(serverId: string) {
@@ -3374,7 +3516,8 @@ export async function searchPlexLibraryItemsAction(
     serverId: string, 
     query: string, 
     sectionKey?: string,
-    includeBlocked = false
+    includeBlocked = false,
+    limit = 100
 ) {
     await verifyAdmin();
     try {
@@ -3388,7 +3531,7 @@ export async function searchPlexLibraryItemsAction(
 
         for (const url of urlsToTry) {
             try {
-                rawItems = await searchPlexLibraryItems(url, resolved.token, query.trim(), sectionKey);
+                rawItems = await searchPlexLibraryItems(url, resolved.token, query.trim(), sectionKey, limit);
                 if (rawItems.length > 0) break;
             } catch (e) {
                 // try next candidate URL

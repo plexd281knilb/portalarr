@@ -80,6 +80,7 @@ export function PlexPosterPickerModal({
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedSort, setSelectedSort] = useState<string>("addedAt:desc");
     const [qualityFilter, setQualityFilter] = useState<"all" | "4k" | "1080p" | "hdr" | "editions">("all");
+    const [batchLimit, setBatchLimit] = useState<number>(50);
     const [loading, setLoading] = useState(false);
     const [items, setItems] = useState<PlexMediaStreamInfo[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -115,7 +116,7 @@ export function PlexPosterPickerModal({
         return availableSections.find(s => String(s.key) === currentSectionKey);
     }, [availableSections, currentSectionKey]);
 
-    // Fetch recent items from the library when server, section, sort, showBlockedPreview, or open changes
+    // Fetch recent items from the library when server, section, sort, showBlockedPreview, batchLimit, or open changes
     useEffect(() => {
         if (!open || !currentServerId) return;
         if (searchQuery.trim().length > 0) return; // let search effect handle it
@@ -127,7 +128,7 @@ export function PlexPosterPickerModal({
                 const res = await getPlexRecentLibraryItemsAction(
                     currentServerId,
                     currentSectionKey || undefined,
-                    60,
+                    batchLimit,
                     selectedSort,
                     showBlockedPreview
                 );
@@ -152,7 +153,7 @@ export function PlexPosterPickerModal({
         return () => {
             isMounted = false;
         };
-    }, [open, currentServerId, currentSectionKey, selectedSort, searchQuery, showBlockedPreview]);
+    }, [open, currentServerId, currentSectionKey, selectedSort, searchQuery, showBlockedPreview, batchLimit]);
 
     // Handle Search with debounce
     useEffect(() => {
@@ -166,7 +167,8 @@ export function PlexPosterPickerModal({
                     currentServerId,
                     searchQuery.trim(),
                     currentSectionKey || undefined,
-                    showBlockedPreview
+                    showBlockedPreview,
+                    batchLimit
                 );
                 if (res.success && res.items) {
                     setItems(res.items);
@@ -185,7 +187,7 @@ export function PlexPosterPickerModal({
         }, 350);
 
         return () => clearTimeout(timer);
-    }, [searchQuery, open, currentServerId, currentSectionKey, showBlockedPreview]);
+    }, [searchQuery, open, currentServerId, currentSectionKey, showBlockedPreview, batchLimit]);
 
     const handleServerChange = (newSrvId: string) => {
         setCurrentServerId(newSrvId);
@@ -396,23 +398,42 @@ export function PlexPosterPickerModal({
                         </button>
                     </div>
 
-                    {/* Sort Selector */}
-                    {!searchQuery && (
+                    {/* Size & Sort Controls */}
+                    <div className="flex items-center gap-2 shrink-0">
+                        {/* Size Selector */}
                         <div className="shrink-0">
-                            <Select value={selectedSort} onValueChange={setSelectedSort}>
-                                <SelectTrigger className="h-9 bg-slate-900 border-slate-800 text-xs w-[145px] text-slate-300">
-                                    <ArrowUpDown className="h-3 w-3 text-slate-400 mr-1 shrink-0" />
-                                    <SelectValue placeholder="Sort By" />
+                            <Select value={String(batchLimit)} onValueChange={(val) => setBatchLimit(Number(val))}>
+                                <SelectTrigger className="h-9 bg-slate-900 border-slate-800 text-xs w-[110px] text-slate-300">
+                                    <Filter className="h-3 w-3 text-purple-400 mr-1 shrink-0" />
+                                    <SelectValue placeholder="Show" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                    <SelectItem value="addedAt:desc" className="text-xs">Recently Added</SelectItem>
-                                    <SelectItem value="titleSort:asc" className="text-xs">Title (A-Z)</SelectItem>
-                                    <SelectItem value="originallyAvailableAt:desc" className="text-xs">Release Year</SelectItem>
-                                    <SelectItem value="rating:desc" className="text-xs">Top Rated</SelectItem>
+                                    <SelectItem value="10" className="text-xs">10 Items</SelectItem>
+                                    <SelectItem value="50" className="text-xs">50 Items</SelectItem>
+                                    <SelectItem value="100" className="text-xs">100 Items</SelectItem>
+                                    <SelectItem value="200" className="text-xs">200 Items</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-                    )}
+
+                        {/* Sort Selector */}
+                        {!searchQuery && (
+                            <div className="shrink-0">
+                                <Select value={selectedSort} onValueChange={setSelectedSort}>
+                                    <SelectTrigger className="h-9 bg-slate-900 border-slate-800 text-xs w-[140px] text-slate-300">
+                                        <ArrowUpDown className="h-3 w-3 text-slate-400 mr-1 shrink-0" />
+                                        <SelectValue placeholder="Sort By" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                        <SelectItem value="addedAt:desc" className="text-xs">Recently Added</SelectItem>
+                                        <SelectItem value="titleSort:asc" className="text-xs">Title (A-Z)</SelectItem>
+                                        <SelectItem value="originallyAvailableAt:desc" className="text-xs">Release Year</SelectItem>
+                                        <SelectItem value="rating:desc" className="text-xs">Top Rated</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Media Cards Grid */}

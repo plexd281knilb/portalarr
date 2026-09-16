@@ -1931,29 +1931,35 @@ export async function evaluatePruneCandidatesForServer(
 
 /**
  * Searches Plex library items across hubs or a specific library section.
+ * Queries all search endpoints without premature termination to guarantee whole-library coverage.
  */
 export async function searchPlexLibraryItems(
     serverUrl: string,
     token: string,
     query: string,
-    sectionKey?: string
+    sectionKey?: string,
+    limit = 100
 ): Promise<PlexMediaStreamInfo[]> {
     const cleanBase = serverUrl.replace(/\/+$/, "");
     const endpointsToTry: string[] = [];
+    const maxLimit = Math.max(10, Math.min(limit || 100, 200));
 
     if (sectionKey) {
-        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/search?query=${encodeURIComponent(query)}&limit=40`);
-        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&sectionId=${encodeURIComponent(sectionKey)}&limit=40`);
-        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/all?title=${encodeURIComponent(query)}&X-Plex-Container-Start=0&X-Plex-Container-Size=40`);
+        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&sectionId=${encodeURIComponent(sectionKey)}&limit=${maxLimit}`);
+        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/search?query=${encodeURIComponent(query)}&limit=${maxLimit}`);
+        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/all?title=${encodeURIComponent(query)}&X-Plex-Container-Start=0&X-Plex-Container-Size=${maxLimit}`);
+        endpointsToTry.push(`${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/all?title*=${encodeURIComponent(query)}&X-Plex-Container-Start=0&X-Plex-Container-Size=${maxLimit}`);
+        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&limit=${maxLimit}`);
     } else {
-        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&limit=50`);
-        endpointsToTry.push(`${cleanBase}/search?query=${encodeURIComponent(query)}&limit=50`);
+        endpointsToTry.push(`${cleanBase}/hubs/search?query=${encodeURIComponent(query)}&limit=${maxLimit}`);
+        endpointsToTry.push(`${cleanBase}/search?query=${encodeURIComponent(query)}&limit=${maxLimit}`);
     }
 
     const seenKeys = new Set<string>();
     const results: PlexMediaStreamInfo[] = [];
 
     for (const endpoint of endpointsToTry) {
+        if (results.length >= maxLimit) break;
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -1989,6 +1995,7 @@ export async function searchPlexLibraryItems(
             }
 
             for (const item of items) {
+                if (results.length >= maxLimit) break;
                 const rKey = String(item.ratingKey || item.key || "");
                 if (!rKey || seenKeys.has(rKey)) continue;
 
@@ -2009,14 +2016,28 @@ export async function searchPlexLibraryItems(
                 seenKeys.add(rKey);
                 results.push(analyzeMediaStreamInfo(item));
             }
-
-            if (results.length > 0) {
-                return results;
-            }
         } catch (e: any) {
             // Try next search endpoint
         }
     }
+
+    // Sort exact/prefix matches to top
+    const lowerQ = query.toLowerCase().trim();
+    results.sort((a, b) => {
+        const aTitle = (a.title || "").toLowerCase();
+        const bTitle = (b.title || "").toLowerCase();
+        const aExact = aTitle === lowerQ;
+        const bExact = bTitle === lowerQ;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+
+        const aStarts = aTitle.startsWith(lowerQ);
+        const bStarts = bTitle.startsWith(lowerQ);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+
+        return 0;
+    });
 
     return results;
 }

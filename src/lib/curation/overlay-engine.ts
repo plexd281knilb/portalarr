@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { fetchPlexPosterBuffer, uploadPlexItemPoster, PlexMediaStreamInfo } from "./plex-analyzer";
@@ -1528,54 +1529,130 @@ export async function applyOverlaysToPoster(
 }
 
 /**
+ * Computes a deterministic MD5 hash representing the media's stream telemetry and overlay options.
+ * When media files are upgraded (e.g. 480p -> 1080p, HDR/Atmos added) or rules change, the hash changes.
+ */
+export function computeMediaOverlayHash(
+    item: PlexMediaStreamInfo,
+    options: OverlayOptions = {}
+): string {
+    const keyData = {
+        ratingKey: String(item.ratingKey || ""),
+        res: item.detectedBadges?.resolution || item.media?.[0]?.videoResolution || "",
+        hdr: item.detectedBadges?.hdr || item.media?.[0]?.hdrFormat || "",
+        audio: item.detectedBadges?.audio || item.media?.[0]?.audioCodec || "",
+        channels: item.detectedBadges?.audioChannels || String(item.media?.[0]?.audioChannels || ""),
+        edition: item.detectedBadges?.edition || item.editionTitle || "",
+        studio: item.detectedBadges?.studio || item.studio || "",
+        contentRating: item.detectedBadges?.contentRating || item.contentRating || "",
+        leavingSoon: !!item.isLeavingSoon,
+        customBadges: (options.customBadges || []).map(b => `${b.id}:${b.position}:${b.width}x${b.height}:${b.opacity}`).join(","),
+        theme: options.theme,
+        badgeScale: options.badgeScale,
+        categoryScales: options.categoryScales,
+        positions: {
+            resolution: options.resolutionPosition,
+            hdr: options.hdrPosition,
+            audio: options.audioPosition,
+            ratings: options.ratingsPosition,
+            ribbon: options.ribbonPosition
+        },
+        toggles: {
+            res: options.showResolution,
+            hdr: options.showHdr,
+            audio: options.showAudio,
+            ratings: options.showRatings,
+            leaving: options.showLeavingSoon,
+            channels: options.showAudioChannels,
+            codec: options.showCodec,
+            edition: options.showEdition,
+            studio: options.showStudio,
+            contentRating: options.showContentRating,
+            ribbon: options.showRibbon
+        }
+    };
+    return crypto.createHash("md5").update(JSON.stringify(keyData)).digest("hex");
+}
+
+/**
  * Backs up pristine original artwork and applies overlay to a Plex item.
+ * Automatically tracks mediaHash so unchanged items are skipped on incremental runs,
+ * and upgraded items (e.g. 480p -> 1080p) are re-rendered from the pristine backup.
  */
 export async function backupAndApplyOverlay(
     serverUrl: string,
     token: string,
     serverId: string,
     item: PlexMediaStreamInfo,
-    options: OverlayOptions = {}
-): Promise<{ success: boolean; message?: string }> {
+    options: OverlayOptions = {},
+    forceReapply = false
+): Promise<{ success: boolean; skipped?: boolean; upgraded?: boolean; applied?: boolean; message?: string }> {
     ensureBackupDir();
 
     if (!item.thumb) {
         return { success: false, message: "Item has no thumbnail to overlay." };
     }
 
-    const originalBuffer = await fetchPlexPosterBuffer(serverUrl, token, item.thumb);
-    if (!originalBuffer) {
-        return { success: false, message: "Failed to download poster buffer from Plex." };
-    }
+    const currentHash = computeMediaOverlayHash(item, options);
+    const badgeSummary = JSON.stringify({
+        resolution: item.detectedBadges?.resolution,
+        hdr: item.detectedBadges?.hdr,
+        audio: item.detectedBadges?.audio,
+        edition: item.detectedBadges?.edition,
+        studio: item.detectedBadges?.studio,
+        contentRating: item.detectedBadges?.contentRating,
+        leavingSoon: item.isLeavingSoon
+    });
 
     const existingBackup = await prisma.mediaArtBackup.findUnique({
         where: {
             serverId_ratingKey: {
                 serverId,
-                ratingKey: item.ratingKey
+                ratingKey: String(item.ratingKey)
             }
         }
     });
 
-    const backupFilePath = path.join(BACKUP_DIR, `${serverId}_${item.ratingKey}.jpg`);
+    // Check if item is already up to date with the exact same media attributes & rules
+    if (!forceReapply && existingBackup && existingBackup.mediaHash === currentHash) {
+        return {
+            success: true,
+            skipped: true,
+            message: `"${item.title}" is already up to date with matching overlays.`
+        };
+    }
+
+    const isUpgrade = Boolean(existingBackup && existingBackup.mediaHash && existingBackup.mediaHash !== currentHash);
+    const backupFilePath = existingBackup?.backupFilePath || path.join(BACKUP_DIR, `${serverId}_${item.ratingKey}.jpg`);
+
+    let originalBuffer: Buffer | null = null;
+    if (existingBackup && fs.existsSync(existingBackup.backupFilePath)) {
+        originalBuffer = fs.readFileSync(existingBackup.backupFilePath);
+    } else {
+        originalBuffer = await fetchPlexPosterBuffer(serverUrl, token, item.thumb);
+        if (!originalBuffer) {
+            return { success: false, message: "Failed to download poster buffer from Plex." };
+        }
+        fs.writeFileSync(backupFilePath, originalBuffer);
+    }
 
     if (!existingBackup) {
-        fs.writeFileSync(backupFilePath, originalBuffer);
         await prisma.mediaArtBackup.create({
             data: {
-                ratingKey: item.ratingKey,
+                ratingKey: String(item.ratingKey),
                 serverId,
+                title: item.title,
                 originalArtUrl: item.thumb,
-                backupFilePath
+                backupFilePath,
+                mediaHash: currentHash,
+                appliedBadges: badgeSummary
             }
         });
-        logger.addLog("INFO", "CURATION", `Backed up original poster for "${item.title}" (RatingKey: ${item.ratingKey})`);
+        logger.addLog("INFO", "CURATION", `Backed up pristine original poster for "${item.title}" (RatingKey: ${item.ratingKey})`);
     }
 
     const overlayBuffer = await applyOverlaysToPoster(
-        existingBackup && fs.existsSync(existingBackup.backupFilePath)
-            ? fs.readFileSync(existingBackup.backupFilePath)
-            : originalBuffer,
+        originalBuffer,
         item,
         options
     );
@@ -1583,8 +1660,25 @@ export async function backupAndApplyOverlay(
     const uploaded = await uploadPlexItemPoster(serverUrl, token, item.ratingKey, overlayBuffer);
 
     if (uploaded) {
-        logger.addLog("SUCCESS", "CURATION", `Applied overlay badges to "${item.title}" on Plex.`);
-        return { success: true, message: `Applied overlay to "${item.title}".` };
+        if (existingBackup) {
+            await prisma.mediaArtBackup.update({
+                where: { id: existingBackup.id },
+                data: {
+                    mediaHash: currentHash,
+                    appliedBadges: badgeSummary,
+                    updatedAt: new Date()
+                }
+            });
+        }
+
+        const actionType = isUpgrade ? "Upgraded" : "Applied";
+        logger.addLog("SUCCESS", "CURATION", `${actionType} overlay badges to "${item.title}" on Plex.`);
+        return { 
+            success: true, 
+            upgraded: isUpgrade, 
+            applied: !isUpgrade,
+            message: `${actionType} overlay to "${item.title}".` 
+        };
     } else {
         return { success: false, message: "Failed to upload overlay poster to Plex." };
     }

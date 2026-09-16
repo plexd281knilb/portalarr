@@ -98,6 +98,7 @@ export function TaggingStudio() {
     }>>([]);
     const [advisoryLoading, setAdvisoryLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [displayLimit, setDisplayLimit] = useState<number>(50);
 
     // Custom Tagging State
     const [customRule, setCustomRule] = useState<CustomTagRule>({
@@ -656,8 +657,8 @@ export function TaggingStudio() {
                                     </CardDescription>
                                 </div>
 
-                                <div className="flex items-center gap-2 w-full sm:w-auto">
-                                    <div className="relative w-full sm:w-[220px]">
+                                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                    <div className="relative w-full sm:w-[200px]">
                                         <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                                         <Input
                                             value={searchQuery}
@@ -666,6 +667,18 @@ export function TaggingStudio() {
                                             className="h-8 pl-8 bg-slate-950 border-slate-700 text-xs text-slate-200"
                                         />
                                     </div>
+                                    <Select value={String(displayLimit)} onValueChange={(v) => setDisplayLimit(Number(v))}>
+                                        <SelectTrigger className="h-8 bg-slate-950 border-slate-700 text-xs w-[105px] text-slate-300">
+                                            <SelectValue placeholder="Show" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-950 border-slate-800 text-white text-xs">
+                                            <SelectItem value="10" className="text-xs">10 Items</SelectItem>
+                                            <SelectItem value="50" className="text-xs">50 Items</SelectItem>
+                                            <SelectItem value="100" className="text-xs">100 Items</SelectItem>
+                                            <SelectItem value="200" className="text-xs">200 Items</SelectItem>
+                                            <SelectItem value="1000" className="text-xs">All Items</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -693,7 +706,7 @@ export function TaggingStudio() {
                                 </div>
                             ) : (
                                 <div className="divide-y divide-slate-800/60 max-h-[500px] overflow-y-auto">
-                                    {filteredAdvisories.slice(0, 100).map((item) => (
+                                    {filteredAdvisories.slice(0, displayLimit).map((item) => (
                                         <div key={item.ratingKey} className="p-3.5 hover:bg-slate-800/40 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-2">

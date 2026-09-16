@@ -431,6 +431,8 @@ model MediaArtBackup {
   title          String?
   originalArtUrl String?
   backupFilePath String
+  mediaHash      String?
+  appliedBadges  String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

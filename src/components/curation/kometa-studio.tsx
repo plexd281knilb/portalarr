@@ -236,6 +236,11 @@ export function KometaStudio() {
     const [posterPickerModalOpen, setPosterPickerModalOpen] = useState(false);
     const [simSelectedRealItem, setSimSelectedRealItem] = useState<PlexMediaStreamInfo | null>(null);
 
+    // Batch Processing & Recheck Cadence States
+    const [overlayBatchSize, setOverlayBatchSize] = useState<number>(200);
+    const [overlayBatchMode, setOverlayBatchMode] = useState<"incremental" | "daily_recheck" | "weekly_recheck" | "monthly_recheck" | "force_all">("incremental");
+    const [inspectorLimit, setInspectorLimit] = useState<number>(50);
+
     const handleSelectRealPoster = (item: PlexMediaStreamInfo, posterUrl: string) => {
         setSimPosterImage(posterUrl);
         setSimSelectedRealItem(item);
@@ -484,11 +489,14 @@ export function KometaStudio() {
         try {
             let res: any;
             if (selectedServerId && selectedSectionKey) {
-                res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey);
+                res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey, undefined, {
+                    batchSize: overlayBatchSize,
+                    mode: overlayBatchMode
+                });
                 if (res.success) {
                     setOverlaySyncResult({
                         success: true,
-                        text: `Successfully processed library: ${res.appliedCount ?? 0} posters updated.`,
+                        text: `Successfully processed library: ${res.appliedCount ?? 0} posters updated (${res.upgradedCount ?? 0} upgraded, ${res.skippedCount ?? 0} up-to-date skipped).`,
                         details: res.message ? [res.message] : []
                     });
                 } else {
@@ -2183,7 +2191,10 @@ export function KometaStudio() {
             }
             const savedRuleId = saveRes.rule?.id || existingId;
 
-            const res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey, savedRuleId);
+            const res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey, savedRuleId, {
+                batchSize: overlayBatchSize,
+                mode: overlayBatchMode
+            });
             if (res.success) {
                 setOverlayMessage({ success: true, text: res.message || "Overlays applied to library successfully!" });
             } else {
@@ -2623,7 +2634,13 @@ export function KometaStudio() {
         setSingleItemMsg(null);
         try {
             const targetServerId = selectedServerId || (servers.length > 0 ? servers[0].serverId : "");
-            const res = await searchPlexLibraryItemsAction(targetServerId, inspectorSearchQuery.trim(), selectedSectionKey || undefined);
+            const res = await searchPlexLibraryItemsAction(
+                targetServerId, 
+                inspectorSearchQuery.trim(), 
+                selectedSectionKey || undefined,
+                false,
+                inspectorLimit
+            );
             if (res.success && res.items) {
                 setSearchResults(res.items);
                 if (res.items.length > 0) {
@@ -2990,8 +3007,8 @@ export function KometaStudio() {
                         )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                        <div className="flex items-center gap-2.5 bg-slate-800/90 px-3.5 py-2 rounded-xl border border-slate-700">
+                    <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+                        <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
                             <span className="text-xs font-bold text-slate-200">Timer</span>
                             <Switch 
                                 checked={curationSyncOverlays}
@@ -2999,12 +3016,13 @@ export function KometaStudio() {
                             />
                         </div>
 
+                        {/* Frequency Schedule */}
                         <div className="space-y-0.5">
                             <Select 
                                 value={curationSyncSchedule} 
                                 onValueChange={val => setCurationSyncSchedule(val)}
                             >
-                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[165px]">
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[155px]">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -3018,12 +3036,49 @@ export function KometaStudio() {
                             </Select>
                         </div>
 
+                        {/* Batch Size Selector */}
+                        <div className="space-y-0.5">
+                            <Select 
+                                value={String(overlayBatchSize)} 
+                                onValueChange={val => setOverlayBatchSize(Number(val))}
+                            >
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[120px] text-purple-300 font-semibold">
+                                    <SelectValue placeholder="Batch Size" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="10">📦 10 Items</SelectItem>
+                                    <SelectItem value="50">📦 50 Items</SelectItem>
+                                    <SelectItem value="100">📦 100 Items</SelectItem>
+                                    <SelectItem value="200">📦 200 Items</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Cadence Mode Selector */}
+                        <div className="space-y-0.5">
+                            <Select 
+                                value={overlayBatchMode} 
+                                onValueChange={(val: any) => setOverlayBatchMode(val)}
+                            >
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[170px] text-slate-200">
+                                    <SelectValue placeholder="Run Mode" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="incremental">⚡ Hourly (Skip Up-to-Date)</SelectItem>
+                                    <SelectItem value="daily_recheck">🌙 Daily Recheck (&gt;24h)</SelectItem>
+                                    <SelectItem value="weekly_recheck">📅 Weekly Recheck (&gt;7d)</SelectItem>
+                                    <SelectItem value="monthly_recheck">🗓️ Monthly Recheck (&gt;30d)</SelectItem>
+                                    <SelectItem value="force_all">🔄 Force Recheck All</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
                         <Button 
                             size="sm"
                             onClick={handleSaveSchedule}
                             disabled={savingSchedule}
                             variant="outline"
-                            className="border-slate-700 text-slate-300 hover:text-white text-xs h-9 px-3.5 cursor-pointer"
+                            className="border-slate-700 text-slate-300 hover:text-white text-xs h-9 px-3 cursor-pointer"
                         >
                             {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
                             {scheduleSavedMsg ? "Saved!" : "Save Schedule"}
@@ -3033,10 +3088,10 @@ export function KometaStudio() {
                             size="sm"
                             onClick={handleRunOverlaySync}
                             disabled={runningOverlaySync}
-                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-9 px-4 gap-1.5 shadow-md shadow-purple-950/40 cursor-pointer"
+                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-9 px-3.5 gap-1.5 shadow-md shadow-purple-950/40 cursor-pointer"
                         >
                             {runningOverlaySync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                            <span>Run Overlay Sync Now</span>
+                            <span>Run Batch Sync Now</span>
                         </Button>
                     </div>
                 </CardContent>
@@ -3097,16 +3152,41 @@ export function KometaStudio() {
                                 {savingOverlaySettings ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                                 <span>🔖 Save Overlay Settings</span>
                             </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                disabled={applyingOverlays}
-                                onClick={handleApplyOverlays}
-                                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer"
-                            >
-                                {applyingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                                <span>✨ Apply Overlays to Library</span>
-                            </Button>
+                            <div className="flex items-center gap-1.5 bg-slate-950/80 p-0.5 rounded-xl border border-slate-800">
+                                <Select value={String(overlayBatchSize)} onValueChange={val => setOverlayBatchSize(Number(val))}>
+                                    <SelectTrigger className="h-8 bg-transparent border-0 text-xs w-[95px] text-purple-300 font-bold focus:ring-0">
+                                        <SelectValue placeholder="Size" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                        <SelectItem value="10">10 Items</SelectItem>
+                                        <SelectItem value="50">50 Items</SelectItem>
+                                        <SelectItem value="100">100 Items</SelectItem>
+                                        <SelectItem value="200">200 Items</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Select value={overlayBatchMode} onValueChange={(val: any) => setOverlayBatchMode(val)}>
+                                    <SelectTrigger className="h-8 bg-transparent border-0 text-xs w-[130px] text-slate-300 font-medium focus:ring-0">
+                                        <SelectValue placeholder="Mode" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                        <SelectItem value="incremental">⚡ Hourly (Skip Up-to-Date)</SelectItem>
+                                        <SelectItem value="daily_recheck">🌙 Daily Recheck</SelectItem>
+                                        <SelectItem value="weekly_recheck">📅 Weekly Recheck</SelectItem>
+                                        <SelectItem value="monthly_recheck">🗓️ Monthly Recheck</SelectItem>
+                                        <SelectItem value="force_all">🔄 Force Recheck All</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={applyingOverlays}
+                                    onClick={handleApplyOverlays}
+                                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs h-7.5 px-3 gap-1.5 shadow-md cursor-pointer rounded-lg"
+                                >
+                                    {applyingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                                    <span>✨ Apply ({overlayBatchSize})</span>
+                                </Button>
+                            </div>
                             <Button
                                 type="button"
                                 size="sm"
@@ -4607,8 +4687,8 @@ export function KometaStudio() {
                                 Test overlay generation and inspect detected video/audio codecs, HDR decisions, and custom priority overrides on actual Plex media items.
                             </CardDescription>
                         </div>
-                        <form onSubmit={handleSearchInspector} className="flex items-center gap-2 w-full sm:w-auto">
-                            <div className="relative w-full sm:w-72">
+                        <form onSubmit={handleSearchInspector} className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                            <div className="relative w-full sm:w-64">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
                                 <Input
                                     value={inspectorSearchQuery}
@@ -4617,6 +4697,17 @@ export function KometaStudio() {
                                     className="pl-8.5 h-8.5 bg-slate-950/80 border-slate-800 text-xs text-slate-100 rounded-xl"
                                 />
                             </div>
+                            <Select value={String(inspectorLimit)} onValueChange={(val) => setInspectorLimit(Number(val))}>
+                                <SelectTrigger className="h-8.5 bg-slate-950/80 border-slate-800 text-xs w-[110px] text-slate-300 rounded-xl">
+                                    <SelectValue placeholder="Limit" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                    <SelectItem value="10" className="text-xs">10 Items</SelectItem>
+                                    <SelectItem value="50" className="text-xs">50 Items</SelectItem>
+                                    <SelectItem value="100" className="text-xs">100 Items</SelectItem>
+                                    <SelectItem value="200" className="text-xs">200 Items</SelectItem>
+                                </SelectContent>
+                            </Select>
                             <Button 
                                 type="submit" 
                                 size="sm" 

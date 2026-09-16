@@ -1011,6 +1011,20 @@ export async function ensureSchemaColumns(): Promise<void> {
                 CREATE UNIQUE INDEX IF NOT EXISTS "MediaArtBackup_serverId_ratingKey_key" ON "MediaArtBackup"("serverId", "ratingKey");
             `);
 
+            try {
+                const backupTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaArtBackup");`);
+                const backupCols = backupTableInfo.map((c: any) => c.name);
+                const backupAddCols: [string, string][] = [
+                    ["mediaHash", `ALTER TABLE "MediaArtBackup" ADD COLUMN "mediaHash" TEXT;`],
+                    ["appliedBadges", `ALTER TABLE "MediaArtBackup" ADD COLUMN "appliedBadges" TEXT;`]
+                ];
+                for (const [colName, ddl] of backupAddCols) {
+                    if (!backupCols.includes(colName)) {
+                        try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                    }
+                }
+            } catch (e) {}
+
             await prisma.$executeRawUnsafe(`
                 CREATE TABLE IF NOT EXISTS "UserContentPreference" (
                     "id" TEXT PRIMARY KEY,
