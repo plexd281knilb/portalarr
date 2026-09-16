@@ -3503,24 +3503,24 @@ export function KometaStudio() {
                                     <div className="space-y-4 pt-1">
                                         {/* Top Config Row */}
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1.5 min-w-0">
                                                 <label className="text-xs font-bold text-slate-300">Ribbon Evaluation Mode</label>
                                                 <Select value={simRibbonMode} onValueChange={(val: any) => setSimRibbonMode(val)}>
-                                                    <SelectTrigger className="h-8 bg-slate-900 border-slate-700 text-xs">
-                                                        <SelectValue />
+                                                    <SelectTrigger className="h-8.5 w-full bg-slate-900 border-slate-700 text-xs">
+                                                        <SelectValue placeholder="Select mode..." />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="waterfall">🌊 Waterfall Priority (Kometa Standard — 1st Match Wins)</SelectItem>
+                                                        <SelectItem value="waterfall">🌊 Waterfall Priority (1st Match Wins)</SelectItem>
                                                         <SelectItem value="single">🏷️ Single Custom Text (Manual Fixed Ribbon)</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
 
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1.5 min-w-0">
                                                 <label className="text-xs font-bold text-slate-300">Ribbon Placement Corner</label>
                                                 <Select value={simRibbonPosition} onValueChange={(val: any) => setSimRibbonPosition(val)}>
-                                                    <SelectTrigger className="h-8 bg-slate-900 border-slate-700 text-xs">
-                                                        <SelectValue />
+                                                    <SelectTrigger className="h-8.5 w-full bg-slate-900 border-slate-700 text-xs">
+                                                        <SelectValue placeholder="Select corner..." />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="top-right">Top-Right (45° Diagonal)</SelectItem>
@@ -3535,19 +3535,19 @@ export function KometaStudio() {
                                         {/* Single Custom Mode Controls */}
                                         {simRibbonMode === "single" && (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-slate-900/70 rounded-xl border border-slate-800">
-                                                <div className="space-y-1.5">
+                                                <div className="space-y-1.5 min-w-0">
                                                     <label className="text-xs font-bold text-slate-300">Custom Ribbon Text</label>
                                                     <Input 
                                                         value={simRibbonText} 
                                                         onChange={e => setSimRibbonText(e.target.value)} 
                                                         placeholder="e.g. IMDb TOP 250, CRITERION COLLECTION" 
-                                                        className="h-8 bg-slate-950 border-slate-700 text-xs text-slate-100"
+                                                        className="h-8.5 bg-slate-950 border-slate-700 text-xs text-slate-100"
                                                     />
                                                 </div>
-                                                <div className="space-y-1.5">
+                                                <div className="space-y-1.5 min-w-0">
                                                     <label className="text-xs font-bold text-slate-300">Ribbon Theme</label>
                                                     <Select value={simRibbonTheme} onValueChange={(val: any) => setSimRibbonTheme(val)}>
-                                                        <SelectTrigger className="h-8 bg-slate-950 border-slate-700 text-xs">
+                                                        <SelectTrigger className="h-8.5 bg-slate-950 border-slate-700 text-xs">
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -3583,12 +3583,12 @@ export function KometaStudio() {
 
                                                     return (
                                                         <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
-                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                                                                <div className="flex items-center gap-2.5">
+                                                            <div className="flex items-center justify-between gap-2.5 flex-wrap">
+                                                                <div className="flex items-center gap-2 flex-wrap min-w-0">
                                                                     <div className="h-6 w-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-black shrink-0">
                                                                         🎯
                                                                     </div>
-                                                                    <span className="text-xs font-bold text-white">Waterfall Simulation Result:</span>
+                                                                    <span className="text-xs font-bold text-white whitespace-nowrap">Waterfall Result:</span>
                                                                     {win ? (
                                                                         <Badge variant="outline" className={`text-xs px-2.5 py-0.5 font-black uppercase tracking-wider ${themeBadgeClasses[win.theme] || themeBadgeClasses.purple}`}>
                                                                             Priority #{win.priority}: "{win.text}"
@@ -3600,7 +3600,7 @@ export function KometaStudio() {
                                                                     )}
                                                                 </div>
                                                                 {simSelectedRealItem && (
-                                                                    <span className="text-[10px] font-mono text-purple-300 bg-purple-950/50 px-2.5 py-1 rounded-lg border border-purple-800/40 truncate max-w-[220px]" title={simSelectedRealItem.title}>
+                                                                    <span className="text-[10px] font-mono text-purple-300 bg-purple-950/50 px-2 py-0.5 rounded-lg border border-purple-800/40 truncate max-w-[200px]" title={simSelectedRealItem.title}>
                                                                         Telemetry: {simSelectedRealItem.title}
                                                                     </span>
                                                                 )}
@@ -3616,12 +3616,12 @@ export function KometaStudio() {
 
                                                 {/* Waterfall Priority Tiers Reordering & Configuration */}
                                                 <div className="space-y-3 pt-1">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-0.5">
+                                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                        <div className="space-y-0.5 min-w-0">
                                                             <span className="text-xs font-bold text-slate-200">Waterfall Priority Cascading List</span>
                                                             <p className="text-xs text-slate-400">Tiers are evaluated from top to bottom. The first qualifying tier awards the single corner ribbon.</p>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex items-center gap-2 shrink-0">
                                                             <Button
                                                                 type="button"
                                                                 variant="outline"
@@ -3633,7 +3633,7 @@ export function KometaStudio() {
                                                                         { id: newId, type: "auto_quality", text: "4K UHD", theme: "purple", enabled: true }
                                                                     ]);
                                                                 }}
-                                                                className="h-7 px-2.5 text-xs bg-slate-900 border-slate-700 text-purple-300 hover:text-white"
+                                                                className="h-7.5 px-2.5 text-xs bg-slate-900 border-slate-700 text-purple-300 hover:text-white"
                                                             >
                                                                 <Plus className="h-3.5 w-3.5 mr-1" /> Add Tier
                                                             </Button>
@@ -3642,14 +3642,14 @@ export function KometaStudio() {
                                                                 variant="ghost"
                                                                 size="sm"
                                                                 onClick={() => setSimTieredRibbons(DEFAULT_KOMETA_WATERFALL_RIBBONS)}
-                                                                className="h-7 px-2.5 text-xs text-slate-400 hover:text-white"
+                                                                className="h-7.5 px-2.5 text-xs text-slate-400 hover:text-white"
                                                             >
                                                                 ↺ Reset Defaults
                                                             </Button>
                                                         </div>
                                                     </div>
 
-                                                    <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1.5 scrollbar-thin">
+                                                    <div className="space-y-3 max-h-96 overflow-y-auto pr-1 scrollbar-thin">
                                                         {simTieredRibbons.map((tier, idx) => {
                                                             const isFirst = idx === 0;
                                                             const isLast = idx === simTieredRibbons.length - 1;
@@ -3657,15 +3657,15 @@ export function KometaStudio() {
                                                             return (
                                                                 <div
                                                                     key={tier.id || idx}
-                                                                    className={`p-3.5 rounded-xl border text-xs transition-all space-y-2.5 ${
+                                                                    className={`p-3.5 rounded-xl border text-xs transition-all space-y-3 ${
                                                                         tier.enabled 
-                                                                            ? "bg-slate-900/90 border-slate-800 shadow-sm hover:border-slate-750" 
+                                                                            ? "bg-slate-900/90 border-slate-800 shadow-sm hover:border-slate-700" 
                                                                             : "bg-slate-950/60 border-slate-800/40 opacity-60"
                                                                     }`}
                                                                 >
-                                                                    {/* Row 1: Priority Badge + Reorder + Preset Selector + Toggle + Delete */}
-                                                                    <div className="flex items-center justify-between gap-2.5 flex-wrap sm:flex-nowrap">
-                                                                        <div className="flex items-center gap-2 shrink-0">
+                                                                    {/* Header Row: Priority Badge + Up/Down + Toggle + Delete */}
+                                                                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/60 pb-2.5">
+                                                                        <div className="flex items-center gap-2">
                                                                             <Badge
                                                                                 variant="outline"
                                                                                 className={`text-xs font-mono font-black px-2 py-0.5 ${
@@ -3708,37 +3708,12 @@ export function KometaStudio() {
                                                                                     <ChevronDown className="h-4 w-4" />
                                                                                 </button>
                                                                             </div>
+                                                                            <span className={`text-[10px] font-bold ${tier.enabled ? "text-emerald-400" : "text-slate-500"}`}>
+                                                                                {tier.enabled ? "Active" : "Disabled"}
+                                                                            </span>
                                                                         </div>
 
-                                                                        <div className="flex-1 min-w-[200px]">
-                                                                            <Select
-                                                                                value={tier.type || "custom"}
-                                                                                onValueChange={(val: any) => {
-                                                                                    const preset = WATERFALL_PRESET_OPTIONS.find(p => p.value === val);
-                                                                                    const next = [...simTieredRibbons];
-                                                                                    next[idx] = {
-                                                                                        ...next[idx],
-                                                                                        type: val,
-                                                                                        text: preset ? preset.defaultText : next[idx].text,
-                                                                                        theme: preset ? preset.defaultTheme : next[idx].theme
-                                                                                    };
-                                                                                    setSimTieredRibbons(next);
-                                                                                }}
-                                                                            >
-                                                                                <SelectTrigger className="h-7.5 bg-slate-950 border-slate-700 text-xs">
-                                                                                    <SelectValue />
-                                                                                </SelectTrigger>
-                                                                                <SelectContent>
-                                                                                    {WATERFALL_PRESET_OPTIONS.map(preset => (
-                                                                                        <SelectItem key={preset.value} value={preset.value} className="text-xs">
-                                                                                            {preset.label}
-                                                                                        </SelectItem>
-                                                                                    ))}
-                                                                                </SelectContent>
-                                                                            </Select>
-                                                                        </div>
-
-                                                                        <div className="flex items-center gap-2.5 shrink-0">
+                                                                        <div className="flex items-center gap-2">
                                                                             <Switch
                                                                                 checked={tier.enabled !== false}
                                                                                 onCheckedChange={checked => {
@@ -3760,10 +3735,40 @@ export function KometaStudio() {
                                                                         </div>
                                                                     </div>
 
-                                                                    {/* Row 2: Theme Selector + Custom Ribbon Text Override */}
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-xs text-slate-400 font-medium shrink-0">Theme:</span>
+                                                                    {/* Preset Selector Row */}
+                                                                    <div className="space-y-1">
+                                                                        <label className="text-[11px] font-medium text-slate-400">Trigger Condition / Award Preset:</label>
+                                                                        <Select
+                                                                            value={tier.type || "custom"}
+                                                                            onValueChange={(val: any) => {
+                                                                                const preset = WATERFALL_PRESET_OPTIONS.find(p => p.value === val);
+                                                                                const next = [...simTieredRibbons];
+                                                                                next[idx] = {
+                                                                                    ...next[idx],
+                                                                                    type: val,
+                                                                                    text: preset ? preset.defaultText : next[idx].text,
+                                                                                    theme: preset ? preset.defaultTheme : next[idx].theme
+                                                                                };
+                                                                                setSimTieredRibbons(next);
+                                                                            }}
+                                                                        >
+                                                                            <SelectTrigger className="h-8 w-full bg-slate-950 border-slate-700 text-xs">
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                {WATERFALL_PRESET_OPTIONS.map(preset => (
+                                                                                    <SelectItem key={preset.value} value={preset.value} className="text-xs">
+                                                                                        {preset.label}
+                                                                                    </SelectItem>
+                                                                                ))}
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                    </div>
+
+                                                                    {/* Customization Row: Theme Selector + Custom Ribbon Text */}
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                                                        <div className="space-y-1 min-w-0">
+                                                                            <label className="text-[11px] font-medium text-slate-400">Ribbon Theme:</label>
                                                                             <Select
                                                                                 value={tier.theme || "purple"}
                                                                                 onValueChange={(val: any) => {
@@ -3772,7 +3777,7 @@ export function KometaStudio() {
                                                                                     setSimTieredRibbons(next);
                                                                                 }}
                                                                             >
-                                                                                <SelectTrigger className="h-7.5 bg-slate-950 border-slate-700 text-xs flex-1">
+                                                                                <SelectTrigger className="h-8 w-full bg-slate-950 border-slate-700 text-xs">
                                                                                     <SelectValue />
                                                                                 </SelectTrigger>
                                                                                 <SelectContent>
@@ -3788,8 +3793,8 @@ export function KometaStudio() {
                                                                             </Select>
                                                                         </div>
 
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-xs text-slate-400 font-medium shrink-0">Banner Text:</span>
+                                                                        <div className="space-y-1 min-w-0">
+                                                                            <label className="text-[11px] font-medium text-slate-400">Ribbon Text:</label>
                                                                             <Input
                                                                                 value={tier.text || ""}
                                                                                 onChange={e => {
@@ -3797,8 +3802,8 @@ export function KometaStudio() {
                                                                                     next[idx] = { ...next[idx], text: e.target.value };
                                                                                     setSimTieredRibbons(next);
                                                                                 }}
-                                                                                placeholder="Banner Text"
-                                                                                className="h-7.5 bg-slate-950 border-slate-700 text-xs px-2.5 flex-1"
+                                                                                placeholder="e.g. IMDb TOP 250"
+                                                                                className="h-8 w-full bg-slate-950 border-slate-700 text-xs px-2.5"
                                                                             />
                                                                         </div>
                                                                     </div>
