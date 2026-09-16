@@ -714,6 +714,16 @@ export const DEFAULT_BUILTIN_BADGE_DEFINITIONS: BuiltinBadgeDefinition[] = [
         svgContent: `<svg width="230" height="46" viewBox="0 0 230 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g4kplus" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24"/><stop offset="50%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.85"/></filter></defs><rect x="2" y="2" width="226" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#g4kplus)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="222" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="36" y="29" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="18.5" fill="#facc15" text-anchor="middle">4K</text><text x="70" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.6)" text-anchor="middle">UHD</text><line x1="90" y1="10" x2="90" y2="36" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/><circle cx="90" cy="23" r="2.5" fill="rgba(255,255,255,0.4)"/><text x="160" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14" fill="#38bdf8" text-anchor="middle">HDR10+</text></svg>`
     },
     {
+        id: "builtin_badge_4k_hdr10",
+        name: "4K UHD • HDR10",
+        category: "resolution",
+        position: "top-right",
+        matchRule: "4k + hdr10",
+        width: 220,
+        height: 46,
+        svgContent: `<svg width="220" height="46" viewBox="0 0 220 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g4khdr10" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#facc15"/><stop offset="100%" stop-color="#38bdf8"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.85"/></filter></defs><rect x="2" y="2" width="216" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#g4khdr10)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="212" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><text x="36" y="29" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="18.5" fill="#facc15" text-anchor="middle">4K</text><text x="70" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="11" fill="rgba(255,255,255,0.6)" text-anchor="middle">UHD</text><line x1="90" y1="10" x2="90" y2="36" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/><circle cx="90" cy="23" r="2.5" fill="rgba(255,255,255,0.4)"/><text x="154" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="14.5" fill="#38bdf8" text-anchor="middle">HDR10</text></svg>`
+    },
+    {
         id: "builtin_badge_4k_hdr",
         name: "4K UHD • HDR",
         category: "resolution",

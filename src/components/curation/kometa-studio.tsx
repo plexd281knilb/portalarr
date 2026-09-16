@@ -1236,13 +1236,13 @@ export function KometaStudio() {
 
         const simDetected = {
             resolution: simShowResolution ? (realRes || "4K") : undefined,
-            hdr: simShowHdr ? (realHdr || "DV") : undefined,
-            codec: simShowCodec ? (realCodec || "HEVC") : undefined,
-            audio: simShowAudio ? (realAudio || "ATMOS") : undefined,
-            audioChannels: simShowChannels ? (realChannels || "7.1") : undefined,
-            edition: simShowEdition ? (realEdition || "IMAX") : undefined,
-            studio: simShowStudio ? (realStudio || "HBO") : undefined,
-            contentRating: simShowRating ? (realRating || "PG-13") : undefined
+            hdr: simShowHdr ? (realHdr || (simSelectedRealItem ? undefined : "DV")) : undefined,
+            codec: simShowCodec ? (realCodec || (simSelectedRealItem ? undefined : "HEVC")) : undefined,
+            audio: simShowAudio ? (realAudio || (simSelectedRealItem ? undefined : "ATMOS")) : undefined,
+            audioChannels: simShowChannels ? (realChannels || (simSelectedRealItem ? undefined : "7.1")) : undefined,
+            edition: simShowEdition ? (realEdition || (simSelectedRealItem ? undefined : "IMAX")) : undefined,
+            studio: simShowStudio ? (realStudio || (simSelectedRealItem ? undefined : "HBO")) : undefined,
+            contentRating: simShowRating ? (realRating || (simSelectedRealItem ? undefined : "PG-13")) : undefined
         };
 
         const renderCustomOrVectorBadge = (badge: any, vectorFallbackJsx: React.ReactNode) => {
@@ -1278,6 +1278,7 @@ export function KometaStudio() {
         const isDovetailed = simDovetailResolutionHdr && 
             simShowResolution && 
             simShowHdr && 
+            Boolean(simDetected.hdr) &&
             simResolutionPosition === simHdrPosition &&
             simResolutionPosition === pos;
 

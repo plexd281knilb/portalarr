@@ -112,10 +112,11 @@ export function getStockKometaAssetBuffer(relativePath: string): Buffer | null {
  * Resolves the matching official stock Kometa resolution/HDR dovetail PNG image.
  */
 export function resolveStockResolutionBadgePath(
-    resolution: string,
+    resolution?: string | null,
     hdr?: string | null
 ): string | null {
     const resUpper = (resolution || "").toUpperCase();
+    const hasRes = Boolean(resUpper && !resUpper.includes("NONE") && !resUpper.includes("AUTO_HDR_ONLY"));
     const is4k = resUpper.includes("4K") || resUpper.includes("2160") || resUpper.includes("UHD");
     const is1080 = resUpper.includes("1080") || resUpper.includes("FHD");
     const is720 = resUpper.includes("720") || resUpper.includes("HD");
@@ -131,21 +132,34 @@ export function resolveStockResolutionBadgePath(
     const isHlg = hdrUpper.includes("HLG");
 
     let candidate = "";
-    if (isDv && isPlus) candidate = `resolution/${basePrefix}dvhdrplus.png`;
-    else if (isDv && isHdr) candidate = `resolution/${basePrefix}dvhdr.png`;
-    else if (isDv) candidate = `resolution/${basePrefix}dv.png`;
-    else if (isPlus) candidate = `resolution/${basePrefix}plus.png`;
-    else if (isHdr) candidate = `resolution/${basePrefix}hdr.png`;
-    else if (isHlg) candidate = `resolution/${basePrefix}hlg.png`;
-    else candidate = `resolution/${basePrefix}.png`;
+    if (hasRes) {
+        if (isDv && isPlus) candidate = `resolution/${basePrefix}dvhdrplus.png`;
+        else if (isDv && isHdr) candidate = `resolution/${basePrefix}dvhdr.png`;
+        else if (isDv) candidate = `resolution/${basePrefix}dv.png`;
+        else if (isPlus) candidate = `resolution/${basePrefix}plus.png`;
+        else if (isHdr) candidate = `resolution/${basePrefix}hdr.png`;
+        else if (isHlg) candidate = `resolution/${basePrefix}hlg.png`;
+        else candidate = `resolution/${basePrefix}.png`;
+    } else {
+        // Standalone HDR badges (without resolution prefix)
+        if (isDv && isPlus) candidate = `resolution/dvhdrplus.png`;
+        else if (isDv && isHdr) candidate = `resolution/dvhdr.png`;
+        else if (isDv) candidate = `resolution/dv.png`;
+        else if (isPlus) candidate = `resolution/plus.png`;
+        else if (isHdr) candidate = `resolution/hdr.png`;
+        else if (isHlg) candidate = `resolution/hlg.png`;
+    }
 
-    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
+    if (candidate && fs.existsSync(path.join(STOCK_KOMETA_DIR, candidate))) {
         return candidate;
     }
 
     // Fallback candidates
-    if (fs.existsSync(path.join(STOCK_KOMETA_DIR, `resolution/${basePrefix}.png`))) {
+    if (hasRes && fs.existsSync(path.join(STOCK_KOMETA_DIR, `resolution/${basePrefix}.png`))) {
         return `resolution/${basePrefix}.png`;
+    }
+    if (!hasRes && fs.existsSync(path.join(STOCK_KOMETA_DIR, `resolution/hdr.png`))) {
+        return `resolution/hdr.png`;
     }
     return null;
 }
@@ -1243,7 +1257,8 @@ export async function applyOverlaysToPoster(
         resPos === hdrPos &&
         !hasCustomResolution &&
         !hasCustomHdr &&
-        Boolean(mediaInfo.detectedBadges.resolution);
+        Boolean(mediaInfo.detectedBadges.resolution) &&
+        Boolean(mediaInfo.detectedBadges.hdr);
 
     if (shouldCombineResHdr) {
         const resHdrPath = resolveStockResolutionBadgePath(
@@ -1261,7 +1276,7 @@ export async function applyOverlaysToPoster(
             }
         }
         if (options.showHdr !== false && mediaInfo.detectedBadges.hdr && !hasCustomHdr) {
-            const hdrPath = resolveStockResolutionBadgePath("1080p", mediaInfo.detectedBadges.hdr);
+            const hdrPath = resolveStockResolutionBadgePath(null, mediaInfo.detectedBadges.hdr);
             if (hdrPath) {
                 await pushStockImageToBucket(hdrPos, hdrPath, "hdr", 200, 48);
             }

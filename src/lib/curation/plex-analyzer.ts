@@ -251,23 +251,98 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
 
         for (const part of rawParts) {
             const streams = Array.isArray(part.Stream) ? part.Stream : part.Stream ? [part.Stream] : [];
+            const partFileLower = String(part.file || "").toLowerCase();
             
             // Analyze video stream
             const videoStream = streams.find((s: any) => s.streamType === 1 || s.streamType === "1");
             if (videoStream) {
                 const colorPrimaries = (videoStream.colorPrimaries || "").toLowerCase();
+                const colorTrc = (videoStream.colorTrc || videoStream.colorTransfer || "").toLowerCase();
+                const colorSpace = (videoStream.colorSpace || "").toLowerCase();
                 const doviTitle = (videoStream.doviTitle || "").toLowerCase();
                 const doviProfile = videoStream.doviProfile;
                 const displayTitle = (videoStream.displayTitle || "").toLowerCase();
                 const extendedDisplayTitle = (videoStream.extendedDisplayTitle || "").toLowerCase();
+                const streamTitle = (videoStream.title || "").toLowerCase();
+                const vProfile = (videoStream.profile || m.videoProfile || "").toLowerCase();
+                const bitDepth = parseInt(videoStream.bitDepth || videoStream.bit_depth || "0", 10);
+                const hasHdrAttr = videoStream.hdr === "1" || videoStream.hdr === true || videoStream.hdr === "hdr" || videoStream.hdr === "hdr10" || videoStream.hdr === "dovi" || m.hasHDR === true || m.hasHDR === "1";
 
-                if (doviProfile || doviTitle || displayTitle.includes("dovi") || displayTitle.includes("dolby vision") || extendedDisplayTitle.includes("dolby vision") || videoStream.DOVIBaselinePresent || videoStream.doviBaselinePresent) {
+                const isDvStream = Boolean(
+                    doviProfile ||
+                    doviTitle ||
+                    videoStream.DOVIBaselinePresent ||
+                    videoStream.doviBaselinePresent ||
+                    videoStream.doviPresent ||
+                    videoStream.doviBLPresent ||
+                    videoStream.doviBLCompatID ||
+                    displayTitle.includes("dovi") ||
+                    displayTitle.includes("dolby vision") ||
+                    extendedDisplayTitle.includes("dolby vision") ||
+                    streamTitle.includes("dovi") ||
+                    streamTitle.includes("dolby vision") ||
+                    /\b(dovi|dv|dolby[ ._-]?vision)\b/i.test(partFileLower) ||
+                    /\b(dovi|dv|dolby[ ._-]?vision)\b/i.test(fileLower)
+                );
+
+                const isHdr10PlusStream = Boolean(
+                    displayTitle.includes("hdr10+") ||
+                    extendedDisplayTitle.includes("hdr10+") ||
+                    streamTitle.includes("hdr10+") ||
+                    displayTitle.includes("hdr10plus") ||
+                    streamTitle.includes("hdr10plus") ||
+                    /\b(hdr10\+|hdr10plus|hdr10_plus)\b/i.test(partFileLower) ||
+                    /\b(hdr10\+|hdr10plus|hdr10_plus)\b/i.test(fileLower)
+                );
+
+                const isHlgStream = Boolean(
+                    colorTrc.includes("arib-std-b67") ||
+                    displayTitle.includes("hlg") ||
+                    extendedDisplayTitle.includes("hlg") ||
+                    streamTitle.includes("hlg") ||
+                    /\bhlg\b/i.test(partFileLower) ||
+                    /\bhlg\b/i.test(fileLower)
+                );
+
+                const isHdr10Standard = Boolean(
+                    colorTrc.includes("smpte2084") ||
+                    colorTrc.includes("smpte 2084") ||
+                    colorTrc.includes("smpte428") ||
+                    colorTrc.includes("bt2020-10") ||
+                    colorPrimaries.includes("bt2020") ||
+                    colorSpace.includes("bt2020") ||
+                    displayTitle.includes("hdr") ||
+                    extendedDisplayTitle.includes("hdr") ||
+                    streamTitle.includes("hdr") ||
+                    hasHdrAttr ||
+                    /\b(hdr10|hdr)\b/i.test(partFileLower) ||
+                    /\b(hdr10|hdr)\b/i.test(fileLower) ||
+                    (is4kRes && (bitDepth === 10 || vProfile.includes("main 10")) && !colorPrimaries.includes("bt709") && !colorTrc.includes("bt709"))
+                );
+
+                if (isDvStream) {
                     itemHdr = "Dolby Vision";
                     detectedHdr = "DV";
-                } else if (displayTitle.includes("hdr10+") || extendedDisplayTitle.includes("hdr10+")) {
+                } else if (isHdr10PlusStream) {
                     itemHdr = "HDR10+";
                     if (detectedHdr !== "DV") detectedHdr = "HDR10+";
-                } else if (colorPrimaries.includes("bt2020") || displayTitle.includes("hdr") || extendedDisplayTitle.includes("hdr") || videoStream.colorSpace?.toLowerCase().includes("bt2020")) {
+                } else if (isHlgStream) {
+                    itemHdr = "HDR";
+                    if (!detectedHdr || (detectedHdr !== "DV" && detectedHdr !== "HDR10+")) detectedHdr = "HDR";
+                } else if (isHdr10Standard) {
+                    itemHdr = "HDR10";
+                    if (!detectedHdr || (detectedHdr !== "DV" && detectedHdr !== "HDR10+")) detectedHdr = "HDR10";
+                }
+            } else {
+                // Fallback video stream analysis from part/media metadata
+                const vProfile = (m.videoProfile || "").toLowerCase();
+                if (/\b(dovi|dv|dolby[ ._-]?vision)\b/i.test(partFileLower) || /\b(dovi|dv|dolby[ ._-]?vision)\b/i.test(fileLower)) {
+                    itemHdr = "Dolby Vision";
+                    detectedHdr = "DV";
+                } else if (/\b(hdr10\+|hdr10plus|hdr10_plus)\b/i.test(partFileLower) || /\b(hdr10\+|hdr10plus|hdr10_plus)\b/i.test(fileLower)) {
+                    itemHdr = "HDR10+";
+                    if (detectedHdr !== "DV") detectedHdr = "HDR10+";
+                } else if (/\b(hdr10|hdr|10bit|10-bit)\b/i.test(partFileLower) || /\b(hdr10|hdr|10bit|10-bit)\b/i.test(fileLower) || (is4kRes && vProfile.includes("main 10"))) {
                     itemHdr = "HDR10";
                     if (!detectedHdr || (detectedHdr !== "DV" && detectedHdr !== "HDR10+")) detectedHdr = "HDR10";
                 }
@@ -280,26 +355,27 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
                 const aDisplay = (as.displayTitle || "").toLowerCase();
                 const aExtended = (as.extendedDisplayTitle || "").toLowerCase();
                 const aCodec = (as.codec || "").toLowerCase();
+                const aProfile = (as.profile || "").toLowerCase();
                 const aChannels = parseInt(as.channels || "2", 10);
 
                 if (aChannels >= 8) detectedAudioChannels = "7.1";
                 else if (aChannels >= 6 && detectedAudioChannels !== "7.1") detectedAudioChannels = "5.1";
 
-                if (aTitle.includes("atmos") || aDisplay.includes("atmos") || aExtended.includes("atmos") || as.audioChannelLayout?.toLowerCase().includes("atmos")) {
+                if (aTitle.includes("atmos") || aDisplay.includes("atmos") || aExtended.includes("atmos") || as.audioChannelLayout?.toLowerCase().includes("atmos") || aProfile.includes("atmos")) {
                     detectedAudio = "ATMOS";
                     audioFormatLabel = "Dolby Atmos";
                     itemAudioProfile = "atmos";
-                } else if (aCodec === "truehd" || aDisplay.includes("truehd")) {
+                } else if (aCodec === "truehd" || aDisplay.includes("truehd") || aTitle.includes("truehd")) {
                     if (!detectedAudio || detectedAudio !== "ATMOS") {
                         detectedAudio = "TRUEHD";
                         audioFormatLabel = aChannels >= 8 ? "TrueHD 7.1" : "TrueHD 5.1";
                     }
-                } else if (aTitle.includes("dts:x") || aDisplay.includes("dts:x") || aExtended.includes("dts:x") || as.profile?.toLowerCase().includes("dts:x")) {
+                } else if (aTitle.includes("dts:x") || aTitle.includes("dtsx") || aDisplay.includes("dts:x") || aExtended.includes("dts:x") || aProfile.includes("dts:x")) {
                     if (detectedAudio !== "ATMOS") {
                         detectedAudio = "DTS:X";
                         audioFormatLabel = "DTS:X";
                     }
-                } else if (aCodec.includes("dca") || aCodec.includes("dts") || aDisplay.includes("dts-hd") || aDisplay.includes("master audio")) {
+                } else if (aCodec.includes("dca") || aCodec.includes("dts") || aDisplay.includes("dts-hd") || aDisplay.includes("master audio") || aProfile.includes("ma")) {
                     if (!detectedAudio || (detectedAudio !== "ATMOS" && detectedAudio !== "DTS:X" && detectedAudio !== "TRUEHD")) {
                         detectedAudio = "DTS-HD";
                         audioFormatLabel = aChannels >= 8 ? "DTS-HD MA 7.1" : "DTS-HD MA 5.1";
@@ -322,6 +398,23 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
             }
         }
 
+        // Audio fallback from media properties or filename
+        if (!detectedAudio || detectedAudio === "5.1" || detectedAudio === "7.1") {
+            if (itemAudioProfile.includes("atmos") || fileLower.includes("atmos")) {
+                detectedAudio = "ATMOS";
+                audioFormatLabel = "Dolby Atmos";
+            } else if (itemAudioCodec === "truehd" || fileLower.includes("truehd")) {
+                detectedAudio = "TRUEHD";
+                audioFormatLabel = itemAudioChannels >= 8 ? "TrueHD 7.1" : "TrueHD 5.1";
+            } else if (itemAudioProfile.includes("dts:x") || fileLower.includes("dts:x") || fileLower.includes("dtsx")) {
+                detectedAudio = "DTS:X";
+                audioFormatLabel = "DTS:X";
+            } else if (itemAudioProfile.includes("ma") || fileLower.includes("dts-hd") || fileLower.includes("master.audio")) {
+                detectedAudio = "DTS-HD";
+                audioFormatLabel = itemAudioChannels >= 8 ? "DTS-HD MA 7.1" : "DTS-HD MA 5.1";
+            }
+        }
+
         mediaList.push({
             id: m.id,
             videoResolution: res,
@@ -341,9 +434,21 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
     }
 
     if (detectedRes === "4K") {
-        videoFormatLabel = detectedHdr === "DV" ? "4K UHD • Dolby Vision" : detectedHdr ? "4K UHD • HDR" : "4K UHD";
+        videoFormatLabel = detectedHdr === "DV" ? "4K UHD • Dolby Vision" 
+            : detectedHdr === "HDR10+" ? "4K UHD • HDR10+" 
+            : detectedHdr === "HDR10" ? "4K UHD • HDR10" 
+            : detectedHdr ? "4K UHD • HDR" 
+            : "4K UHD";
     } else if (detectedRes === "1080p") {
-        videoFormatLabel = detectedHdr ? "1080p • HDR" : "1080p FHD";
+        videoFormatLabel = detectedHdr === "DV" ? "1080p • Dolby Vision" 
+            : detectedHdr === "HDR10+" ? "1080p • HDR10+" 
+            : detectedHdr === "HDR10" ? "1080p • HDR10" 
+            : detectedHdr ? "1080p • HDR" 
+            : "1080p FHD";
+    } else if (detectedRes === "720p") {
+        videoFormatLabel = detectedHdr ? "720p • HDR" : "720p HD";
+    } else if (detectedRes === "SD") {
+        videoFormatLabel = "SD 480p";
     }
 
     const totalSize = rawMediaList.reduce((acc: number, m: any) => {
@@ -536,12 +641,24 @@ function parsePlexXmlMetadata(xml: string): any[] {
                         channels: getSAttr("channels"),
                         audioChannelLayout: getSAttr("audioChannelLayout"),
                         colorPrimaries: getSAttr("colorPrimaries"),
+                        colorTrc: getSAttr("colorTrc") || getSAttr("colorTransfer"),
+                        colorTransfer: getSAttr("colorTransfer") || getSAttr("colorTrc"),
                         colorSpace: getSAttr("colorSpace"),
+                        colorRange: getSAttr("colorRange"),
+                        bitDepth: getSAttr("bitDepth") ? parseInt(getSAttr("bitDepth")!, 10) : undefined,
+                        hdr: getSAttr("hdr"),
                         doviTitle: getSAttr("doviTitle"),
                         doviProfile: getSAttr("doviProfile"),
+                        doviLevel: getSAttr("doviLevel"),
+                        doviPresent: getSAttr("doviPresent") === "1" || getSAttr("doviPresent") === "true",
+                        doviBLPresent: getSAttr("doviBLPresent") === "1" || getSAttr("doviBLPresent") === "true",
+                        doviELPresent: getSAttr("doviELPresent") === "1" || getSAttr("doviELPresent") === "true",
+                        doviBLCompatID: getSAttr("doviBLCompatID"),
                         DOVIBaselinePresent: getSAttr("DOVIBaselinePresent") === "1" || getSAttr("DOVIBaselinePresent") === "true",
                         doviBaselinePresent: getSAttr("doviBaselinePresent") === "1" || getSAttr("doviBaselinePresent") === "true",
-                        profile: getSAttr("profile")
+                        profile: getSAttr("profile"),
+                        width: getSAttr("width") ? parseInt(getSAttr("width")!, 10) : undefined,
+                        height: getSAttr("height") ? parseInt(getSAttr("height")!, 10) : undefined
                     });
                 }
 
@@ -567,6 +684,8 @@ function parsePlexXmlMetadata(xml: string): any[] {
                 width: getMAttr("width") ? parseInt(getMAttr("width")!, 10) : undefined,
                 height: getMAttr("height") ? parseInt(getMAttr("height")!, 10) : undefined,
                 container: getMAttr("container"),
+                hasHDR: getMAttr("hasHDR") === "1" || getMAttr("hasHDR") === "true",
+                hdr: getMAttr("hdr"),
                 Part: parts
             });
         }
@@ -755,8 +874,8 @@ export async function getPlexLibraryMediaItems(
     for (const cleanBase of urlsToTry) {
         if (!cleanBase) continue;
 
-        // 1. Try standard query with includeGuids=1&includeAdvanced=1&includeMeta=1
-        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&includeAdvanced=1&includeMeta=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
+        // 1. Try standard query with includeGuids=1&includeAdvanced=1&includeMeta=1&includeStreams=1
+        const urlWithGuids = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeGuids=1&includeAdvanced=1&includeMeta=1&includeStreams=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
         lastUrlAttempted = urlWithGuids;
         try {
             const controller = new AbortController();
@@ -797,7 +916,7 @@ export async function getPlexLibraryMediaItems(
         }
 
         // 2. Try fast fallback without includeGuids=1
-        const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeAdvanced=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
+        const fallbackUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?includeAdvanced=1&includeStreams=1&X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}${sortParam}&X-Plex-Token=${encodeURIComponent(token)}`;
         lastUrlAttempted = fallbackUrl;
         try {
             const fbController = new AbortController();
