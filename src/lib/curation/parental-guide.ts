@@ -892,7 +892,7 @@ export async function applyParentalTagsToLibrary(
     logger.addLog("INFO", "CURATION", `Starting IMDb Parental Rating Tagging for library section ${sectionKey} on "${serverName}"...`);
 
     const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 1000);
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
     if (items.length === 0) {
         return { success: true, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, appliedTagsSummary: {} };
     }
@@ -991,7 +991,7 @@ export async function clearParentalTagsFromLibrary(
     logger.addLog("INFO", "CURATION", `Clearing all IMDb Parental Tags from library section ${sectionKey} on "${serverName}"...`);
 
     const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 1000);
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
     let clearedCount = 0;
 
     const ratingKeys = items.map(it => it.ratingKey);
@@ -1039,7 +1039,7 @@ export async function getStoredParentalAdvisoriesForLibrary(
         if (!resolved || !resolved.serverUrl) return { items: [] };
 
         const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-        const mediaItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 500);
+        const mediaItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000);
 
         const ratingKeys = mediaItems.map(m => m.ratingKey);
         const advisories = await prisma.mediaContentAdvisory.findMany({
@@ -1103,7 +1103,7 @@ export async function applyCustomTagRuleToLibrary(
 
     logger.addLog("INFO", "CURATION", `Applying custom tag "${rule.tagName}" (${rule.field}) on section ${sectionKey} on "${serverName}"...`);
 
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 1500);
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
     let taggedCount = 0;
     let skippedCount = 0;
 
@@ -1238,7 +1238,7 @@ export async function clearCustomTagFromLibrary(
 
     logger.addLog("INFO", "CURATION", `Removing custom tag "${tagName}" (${field}) from section ${sectionKey} on "${serverName}"...`);
 
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 1500);
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
     let clearedCount = 0;
 
     for (const item of items) {
@@ -1322,24 +1322,29 @@ export async function getPlexLibraryTagsAudit(
         if (!resolved || !resolved.serverUrl) return { labels: [], genres: [], collections: [], totalItems: 0 };
 
         const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-        const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 1000);
+        const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000);
 
         const labelCounts: Record<string, number> = {};
         const genreCounts: Record<string, number> = {};
         const collectionCounts: Record<string, number> = {};
 
-        // In a single pass, fetch metadata or summarize tags
         for (const item of items) {
-            // Note: getPlexLibraryMediaItems gets summary. To get deep tags for each item:
-            // if available on item
-            if ((item as any).labels) {
-                for (const l of (item as any).labels) {
+            const itemLabels = item.labels || [];
+            for (const l of itemLabels) {
+                if (l && typeof l === "string") {
                     labelCounts[l] = (labelCounts[l] || 0) + 1;
                 }
             }
-            if ((item as any).genres) {
-                for (const g of (item as any).genres) {
+            const itemGenres = item.genres || item.genre || [];
+            for (const g of itemGenres) {
+                if (g && typeof g === "string") {
                     genreCounts[g] = (genreCounts[g] || 0) + 1;
+                }
+            }
+            const itemCollections = item.collections || (item as any).collection || [];
+            for (const c of itemCollections) {
+                if (c && typeof c === "string") {
+                    collectionCounts[c] = (collectionCounts[c] || 0) + 1;
                 }
             }
         }

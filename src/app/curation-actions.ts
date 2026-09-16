@@ -905,7 +905,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         }
 
         // 1. Fetch library media items and filter out any excluded labels
-        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 1000);
+        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 5000);
         
         const excludedList = (collection.excludedLabels || "")
             .split(",")
@@ -948,80 +948,57 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
                 if (tmdbRes.ok) {
                     const data = await tmdbRes.json();
-                    const parts: any[] = data.parts || [];
-                    const titles = parts.map((p: any) => p.title.toLowerCase());
-                    const tmdbIds = parts.map((p: any) => String(p.id));
-
-                    matchingRatingKeys.push(...libraryItems.filter(it => 
-                        (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
-                        titles.includes(it.title.toLowerCase())
-                    ).map(it => it.ratingKey));
+                    const parts = data.parts || [];
+                    const tmdbIds = new Set(parts.map((p: any) => String(p.id)));
+                    matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
                 }
             } else if (collection.sourceQuery?.startsWith("company:")) {
                 const compId = collection.sourceQuery.replace("company:", "");
                 const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
                 if (tmdbRes.ok) {
                     const data = await tmdbRes.json();
-                    const results: any[] = data.results || [];
-                    const tmdbIds = results.map((r: any) => String(r.id));
-                    const titles = results.map((r: any) => r.title.toLowerCase());
-
-                    matchingRatingKeys.push(...libraryItems.filter(it => 
-                        (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
-                        titles.includes(it.title.toLowerCase())
-                    ).map(it => it.ratingKey));
+                    const tmdbIds = new Set((data.results || []).map((p: any) => String(p.id)));
+                    matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
                 }
             } else if (collection.sourceQuery?.startsWith("network:")) {
                 const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
                 const shows = await getTmdbNetworkShows(netId);
-                const tmdbIds = shows.map(s => String(s.id));
-                const titles = shows.map(s => s.title.toLowerCase());
-
-                matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
-                    (it.title && titles.includes(it.title.toLowerCase()))
-                ).map(it => it.ratingKey));
+                const tmdbIds = new Set(shows.map(s => String(s.id)));
+                matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
             } else if (collection.sourceQuery?.startsWith("provider:")) {
                 const parts = collection.sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
                 const providerMedia = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
-                const tmdbIds = providerMedia.map(m => String(m.id));
-                const titles = providerMedia.map(m => m.title.toLowerCase());
-
-                matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
-                    (it.title && titles.includes(it.title.toLowerCase()))
-                ).map(it => it.ratingKey));
+                const tmdbIds = new Set(providerMedia.map(m => String(m.id)));
+                matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
             } else if (collection.sourceQuery === "digital_releases") {
                 const upcoming = await getTmdbUpcomingMovies();
-                const tmdbIds = upcoming.map(m => String(m.id));
-                const titles = upcoming.map(m => m.title.toLowerCase());
-
-                matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
-                    (it.title && titles.includes(it.title.toLowerCase()))
-                ).map(it => it.ratingKey));
+                const tmdbIds = new Set(upcoming.map(u => String(u.id)));
+                matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
+            } else {
+                // Trending / Popular
+                const trending = await getTmdbTrending("all", "week");
+                const tmdbIds = new Set(trending.map(t => String(t.id)));
+                matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
             }
         } else if (collection.sourceType === "trakt") {
             if (collection.sourceQuery === "trending") {
-                const trending = await getTraktTrendingMovies(50);
-                const imdbIds = trending.map((t: any) => t.imdbId).filter(Boolean);
-                const titles = trending.map((t: any) => t.title?.toLowerCase()).filter(Boolean);
-
+                const trending = await getTraktTrendingMovies(40);
+                const tmdbIds = new Set(trending.map((t: any) => String(t.tmdbId)).filter(Boolean));
+                const imdbIds = new Set(trending.map((t: any) => String(t.imdbId)).filter(Boolean));
                 matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids.imdb && imdbIds.includes(it.guids.imdb)) ||
-                    (it.title && titles.includes(it.title.toLowerCase()))
+                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb)))
                 ).map(it => it.ratingKey));
             } else if (collection.sourceQuery) {
                 const listData = await getTraktUserList(collection.sourceQuery);
                 if (listData?.items) {
-                    const imdbIds = listData.items.map((t: any) => t.imdbId).filter(Boolean);
-                    const titles = listData.items.map((t: any) => t.title?.toLowerCase()).filter(Boolean);
-
+                    const tmdbIds = new Set(listData.items.map((t: any) => String(t.tmdbId)).filter(Boolean));
+                    const imdbIds = new Set(listData.items.map((t: any) => String(t.imdbId)).filter(Boolean));
                     matchingRatingKeys.push(...libraryItems.filter(it => 
-                        (it.guids.imdb && imdbIds.includes(it.guids.imdb)) ||
-                        (it.title && titles.includes(it.title.toLowerCase()))
+                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb)))
                     ).map(it => it.ratingKey));
                 }
             }
@@ -1029,24 +1006,20 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             if (collection.sourceQuery) {
                 const items = await getMdblistItems(collection.sourceQuery);
                 if (items && items.length > 0) {
-                    const imdbIds = items.map((t: any) => t.imdbId).filter(Boolean);
-                    const titles = items.map((t: any) => t.title?.toLowerCase()).filter(Boolean);
-
+                    const tmdbIds = new Set(items.map((t: any) => String(t.tmdbId)).filter(Boolean));
+                    const imdbIds = new Set(items.map((t: any) => String(t.imdbId)).filter(Boolean));
                     matchingRatingKeys.push(...libraryItems.filter(it => 
-                        (it.guids.imdb && imdbIds.includes(it.guids.imdb)) ||
-                        (it.title && titles.includes(it.title.toLowerCase()))
+                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb)))
                     ).map(it => it.ratingKey));
-                } else if (collection.sourceQuery === "top-imdb-250" || collection.sourceQuery === "top-imdb-tv") {
-                    // Smart library fallback if MDBList API key not present: items with rating >= 8.0
-                    matchingRatingKeys.push(...libraryItems.filter(it => it.rating && it.rating >= 8.0).map(it => it.ratingKey));
                 }
             }
         }
 
         if (matchingRatingKeys.length === 0) {
-            logger.addLog("WARN", "PLEX", `No matching media found in section ${collection.sectionKey} for collection "${collection.title}" (${libraryItems.length} items evaluated, query: ${collection.sourceQuery || "none"}).`);
             return {
                 success: false,
+                error: "No matching library media found for collection query criteria.",
                 message: `No matching library media found for collection criteria (${libraryItems.length} items evaluated).`
             };
         }
@@ -1120,19 +1093,19 @@ export async function syncCollectionToPlexAction(collectionId: string) {
 }
 
 /**
- * Preview matched media items in user library for a collection rule/preset
+ * Server action to preview matching library media items for a collection configuration before syncing
  */
-export async function previewCollectionMatchingAction(
+export async function generateCollectionCandidateItemsPreviewAction(
     serverId: string,
     sectionKey: string,
     collectionConfig: {
         sourceType: string;
         sourceQuery?: string;
+        excludedLabels?: string;
+        maxItems?: number;
         mediaType?: string;
         title?: string;
         type?: string;
-        maxItems?: number;
-        excludedLabels?: string;
     }
 ) {
     await verifyAdmin();
@@ -1144,7 +1117,7 @@ export async function previewCollectionMatchingAction(
         const token = resolved.token;
 
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 500);
+        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 5000);
 
         const excludedList = (collectionConfig.excludedLabels || "")
             .split(",")
@@ -1305,6 +1278,8 @@ export async function previewCollectionMatchingAction(
         return { success: false, error: e.message };
     }
 }
+
+export const previewCollectionMatchingAction = generateCollectionCandidateItemsPreviewAction;
 
 export async function reorderPlexCollectionsAction(
     serverId: string,
@@ -1549,13 +1524,8 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
             ? JSON.parse(settings.enabledServersForCollections)
             : [];
 
-        const scheduledCollections = await prisma.mediaCollection.findMany({
+        const allCollections = await prisma.mediaCollection.findMany({
             where: {
-                OR: [
-                    { isSeasonal: true },
-                    { activeDays: { not: "all" } },
-                    { activeTimeRange: { not: "all_day" } }
-                ],
                 ...(serverId ? { serverId } : {}),
                 ...(sectionKey ? { sectionKey } : {})
             }
@@ -1571,7 +1541,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
 
         const results: Array<{ title: string; active: boolean; action: string }> = [];
 
-        for (const coll of scheduledCollections) {
+        for (const coll of allCollections) {
             // Respect library section enablement whitelist
             if (coll.serverId && coll.sectionKey) {
                 const isSecEnabled = await isSectionEnabledInList(enabledServersForCollections, coll.serverId, coll.sectionKey);
@@ -1580,103 +1550,158 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                 }
             }
 
-            let isScheduleActive = true;
+            const isScheduled = Boolean(coll.isSeasonal || (coll.activeDays && coll.activeDays !== "all") || (coll.activeTimeRange && coll.activeTimeRange !== "all_day"));
 
-            // 1. Day of Week Check
-            if (coll.activeDays && coll.activeDays !== "all") {
-                const allowedDays = coll.activeDays.toLowerCase().split(",").map(d => d.trim());
-                if (!allowedDays.includes(curDayCode)) {
-                    isScheduleActive = false;
+            if (isScheduled) {
+                let isScheduleActive = true;
+
+                // 1. Day of Week Check
+                if (coll.activeDays && coll.activeDays !== "all") {
+                    const allowedDays = coll.activeDays.toLowerCase().split(",").map(d => d.trim());
+                    if (!allowedDays.includes(curDayCode)) {
+                        isScheduleActive = false;
+                    }
                 }
-            }
 
-            // 2. Time of Day Check
-            if (isScheduleActive && coll.activeTimeRange && coll.activeTimeRange !== "all_day") {
-                if (coll.activeTimeRange === "evening") {
-                    // 6:00 PM (18) to 11:59 PM (23)
-                    if (curHour < 18 || curHour > 23) isScheduleActive = false;
-                } else if (coll.activeTimeRange === "late_night") {
-                    // 11:00 PM (23) to 4:00 AM (4)
-                    if (curHour < 23 && curHour > 4) isScheduleActive = false;
-                } else if (coll.activeTimeRange === "daytime") {
-                    // 8:00 AM (8) to 5:00 PM (17)
-                    if (curHour < 8 || curHour > 17) isScheduleActive = false;
+                // 2. Time of Day Check
+                if (isScheduleActive && coll.activeTimeRange && coll.activeTimeRange !== "all_day") {
+                    if (coll.activeTimeRange === "evening") {
+                        // 6:00 PM (18) to 11:59 PM (23)
+                        if (curHour < 18 || curHour > 23) isScheduleActive = false;
+                    } else if (coll.activeTimeRange === "late_night") {
+                        // 11:00 PM (23) to 4:00 AM (4)
+                        if (curHour < 23 && curHour > 4) isScheduleActive = false;
+                    } else if (coll.activeTimeRange === "daytime") {
+                        // 8:00 AM (8) to 5:00 PM (17)
+                        if (curHour < 8 || curHour > 17) isScheduleActive = false;
+                    }
                 }
-            }
 
-            // 3. Seasonal Calendar Range Check
-            if (isScheduleActive && coll.isSeasonal) {
-                const startM = coll.scheduleStartMonth || 1;
-                const startD = coll.scheduleStartDay || 1;
-                const endM = coll.scheduleEndMonth || 12;
-                const endD = coll.scheduleEndDay || 31;
+                // 3. Seasonal Calendar Range Check
+                if (isScheduleActive && coll.isSeasonal) {
+                    const startM = coll.scheduleStartMonth || 1;
+                    const startD = coll.scheduleStartDay || 1;
+                    const endM = coll.scheduleEndMonth || 12;
+                    const endD = coll.scheduleEndDay || 31;
 
-                const startVal = startM * 100 + startD;
-                const endVal = endM * 100 + endD;
+                    const startVal = startM * 100 + startD;
+                    const endVal = endM * 100 + endD;
 
-                let isInSeason = false;
-                if (startVal <= endVal) {
-                    isInSeason = curVal >= startVal && curVal <= endVal;
+                    let isInSeason = false;
+                    if (startVal <= endVal) {
+                        isInSeason = curVal >= startVal && curVal <= endVal;
+                    } else {
+                        // Wrap around year end (e.g. Nov 20 to Jan 6)
+                        isInSeason = curVal >= startVal || curVal <= endVal;
+                    }
+                    if (!isInSeason) isScheduleActive = false;
+                }
+
+                if (isScheduleActive) {
+                    // Promote active scheduled collection
+                    await prisma.mediaCollection.update({
+                        where: { id: coll.id },
+                        data: { promotedToHome: true, promotedToRecommended: true }
+                    });
+
+                    let placeholderNotes = "";
+                    if (coll.includePlaceholders) {
+                        try {
+                            const pRes = await generateCollectionPlaceholdersInternal(coll);
+                            if (pRes.success && pRes.generatedCount > 0) {
+                                placeholderNotes = ` (+${pRes.generatedCount} placeholders)`;
+                            }
+                        } catch (pErr: any) {
+                            console.warn("[CURATION-SYNC] Error generating placeholders for active schedule:", pErr.message);
+                        }
+                    }
+
+                    if (serverUrl && coll.ratingKey && coll.sectionKey) {
+                        const prefix = coll.sortPrefix || `!02_Schedule_`;
+                        const effectiveSort = `${prefix}${coll.sortTitle || coll.title}`;
+                        await updatePlexCollectionPromotionAndOrder(
+                            serverUrl,
+                            token,
+                            coll.sectionKey,
+                            coll.ratingKey,
+                            {
+                                sortTitle: effectiveSort,
+                                promotedToHome: true,
+                                promotedToRecommended: true,
+                                promotedToSharedHome: coll.promotedToSharedHome,
+                                collectionMode: coll.collectionMode || "default"
+                            }
+                        );
+                    } else if (!coll.ratingKey) {
+                        // Auto-sync collection if not yet created on Plex
+                        await syncCollectionToPlexAction(coll.id).catch(() => {});
+                    }
+
+                    results.push({ title: coll.title, active: true, action: `Promoted to Plex Home & Recommended (Schedule Active)${placeholderNotes}` });
                 } else {
-                    // Wrap around year end (e.g. Nov 20 to Jan 6)
-                    isInSeason = curVal >= startVal || curVal <= endVal;
+                    // Demote / hide inactive scheduled collection
+                    const shouldHide = coll.seasonalAction === "promote_hide" || coll.seasonalAction === "create_delete";
+
+                    await prisma.mediaCollection.update({
+                        where: { id: coll.id },
+                        data: { promotedToHome: !shouldHide }
+                    });
+
+                    if (serverUrl && coll.ratingKey && coll.sectionKey) {
+                        await updatePlexCollectionPromotionAndOrder(
+                            serverUrl,
+                            token,
+                            coll.sectionKey,
+                            coll.ratingKey,
+                            {
+                                promotedToHome: !shouldHide,
+                                promotedToRecommended: !shouldHide,
+                                collectionMode: coll.collectionMode || "default"
+                            }
+                        );
+                    }
+
+                    results.push({ title: coll.title, active: false, action: shouldHide ? "Hidden from Plex Home (Out of Schedule/Season)" : "Demoted" });
                 }
-                if (!isInSeason) isScheduleActive = false;
-            }
-
-            if (isScheduleActive) {
-                // Promote active scheduled collection
-                await prisma.mediaCollection.update({
-                    where: { id: coll.id },
-                    data: { promotedToHome: true, promotedToRecommended: true }
-                });
-
-                if (serverUrl && coll.ratingKey && coll.sectionKey) {
-                    const prefix = coll.sortPrefix || `!02_Schedule_`;
-                    const effectiveSort = `${prefix}${coll.sortTitle || coll.title}`;
-                    await updatePlexCollectionPromotionAndOrder(
-                        serverUrl,
-                        token,
-                        coll.sectionKey,
-                        coll.ratingKey,
-                        {
-                            sortTitle: effectiveSort,
-                            promotedToHome: true,
-                            promotedToRecommended: true,
-                            promotedToSharedHome: coll.promotedToSharedHome,
-                            collectionMode: coll.collectionMode || "default"
-                        }
-                    );
-                } else if (!coll.ratingKey) {
-                    // Auto-sync collection if not yet created on Plex
-                    await syncCollectionToPlexAction(coll.id).catch(() => {});
-                }
-
-                results.push({ title: coll.title, active: true, action: "Promoted to Plex Home & Recommended (Schedule Active)" });
             } else {
-                // Demote / hide inactive scheduled collection
-                const shouldHide = coll.seasonalAction === "promote_hide" || coll.seasonalAction === "create_delete";
+                // Non-scheduled active collection (e.g. dynamic or standard)
+                let placeholderNotes = "";
+                if (coll.includePlaceholders) {
+                    try {
+                        const pRes = await generateCollectionPlaceholdersInternal(coll);
+                        if (pRes.success && pRes.generatedCount > 0) {
+                            placeholderNotes = ` (+${pRes.generatedCount} placeholders generated)`;
+                        }
+                    } catch (pErr: any) {
+                        console.warn("[CURATION-SYNC] Error generating placeholders for dynamic collection:", pErr.message);
+                    }
+                }
 
-                await prisma.mediaCollection.update({
-                    where: { id: coll.id },
-                    data: { promotedToHome: !shouldHide }
-                });
-
-                if (serverUrl && coll.ratingKey && coll.sectionKey) {
+                if (!coll.ratingKey || coll.sourceType !== "plex_native") {
+                    // Auto-sync dynamic collection to Plex to refresh contents & ordering
+                    await syncCollectionToPlexAction(coll.id).catch(() => {});
+                } else if (serverUrl && coll.ratingKey && coll.sectionKey) {
+                    const sortTitle = `${coll.sortPrefix || "!00_"}${coll.sortTitle || coll.title}`;
                     await updatePlexCollectionPromotionAndOrder(
                         serverUrl,
                         token,
                         coll.sectionKey,
                         coll.ratingKey,
                         {
-                            promotedToHome: !shouldHide,
-                            promotedToRecommended: !shouldHide,
+                            sortTitle,
+                            promotedToHome: coll.promotedToHome ?? true,
+                            promotedToRecommended: coll.promotedToRecommended ?? true,
+                            promotedToSharedHome: coll.promotedToSharedHome ?? true,
                             collectionMode: coll.collectionMode || "default"
                         }
-                    );
+                    ).catch(() => {});
                 }
 
-                results.push({ title: coll.title, active: false, action: shouldHide ? "Hidden from Plex Home (Out of Schedule/Season)" : "Demoted" });
+                results.push({
+                    title: coll.title,
+                    active: true,
+                    action: `Collection Synced & Active${placeholderNotes}`
+                });
             }
         }
 
@@ -1687,12 +1712,12 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
             console.warn("[CURATION-SYNC] Error in placeholder auto-cleanup:", cleanErr.message);
         }
 
-        logger.addLog("INFO", "CURATION", `Evaluated ${scheduledCollections.length} scheduled & seasonal collections.`);
+        logger.addLog("INFO", "CURATION", `Evaluated & synced ${allCollections.length} collections and hubs.`);
         return {
             success: true,
-            evaluatedCount: scheduledCollections.length,
+            evaluatedCount: allCollections.length,
             results,
-            message: `Evaluated ${scheduledCollections.length} scheduled & seasonal collection schedules.`
+            message: `Evaluated & synced ${allCollections.length} collections and hubs.`
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -5310,7 +5335,7 @@ export async function getTrendingAndPlaceholderMediaAction(
                 const resolved = await resolveWorkingPlexServerConnection(serverId);
                 if (resolved && resolved.serverUrl) {
                     const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 1000);
+                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000);
                 }
             } catch (err: any) {
                 console.warn("[PLACEHOLDER-ACTION] Failed fetching library items for comparison:", err.message);
@@ -5754,7 +5779,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const resolved = await resolveWorkingPlexServerConnection(collection.serverId);
                 if (resolved && resolved.serverUrl) {
                     const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 1000);
+                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000);
                 }
             } catch (err: any) {
                 console.warn("[COLL-PLACEHOLDER] Failed fetching library items:", err.message);
@@ -6037,7 +6062,7 @@ export async function cleanupAvailablePlaceholdersInternal(
                         for (const sec of sections) {
                             if (sectionKey && String(sec.key) !== String(sectionKey)) continue;
                             if (sec.type !== "movie" && sec.type !== "show") continue;
-                            const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, String(sec.key), 1000);
+                            const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, String(sec.key), 5000);
                             for (const it of items) {
                                 if (it.guids?.tmdb) libraryTmdbIds.add(String(it.guids.tmdb));
                                 if (it.guids?.imdb) libraryImdbIds.add(String(it.guids.imdb));

@@ -1029,7 +1029,7 @@ export function TaggingStudio() {
                                     <CardTitle className="text-base font-bold text-white flex items-center gap-2">
                                         <span>Detected Content Advisories</span>
                                         <Badge variant="outline" className="border-slate-700 text-slate-400 text-xs">
-                                            {advisoryItems.length} Items Loaded
+                                            Showing {Math.min(filteredAdvisories.length, displayLimit)} of {advisoryItems.length} Items
                                         </Badge>
                                     </CardTitle>
                                     <CardDescription className="text-xs text-slate-400">
@@ -1082,7 +1082,11 @@ export function TaggingStudio() {
                             ) : filteredAdvisories.length === 0 ? (
                                 <div className="p-12 text-center space-y-2 text-slate-500">
                                     <Shield className="h-8 w-8 mx-auto text-slate-600" />
-                                    <p className="text-xs">No media advisories found. Click &quot;Tag Library&quot; to scan items.</p>
+                                    {searchQuery ? (
+                                        <p className="text-xs">No media items matching &quot;{searchQuery}&quot; found in loaded library.</p>
+                                    ) : (
+                                        <p className="text-xs">No media advisories found. Click &quot;Tag Library&quot; to scan items.</p>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="divide-y divide-slate-800/60 max-h-[500px] overflow-y-auto">

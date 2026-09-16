@@ -101,9 +101,14 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
             if (typeof g === "string") extractedGenres.push(g);
             else if (g?.tag) extractedGenres.push(g.tag);
         }
-    } else if (metadata.genre) {
-        if (Array.isArray(metadata.genre)) extractedGenres.push(...metadata.genre);
-        else if (typeof metadata.genre === "string") extractedGenres.push(metadata.genre);
+    } else if (metadata.genre || metadata.genres) {
+        const rawG = metadata.genre || metadata.genres;
+        if (Array.isArray(rawG)) {
+            for (const g of rawG) {
+                if (typeof g === "string") extractedGenres.push(g);
+                else if (g?.tag) extractedGenres.push(g.tag);
+            }
+        } else if (typeof rawG === "string") extractedGenres.push(rawG);
     }
 
     // Extract Collections
@@ -113,9 +118,14 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
             if (typeof c === "string") extractedCollections.push(c);
             else if (c?.tag) extractedCollections.push(c.tag);
         }
-    } else if (metadata.collection) {
-        if (Array.isArray(metadata.collection)) extractedCollections.push(...metadata.collection);
-        else if (typeof metadata.collection === "string") extractedCollections.push(metadata.collection);
+    } else if (metadata.collection || metadata.collections) {
+        const rawC = metadata.collection || metadata.collections;
+        if (Array.isArray(rawC)) {
+            for (const c of rawC) {
+                if (typeof c === "string") extractedCollections.push(c);
+                else if (c?.tag) extractedCollections.push(c.tag);
+            }
+        } else if (typeof rawC === "string") extractedCollections.push(rawC);
     }
 
     // Extract Labels
@@ -125,9 +135,14 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
             if (typeof l === "string") extractedLabels.push(l);
             else if (l?.tag) extractedLabels.push(l.tag);
         }
-    } else if (metadata.label) {
-        if (Array.isArray(metadata.label)) extractedLabels.push(...metadata.label);
-        else if (typeof metadata.label === "string") extractedLabels.push(metadata.label);
+    } else if (metadata.label || metadata.labels) {
+        const rawL = metadata.label || metadata.labels;
+        if (Array.isArray(rawL)) {
+            for (const l of rawL) {
+                if (typeof l === "string") extractedLabels.push(l);
+                else if (l?.tag) extractedLabels.push(l.tag);
+            }
+        } else if (typeof rawL === "string") extractedLabels.push(rawL);
     }
 
     let detectedRes: "4K" | "1080p" | "720p" | "SD" | undefined;
@@ -615,6 +630,22 @@ function parsePlexXmlMetadata(xml: string): any[] {
             if (genTag) genres.push(genTag);
         }
 
+        const labels: string[] = [];
+        const labelMatches = inner.matchAll(/<Label\b([^>]*?)(?:\/>|>.*?<\/Label>)/gi);
+        for (const lm of labelMatches) {
+            const lAttrs = lm[1] || "";
+            const lTag = lAttrs.match(/\btag=["']([^"']*)["']/i)?.[1];
+            if (lTag) labels.push(lTag);
+        }
+
+        const collections: string[] = [];
+        const collectionMatches = inner.matchAll(/<Collection\b([^>]*?)(?:\/>|>.*?<\/Collection>)/gi);
+        for (const cm of collectionMatches) {
+            const cAttrs = cm[1] || "";
+            const cTag = cAttrs.match(/\btag=["']([^"']*)["']/i)?.[1];
+            if (cTag) collections.push(cTag);
+        }
+
         const mediaList: any[] = [];
         const mediaMatches = inner.matchAll(/<Media\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Media>)/gi);
         for (const mm of mediaMatches) {
@@ -715,6 +746,12 @@ function parsePlexXmlMetadata(xml: string): any[] {
             contentRating: getAttr("contentRating"),
             genres: genres.length > 0 ? genres : undefined,
             genre: genres.length > 0 ? genres : undefined,
+            labels: labels.length > 0 ? labels : undefined,
+            label: labels.length > 0 ? labels : undefined,
+            Label: labels.length > 0 ? labels.map(t => ({ tag: t })) : undefined,
+            collections: collections.length > 0 ? collections : undefined,
+            collection: collections.length > 0 ? collections : undefined,
+            Collection: collections.length > 0 ? collections.map(t => ({ tag: t })) : undefined,
             rating: getAttr("rating"),
             audienceRating: getAttr("audienceRating"),
             addedAt: getAttr("addedAt"),
