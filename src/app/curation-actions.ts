@@ -2246,13 +2246,24 @@ export async function toggleCustomBadgeAction(id: string, enabled: boolean) {
 export async function getOverlayRulesAction(serverId?: string, sectionKey?: string) {
     await verifyAdmin();
     try {
-        const rules = await prisma.mediaOverlayRule.findMany({
-            where: {
-                ...(serverId ? { serverId } : {}),
-                ...(sectionKey ? { sectionKey } : {})
-            },
-            orderBy: { createdAt: "desc" }
-        });
+        let rules: any[] = [];
+        if (serverId && sectionKey) {
+            rules = await prisma.mediaOverlayRule.findMany({
+                where: { serverId, sectionKey: String(sectionKey) },
+                orderBy: { updatedAt: "desc" }
+            });
+        }
+        if (rules.length === 0 && serverId) {
+            rules = await prisma.mediaOverlayRule.findMany({
+                where: { serverId },
+                orderBy: { updatedAt: "desc" }
+            });
+        }
+        if (rules.length === 0) {
+            rules = await prisma.mediaOverlayRule.findMany({
+                orderBy: { updatedAt: "desc" }
+            });
+        }
 
         const backupsCount = await prisma.mediaArtBackup.count({
             where: serverId ? { serverId } : {}
@@ -2320,12 +2331,15 @@ export async function saveOverlayRuleAction(data: {
                 ? data.layerPriorityOrder 
                 : (typeof data.layerPriorityOrder === "object" && data.layerPriorityOrder?.order) 
                     ? data.layerPriorityOrder.order 
-                    : typeof data.layerPriorityOrder === "string" 
-                        ? JSON.parse(data.layerPriorityOrder) 
-                        : undefined;
+                    : (typeof data.layerPriorityOrder === "object" && data.layerPriorityOrder?.layerOrder)
+                        ? data.layerPriorityOrder.layerOrder
+                        : typeof data.layerPriorityOrder === "string" 
+                            ? JSON.parse(data.layerPriorityOrder) 
+                            : undefined;
             
             serializedLayerOrder = JSON.stringify({
                 order: rawOrder,
+                layerOrder: rawOrder,
                 ribbonMode: data.ribbonMode || "single",
                 tieredRibbons: data.tieredRibbons || null,
                 maxRibbonTiers: data.maxRibbonTiers || 3,
@@ -2384,12 +2398,27 @@ export async function saveOverlayRuleAction(data: {
                 data: ruleData
             });
         } else {
-            const existingRule = await prisma.mediaOverlayRule.findFirst({
-                where: {
-                    serverId: data.serverId || undefined,
-                    sectionKey: data.sectionKey ? String(data.sectionKey) : undefined
-                }
-            });
+            let existingRule = null;
+            if (data.serverId && data.sectionKey) {
+                existingRule = await prisma.mediaOverlayRule.findFirst({
+                    where: {
+                        serverId: data.serverId,
+                        sectionKey: String(data.sectionKey)
+                    }
+                });
+            }
+            if (!existingRule && data.serverId) {
+                existingRule = await prisma.mediaOverlayRule.findFirst({
+                    where: {
+                        serverId: data.serverId
+                    }
+                });
+            }
+            if (!existingRule) {
+                existingRule = await prisma.mediaOverlayRule.findFirst({
+                    orderBy: { updatedAt: "desc" }
+                });
+            }
 
             if (existingRule) {
                 rule = await prisma.mediaOverlayRule.update({
@@ -2426,12 +2455,14 @@ export async function applyOverlaysToLibraryInternal(serverId: string, sectionKe
             : await prisma.mediaOverlayRule.findFirst({
                 where: {
                     serverId,
-                    sectionKey
+                    sectionKey: String(sectionKey)
                 }
             }) || await prisma.mediaOverlayRule.findFirst({
                 where: {
                     serverId
                 }
+            }) || await prisma.mediaOverlayRule.findFirst({
+                orderBy: { updatedAt: "desc" }
             });
 
         // Fetch rule options

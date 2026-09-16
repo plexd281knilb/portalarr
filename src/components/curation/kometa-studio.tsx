@@ -523,13 +523,18 @@ export function KometaStudio() {
         const loadInitialData = async () => {
             setLoading(true);
             try {
+                let initialServerId = "";
+                let initialSectionKey = "";
+
                 const srvRes = await getPlexServersAndSectionsAction();
                 if (srvRes.success && srvRes.servers && srvRes.servers.length > 0) {
                     setServers(srvRes.servers);
                     const firstServer = srvRes.servers[0];
-                    setSelectedServerId(firstServer.serverId);
+                    initialServerId = firstServer.serverId;
+                    setSelectedServerId(initialServerId);
                     if (firstServer.sections && firstServer.sections.length > 0) {
-                        setSelectedSectionKey(String(firstServer.sections[0].key));
+                        initialSectionKey = String(firstServer.sections[0].key);
+                        setSelectedSectionKey(initialSectionKey);
                     }
                 }
 
@@ -538,9 +543,12 @@ export function KometaStudio() {
                     setCustomBadges(badgeRes.badges);
                 }
 
-                const rulesRes = await getOverlayRulesAction();
+                const rulesRes = await getOverlayRulesAction(initialServerId || undefined, initialSectionKey || undefined);
                 if (rulesRes.success && rulesRes.rules) {
                     setOverlayRules(rulesRes.rules);
+                    if (rulesRes.rules.length > 0) {
+                        applyRuleToSimulator(rulesRes.rules[0]);
+                    }
                 }
 
                 const settingsRes = await getCurationSettingsAction();
@@ -627,10 +635,14 @@ export function KometaStudio() {
         if (targetRule.ribbonTheme) setSimRibbonTheme(targetRule.ribbonTheme as any);
         if (targetRule.ribbonType) setSimRibbonType(targetRule.ribbonType);
         if (targetRule.ribbonText !== undefined && targetRule.ribbonText !== null) setSimRibbonText(targetRule.ribbonText);
+        if (targetRule.ribbonMode) setSimRibbonMode(targetRule.ribbonMode as any);
+        if (targetRule.dovetailResolutionHdr !== undefined) setSimDovetailResolutionHdr(Boolean(targetRule.dovetailResolutionHdr));
 
         if (targetRule.layerPriorityOrder) {
             try {
-                const parsed = JSON.parse(targetRule.layerPriorityOrder);
+                const parsed = typeof targetRule.layerPriorityOrder === "string"
+                    ? JSON.parse(targetRule.layerPriorityOrder)
+                    : targetRule.layerPriorityOrder;
                 if (parsed && typeof parsed === "object") {
                     if (Array.isArray(parsed)) {
                         setLayerPriorityOrder(parsed);
@@ -638,8 +650,9 @@ export function KometaStudio() {
                         if (parsed.ribbonMode) setSimRibbonMode(parsed.ribbonMode);
                         if (Array.isArray(parsed.tieredRibbons)) setSimTieredRibbons(parsed.tieredRibbons);
                         if (parsed.maxRibbonTiers) setSimMaxRibbonTiers(parsed.maxRibbonTiers);
-                        if (parsed.dovetailResolutionHdr !== undefined) setSimDovetailResolutionHdr(parsed.dovetailResolutionHdr);
-                        if (Array.isArray(parsed.layerOrder)) setLayerPriorityOrder(parsed.layerOrder);
+                        if (parsed.dovetailResolutionHdr !== undefined) setSimDovetailResolutionHdr(Boolean(parsed.dovetailResolutionHdr));
+                        if (Array.isArray(parsed.order)) setLayerPriorityOrder(parsed.order);
+                        else if (Array.isArray(parsed.layerOrder)) setLayerPriorityOrder(parsed.layerOrder);
                     }
                 }
             } catch (e) {}
@@ -1915,7 +1928,9 @@ export function KometaStudio() {
         setSavingOverlaySettings(true);
         setOverlayMessage(null);
         try {
+            const existingId = overlayRules?.[0]?.id;
             const payload = {
+                id: existingId,
                 name: "Kometa Library Overlay",
                 serverId: selectedServerId || "main",
                 sectionKey: selectedSectionKey || "1",
@@ -1954,6 +1969,9 @@ export function KometaStudio() {
 
             const res = await saveOverlayRuleAction(payload);
             if (res.success) {
+                if (res.rule) {
+                    setOverlayRules([res.rule]);
+                }
                 setOverlayMessage({ success: true, text: "Overlay settings saved successfully!" });
                 setTimeout(() => setOverlayMessage(null), 5000);
             } else {
@@ -1971,8 +1989,10 @@ export function KometaStudio() {
         setApplyingOverlays(true);
         setOverlayMessage(null);
         try {
+            const existingId = overlayRules?.[0]?.id;
             // Auto-save active studio options to rule first
             const payload: any = {
+                id: existingId,
                 name: "Kometa Library Overlay",
                 serverId: selectedServerId,
                 sectionKey: selectedSectionKey,
@@ -2013,7 +2033,10 @@ export function KometaStudio() {
             };
 
             const saveRes = await saveOverlayRuleAction(payload);
-            const savedRuleId = saveRes.rule?.id;
+            if (saveRes.rule) {
+                setOverlayRules([saveRes.rule]);
+            }
+            const savedRuleId = saveRes.rule?.id || existingId;
 
             const res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey, savedRuleId);
             if (res.success) {
