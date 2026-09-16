@@ -287,6 +287,99 @@ export function resolveParentalAdvisoryFallback(metadata: {
 }
 
 /**
+ * Resolves IMDb ID from title and release year using IMDb's suggestion search service.
+ */
+export async function searchImdbIdByTitle(title: string, year?: number): Promise<string | null> {
+    try {
+        const clean = encodeURIComponent(title.replace(/[^\w\s]/gi, " ").trim());
+        const res = await fetch(`https://v3.sg.media-imdb.com/suggestion/x/${clean}.json`, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data?.d || !Array.isArray(data.d) || data.d.length === 0) return null;
+
+        // Try exact year match first
+        if (year) {
+            const yearMatch = data.d.find((m: any) => m.y === year || Math.abs((m.y || 0) - year) <= 1);
+            if (yearMatch?.id) return yearMatch.id;
+        }
+
+        // Fall back to first feature or series
+        const featureMatch = data.d.find((m: any) => m.q === "feature" || m.q === "TV series" || m.q === "TV mini-series");
+        return featureMatch?.id || data.d[0]?.id || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Directly queries the official IMDb GraphQL API for authoritative Parents Guide category severities.
+ */
+export async function fetchImdbParentalGuideDirect(imdbId?: string): Promise<ImdbParentalAdvisory | null> {
+    if (!imdbId || !imdbId.startsWith("tt")) return null;
+
+    const query = `
+    query TitleParentsGuide($id: ID!) {
+      title(id: $id) {
+        id
+        titleText { text }
+        parentsGuide {
+          categories {
+            category { id text }
+            severity { id text }
+          }
+        }
+        certificate {
+          rating
+          ratingReason
+        }
+      }
+    }`;
+
+    try {
+        const res = await fetch("https://graphql.imdb.com", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "User-Agent": "IMDb/3.9.1 (iPhone; iOS 16.5; Scale/3.00)",
+                "x-imdb-client-name": "imdb-ios-app"
+            },
+            body: JSON.stringify({ query, variables: { id: imdbId } })
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const cats = data.data?.title?.parentsGuide?.categories || [];
+        if (!cats || cats.length === 0) return null;
+
+        const map: ImdbParentalAdvisory = {
+            nudity: "None",
+            violence: "None",
+            profanity: "None",
+            alcohol: "None",
+            frightening: "None",
+            certificate: data.data?.title?.certificate?.rating || undefined,
+            summary: data.data?.title?.certificate?.ratingReason || undefined,
+            source: "imdb_direct"
+        };
+
+        for (const c of cats) {
+            const catId = c.category?.id;
+            const sevText = (c.severity?.text as ParentalSeverity) || "None";
+            if (catId === "NUDITY") map.nudity = sevText;
+            else if (catId === "VIOLENCE") map.violence = sevText;
+            else if (catId === "PROFANITY") map.profanity = sevText;
+            else if (catId === "ALCOHOL") map.alcohol = sevText;
+            else if (catId === "FRIGHTENING") map.frightening = sevText;
+        }
+
+        return map;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
  * AI-powered batch resolver for IMDb Parental Guide ratings.
  * Resolves up to 30 titles in a single LLM prompt.
  */
@@ -436,6 +529,53 @@ Example output:
     return fallbacks;
 }
 
+/**
+ * Unified batch resolver prioritizing Direct IMDb GraphQL, then AI, then Heuristic Fallbacks.
+ */
+export async function resolveParentalAdvisoryBatch(
+    items: {
+        ratingKey: string;
+        title: string;
+        year?: number;
+        type: string;
+        imdbId?: string;
+        mpaaRating?: string;
+    }[]
+): Promise<Record<string, ImdbParentalAdvisory>> {
+    if (items.length === 0) return {};
+
+    const results: Record<string, ImdbParentalAdvisory> = {};
+    const unresolved: typeof items = [];
+
+    // Tier 1: Direct IMDb GraphQL queries in parallel
+    await Promise.all(items.map(async (it) => {
+        try {
+            let imdbId = it.imdbId;
+            if (!imdbId) {
+                imdbId = (await searchImdbIdByTitle(it.title, it.year)) || undefined;
+            }
+            if (imdbId) {
+                const direct = await fetchImdbParentalGuideDirect(imdbId);
+                if (direct) {
+                    results[it.ratingKey] = direct;
+                    return;
+                }
+            }
+        } catch (e) {}
+        unresolved.push(it);
+    }));
+
+    // Tier 2 & 3: AI batch resolution + Heuristics for remaining unresolved items
+    if (unresolved.length > 0) {
+        const aiResults = await resolveParentalAdvisoryBatchAI(unresolved);
+        for (const it of unresolved) {
+            results[it.ratingKey] = aiResults[it.ratingKey] || resolveParentalAdvisoryFallback(it);
+        }
+    }
+
+    return results;
+}
+
 function normalizeSeverity(val: any): ParentalSeverity {
     if (!val) return "None";
     const s = String(val).trim().toLowerCase();
@@ -446,7 +586,7 @@ function normalizeSeverity(val: any): ParentalSeverity {
 }
 
 /**
- * Resolves parental advisory for a single media item (Cache -> AI -> Fallback).
+ * Resolves parental advisory for a single media item (Cache -> Direct IMDb -> AI -> Fallback).
  */
 export async function resolveParentalAdvisory(
     item: {
@@ -463,7 +603,23 @@ export async function resolveParentalAdvisory(
     const cached = await getStoredParentalAdvisory(item.ratingKey, serverId);
     if (cached) return cached;
 
-    // 2. Query AI batch with single item
+    // 2. Query Direct Official IMDb GraphQL API
+    let imdbId = item.imdbId;
+    if (!imdbId) {
+        imdbId = (await searchImdbIdByTitle(item.title, item.year)) || undefined;
+    }
+    if (imdbId) {
+        const direct = await fetchImdbParentalGuideDirect(imdbId);
+        if (direct) {
+            await saveParentalAdvisory(item.ratingKey, serverId, item.title, direct, {
+                imdbId,
+                mpaaRating: item.contentRating
+            });
+            return direct;
+        }
+    }
+
+    // 3. Fall back to AI Batch
     const resolvedMap = await resolveParentalAdvisoryBatchAI([{
         ratingKey: item.ratingKey,
         title: item.title,
@@ -475,7 +631,7 @@ export async function resolveParentalAdvisory(
 
     const advisory = resolvedMap[item.ratingKey] || resolveParentalAdvisoryFallback(item);
 
-    // 3. Persist to DB cache
+    // 4. Persist to DB cache
     await saveParentalAdvisory(item.ratingKey, serverId, item.title, advisory, {
         imdbId: item.imdbId,
         mpaaRating: item.contentRating
@@ -750,8 +906,8 @@ export async function applyParentalTagsToLibrary(
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
         const batch = items.slice(i, i + BATCH_SIZE);
 
-        // 1. Identify which items need AI resolution vs cached
-        const needsAi: any[] = [];
+        // 1. Identify which items need resolution vs cached
+        const needsResolution: any[] = [];
         const batchAdvisories: Record<string, ImdbParentalAdvisory> = {};
 
         for (const it of batch) {
@@ -759,7 +915,7 @@ export async function applyParentalTagsToLibrary(
             if (cached) {
                 batchAdvisories[it.ratingKey] = cached;
             } else {
-                needsAi.push({
+                needsResolution.push({
                     ratingKey: it.ratingKey,
                     title: it.title,
                     year: it.year,
@@ -770,11 +926,11 @@ export async function applyParentalTagsToLibrary(
             }
         }
 
-        // 2. Resolve AI batch if needed
-        if (needsAi.length > 0) {
-            const aiResults = await resolveParentalAdvisoryBatchAI(needsAi);
-            for (const it of needsAi) {
-                const adv = aiResults[it.ratingKey] || resolveParentalAdvisoryFallback(it);
+        // 2. Resolve batch using Direct IMDb GraphQL with AI/Fallback
+        if (needsResolution.length > 0) {
+            const resolvedMap = await resolveParentalAdvisoryBatch(needsResolution);
+            for (const it of needsResolution) {
+                const adv = resolvedMap[it.ratingKey] || resolveParentalAdvisoryFallback(it);
                 batchAdvisories[it.ratingKey] = adv;
                 // Save to DB cache
                 await saveParentalAdvisory(it.ratingKey, resolved.serverId, it.title, adv, {

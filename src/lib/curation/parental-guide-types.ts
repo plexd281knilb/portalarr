@@ -9,7 +9,7 @@ export interface ImdbParentalAdvisory {
     frightening: ParentalSeverity;
     certificate?: string;
     summary?: string;
-    source: "ai" | "tmdb" | "cache" | "manual";
+    source: "imdb_direct" | "ai" | "tmdb" | "cache" | "manual";
 }
 
 export interface ParentalTaggingOptions {
