@@ -194,6 +194,16 @@ function deduplicatePlexLibraryItems(items: any[]): any[] {
     return result;
 }
 
+function safeJsonParse<T>(val: any, fallback: T): T {
+    if (val === null || val === undefined || val === "") return fallback;
+    if (typeof val === "object") return val as T;
+    try {
+        return JSON.parse(val) as T;
+    } catch {
+        return fallback;
+    }
+}
+
 export async function getCurationSettingsAction() {
     await verifyAdmin();
     await ensureSchemaColumns();
@@ -215,13 +225,16 @@ export async function getCurationSettingsAction() {
         pruneDaysNotice: settings?.pruneDaysNotice ?? 14,
         pruneMinAgeDays: settings?.pruneMinAgeDays ?? 90,
         pruneUnwatchedOnly: settings?.pruneUnwatchedOnly ?? true,
-        enabledServersForOverlays: settings?.enabledServersForOverlays ? JSON.parse(settings.enabledServersForOverlays) : [],
-        enabledServersForCollections: settings?.enabledServersForCollections ? JSON.parse(settings.enabledServersForCollections) : [],
-        enabledServersForPruning: settings?.enabledServersForPruning ? JSON.parse(settings.enabledServersForPruning) : [],
-        enabledServersForTagging: settings?.enabledServersForTagging ? JSON.parse(settings.enabledServersForTagging) : [],
-        comingSoonShares: settings?.comingSoonShares ? JSON.parse(settings.comingSoonShares) : {},
-        serverStorageConfig: settings?.serverStorageConfig ? JSON.parse(settings.serverStorageConfig) : {},
-        selectedGlancesDiskId: (settings?.serverStorageConfig ? JSON.parse(settings.serverStorageConfig) : {})?.selectedGlancesDiskId || "",
+        pruneSortStrategy: settings?.pruneSortStrategy || "combined_oldest",
+        pruneOldestLimit: settings?.pruneOldestLimit ?? 50,
+        pruneRulePresets: safeJsonParse(settings?.pruneRulePresets, []),
+        enabledServersForOverlays: safeJsonParse(settings?.enabledServersForOverlays, []),
+        enabledServersForCollections: safeJsonParse(settings?.enabledServersForCollections, []),
+        enabledServersForPruning: safeJsonParse(settings?.enabledServersForPruning, []),
+        enabledServersForTagging: safeJsonParse(settings?.enabledServersForTagging, []),
+        comingSoonShares: safeJsonParse(settings?.comingSoonShares, {}),
+        serverStorageConfig: safeJsonParse(settings?.serverStorageConfig, {}),
+        selectedGlancesDiskId: safeJsonParse<any>(settings?.serverStorageConfig, {})?.selectedGlancesDiskId || "",
 
         // Placeholder Timing & Overlay Settings
         placeholderDaysThreshold: settings?.placeholderDaysThreshold ?? 90,
@@ -233,7 +246,7 @@ export async function getCurationSettingsAction() {
         placeholderBannerTheme: settings?.placeholderBannerTheme || "indigo-purple",
         placeholderBannerFontSize: settings?.placeholderBannerFontSize ?? 44,
         placeholderCustomText: settings?.placeholderCustomText || "",
-        placeholderBannerTemplates: settings?.placeholderBannerTemplates ? JSON.parse(settings.placeholderBannerTemplates) : {},
+        placeholderBannerTemplates: safeJsonParse(settings?.placeholderBannerTemplates, {}),
         placeholderEnabled: settings?.placeholderEnabled ?? true,
 
         // Pruning Banner Appearance Settings
@@ -242,7 +255,7 @@ export async function getCurationSettingsAction() {
         pruneBannerText: settings?.pruneBannerText || "LEAVING ON {date}",
         pruneBannerFontSize: settings?.pruneBannerFontSize ?? 44,
         pruneBannerType: (settings as any)?.pruneBannerType || "leaving_date",
-        pruneBannerTemplates: (settings as any)?.pruneBannerTemplates ? JSON.parse((settings as any).pruneBannerTemplates) : {},
+        pruneBannerTemplates: safeJsonParse((settings as any)?.pruneBannerTemplates, {}),
 
         // Leaving Soon Home Hub & Schedule Settings
         leavingSoonPromotedToHome: settings?.leavingSoonPromotedToHome ?? true,
@@ -258,7 +271,7 @@ export async function getCurationSettingsAction() {
         parentalTagPrefix: settings?.parentalTagPrefix || "IMDb",
         parentalTagTarget: settings?.parentalTagTarget || "labels",
         parentalMinSeverity: settings?.parentalMinSeverity || "Mild",
-        parentalCategories: settings?.parentalCategories ? JSON.parse(settings.parentalCategories) : ["nudity", "violence", "profanity", "alcohol", "frightening"],
+        parentalCategories: safeJsonParse(settings?.parentalCategories, ["nudity", "violence", "profanity", "alcohol", "frightening"]),
         curationSyncParentalTags: settings?.curationSyncParentalTags ?? true,
 
         // Curation Scheduler Timer & Automation Settings
@@ -270,7 +283,7 @@ export async function getCurationSettingsAction() {
         curationSyncReleases: settings?.curationSyncReleases ?? true,
         curationSyncPruning: settings?.curationSyncPruning ?? true,
         curationLastRunAt: settings?.curationLastRunAt ? settings.curationLastRunAt.toISOString() : null,
-        curationLastRunStatus: settings?.curationLastRunStatus ? JSON.parse(settings.curationLastRunStatus) : null
+        curationLastRunStatus: safeJsonParse(settings?.curationLastRunStatus, null)
     };
 }
 
@@ -534,6 +547,9 @@ export async function saveCurationSettingsAction(data: {
     pruneBannerFontSize?: number;
     pruneBannerType?: string;
     pruneBannerTemplates?: string | Record<string, any>;
+    pruneSortStrategy?: string;
+    pruneOldestLimit?: number;
+    pruneRulePresets?: string | any[];
     leavingSoonPromotedToHome?: boolean;
     leavingSoonPromotedToRecommended?: boolean;
     leavingSoonPromotedToSharedHome?: boolean;
@@ -556,6 +572,7 @@ export async function saveCurationSettingsAction(data: {
     parentalCategories?: string[];
 }) {
     await verifyAdmin();
+    await ensureSchemaColumns();
     try {
         const updatePayload: any = {};
         if (data.tmdbApiKey !== undefined) updatePayload.tmdbApiKey = data.tmdbApiKey;
@@ -620,6 +637,13 @@ export async function saveCurationSettingsAction(data: {
             updatePayload.pruneBannerTemplates = typeof data.pruneBannerTemplates === "string"
                 ? data.pruneBannerTemplates
                 : JSON.stringify(data.pruneBannerTemplates);
+        }
+        if (data.pruneSortStrategy !== undefined) updatePayload.pruneSortStrategy = data.pruneSortStrategy;
+        if (data.pruneOldestLimit !== undefined) updatePayload.pruneOldestLimit = data.pruneOldestLimit;
+        if (data.pruneRulePresets !== undefined) {
+            updatePayload.pruneRulePresets = typeof data.pruneRulePresets === "string"
+                ? data.pruneRulePresets
+                : JSON.stringify(data.pruneRulePresets);
         }
 
         if (data.leavingSoonPromotedToHome !== undefined) updatePayload.leavingSoonPromotedToHome = data.leavingSoonPromotedToHome;

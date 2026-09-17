@@ -37,7 +37,8 @@ import {
     ImageIcon,
     Sparkles,
     Eye,
-    Tag
+    Tag,
+    Plus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +74,95 @@ import {
     saveSelectedGlancesDiskAction,
     recheckLeavingSoonWatchActivityAction
 } from "@/app/curation-actions";
+
+export interface MaintainerrRulePreset {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    minAgeDays: number;
+    gracePeriodDays: number;
+    unwatchedOnly: boolean;
+    sortStrategy: "combined_oldest" | "oldest_added" | "oldest_watched" | "oldest_modified" | "largest_size" | "least_plays";
+    oldestLimit: number;
+    bannerType: string;
+    isCustom?: boolean;
+}
+
+export const MAINTAINERR_RULE_PRESETS: MaintainerrRulePreset[] = [
+    {
+        id: "standard_90d_unwatched",
+        name: "Standard 90d Unwatched",
+        description: "Flags media unwatched for 90+ days with 14-day notice",
+        icon: "📦",
+        minAgeDays: 90,
+        gracePeriodDays: 14,
+        unwatchedOnly: true,
+        sortStrategy: "combined_oldest",
+        oldestLimit: 50,
+        bannerType: "leaving_date"
+    },
+    {
+        id: "extended_180d_grace",
+        name: "Extended 180d Grace",
+        description: "Gentle 6-month retention policy with 30-day notice period",
+        icon: "⏳",
+        minAgeDays: 180,
+        gracePeriodDays: 30,
+        unwatchedOnly: true,
+        sortStrategy: "oldest_watched",
+        oldestLimit: 50,
+        bannerType: "upper_third"
+    },
+    {
+        id: "emergency_low_disk",
+        name: "Emergency Low Disk",
+        description: "Target large 4K/Remux files over 30 days old with 7-day notice",
+        icon: "🚨",
+        minAgeDays: 30,
+        gracePeriodDays: 7,
+        unwatchedOnly: true,
+        sortStrategy: "largest_size",
+        oldestLimit: 25,
+        bannerType: "top_banner"
+    },
+    {
+        id: "one_play_abandoned",
+        name: "One-Play Abandoned",
+        description: "Media added 1+ year ago with low lifetime plays",
+        icon: "📉",
+        minAgeDays: 365,
+        gracePeriodDays: 21,
+        unwatchedOnly: false,
+        sortStrategy: "least_plays",
+        oldestLimit: 50,
+        bannerType: "unwatched_warning"
+    },
+    {
+        id: "dormant_clean",
+        name: "Dormant Deep Clean",
+        description: "Oldest unmodified files sitting idle on disk for 180+ days",
+        icon: "🧹",
+        minAgeDays: 180,
+        gracePeriodDays: 14,
+        unwatchedOnly: true,
+        sortStrategy: "oldest_modified",
+        oldestLimit: 50,
+        bannerType: "middle_banner"
+    },
+    {
+        id: "aggressive_45d_prune",
+        name: "Aggressive 45d Prune",
+        description: "Fast storage reclamation targeting large files with 7-day notice",
+        icon: "⚡",
+        minAgeDays: 45,
+        gracePeriodDays: 7,
+        unwatchedOnly: false,
+        sortStrategy: "largest_size",
+        oldestLimit: 100,
+        bannerType: "leaving_soon"
+    }
+];
 
 export const PRUNE_BANNER_PRESETS = [
     { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
@@ -341,9 +431,15 @@ export function PruneStudio() {
     const [simBatchFlagAmount, setSimBatchFlagAmount] = useState<number>(10);
     const [simGracePeriodDays, setSimGracePeriodDays] = useState<number>(14);
     const [simFilterSearch, setSimFilterSearch] = useState<string>("");
-    const [simMinAgeDays, setSimMinAgeDays] = useState(30);
-    const [simUnwatchedOnly, setSimUnwatchedOnly] = useState(false);
+    const [simMinAgeDays, setSimMinAgeDays] = useState(90);
+    const [simUnwatchedOnly, setSimUnwatchedOnly] = useState(true);
     const [simulatingPrune, setSimulatingPrune] = useState(false);
+    const [selectedRulePresetId, setSelectedRulePresetId] = useState<string>("standard_90d_unwatched");
+    const [customRulePresets, setCustomRulePresets] = useState<MaintainerrRulePreset[]>([]);
+    const [savingRuleDefault, setSavingRuleDefault] = useState<boolean>(false);
+    const [ruleDefaultSavedMsg, setRuleDefaultSavedMsg] = useState<string | null>(null);
+    const [saveCustomPresetModalOpen, setSaveCustomPresetModalOpen] = useState<boolean>(false);
+    const [newCustomPresetName, setNewCustomPresetName] = useState<string>("");
     const [pruneSimResults, setPruneSimResults] = useState<{
         candidates: any[];
         totalRecoverableGb: number;
@@ -380,7 +476,7 @@ export function PruneStudio() {
     const [simPreviewDataUrl, setSimPreviewDataUrl] = useState<string | null>(null);
     const [simPreviewLoading, setSimPreviewLoading] = useState<boolean>(false);
     const [savingBannerConfig, setSavingBannerConfig] = useState<boolean>(false);
-    const [bannerConfigSavedMsg, setBannerConfigSavedMsg] = useState<boolean>(false);
+    const [bannerConfigSavedMsg, setBannerConfigSavedMsg] = useState<string | null>(null);
 
     // Effective Banner Config Resolver for any Preset ID
     const getEffectivePruneBannerConfig = (presetId: string, customTemplates = bannerTemplates) => {
@@ -530,10 +626,108 @@ export function PruneStudio() {
         );
     };
 
+    // Apply a Maintainerr Rule Preset
+    const handleApplyRulePreset = (preset: MaintainerrRulePreset) => {
+        setSelectedRulePresetId(preset.id);
+        setSimMinAgeDays(preset.minAgeDays);
+        setSimGracePeriodDays(preset.gracePeriodDays);
+        setSimUnwatchedOnly(preset.unwatchedOnly);
+        setSimSortBy(preset.sortStrategy);
+        setSimOldestLimit(preset.oldestLimit);
+
+        // Also sync to storage settings tab state
+        setPruneMinAgeDaysSetting(preset.minAgeDays);
+        setPruneDaysNoticeSetting(preset.gracePeriodDays);
+        setPruneUnwatchedOnlySetting(preset.unwatchedOnly);
+
+        if (preset.bannerType) {
+            handleSelectPruneBannerPreset(preset.bannerType);
+        }
+    };
+
+    // Save Current Sandbox Criteria as Global Default Pruning Rule
+    const handleSaveCurrentSandboxAsDefaultRule = async () => {
+        setSavingRuleDefault(true);
+        setRuleDefaultSavedMsg(null);
+        try {
+            const res = await saveCurationSettingsAction({
+                pruneMinAgeDays: Number(simMinAgeDays),
+                pruneDaysNotice: Number(simGracePeriodDays),
+                pruneUnwatchedOnly: Boolean(simUnwatchedOnly),
+                pruneSortStrategy: simSortBy,
+                pruneOldestLimit: Number(simOldestLimit),
+                pruneBannerType: simBannerType,
+                pruneBannerPosition: simBannerPosition,
+                pruneBannerTheme: simBannerTheme,
+                pruneBannerText: simBannerText,
+                pruneBannerFontSize: simBannerFontSize
+            });
+            if (res.success) {
+                setPruneMinAgeDaysSetting(simMinAgeDays);
+                setPruneDaysNoticeSetting(simGracePeriodDays);
+                setPruneUnwatchedOnlySetting(simUnwatchedOnly);
+                setRuleDefaultSavedMsg("✓ Saved as Global Default Pruning Rule!");
+                setTimeout(() => setRuleDefaultSavedMsg(null), 3500);
+            }
+        } catch (e) {
+            console.error("Failed saving default pruning rule:", e);
+        } finally {
+            setSavingRuleDefault(false);
+        }
+    };
+
+    // Save a New Custom Rule Preset
+    const handleSaveCustomRulePreset = async () => {
+        if (!newCustomPresetName.trim()) return;
+        const newPreset: MaintainerrRulePreset = {
+            id: `custom_${Date.now()}`,
+            name: newCustomPresetName.trim(),
+            description: `Custom ${simMinAgeDays}d age, ${simGracePeriodDays}d notice, ${simUnwatchedOnly ? "unwatched only" : "all media"}`,
+            icon: "⚙️",
+            minAgeDays: simMinAgeDays,
+            gracePeriodDays: simGracePeriodDays,
+            unwatchedOnly: simUnwatchedOnly,
+            sortStrategy: simSortBy,
+            oldestLimit: simOldestLimit,
+            bannerType: simBannerType,
+            isCustom: true
+        };
+        const updated = [...customRulePresets, newPreset];
+        setCustomRulePresets(updated);
+        setNewCustomPresetName("");
+        setSaveCustomPresetModalOpen(false);
+        setSelectedRulePresetId(newPreset.id);
+
+        try {
+            await saveCurationSettingsAction({
+                pruneRulePresets: updated
+            });
+            setRuleDefaultSavedMsg(`✓ Saved Custom Preset "${newPreset.name}"!`);
+            setTimeout(() => setRuleDefaultSavedMsg(null), 3500);
+        } catch (e) {
+            console.error("Failed saving custom rule presets:", e);
+        }
+    };
+
+    // Delete a Custom Rule Preset
+    const handleDeleteCustomRulePreset = async (presetId: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        const updated = customRulePresets.filter(p => p.id !== presetId);
+        setCustomRulePresets(updated);
+        if (selectedRulePresetId === presetId) setSelectedRulePresetId("standard_90d_unwatched");
+        try {
+            await saveCurationSettingsAction({
+                pruneRulePresets: updated
+            });
+        } catch (e) {
+            console.error("Failed deleting custom rule preset:", e);
+        }
+    };
+
     // Save Current Banner Template Preset
     const handleSaveDefaultPruneBannerTemplate = async () => {
         setSavingBannerConfig(true);
-        setBannerConfigSavedMsg(false);
+        setBannerConfigSavedMsg(null);
         try {
             const updatedTemplates = {
                 ...bannerTemplates,
@@ -555,8 +749,9 @@ export function PruneStudio() {
                 pruneBannerTemplates: JSON.stringify(updatedTemplates)
             });
             if (res.success) {
-                setBannerConfigSavedMsg(true);
-                setTimeout(() => setBannerConfigSavedMsg(false), 3500);
+                const currentPreset = PRUNE_BANNER_PRESETS.find(p => p.id === simBannerType);
+                setBannerConfigSavedMsg(`✓ Saved Template for "${currentPreset?.label || simBannerType}"!`);
+                setTimeout(() => setBannerConfigSavedMsg(null), 3500);
             }
         } catch (e) {
             console.error("Failed saving default prune banner template:", e);
@@ -584,14 +779,15 @@ export function PruneStudio() {
 
         try {
             await saveCurationSettingsAction({
+                pruneBannerType: simBannerType,
                 pruneBannerPosition: defaultPos,
                 pruneBannerTheme: defaultTheme,
                 pruneBannerText: defaultText,
                 pruneBannerFontSize: defaultFontSize,
                 pruneBannerTemplates: JSON.stringify(updatedTemplates)
             });
-            setBannerConfigSavedMsg(true);
-            setTimeout(() => setBannerConfigSavedMsg(false), 3500);
+            setBannerConfigSavedMsg(`✓ Reset "${preset?.label || simBannerType}" to preset default!`);
+            setTimeout(() => setBannerConfigSavedMsg(null), 3500);
         } catch (e) {
             console.error("Failed resetting template:", e);
         }
@@ -721,7 +917,7 @@ export function PruneStudio() {
                 if (settingsRes.success) {
                     setSettings(settingsRes);
                     if (settingsRes.serverStorageConfig) setServerStorageConfig(settingsRes.serverStorageConfig);
-                    savedDiskId = settingsRes.selectedGlancesDiskId || settingsRes.serverStorageConfig?.selectedGlancesDiskId || "";
+                    savedDiskId = settingsRes.selectedGlancesDiskId || (settingsRes.serverStorageConfig as any)?.selectedGlancesDiskId || "";
                     if (savedDiskId) {
                         setSelectedGlancesDiskId(savedDiskId);
                     }
@@ -747,6 +943,24 @@ export function PruneStudio() {
                     if (settingsRes.pruneUnwatchedOnly !== undefined) {
                         setPruneUnwatchedOnlySetting(settingsRes.pruneUnwatchedOnly);
                         setSimUnwatchedOnly(settingsRes.pruneUnwatchedOnly);
+                    }
+                    if (settingsRes.pruneSortStrategy) {
+                        setSimSortBy(settingsRes.pruneSortStrategy as any);
+                    }
+                    if (settingsRes.pruneOldestLimit !== undefined) {
+                        setSimOldestLimit(settingsRes.pruneOldestLimit);
+                    }
+                    if (settingsRes.pruneRulePresets) {
+                        try {
+                            const parsedPresets = typeof settingsRes.pruneRulePresets === "string"
+                                ? JSON.parse(settingsRes.pruneRulePresets)
+                                : settingsRes.pruneRulePresets;
+                            if (Array.isArray(parsedPresets)) {
+                                setCustomRulePresets(parsedPresets);
+                            }
+                        } catch (e) {
+                            console.warn("Failed parsing custom prune rule presets:", e);
+                        }
                     }
 
                     let activeBannerType = settingsRes.pruneBannerType || "leaving_date";
@@ -2035,7 +2249,7 @@ export function PruneStudio() {
                                             {bannerConfigSavedMsg && (
                                                 <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
                                                     <CheckCircle2 className="h-3.5 w-3.5" />
-                                                    <span>Banner template saved!</span>
+                                                    <span>{bannerConfigSavedMsg}</span>
                                                 </span>
                                             )}
                                         </div>
@@ -2086,16 +2300,86 @@ export function PruneStudio() {
                                     Scan libraries to discover the oldest, least watched, or largest media items. Verify full telemetry (last watched, modified date, codec, disk path) before staging.
                                 </CardDescription>
                             </div>
-                            <Button
-                                type="button"
-                                size="sm"
-                                disabled={simulatingPrune}
-                                onClick={handleRunSimulation}
-                                className="bg-rose-600 hover:bg-rose-500 text-white font-black text-xs h-9 px-4 gap-2 shadow-lg cursor-pointer shrink-0"
-                            >
-                                {simulatingPrune ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                                <span>Discover Oldest Candidates</span>
-                            </Button>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                        setNewCustomPresetName("");
+                                        setSaveCustomPresetModalOpen(true);
+                                    }}
+                                    className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-9 px-3 gap-1.5 cursor-pointer"
+                                >
+                                    <Plus className="h-4 w-4 text-rose-400" />
+                                    <span>Save Custom Preset</span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={simulatingPrune}
+                                    onClick={handleRunSimulation}
+                                    className="bg-rose-600 hover:bg-rose-500 text-white font-black text-xs h-9 px-4 gap-2 shadow-lg cursor-pointer shrink-0"
+                                >
+                                    {simulatingPrune ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                                    <span>Discover Oldest Candidates</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Quick Rule Presets Selector */}
+                        <div className="space-y-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-rose-400" />
+                                    <span>Maintainerr Rule Presets &amp; Retention Policies:</span>
+                                </Label>
+                                <span className="text-[11px] text-slate-400">1-Click load rule configurations</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                                {MAINTAINERR_RULE_PRESETS.map((preset) => (
+                                    <button
+                                        key={preset.id}
+                                        type="button"
+                                        title={preset.description}
+                                        onClick={() => handleApplyRulePreset(preset)}
+                                        className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 transition-all cursor-pointer ${
+                                            selectedRulePresetId === preset.id
+                                                ? "bg-rose-600 text-white border-rose-500 font-bold shadow-md shadow-rose-950/50"
+                                                : "bg-slate-900/80 text-slate-300 border-slate-700/80 hover:bg-slate-800 hover:text-white"
+                                        }`}
+                                    >
+                                        <span>{preset.icon}</span>
+                                        <span>{preset.name}</span>
+                                    </button>
+                                ))}
+                                {customRulePresets.map((preset) => (
+                                    <div
+                                        key={preset.id}
+                                        onClick={() => handleApplyRulePreset(preset)}
+                                        title={preset.description}
+                                        className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 transition-all cursor-pointer group ${
+                                            selectedRulePresetId === preset.id
+                                                ? "bg-rose-600 text-white border-rose-500 font-bold shadow-md shadow-rose-950/50"
+                                                : "bg-slate-900/80 text-slate-300 border-slate-700/80 hover:bg-slate-800 hover:text-white"
+                                        }`}
+                                    >
+                                        <span>{preset.icon || "⚙️"}</span>
+                                        <span>{preset.name}</span>
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-rose-400/40 text-rose-300 bg-rose-950/40 font-normal">
+                                            Custom
+                                        </Badge>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => handleDeleteCustomRulePreset(preset.id, e)}
+                                            className="opacity-60 hover:opacity-100 hover:text-rose-300 text-slate-400 ml-1 transition-opacity"
+                                            title="Delete Custom Preset"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
@@ -2176,6 +2460,32 @@ export function PruneStudio() {
                                     {simUnwatchedOnly ? "Only items with 0 plays" : "Include watched & unwatched"}
                                 </p>
                             </div>
+                        </div>
+
+                        {/* Save Rule as Global Default Action Bar */}
+                        <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                {ruleDefaultSavedMsg ? (
+                                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 animate-in fade-in-50">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        <span>{ruleDefaultSavedMsg}</span>
+                                    </span>
+                                ) : (
+                                    <p className="text-[11px] text-slate-400">
+                                        Save these criteria and active banner style as the default pruning rule across automated sync runs.
+                                    </p>
+                                )}
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={savingRuleDefault}
+                                onClick={handleSaveCurrentSandboxAsDefaultRule}
+                                className="h-8 text-xs bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold gap-1.5 shadow cursor-pointer"
+                            >
+                                {savingRuleDefault ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5 text-rose-400" />}
+                                <span>Save Rule as Global Default</span>
+                            </Button>
                         </div>
                     </Card>
 
@@ -2908,6 +3218,84 @@ export function PruneStudio() {
                 servers={servers}
                 onSelect={handleSelectRealPoster}
             />
+
+            {/* Save Custom Rule Preset Modal */}
+            <Dialog open={saveCustomPresetModalOpen} onOpenChange={setSaveCustomPresetModalOpen}>
+                <DialogContent className="max-w-md bg-slate-900 border-slate-800 text-slate-100 p-6">
+                    <DialogHeader className="pb-2 border-b border-slate-800">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-rose-400" />
+                            <span>Save Custom Maintainerr Rule Preset</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Save your current criteria as a named rule preset to quickly reload anytime.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3 py-3 text-xs">
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-300 font-semibold">Preset Name:</Label>
+                            <Input
+                                placeholder="e.g. 4K HDR 60-Day Prune"
+                                value={newCustomPresetName}
+                                onChange={(e) => setNewCustomPresetName(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && newCustomPresetName.trim()) {
+                                        handleSaveCustomRulePreset();
+                                    }
+                                }}
+                                className="h-8 text-xs bg-slate-950 border-slate-800"
+                                autoFocus
+                            />
+                        </div>
+
+                        {/* Summary of Configuration to be Saved */}
+                        <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1.5 font-mono text-[11px]">
+                            <span className="text-slate-400 font-bold block text-[10px] uppercase">Included Rule Configuration:</span>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Minimum Age:</span>
+                                <span>{simMinAgeDays} days</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Grace Notice:</span>
+                                <span>{simGracePeriodDays} days</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Filter Mode:</span>
+                                <span>{simUnwatchedOnly ? "Unwatched Only (0 plays)" : "All Media"}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Sort Strategy:</span>
+                                <span className="capitalize">{simSortBy.replace(/_/g, " ")}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Oldest Limit:</span>
+                                <span>{simOldestLimit === 0 ? "All files" : `${simOldestLimit} files`}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Banner Template:</span>
+                                <span>{PRUNE_BANNER_PRESETS.find(p => p.id === simBannerType)?.label || simBannerType}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setSaveCustomPresetModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={!newCustomPresetName.trim()}
+                            onClick={handleSaveCustomRulePreset}
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs gap-1.5 cursor-pointer"
+                        >
+                            <Save className="h-3.5 w-3.5" />
+                            <span>Save Preset</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

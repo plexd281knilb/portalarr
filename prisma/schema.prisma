@@ -98,6 +98,9 @@ model Settings {
   pruneBannerFontSize              Int?      @default(44) // Default font size in px
   pruneBannerType                  String?   @default("leaving_date")
   pruneBannerTemplates             String?   // JSON map of banner preset ID -> { text, theme, pos, fontSize }
+  pruneSortStrategy                String?   @default("combined_oldest")
+  pruneOldestLimit                 Int?      @default(50)
+  pruneRulePresets                 String?   // JSON array of custom user-defined prune rule presets
   
   // Leaving Soon Home Hub & Schedule Controls
   leavingSoonPromotedToHome        Boolean   @default(true)
