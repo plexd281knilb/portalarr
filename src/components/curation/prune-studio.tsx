@@ -70,6 +70,7 @@ import {
     getArtBackupAndBadgeStatsAction,
     getPlaceholderPreviewDataUrlAction,
     getGlancesDisksAction,
+    saveSelectedGlancesDiskAction,
     recheckLeavingSoonWatchActivityAction
 } from "@/app/curation-actions";
 
@@ -323,6 +324,8 @@ export function PruneStudio() {
     }>>([]);
     const [selectedGlancesDiskId, setSelectedGlancesDiskId] = useState<string>("");
     const [glancesLoading, setGlancesLoading] = useState<boolean>(false);
+    const [savingGlancesDisk, setSavingGlancesDisk] = useState<boolean>(false);
+    const [glancesDiskSavedMsg, setGlancesDiskSavedMsg] = useState<boolean>(false);
 
     // Manual Leaving Soon Modal
     const [manualFlagModalOpen, setManualFlagModalOpen] = useState(false);
@@ -333,7 +336,7 @@ export function PruneStudio() {
     const [flaggingItem, setFlaggingItem] = useState(false);
 
     // Simulation & Oldest Files Explorer States
-    const [simSortBy, setSimSortBy] = useState<"oldest_added" | "oldest_watched" | "oldest_modified" | "largest_size" | "least_plays">("oldest_added");
+    const [simSortBy, setSimSortBy] = useState<"combined_oldest" | "oldest_added" | "oldest_watched" | "oldest_modified" | "largest_size" | "least_plays">("combined_oldest");
     const [simOldestLimit, setSimOldestLimit] = useState<number>(50);
     const [simBatchFlagAmount, setSimBatchFlagAmount] = useState<number>(10);
     const [simGracePeriodDays, setSimGracePeriodDays] = useState<number>(14);
@@ -508,9 +511,14 @@ export function PruneStudio() {
                 }
 
                 const settingsRes = await getCurationSettingsAction();
+                let savedDiskId = "";
                 if (settingsRes.success) {
                     setSettings(settingsRes);
                     if (settingsRes.serverStorageConfig) setServerStorageConfig(settingsRes.serverStorageConfig);
+                    savedDiskId = settingsRes.selectedGlancesDiskId || settingsRes.serverStorageConfig?.selectedGlancesDiskId || "";
+                    if (savedDiskId) {
+                        setSelectedGlancesDiskId(savedDiskId);
+                    }
                     setCurationSyncPruning(settingsRes.curationSyncPruning ?? true);
                     setCurationSyncSchedule(settingsRes.curationSyncSchedule || "daily_5am");
                     setPruneDryRun(settingsRes.pruneDryRun ?? true);
@@ -553,7 +561,7 @@ export function PruneStudio() {
 
                 await Promise.all([
                     loadLeavingSoonItems(),
-                    loadGlancesDisks()
+                    loadGlancesDisks(savedDiskId)
                 ]);
             } catch (err) {
                 console.error("Failed loading Maintainerr Prune studio data:", err);
@@ -565,13 +573,16 @@ export function PruneStudio() {
         loadInitialData();
     }, []);
 
-    const loadGlancesDisks = async () => {
+    const loadGlancesDisks = async (savedDiskIdParam?: string) => {
         setGlancesLoading(true);
         try {
             const res = await getGlancesDisksAction();
             if (res.success && Array.isArray(res.disks)) {
                 setGlancesDisks(res.disks);
-                if (res.disks.length > 0 && !selectedGlancesDiskId) {
+                const targetId = savedDiskIdParam || selectedGlancesDiskId;
+                if (targetId && res.disks.some(d => d.id === targetId)) {
+                    setSelectedGlancesDiskId(targetId);
+                } else if (res.disks.length > 0 && !selectedGlancesDiskId) {
                     setSelectedGlancesDiskId(res.disks[0].id);
                 }
             }
@@ -579,6 +590,23 @@ export function PruneStudio() {
             console.error("Failed loading Glances disks:", e);
         } finally {
             setGlancesLoading(false);
+        }
+    };
+
+    const handleSaveGlancesDisk = async () => {
+        if (!selectedGlancesDiskId) return;
+        setSavingGlancesDisk(true);
+        setGlancesDiskSavedMsg(false);
+        try {
+            const res = await saveSelectedGlancesDiskAction(selectedGlancesDiskId);
+            if (res.success) {
+                setGlancesDiskSavedMsg(true);
+                setTimeout(() => setGlancesDiskSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving Glances disk selection:", e);
+        } finally {
+            setSavingGlancesDisk(false);
         }
     };
 
@@ -1227,7 +1255,7 @@ export function PruneStudio() {
                                     <span className="text-xs font-bold text-white">Glances Storage Array &amp; Live Capacity:</span>
                                     {glancesLoading && <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />}
                                 </div>
-                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
                                     <Select
                                         value={selectedGlancesDiskId || (glancesDisks[0]?.id || "")}
                                         onValueChange={setSelectedGlancesDiskId}
@@ -1245,9 +1273,26 @@ export function PruneStudio() {
                                     </Select>
                                     <Button
                                         type="button"
+                                        size="sm"
+                                        onClick={handleSaveGlancesDisk}
+                                        disabled={savingGlancesDisk || !selectedGlancesDiskId}
+                                        title="Save this storage array as the default monitor array"
+                                        className="h-8 px-3 gap-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow cursor-pointer"
+                                    >
+                                        {savingGlancesDisk ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : glancesDiskSavedMsg ? (
+                                            <Check className="h-3.5 w-3.5 text-emerald-300" />
+                                        ) : (
+                                            <Save className="h-3.5 w-3.5" />
+                                        )}
+                                        <span>{glancesDiskSavedMsg ? "Saved Array!" : "Save Array"}</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
                                         variant="outline"
                                         size="sm"
-                                        onClick={loadGlancesDisks}
+                                        onClick={() => loadGlancesDisks(selectedGlancesDiskId)}
                                         disabled={glancesLoading}
                                         title="Refresh Glances Storage Telemetry"
                                         className="h-8 w-8 p-0 border-slate-700 text-slate-300 hover:text-white"
@@ -1814,6 +1859,7 @@ export function PruneStudio() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="combined_oldest">⚡ Combined Stagnant (Added, Watched &amp; Modified)</SelectItem>
                                         <SelectItem value="oldest_added">📅 Oldest Added to Library</SelectItem>
                                         <SelectItem value="oldest_watched">👁️ Oldest Last Watched</SelectItem>
                                         <SelectItem value="oldest_modified">📝 Oldest Modified on Disk</SelectItem>
@@ -2237,7 +2283,7 @@ export function PruneStudio() {
                                     size="sm"
                                     variant="outline"
                                     disabled={glancesLoading}
-                                    onClick={loadGlancesDisks}
+                                    onClick={() => loadGlancesDisks(selectedGlancesDiskId)}
                                     className="border-slate-700 text-xs h-8 gap-1.5 text-slate-300 hover:text-white"
                                 >
                                     <RefreshCw className={`h-3.5 w-3.5 ${glancesLoading ? 'animate-spin' : ''}`} />

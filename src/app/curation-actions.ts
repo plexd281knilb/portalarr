@@ -132,6 +132,7 @@ export async function getCurationSettingsAction() {
         enabledServersForTagging: settings?.enabledServersForTagging ? JSON.parse(settings.enabledServersForTagging) : [],
         comingSoonShares: settings?.comingSoonShares ? JSON.parse(settings.comingSoonShares) : {},
         serverStorageConfig: settings?.serverStorageConfig ? JSON.parse(settings.serverStorageConfig) : {},
+        selectedGlancesDiskId: (settings?.serverStorageConfig ? JSON.parse(settings.serverStorageConfig) : {})?.selectedGlancesDiskId || "",
 
         // Placeholder Timing & Overlay Settings
         placeholderTheatricalNoticeDays: settings?.placeholderTheatricalNoticeDays ?? 60,
@@ -420,6 +421,7 @@ export async function saveCurationSettingsAction(data: {
     enabledServersForTagging?: string[];
     comingSoonShares?: Record<string, string>;
     serverStorageConfig?: Record<string, any>;
+    selectedGlancesDiskId?: string;
     placeholderTheatricalNoticeDays?: number;
     placeholderDigitalCountdownDays?: number;
     placeholderNowStreamingGraceDays?: number;
@@ -475,7 +477,21 @@ export async function saveCurationSettingsAction(data: {
         if (data.enabledServersForPruning !== undefined) updatePayload.enabledServersForPruning = JSON.stringify(data.enabledServersForPruning);
         if (data.enabledServersForTagging !== undefined) updatePayload.enabledServersForTagging = JSON.stringify(data.enabledServersForTagging);
         if (data.comingSoonShares !== undefined) updatePayload.comingSoonShares = JSON.stringify(data.comingSoonShares);
-        if (data.serverStorageConfig !== undefined) updatePayload.serverStorageConfig = JSON.stringify(data.serverStorageConfig);
+        if (data.serverStorageConfig !== undefined) {
+            const config = { ...data.serverStorageConfig };
+            if (data.selectedGlancesDiskId !== undefined) {
+                config.selectedGlancesDiskId = data.selectedGlancesDiskId;
+            }
+            updatePayload.serverStorageConfig = JSON.stringify(config);
+        } else if (data.selectedGlancesDiskId !== undefined) {
+            const existingSettings = await prisma.settings.findFirst({ where: { id: "global" } });
+            let config: Record<string, any> = {};
+            if (existingSettings?.serverStorageConfig) {
+                try { config = JSON.parse(existingSettings.serverStorageConfig); } catch (e) {}
+            }
+            config.selectedGlancesDiskId = data.selectedGlancesDiskId;
+            updatePayload.serverStorageConfig = JSON.stringify(config);
+        }
 
         // Placeholder & Leaving Soon Settings
         if (data.placeholderTheatricalNoticeDays !== undefined) updatePayload.placeholderTheatricalNoticeDays = data.placeholderTheatricalNoticeDays;
@@ -3598,7 +3614,7 @@ export async function getPrunePreviewAction(options?: {
         minAgeDays?: number;
         unwatchedOnly?: boolean;
         maxCandidates?: number;
-        sortBy?: "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
+        sortBy?: "combined_oldest" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     };
 }) {
     await verifyAdmin();
@@ -3674,8 +3690,20 @@ export async function getPrunePreviewAction(options?: {
         }
 
         // Sort candidates
-        const sortBy = criteria?.sortBy ?? "oldest_added";
-        if (sortBy === "oldest_watched") {
+        const sortBy = criteria?.sortBy ?? "combined_oldest";
+        if (sortBy === "combined_oldest" || (sortBy as any) === "combined_activity") {
+            const nowMs = Date.now();
+            allCandidates.sort((a, b) => {
+                const getScore = (c: any) => {
+                    const added = c.addedAt || nowMs;
+                    const watched = c.lastViewedAt || (c.viewCount === 0 ? 0 : added);
+                    const modified = c.updatedAt || added;
+                    // Weighted composite activity: older added (35%), older/unwatched (45%), older modified (20%)
+                    return (added * 0.35) + (watched * 0.45) + (modified * 0.20);
+                };
+                return getScore(a) - getScore(b);
+            });
+        } else if (sortBy === "oldest_watched") {
             allCandidates.sort((a, b) => {
                 if (!a.lastViewedAt && !b.lastViewedAt) return (a.addedAt || 0) - (b.addedAt || 0);
                 if (!a.lastViewedAt) return -1;
@@ -3713,7 +3741,7 @@ export async function runPruneSimulationAction(
         minAgeDays?: number;
         unwatchedOnly?: boolean;
         maxCandidates?: number;
-        sortBy?: "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
+        sortBy?: "combined_oldest" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     },
     targetSectionKey?: string
 ) {
@@ -3803,9 +3831,11 @@ export async function executePruneAction(
                     const matched = await getPlexSingleItemMetadata(serverUrl, serverToken, it.ratingKey);
                     if (matched) {
                         matched.isLeavingSoon = true;
+                        const effectiveDateStr = effectiveDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
                         const overlayOpts = await getActiveOverlayOptionsHelper(it.serverId, it.sectionKey, {
                             showLeavingSoon: true,
                             leavingSoonDays: daysNotice,
+                            digitalReleaseDate: effectiveDateStr,
                             placeholderText: bannerText,
                             placeholderTheme: bannerTheme,
                             placeholderPosition: bannerPosition
@@ -3949,6 +3979,28 @@ export async function saveServerStorageConfigAction(storageConfig: Record<string
             create: { id: "global", serverStorageConfig: JSON.stringify(storageConfig) }
         });
         return { success: true, message: "Server storage mount paths saved successfully." };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function saveSelectedGlancesDiskAction(diskId: string) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        let currentStorageConfig: Record<string, any> = {};
+        if (settings?.serverStorageConfig) {
+            try {
+                currentStorageConfig = JSON.parse(settings.serverStorageConfig);
+            } catch (e) {}
+        }
+        currentStorageConfig.selectedGlancesDiskId = diskId;
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { serverStorageConfig: JSON.stringify(currentStorageConfig) },
+            create: { id: "global", serverStorageConfig: JSON.stringify(currentStorageConfig) }
+        });
+        return { success: true, message: "Default Glances storage array saved successfully." };
     } catch (e: any) {
         return { success: false, error: e.message };
     }

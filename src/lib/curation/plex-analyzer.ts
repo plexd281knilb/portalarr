@@ -2010,7 +2010,7 @@ export async function evaluatePruneCandidatesForServer(
         maxCandidates?: number;
         sectionKeys?: string[];
         enabledSectionKeys?: string[];
-        sortBy?: "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
+        sortBy?: "combined_oldest" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     } = {}
 ): Promise<{
     candidates: PruneCandidateItem[];
@@ -2020,7 +2020,7 @@ export async function evaluatePruneCandidatesForServer(
     const minAgeDays = options.minAgeDays ?? 90;
     const unwatchedOnly = options.unwatchedOnly ?? false;
     const maxCandidates = options.maxCandidates ?? 50;
-    const sortBy = options.sortBy ?? "oldest_added";
+    const sortBy = options.sortBy ?? "combined_oldest";
 
     const cleanBase = serverUrl.replace(/\/+$/, "");
     const sectionsUrl = `${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`;
@@ -2118,7 +2118,19 @@ export async function evaluatePruneCandidatesForServer(
     }
 
     // Sort candidates according to specified sort option
-    if (sortBy === "oldest_watched") {
+    if (sortBy === "combined_oldest" || sortBy === "combined_activity") {
+        // Combined Oldest Activity Strategy: Evaluates oldest addedAt, oldest lastViewedAt, and oldest updatedAt
+        allCandidates.sort((a, b) => {
+            const getScore = (c: PruneCandidateItem) => {
+                const added = c.addedAt || nowMs;
+                const watched = c.lastViewedAt || (c.viewCount === 0 ? 0 : added);
+                const modified = c.updatedAt || added;
+                // Weighted composite activity: older added (35%), older/unwatched (45%), older modified (20%)
+                return (added * 0.35) + (watched * 0.45) + (modified * 0.20);
+            };
+            return getScore(a) - getScore(b);
+        });
+    } else if (sortBy === "oldest_watched") {
         allCandidates.sort((a, b) => {
             if (!a.lastViewedAt && !b.lastViewedAt) return (a.addedAt || 0) - (b.addedAt || 0);
             if (!a.lastViewedAt) return -1;

@@ -1223,7 +1223,8 @@ function generatePlaceholderBackdropSvg(title: string): string {
 }
 
 /**
- * Interpolates template tokens such as {date}, {days}, {title}, {source}, {status}, {reason} in custom banner strings.
+ * Interpolates template tokens such as {date}, {days}, {title}, {source}, {status}, {reason}, {quality} in custom banner strings.
+ * Automatically computes target dates and days remaining so banners always render populated text.
  */
 export function interpolateBannerVariables(
     template: string,
@@ -1239,27 +1240,52 @@ export function interpolateBannerVariables(
 ): string {
     if (!template) return "";
     let res = template;
-    if (vars.date !== undefined && vars.date !== null) {
-        res = res.replace(/{date}/gi, String(vars.date));
-    }
-    if (vars.days !== undefined && vars.days !== null) {
-        res = res.replace(/{days}/gi, String(vars.days));
-    }
+
+    // Calculate effective days and formatted date if missing
+    const effectiveDays = vars.days !== undefined && vars.days !== null ? Number(vars.days) : 14;
+    const effectiveDate = vars.date || new Date(Date.now() + effectiveDays * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const effectiveFullDate = vars.date || new Date(Date.now() + effectiveDays * 86400000).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
+
+    res = res.replace(/\{date\}/gi, effectiveDate);
+    res = res.replace(/\{date_short\}/gi, effectiveDate);
+    res = res.replace(/\{date_full\}/gi, effectiveFullDate);
+    res = res.replace(/\{days\}/gi, String(effectiveDays));
+    res = res.replace(/\{days_left\}/gi, String(effectiveDays));
+    res = res.replace(/\{days_remaining\}/gi, String(effectiveDays));
+
     if (vars.title !== undefined && vars.title !== null) {
-        res = res.replace(/{title}/gi, String(vars.title));
+        res = res.replace(/\{title\}/gi, String(vars.title));
+    } else {
+        res = res.replace(/\{title\}/gi, "Media");
     }
+
     if (vars.source !== undefined && vars.source !== null) {
-        res = res.replace(/{source}/gi, String(vars.source));
+        res = res.replace(/\{source\}/gi, String(vars.source));
+    } else {
+        res = res.replace(/\{source\}/gi, "Plex");
     }
+
     if (vars.status !== undefined && vars.status !== null) {
-        res = res.replace(/{status}/gi, String(vars.status));
+        res = res.replace(/\{status\}/gi, String(vars.status));
+    } else {
+        res = res.replace(/\{status\}/gi, "Leaving Soon");
     }
+
     if (vars.reason !== undefined && vars.reason !== null) {
-        res = res.replace(/{reason}/gi, String(vars.reason));
+        res = res.replace(/\{reason\}/gi, String(vars.reason));
+    } else {
+        res = res.replace(/\{reason\}/gi, "Unwatched Media");
     }
+
     if (vars.quality !== undefined && vars.quality !== null) {
-        res = res.replace(/{quality}/gi, String(vars.quality));
+        res = res.replace(/\{quality\}/gi, String(vars.quality));
+    } else {
+        res = res.replace(/\{quality\}/gi, "4K UHD");
     }
+
+    // Clean up any remaining unparsed token artifacts (e.g. {unknown})
+    res = res.replace(/\{[a-zA-Z0-9_\-]+\}/g, "").replace(/\s{2,}/g, " ").trim();
+
     return res;
 }
 
@@ -1294,10 +1320,13 @@ export async function generatePlaceholderPosterBuffer(
         pipeline = sharp(Buffer.from(bgSvg)).resize(width, height);
     }
 
+    const effectiveDays = options.daysRemaining !== undefined && options.daysRemaining !== null ? Number(options.daysRemaining) : 14;
+    const effectiveDate = options.date || options.formattedDate || new Date(Date.now() + effectiveDays * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
     const rawText = options.customText || options.type?.replace(/_/g, " ").toUpperCase() || "COMING SOON";
     const interpolatedText = interpolateBannerVariables(rawText, {
-        date: options.date || options.formattedDate,
-        days: options.daysRemaining,
+        date: effectiveDate,
+        days: effectiveDays,
         title,
         source: options.source,
         status: options.status,
@@ -1346,13 +1375,20 @@ export async function applyOverlaysToPoster(
         mediaInfo.collections?.some(c => /leaving[\s_-]?soon/i.test(c))
     );
     if (options.showLeavingSoon && isItemLeavingSoon) {
+        const effectiveDays = options.leavingSoonDays !== undefined ? Number(options.leavingSoonDays) : 14;
+        const effectiveDate = options.digitalReleaseDate || new Date(Date.now() + effectiveDays * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
         const leavingText = options.placeholderText 
             ? interpolateBannerVariables(options.placeholderText, {
-                days: options.leavingSoonDays,
-                date: options.digitalReleaseDate,
-                title: mediaInfo.title
+                days: effectiveDays,
+                date: effectiveDate,
+                title: mediaInfo.title,
+                reason: (mediaInfo as any).leavingReason || "Storage threshold optimization",
+                status: "Leaving Soon",
+                quality: mediaInfo.detectedBadges?.resolution || "4K UHD",
+                source: "Plex"
             })
-            : (options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays} DAYS` : "LEAVING SOON");
+            : `LEAVING IN ${effectiveDays} DAYS`;
 
         const bannerPos = options.placeholderPosition || (options.position === "top-right" || options.position === "top-left" ? "corner" : "bottom");
         const bannerTheme = options.placeholderTheme || "crimson-red";
