@@ -2018,20 +2018,24 @@ export async function evaluatePruneCandidatesForServer(
         totalEvaluated += items.length;
 
         for (const item of items) {
-            const addedAtMs = item.addedAt || nowMs;
-            const ageMs = nowMs - addedAtMs;
+            const rawAddedAt = item.addedAt;
+            const addedAtMs = rawAddedAt ? (rawAddedAt < 1e11 ? rawAddedAt * 1000 : rawAddedAt) : nowMs;
+            const ageMs = Math.max(0, nowMs - addedAtMs);
             const daysOld = Math.floor(ageMs / (24 * 60 * 60 * 1000));
 
             // Filter out items younger than minAgeDays
             if (daysOld < minAgeDays) continue;
 
             const viewCount = item.viewCount || 0;
-            const lastViewedAtMs = item.lastViewedAt;
+            const rawLastViewedAt = item.lastViewedAt;
+            const lastViewedAtMs = rawLastViewedAt ? (rawLastViewedAt < 1e11 ? rawLastViewedAt * 1000 : rawLastViewedAt) : undefined;
+            const rawUpdatedAt = item.updatedAt;
+            const updatedAtMs = rawUpdatedAt ? (rawUpdatedAt < 1e11 ? rawUpdatedAt * 1000 : rawUpdatedAt) : addedAtMs;
 
             // Filter out items that have been watched recently if unwatchedOnly is true
             if (unwatchedOnly) {
                 if (viewCount > 0 && lastViewedAtMs) {
-                    const daysSinceViewed = Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000));
+                    const daysSinceViewed = Math.max(0, Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000)));
                     if (daysSinceViewed < 180) continue; // Watched in last 6 months
                 }
             }
@@ -2041,7 +2045,7 @@ export async function evaluatePruneCandidatesForServer(
 
             let reason = `Added ${daysOld} days ago (Never Watched)`;
             if (viewCount > 0 && lastViewedAtMs) {
-                const daysSinceViewed = Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000));
+                const daysSinceViewed = Math.max(0, Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000)));
                 reason = `Last watched ${daysSinceViewed} days ago (${viewCount} total ${viewCount === 1 ? 'play' : 'plays'})`;
             } else if (viewCount > 0) {
                 reason = `View count: ${viewCount} plays`;
@@ -2056,9 +2060,9 @@ export async function evaluatePruneCandidatesForServer(
                 sectionTitle: sec.title,
                 serverId,
                 serverName,
-                addedAt: item.addedAt,
-                updatedAt: item.updatedAt || item.addedAt,
-                lastViewedAt: item.lastViewedAt,
+                addedAt: addedAtMs,
+                updatedAt: updatedAtMs,
+                lastViewedAt: lastViewedAtMs,
                 viewCount,
                 fileSizeGb: sizeGb > 0 ? sizeGb : (item.type === "movie" ? 4.5 : 12.0),
                 filePath: item.filePath,

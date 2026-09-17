@@ -1950,10 +1950,17 @@ export function PruneStudio() {
                                             })
                                             .map((c: any) => {
                                                 const isSelected = selectedCandidateKeys.includes(c.ratingKey);
-                                                const addedDateStr = c.addedAt ? new Date(c.addedAt * 1000).toLocaleDateString() : "Unknown";
-                                                const modifiedDateStr = c.updatedAt ? new Date(c.updatedAt * 1000).toLocaleDateString() : (c.addedAt ? new Date(c.addedAt * 1000).toLocaleDateString() : "Unknown");
-                                                const lastWatchedDateStr = c.lastViewedAt ? new Date(c.lastViewedAt * 1000).toLocaleDateString() : null;
-                                                const daysSinceViewed = c.lastViewedAt ? Math.floor((Date.now() - c.lastViewedAt * 1000) / (1000 * 60 * 60 * 24)) : null;
+                                                const toSafeMs = (ts?: number | null) => {
+                                                    if (!ts || isNaN(ts) || ts <= 0) return null;
+                                                    return ts < 1e11 ? ts * 1000 : ts;
+                                                };
+                                                const addedMs = toSafeMs(c.addedAt);
+                                                const addedDateStr = addedMs ? new Date(addedMs).toLocaleDateString() : "Unknown";
+                                                const modifiedMs = toSafeMs(c.updatedAt) || addedMs;
+                                                const modifiedDateStr = modifiedMs ? new Date(modifiedMs).toLocaleDateString() : "Unknown";
+                                                const lastWatchedMs = toSafeMs(c.lastViewedAt);
+                                                const lastWatchedDateStr = lastWatchedMs ? new Date(lastWatchedMs).toLocaleDateString() : null;
+                                                const daysSinceViewed = lastWatchedMs ? Math.max(0, Math.floor((Date.now() - lastWatchedMs) / (1000 * 60 * 60 * 24))) : null;
 
                                                 return (
                                                     <div
