@@ -3165,36 +3165,38 @@ export function KometaStudio() {
                                 {savingOverlaySettings ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                                 <span>🔖 Save Overlay Settings</span>
                             </Button>
-                            <div className="flex items-center gap-1.5 bg-slate-950/80 p-0.5 rounded-xl border border-slate-800">
-                                <Select value={String(overlayBatchSize)} onValueChange={val => setOverlayBatchSize(Number(val))}>
-                                    <SelectTrigger className="h-8 bg-transparent border-0 text-xs w-[95px] text-purple-300 font-bold focus:ring-0">
-                                        <SelectValue placeholder="Size" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                        <SelectItem value="10">10 Items</SelectItem>
-                                        <SelectItem value="50">50 Items</SelectItem>
-                                        <SelectItem value="100">100 Items</SelectItem>
-                                        <SelectItem value="200">200 Items</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Select value={overlayBatchMode} onValueChange={(val: any) => setOverlayBatchMode(val)}>
-                                    <SelectTrigger className="h-8 bg-transparent border-0 text-xs w-[145px] text-slate-300 font-medium focus:ring-0" title="Scan Mode & Recheck Scope">
-                                        <SelectValue placeholder="Mode" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                        <SelectItem value="incremental">⚡ Incremental (New &amp; Upgrades)</SelectItem>
-                                        <SelectItem value="daily_recheck">🌙 Daily Recheck (&gt;24h Old)</SelectItem>
-                                        <SelectItem value="weekly_recheck">📅 Weekly Recheck (&gt;7d Old)</SelectItem>
-                                        <SelectItem value="monthly_recheck">🗓️ Monthly Recheck (&gt;30d Old)</SelectItem>
-                                        <SelectItem value="force_all">🔄 Force Recheck (All)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 bg-slate-950/80 p-1 sm:p-0.5 rounded-xl border border-slate-800 w-full sm:w-auto">
+                                <div className="flex items-center gap-1 w-full sm:w-auto">
+                                    <Select value={String(overlayBatchSize)} onValueChange={val => setOverlayBatchSize(Number(val))}>
+                                        <SelectTrigger className="h-8 bg-transparent border-0 text-xs flex-1 sm:w-[95px] text-purple-300 font-bold focus:ring-0">
+                                            <SelectValue placeholder="Size" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="10">10 Items</SelectItem>
+                                            <SelectItem value="50">50 Items</SelectItem>
+                                            <SelectItem value="100">100 Items</SelectItem>
+                                            <SelectItem value="200">200 Items</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={overlayBatchMode} onValueChange={(val: any) => setOverlayBatchMode(val)}>
+                                        <SelectTrigger className="h-8 bg-transparent border-0 text-xs flex-1 sm:w-[145px] text-slate-300 font-medium focus:ring-0" title="Scan Mode & Recheck Scope">
+                                            <SelectValue placeholder="Mode" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="incremental">⚡ Incremental (New &amp; Upgrades)</SelectItem>
+                                            <SelectItem value="daily_recheck">🌙 Daily Recheck (&gt;24h Old)</SelectItem>
+                                            <SelectItem value="weekly_recheck">📅 Weekly Recheck (&gt;7d Old)</SelectItem>
+                                            <SelectItem value="monthly_recheck">🗓️ Monthly Recheck (&gt;30d Old)</SelectItem>
+                                            <SelectItem value="force_all">🔄 Force Recheck (All)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                                 <Button
                                     type="button"
                                     size="sm"
                                     disabled={applyingOverlays}
                                     onClick={handleApplyOverlays}
-                                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs h-7.5 px-3 gap-1.5 shadow-md cursor-pointer rounded-lg"
+                                    className="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer rounded-lg shrink-0"
                                 >
                                     {applyingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                                     <span>✨ Apply ({overlayBatchSize})</span>

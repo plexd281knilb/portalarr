@@ -1274,19 +1274,19 @@ export function AgregarrStudio() {
             </Card>
 
             {/* Agregarr Sub-Navigation Tabs */}
-            <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md overflow-x-auto">
+            <div className="grid grid-cols-2 md:flex md:items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
                 <button
                     type="button"
                     onClick={() => setSubTab("collections")}
-                    className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "collections"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <Trophy className="h-4 w-4" />
-                    <span>Collections &amp; Hubs</span>
-                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${subTab === "collections" ? "border-amber-900 text-slate-950 bg-amber-400" : "border-slate-700 text-slate-400"}`}>
+                    <Trophy className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Collections</span>
+                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "collections" ? "border-amber-900 text-slate-950 bg-amber-400" : "border-slate-700 text-slate-400"}`}>
                         {collections.length}
                     </Badge>
                 </button>
@@ -1294,40 +1294,40 @@ export function AgregarrStudio() {
                 <button
                     type="button"
                     onClick={() => setSubTab("trending")}
-                    className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "trending"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <Flame className="h-4 w-4" />
-                    <span>Trending Discovery</span>
+                    <Flame className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Trending</span>
                 </button>
 
                 <button
                     type="button"
                     onClick={() => setSubTab("releases")}
-                    className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "releases"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <CalendarClock className="h-4 w-4" />
-                    <span>Upcoming Releases</span>
+                    <CalendarClock className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Releases</span>
                 </button>
 
                 <button
                     type="button"
                     onClick={() => setSubTab("placeholders")}
-                    className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "placeholders"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <Tag className="h-4 w-4" />
-                    <span>Coming Soon Banners</span>
+                    <Tag className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Coming Soon</span>
                 </button>
             </div>
 
@@ -1466,7 +1466,7 @@ export function AgregarrStudio() {
                                                 {/* Collection Details */}
                                                 <div className="space-y-1 min-w-0">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="font-bold text-white text-xs truncate max-w-[280px]" title={coll.title}>
+                                                        <span className="font-bold text-white text-xs truncate max-w-[170px] xs:max-w-[240px] sm:max-w-[360px] lg:max-w-[420px]" title={coll.title}>
                                                             {coll.title}
                                                         </span>
                                                         <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400 shrink-0">
@@ -1507,7 +1507,7 @@ export function AgregarrStudio() {
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <p className="text-[11px] text-slate-400 truncate max-w-[420px]">
+                                                    <p className="text-[11px] text-slate-400 truncate max-w-[200px] xs:max-w-[300px] sm:max-w-[420px]">
                                                         {coll.summary || coll.sourceQuery || "No summary configured."}
                                                     </p>
                                                     {collPlaceholderMsg && collPlaceholderMsg.id === coll.id && (
@@ -1522,7 +1522,7 @@ export function AgregarrStudio() {
                                             </div>
 
                                             {/* Agregarr Placement & Visibility Matrix */}
-                                            <div className="flex flex-wrap items-center gap-2 self-end lg:self-center shrink-0">
+                                            <div className="flex flex-wrap items-center gap-2 self-start sm:self-end lg:self-center w-full sm:w-auto justify-between sm:justify-end shrink-0">
                                                 {/* Screen Visibility Targets */}
                                                 <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
                                                     {/* Home Screen Toggle */}

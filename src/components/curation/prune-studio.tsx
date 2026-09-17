@@ -914,19 +914,19 @@ export function PruneStudio() {
             </Card>
 
             {/* Sub-Navigation Tabs */}
-            <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md overflow-x-auto">
+            <div className="grid grid-cols-2 md:flex md:items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
                 <button
                     type="button"
                     onClick={() => setSubTab("leaving_soon")}
-                    className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "leaving_soon"
                             ? "bg-rose-600 text-white shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <AlertTriangle className="h-4 w-4" />
-                    <span>Leaving Soon Hub</span>
-                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${subTab === "leaving_soon" ? "border-rose-300 text-rose-100 bg-rose-700/60" : "border-slate-700 text-slate-400"}`}>
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Leaving Soon</span>
+                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "leaving_soon" ? "border-rose-300 text-rose-100 bg-rose-700/60" : "border-slate-700 text-slate-400"}`}>
                         {leavingSoonItems.length}
                     </Badge>
                 </button>
@@ -934,40 +934,40 @@ export function PruneStudio() {
                 <button
                     type="button"
                     onClick={() => setSubTab("simulation")}
-                    className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "simulation"
                             ? "bg-rose-600 text-white shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <Play className="h-4 w-4" />
-                    <span>Prune Sandbox</span>
+                    <Play className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Prune Sandbox</span>
                 </button>
 
                 <button
                     type="button"
                     onClick={() => setSubTab("execution")}
-                    className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "execution"
                             ? "bg-rose-600 text-white shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <Trash2 className="h-4 w-4" />
-                    <span>Safe Deletion Engine</span>
+                    <Trash2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Safe Deletion</span>
                 </button>
 
                 <button
                     type="button"
                     onClick={() => setSubTab("storage")}
-                    className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "storage"
                             ? "bg-rose-600 text-white shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <HardDrive className="h-4 w-4" />
-                    <span>Mounts &amp; Vault</span>
+                    <HardDrive className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Mounts &amp; Vault</span>
                 </button>
             </div>
 

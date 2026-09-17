@@ -778,44 +778,44 @@ export function TaggingStudio() {
             </Card>
 
             {/* Sub-Tabs Selector */}
-            <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md overflow-x-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
                 <button
                     type="button"
                     onClick={() => setSubTab("parental")}
-                    className={`flex-1 min-w-[180px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "parental"
                             ? "bg-emerald-600 text-white shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <Shield className="h-4 w-4" />
-                    <span>IMDb Parental Guide</span>
+                    <Shield className="h-4 w-4 shrink-0" />
+                    <span className="truncate">IMDb Parental Guide</span>
                 </button>
 
                 <button
                     type="button"
                     onClick={() => setSubTab("custom_rules")}
-                    className={`flex-1 min-w-[180px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "custom_rules"
                             ? "bg-emerald-600 text-white shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <Sliders className="h-4 w-4" />
-                    <span>Custom Tag Rules</span>
+                    <Sliders className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Custom Tag Rules</span>
                 </button>
 
                 <button
                     type="button"
                     onClick={() => setSubTab("audit")}
-                    className={`flex-1 min-w-[180px] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "audit"
                             ? "bg-emerald-600 text-white shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <Tag className="h-4 w-4" />
-                    <span>Tag Audit &amp; Cleanup</span>
+                    <Tag className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Tag Audit &amp; Cleanup</span>
                 </button>
             </div>
 
@@ -840,7 +840,7 @@ export function TaggingStudio() {
                                     </CardDescription>
                                 </div>
 
-                                <div className="flex items-center gap-2.5">
+                                <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-start sm:justify-end">
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -1092,14 +1092,14 @@ export function TaggingStudio() {
                                 <div className="divide-y divide-slate-800/60 max-h-[500px] overflow-y-auto">
                                     {filteredAdvisories.slice(0, displayLimit).map((item) => (
                                         <div key={item.ratingKey} className="p-3.5 hover:bg-slate-800/40 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold text-xs text-white">{item.title}</span>
+                                            <div className="space-y-1 min-w-0 max-w-full">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="font-bold text-xs text-white truncate max-w-[200px] xs:max-w-[300px] sm:max-w-[420px]" title={item.title}>{item.title}</span>
                                                     {item.year && (
                                                         <span className="text-[10px] text-slate-400">({item.year})</span>
                                                     )}
                                                     {item.contentRating && (
-                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-700 text-slate-300 bg-slate-950">
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-700 text-slate-300 bg-slate-950 shrink-0">
                                                             {item.contentRating}
                                                         </Badge>
                                                     )}
