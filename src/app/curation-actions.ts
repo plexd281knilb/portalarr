@@ -35,7 +35,9 @@ import {
     getTmdbApiKey,
     getTmdbTrending, 
     getTmdbPopularMovies, 
+    getTmdbPopularTv,
     getTmdbTopRatedMovies, 
+    getTmdbTopRatedTv,
     getTmdbNowPlayingMovies, 
     getTmdbUpcomingMovies, 
     getTmdbCollection, 
@@ -52,8 +54,11 @@ import {
 } from "@/lib/curation/tmdb";
 import { 
     getTraktTrendingMovies, 
+    getTraktTrendingShows,
     getTraktPopularMovies, 
+    getTraktPopularShows,
     getTraktAnticipatedMovies, 
+    getTraktAnticipatedShows,
     getTraktBoxOfficeMovies, 
     getTraktUserList 
 } from "@/lib/curation/trakt";
@@ -940,7 +945,17 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             }
         }
 
-        // 1. Fetch library media items and filter out any excluded labels
+        // 1. Determine Section Media Type (Movie vs TV) to guarantee library and collection isolation
+        let isTvSection = false;
+        let isMovieSection = false;
+        try {
+            const sections = await getPlexServerSections(token, collection.serverId || "", serverUrl);
+            const sec = sections.find(s => String(s.key) === String(collection.sectionKey));
+            isTvSection = sec?.type === "show" || sec?.type === "tv";
+            isMovieSection = sec?.type === "movie";
+        } catch {}
+
+        // Fetch library media items and filter out any excluded labels and cross-media type noise
         const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 5000);
         
         const excludedList = (collection.excludedLabels || "")
@@ -948,17 +963,20 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             .map(s => s.trim().toLowerCase())
             .filter(Boolean);
 
-        const libraryItems = excludedList.length > 0
-            ? rawLibraryItems.filter(it => {
+        const libraryItems = rawLibraryItems.filter(it => {
+            if (isTvSection && it.type === "movie") return false;
+            if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
+            if (excludedList.length > 0) {
                 const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
                 const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
                 const isExcluded = itLabels.some((l: string) => excludedList.includes(l)) || 
                                    itCollections.some((c: string) => excludedList.includes(c));
-                return !isExcluded;
-            })
-            : rawLibraryItems;
+                if (isExcluded) return false;
+            }
+            return true;
+        });
 
-        // 2. Resolve matching rating keys based on collection source type
+        // 2. Resolve matching rating keys based on collection source type with strict media-type filtering
         const matchingRatingKeys: string[] = [];
 
         if (collection.sourceType === "plex_query") {
@@ -979,13 +997,17 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         } else if (collection.sourceType === "tmdb") {
             const tmdbKey = await getTmdbApiKey();
             if (collection.sourceQuery?.startsWith("collection:")) {
-                // Franchise collection
+                // Franchise collection (e.g. Marvel MCU, Star Wars)
                 const collId = collection.sourceQuery.replace("collection:", "");
                 if (tmdbKey) {
                     const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
-                        const parts = data.parts || [];
+                        const parts = (data.parts || []).filter((p: any) => {
+                            if (isTvSection && p.media_type === "movie") return false;
+                            if (isMovieSection && p.media_type === "tv") return false;
+                            return true;
+                        });
                         const tmdbIds = new Set(parts.map((p: any) => String(p.id)));
                         const titles = new Set(parts.map((p: any) => p.title?.toLowerCase().trim()).filter(Boolean));
                         matchingRatingKeys.push(...libraryItems.filter(it => 
@@ -996,7 +1018,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 }
             } else if (collection.sourceQuery?.startsWith("company:")) {
                 const compId = collection.sourceQuery.replace("company:", "");
-                if (tmdbKey) {
+                if (tmdbKey && !isTvSection) {
                     const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
@@ -1010,18 +1032,23 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 }
             } else if (collection.sourceQuery?.startsWith("network:")) {
                 const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
-                const shows = await getTmdbNetworkShows(netId);
-                const tmdbIds = new Set(shows.map(s => String(s.id)));
-                const titles = new Set(shows.map(s => s.title?.toLowerCase().trim()).filter(Boolean));
-                matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                    (it.title && titles.has(it.title.toLowerCase().trim()))
-                ).map(it => it.ratingKey));
+                if (!isMovieSection) {
+                    const shows = await getTmdbNetworkShows(netId);
+                    const tmdbIds = new Set(shows.map(s => String(s.id)));
+                    const titles = new Set(shows.map(s => s.title?.toLowerCase().trim()).filter(Boolean));
+                    matchingRatingKeys.push(...libraryItems.filter(it => 
+                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                        (it.title && titles.has(it.title.toLowerCase().trim()))
+                    ).map(it => it.ratingKey));
+                }
             } else if (collection.sourceQuery?.startsWith("provider:")) {
                 const parts = collection.sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
-                const providerMedia = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+                const providerMedia = await getTmdbStreamingProviderMedia(provId, { 
+                    isKids, 
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both" 
+                });
                 const tmdbIds = new Set(providerMedia.map(m => String(m.id)));
                 const imdbIds = new Set(providerMedia.map(m => m.imdbId).filter(Boolean));
                 const titles = new Set(providerMedia.map(m => m.title?.toLowerCase().trim()).filter(Boolean));
@@ -1031,18 +1058,30 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                     (it.title && titles.has(it.title.toLowerCase().trim()))
                 ).map(it => it.ratingKey));
             } else if (collection.sourceQuery === "digital_releases") {
-                const upcoming = await getTmdbUpcomingMovies();
-                const tmdbIds = new Set(upcoming.map(u => String(u.id)));
-                const imdbIds = new Set(upcoming.map(u => u.imdbId).filter(Boolean));
-                const titles = new Set(upcoming.map(u => u.title?.toLowerCase().trim()).filter(Boolean));
-                matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                    (it.title && titles.has(it.title.toLowerCase().trim()))
-                ).map(it => it.ratingKey));
+                if (isTvSection) {
+                    const tvShows = await getTmdbPopularTv(1);
+                    const tmdbIds = new Set(tvShows.map(u => String(u.id)));
+                    const imdbIds = new Set(tvShows.map(u => u.imdbId).filter(Boolean));
+                    const titles = new Set(tvShows.map(u => u.title?.toLowerCase().trim()).filter(Boolean));
+                    matchingRatingKeys.push(...libraryItems.filter(it => 
+                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                        (it.title && titles.has(it.title.toLowerCase().trim()))
+                    ).map(it => it.ratingKey));
+                } else {
+                    const upcoming = await getTmdbUpcomingMovies();
+                    const tmdbIds = new Set(upcoming.map(u => String(u.id)));
+                    const imdbIds = new Set(upcoming.map(u => u.imdbId).filter(Boolean));
+                    const titles = new Set(upcoming.map(u => u.title?.toLowerCase().trim()).filter(Boolean));
+                    matchingRatingKeys.push(...libraryItems.filter(it => 
+                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                        (it.title && titles.has(it.title.toLowerCase().trim()))
+                    ).map(it => it.ratingKey));
+                }
             } else {
                 // Trending / Popular
-                const trending = await getTmdbTrending("all", "week");
+                const trending = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
                 const tmdbIds = new Set(trending.map(t => String(t.id)));
                 const imdbIds = new Set(trending.map(t => t.imdbId).filter(Boolean));
                 const titles = new Set(trending.map(t => t.title?.toLowerCase().trim()).filter(Boolean));
@@ -1054,7 +1093,9 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             }
         } else if (collection.sourceType === "trakt") {
             if (collection.sourceQuery === "trending") {
-                const trending = await getTraktTrendingMovies(40);
+                const trending = isTvSection 
+                    ? await getTraktTrendingShows(40)
+                    : await getTraktTrendingMovies(40);
                 const tmdbIds = new Set(trending.map((t: any) => String(t.tmdbId)).filter(Boolean));
                 const imdbIds = new Set(trending.map((t: any) => String(t.imdbId)).filter(Boolean));
                 const titles = new Set(trending.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
@@ -1066,9 +1107,14 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             } else if (collection.sourceQuery) {
                 const listData = await getTraktUserList(collection.sourceQuery);
                 if (listData?.items) {
-                    const tmdbIds = new Set(listData.items.map((t: any) => String(t.tmdbId)).filter(Boolean));
-                    const imdbIds = new Set(listData.items.map((t: any) => String(t.imdbId)).filter(Boolean));
-                    const titles = new Set(listData.items.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
+                    const scopedListItems = listData.items.filter(t => {
+                        if (isTvSection && t.mediaType === "movie") return false;
+                        if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
+                        return true;
+                    });
+                    const tmdbIds = new Set(scopedListItems.map((t: any) => String(t.tmdbId)).filter(Boolean));
+                    const imdbIds = new Set(scopedListItems.map((t: any) => String(t.imdbId)).filter(Boolean));
+                    const titles = new Set(scopedListItems.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
                     matchingRatingKeys.push(...libraryItems.filter(it => 
                         (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
                         (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
@@ -1080,8 +1126,13 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             if (collection.sourceQuery) {
                 const items = await getMdblistItems(collection.sourceQuery);
                 if (items && items.length > 0) {
-                    const tmdbIds = new Set(items.map((t: any) => String(t.tmdbId)).filter(Boolean));
-                    const imdbIds = new Set(items.map((t: any) => String(t.imdbId)).filter(Boolean));
+                    const scopedItems = items.filter(t => {
+                        if (isTvSection && t.mediaType === "movie") return false;
+                        if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
+                        return true;
+                    });
+                    const tmdbIds = new Set(scopedItems.map((t: any) => String(t.tmdbId)).filter(Boolean));
+                    const imdbIds = new Set(scopedItems.map((t: any) => String(t.imdbId)).filter(Boolean));
                     matchingRatingKeys.push(...libraryItems.filter(it => 
                         (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
                         (it.guids?.imdb && imdbIds.has(String(it.guids.imdb)))
@@ -1092,16 +1143,23 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             // Fallback for IMDb Top 250 / top-rated collections when MDBList is not configured or returns 0
             if (matchingRatingKeys.length === 0 && (collection.title.toLowerCase().includes("top 250") || collection.sourceQuery?.includes("250") || collection.sourceQuery?.includes("top-imdb"))) {
                 try {
-                    const topRatedPages = await Promise.all([
-                        getTmdbTopRatedMovies(1),
-                        getTmdbTopRatedMovies(2),
-                        getTmdbTopRatedMovies(3),
-                        getTmdbTopRatedMovies(4),
-                        getTmdbTopRatedMovies(5),
-                        getTmdbTopRatedMovies(6),
-                        getTmdbTopRatedMovies(7),
-                        getTmdbTopRatedMovies(8)
-                    ]);
+                    const topRatedPages = isTvSection 
+                        ? await Promise.all([
+                            getTmdbTopRatedTv(1),
+                            getTmdbTopRatedTv(2),
+                            getTmdbTopRatedTv(3),
+                            getTmdbTopRatedTv(4)
+                        ])
+                        : await Promise.all([
+                            getTmdbTopRatedMovies(1),
+                            getTmdbTopRatedMovies(2),
+                            getTmdbTopRatedMovies(3),
+                            getTmdbTopRatedMovies(4),
+                            getTmdbTopRatedMovies(5),
+                            getTmdbTopRatedMovies(6),
+                            getTmdbTopRatedMovies(7),
+                            getTmdbTopRatedMovies(8)
+                        ]);
                     const tmdbTopIds = new Set(topRatedPages.flat().map(m => String(m.id)).filter(Boolean));
                     const tmdbMatches = libraryItems.filter(it => it.guids?.tmdb && tmdbTopIds.has(String(it.guids.tmdb))).map(it => it.ratingKey);
                     if (tmdbMatches.length > 0) {
@@ -1228,6 +1286,16 @@ export async function generateCollectionCandidateItemsPreviewAction(
         const token = resolved.token;
 
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+        // Determine Section Media Type (Movie vs TV) to guarantee preview isolation
+        let isTvSection = false;
+        let isMovieSection = false;
+        try {
+            const sections = await getPlexServerSections(token, serverId, serverUrl);
+            const sec = sections.find(s => String(s.key) === String(sectionKey));
+            isTvSection = sec?.type === "show" || sec?.type === "tv";
+            isMovieSection = sec?.type === "movie";
+        } catch {}
+
         const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 5000);
 
         const excludedList = (collectionConfig.excludedLabels || "")
@@ -1235,15 +1303,18 @@ export async function generateCollectionCandidateItemsPreviewAction(
             .map(s => s.trim().toLowerCase())
             .filter(Boolean);
 
-        const libraryItems = excludedList.length > 0
-            ? rawLibraryItems.filter(it => {
+        const libraryItems = rawLibraryItems.filter(it => {
+            if (isTvSection && it.type === "movie") return false;
+            if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
+            if (excludedList.length > 0) {
                 const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
                 const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
                 const isExcluded = itLabels.some((l: string) => excludedList.includes(l)) || 
                                    itCollections.some((c: string) => excludedList.includes(c));
-                return !isExcluded;
-            })
-            : rawLibraryItems;
+                if (isExcluded) return false;
+            }
+            return true;
+        });
 
         let matchedItems: any[] = [];
         let executionMethod = "";
@@ -1286,7 +1357,11 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
-                        const parts: any[] = data.parts || [];
+                        const parts: any[] = (data.parts || []).filter((p: any) => {
+                            if (isTvSection && p.media_type === "movie") return false;
+                            if (isMovieSection && p.media_type === "tv") return false;
+                            return true;
+                        });
                         const titles = parts.map((p: any) => p.title?.toLowerCase().trim()).filter(Boolean);
                         const tmdbIds = parts.map((p: any) => String(p.id));
                         matchedItems = libraryItems.filter(it => 
@@ -1298,7 +1373,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
             } else if (sourceQuery.startsWith("company:")) {
                 const compId = sourceQuery.replace("company:", "");
                 executionMethod = `TMDb Studio API: Querying company ID #${compId} filmography.`;
-                if (tmdbKey) {
+                if (tmdbKey && !isTvSection) {
                     const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
@@ -1314,20 +1389,25 @@ export async function generateCollectionCandidateItemsPreviewAction(
             } else if (sourceQuery.startsWith("network:")) {
                 const netId = parseInt(sourceQuery.replace("network:", ""), 10) || 213;
                 executionMethod = `TMDb TV Network API: Querying network ID #${netId} shows.`;
-                const shows = await getTmdbNetworkShows(netId);
-                const tmdbIds = shows.map(s => String(s.id));
-                const titles = shows.map(s => s.title?.toLowerCase().trim()).filter(Boolean);
-                matchedItems = libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                    (it.title && titles.includes(it.title.toLowerCase().trim()))
-                );
+                if (!isMovieSection) {
+                    const shows = await getTmdbNetworkShows(netId);
+                    const tmdbIds = shows.map(s => String(s.id));
+                    const titles = shows.map(s => s.title?.toLowerCase().trim()).filter(Boolean);
+                    matchedItems = libraryItems.filter(it => 
+                        (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                        (it.title && titles.includes(it.title.toLowerCase().trim()))
+                    );
+                }
             } else if (sourceQuery.startsWith("provider:")) {
                 const parts = sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
                 const provName = provId === 337 ? "Disney+" : provId === 8 ? "Netflix" : `Provider #${provId}`;
                 executionMethod = `TMDb Streaming Provider API: Querying ${provName} ${isKids ? "(Kids & Family)" : "Trending Top Charts"}. Matches against Plex library metadata.`;
-                const providerMedia = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+                const providerMedia = await getTmdbStreamingProviderMedia(provId, { 
+                    isKids, 
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both" 
+                });
                 const tmdbIds = providerMedia.map(m => String(m.id));
                 const imdbIds = providerMedia.map(m => m.imdbId).filter(Boolean);
                 const titles = providerMedia.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
@@ -1337,8 +1417,12 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
             } else if (sourceQuery === "digital_releases") {
-                executionMethod = `TMDb Releases API: Querying new digital streaming releases.`;
-                const upcoming = await getTmdbUpcomingMovies();
+                executionMethod = isTvSection 
+                    ? `TMDb Popular TV API: Querying active television shows.`
+                    : `TMDb Releases API: Querying new digital streaming releases.`;
+                const upcoming = isTvSection 
+                    ? await getTmdbPopularTv(1)
+                    : await getTmdbUpcomingMovies();
                 const tmdbIds = upcoming.map(m => String(m.id));
                 const imdbIds = upcoming.map(m => m.imdbId).filter(Boolean);
                 const titles = upcoming.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
@@ -1348,8 +1432,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
             } else {
-                executionMethod = `TMDb Query: ${sourceQuery}`;
-                const trending = await getTmdbTrending("all", "week");
+                executionMethod = `TMDb Trending (${isTvSection ? "TV" : isMovieSection ? "Movies" : "All"}): ${sourceQuery}`;
+                const trending = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
                 const tmdbIds = trending.map(t => String(t.id));
                 const imdbIds = trending.map(t => t.imdbId).filter(Boolean);
                 const titles = trending.map(t => t.title?.toLowerCase().trim()).filter(Boolean);
@@ -1363,9 +1447,14 @@ export async function generateCollectionCandidateItemsPreviewAction(
             executionMethod = `MDBList API: Resolving curated chart "${sourceQuery}". Matches against Plex IMDb/TMDb metadata.`;
             const items = await getMdblistItems(sourceQuery);
             if (items && items.length > 0) {
-                const imdbIds = items.map((t: any) => t.imdbId).filter(Boolean);
-                const tmdbIds = items.map((t: any) => String(t.tmdbId)).filter(Boolean);
-                const titles = items.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
+                const scopedItems = items.filter(t => {
+                    if (isTvSection && t.mediaType === "movie") return false;
+                    if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
+                    return true;
+                });
+                const imdbIds = scopedItems.map((t: any) => t.imdbId).filter(Boolean);
+                const tmdbIds = scopedItems.map((t: any) => String(t.tmdbId)).filter(Boolean);
+                const titles = scopedItems.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
                 matchedItems = libraryItems.filter(it => 
                     (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
                     (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
@@ -1382,7 +1471,9 @@ export async function generateCollectionCandidateItemsPreviewAction(
         } else if (sourceType === "trakt") {
             executionMethod = `Trakt API: Querying list "${sourceQuery}".`;
             if (sourceQuery === "trending") {
-                const trending = await getTraktTrendingMovies(50);
+                const trending = isTvSection 
+                    ? await getTraktTrendingShows(50)
+                    : await getTraktTrendingMovies(50);
                 const imdbIds = trending.map((t: any) => t.imdbId).filter(Boolean);
                 const tmdbIds = trending.map((t: any) => String(t.tmdbId)).filter(Boolean);
                 const titles = trending.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
@@ -6006,23 +6097,93 @@ export async function getTrendingAndPlaceholderMediaAction(
 ) {
     await verifyAdmin();
     try {
+        // 1. Detect section type (Movies vs TV) if server and section are provided
+        let isTvSection = false;
+        let isMovieSection = false;
+        let libraryItems: any[] = [];
+
+        if (serverId && sectionKey) {
+            try {
+                const resolved = await resolveWorkingPlexServerConnection(serverId);
+                if (resolved && resolved.serverUrl) {
+                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    const sections = await getPlexServerSections(resolved.token, serverId, resolved.serverUrl);
+                    const sec = sections.find(s => String(s.key) === String(sectionKey));
+                    isTvSection = sec?.type === "show" || sec?.type === "tv";
+                    isMovieSection = sec?.type === "movie";
+
+                    const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000);
+                    libraryItems = rawLibraryItems.filter(it => {
+                        if (isTvSection && it.type === "movie") return false;
+                        if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
+                        return true;
+                    });
+                }
+            } catch (err: any) {
+                console.warn("[PLACEHOLDER-ACTION] Failed fetching library items for comparison:", err.message);
+            }
+        }
+
         let trendingItems: TmdbMediaItem[] = [];
 
-        if (category === "disney") {
-            trendingItems = await getDisneyTrending(false);
-        } else if (category === "disney_kids") {
-            trendingItems = await getDisneyTrending(true);
-        } else if (category === "netflix") {
-            trendingItems = await getNetflixTrending(false);
-        } else if (category === "netflix_kids") {
-            trendingItems = await getNetflixTrending(true);
-        } else if (category === "digital") {
-            const upcoming = await getTmdbUpcomingMovies();
-            trendingItems = upcoming.filter(it => Boolean(it.digitalReleaseDate));
-        } else if (category === "theatrical") {
-            trendingItems = await getTmdbNowPlayingMovies();
+        if (isTvSection) {
+            // Strictly fetch TV show trending and catalog for TV sections
+            if (category === "disney") {
+                trendingItems = await getDisneyTrending(false, 1, "tv");
+            } else if (category === "disney_kids") {
+                trendingItems = await getDisneyTrending(true, 1, "tv");
+            } else if (category === "netflix") {
+                trendingItems = await getNetflixTrending(false, 1, "tv");
+            } else if (category === "netflix_kids") {
+                trendingItems = await getNetflixTrending(true, 1, "tv");
+            } else if (category === "digital" || category === "theatrical") {
+                trendingItems = await getTmdbPopularTv(1);
+            } else {
+                trendingItems = await getTmdbTrending("tv", "week");
+            }
+        } else if (isMovieSection) {
+            // Strictly fetch Movie trending and catalog for Movie sections
+            if (category === "disney") {
+                trendingItems = await getDisneyTrending(false, 1, "movie");
+            } else if (category === "disney_kids") {
+                trendingItems = await getDisneyTrending(true, 1, "movie");
+            } else if (category === "netflix") {
+                trendingItems = await getNetflixTrending(false, 1, "movie");
+            } else if (category === "netflix_kids") {
+                trendingItems = await getNetflixTrending(true, 1, "movie");
+            } else if (category === "digital") {
+                const upcoming = await getTmdbUpcomingMovies();
+                trendingItems = upcoming.filter(it => Boolean(it.digitalReleaseDate));
+            } else if (category === "theatrical") {
+                trendingItems = await getTmdbNowPlayingMovies();
+            } else {
+                trendingItems = await getTmdbTrending("movie", "week");
+            }
         } else {
-            trendingItems = await getTmdbTrending("all", "week");
+            // General / Unfiltered fallback
+            if (category === "disney") {
+                trendingItems = await getDisneyTrending(false);
+            } else if (category === "disney_kids") {
+                trendingItems = await getDisneyTrending(true);
+            } else if (category === "netflix") {
+                trendingItems = await getNetflixTrending(false);
+            } else if (category === "netflix_kids") {
+                trendingItems = await getNetflixTrending(true);
+            } else if (category === "digital") {
+                const upcoming = await getTmdbUpcomingMovies();
+                trendingItems = upcoming.filter(it => Boolean(it.digitalReleaseDate));
+            } else if (category === "theatrical") {
+                trendingItems = await getTmdbNowPlayingMovies();
+            } else {
+                trendingItems = await getTmdbTrending("all", "week");
+            }
+        }
+
+        // Filter trending items strictly matching the section type
+        if (isTvSection) {
+            trendingItems = trendingItems.filter(it => it.mediaType === "tv");
+        } else if (isMovieSection) {
+            trendingItems = trendingItems.filter(it => it.mediaType === "movie");
         }
 
         // If no items returned (e.g. offline fallback), provide safe empty
@@ -6035,20 +6196,6 @@ export async function getTrendingAndPlaceholderMediaAction(
                 missingCount: 0,
                 items: []
             };
-        }
-
-        // 1. Check against Plex Library if serverId and sectionKey are provided
-        let libraryItems: any[] = [];
-        if (serverId && sectionKey) {
-            try {
-                const resolved = await resolveWorkingPlexServerConnection(serverId);
-                if (resolved && resolved.serverUrl) {
-                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000);
-                }
-            } catch (err: any) {
-                console.warn("[PLACEHOLDER-ACTION] Failed fetching library items for comparison:", err.message);
-            }
         }
 
         const libraryTmdbIds = new Set(libraryItems.map(it => it.guids?.tmdb).filter(Boolean));
@@ -6086,9 +6233,9 @@ export async function getTrendingAndPlaceholderMediaAction(
             const inLibrary = Boolean(match);
             if (inLibrary) inLibraryCount++;
 
-            // Radarr / Sonarr matching
+            // Radarr / Sonarr matching isolated by section type
             let arrItem: ArrItemStatus | undefined;
-            if (item.mediaType === "tv") {
+            if (isTvSection || item.mediaType === "tv") {
                 arrItem = (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
                           (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
             } else {
@@ -6097,8 +6244,8 @@ export async function getTrendingAndPlaceholderMediaAction(
                           (item.title ? arrIndex.moviesByTitle.get(item.title.toLowerCase().trim()) : undefined);
             }
 
-            const inRadarr = arrItem?.appType === "radarr";
-            const inSonarr = arrItem?.appType === "sonarr";
+            const inRadarr = !isTvSection && arrItem?.appType === "radarr";
+            const inSonarr = !isMovieSection && arrItem?.appType === "sonarr";
             const isMonitored = Boolean(arrItem?.monitored);
             const arrHasFile = Boolean(arrItem?.hasFile);
 
@@ -6310,18 +6457,64 @@ export async function createPlaceholderItemInternal(
     }
 ) {
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const comingSoonShares: Record<string, string> = settings?.comingSoonShares 
-            ? JSON.parse(settings.comingSoonShares) 
-            : {};
-        
-        let sharePath = (serverId && comingSoonShares[serverId]) ? comingSoonShares[serverId] : "";
-        if (!sharePath || !fs.existsSync(sharePath)) {
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const isTv = itemData.mediaType === "tv";
+        let serverStorageConfig: Record<string, any> = {};
+        if (settings?.serverStorageConfig) {
+            try { serverStorageConfig = JSON.parse(settings.serverStorageConfig); } catch {}
+        }
+        let comingSoonShares: Record<string, string> = {};
+        if (settings?.comingSoonShares) {
+            try { comingSoonShares = JSON.parse(settings.comingSoonShares); } catch {}
+        }
+        const srvConfig = (serverId && serverStorageConfig[serverId]) ? serverStorageConfig[serverId] : null;
+
+        let sharePath = "";
+        // 1. Check server-specific TV or Movie path
+        if (srvConfig) {
+            if (isTv && srvConfig.tvSharePath && fs.existsSync(srvConfig.tvSharePath)) {
+                sharePath = srvConfig.tvSharePath;
+            } else if (!isTv && srvConfig.movieSharePath && fs.existsSync(srvConfig.movieSharePath)) {
+                sharePath = srvConfig.movieSharePath;
+            } else if (srvConfig.sharePath && fs.existsSync(srvConfig.sharePath)) {
+                sharePath = srvConfig.sharePath;
+            }
+        }
+
+        // 2. Check comingSoonShares dictionary with media suffix
+        if (!sharePath && serverId) {
+            const specificKey = isTv ? `${serverId}_tv` : `${serverId}_movie`;
+            if (comingSoonShares[specificKey] && fs.existsSync(comingSoonShares[specificKey])) {
+                sharePath = comingSoonShares[specificKey];
+            } else if (comingSoonShares[serverId] && fs.existsSync(comingSoonShares[serverId])) {
+                sharePath = comingSoonShares[serverId];
+            }
+        }
+
+        // 3. Fallback to any valid share matching media type across all configured servers
+        if (!sharePath) {
+            for (const cfg of Object.values(serverStorageConfig)) {
+                if (isTv && cfg.tvSharePath && fs.existsSync(cfg.tvSharePath)) {
+                    sharePath = cfg.tvSharePath;
+                    break;
+                } else if (!isTv && cfg.movieSharePath && fs.existsSync(cfg.movieSharePath)) {
+                    sharePath = cfg.movieSharePath;
+                    break;
+                }
+            }
+        }
+
+        // 4. Fallback to generic valid shares
+        if (!sharePath) {
             const valid = Object.values(comingSoonShares).find(p => p && fs.existsSync(p));
             if (valid) sharePath = valid;
         }
-        if (!sharePath || !fs.existsSync(sharePath)) {
-            const defaultShare = path.resolve("./data/coming_soon");
+
+        // 5. Default isolated local storage
+        if (!sharePath) {
+            const defaultShare = isTv
+                ? path.resolve("./data/coming_soon/tv")
+                : path.resolve("./data/coming_soon/movies");
             if (!fs.existsSync(defaultShare)) {
                 try { fs.mkdirSync(defaultShare, { recursive: true }); } catch {}
             }
@@ -6552,20 +6745,8 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
             : {};
 
         const serverId = collection.serverId || "main";
-        let sharePath = (serverId && comingSoonShares[serverId]) ? comingSoonShares[serverId] : "";
-        if (!sharePath || !fs.existsSync(sharePath)) {
-            const valid = Object.values(comingSoonShares).find(p => p && fs.existsSync(p));
-            if (valid) sharePath = valid;
-        }
-        if (!sharePath || !fs.existsSync(sharePath)) {
-            const defaultShare = path.resolve("./data/coming_soon");
-            if (!fs.existsSync(defaultShare)) {
-                try { fs.mkdirSync(defaultShare, { recursive: true }); } catch {}
-            }
-            if (fs.existsSync(defaultShare)) {
-                sharePath = defaultShare;
-            }
-        }
+        let isTvSection = false;
+        let isMovieSection = false;
 
         // Auto-cleanup any previously created placeholders whose full media is now available in Plex
         try {
@@ -6574,14 +6755,24 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
             console.warn("[COLL-PLACEHOLDER] Error during placeholder auto-cleanup:", cleanErr.message);
         }
 
-        // 1. Fetch library items to know what is already present in Plex
+        // 1. Fetch library items to know what is already present in Plex and detect Section Type
         let libraryItems: any[] = [];
         if (collection.serverId && collection.sectionKey) {
             try {
                 const resolved = await resolveWorkingPlexServerConnection(collection.serverId);
                 if (resolved && resolved.serverUrl) {
                     const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000, undefined, false);
+                    const sections = await getPlexServerSections(resolved.token, collection.serverId, resolved.serverUrl);
+                    const sec = sections.find(s => String(s.key) === String(collection.sectionKey));
+                    isTvSection = sec?.type === "show" || sec?.type === "tv";
+                    isMovieSection = sec?.type === "movie";
+
+                    const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000, undefined, false);
+                    libraryItems = rawLibraryItems.filter(it => {
+                        if (isTvSection && it.type === "movie") return false;
+                        if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
+                        return true;
+                    });
                 }
             } catch (err: any) {
                 console.warn("[COLL-PLACEHOLDER] Failed fetching library items:", err.message);
@@ -6592,7 +6783,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
         const libraryImdbIds = new Set(libraryItems.map(it => it.guids?.imdb).filter(Boolean));
         const libraryTitles = new Set(libraryItems.map(it => it.title?.toLowerCase().trim()).filter(Boolean));
 
-        // 2. Fetch candidates from Collection Source Query
+        // 2. Fetch candidates from Collection Source Query with strict section type isolation
         let candidateItems: any[] = [];
         const tmdbKey = await getTmdbApiKey();
 
@@ -6602,89 +6793,125 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
                 if (tmdbRes.ok) {
                     const data = await tmdbRes.json();
-                    candidateItems = (data.parts || []).map((p: any) => ({
-                        id: p.id,
-                        title: p.title,
-                        overview: p.overview,
-                        posterPath: p.poster_path,
-                        backdropPath: p.backdrop_path,
-                        mediaType: "movie" as const,
-                        releaseDate: p.release_date
-                    }));
+                    candidateItems = (data.parts || [])
+                        .filter((p: any) => {
+                            if (isTvSection && p.media_type === "movie") return false;
+                            if (isMovieSection && p.media_type === "tv") return false;
+                            return true;
+                        })
+                        .map((p: any) => ({
+                            id: p.id,
+                            title: p.title,
+                            overview: p.overview,
+                            posterPath: p.poster_path,
+                            backdropPath: p.backdrop_path,
+                            mediaType: (p.media_type === "tv" ? "tv" : "movie") as "movie" | "tv",
+                            releaseDate: p.release_date
+                        }));
                 }
             } else if (collection.sourceQuery?.startsWith("company:")) {
                 const compId = collection.sourceQuery.replace("company:", "");
-                const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
-                if (tmdbRes.ok) {
-                    const data = await tmdbRes.json();
-                    candidateItems = (data.results || []).map((p: any) => ({
-                        id: p.id,
-                        title: p.title,
-                        overview: p.overview,
-                        posterPath: p.poster_path,
-                        backdropPath: p.backdrop_path,
-                        mediaType: "movie" as const,
-                        releaseDate: p.release_date
-                    }));
+                if (!isTvSection) {
+                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
+                    if (tmdbRes.ok) {
+                        const data = await tmdbRes.json();
+                        candidateItems = (data.results || []).map((p: any) => ({
+                            id: p.id,
+                            title: p.title,
+                            overview: p.overview,
+                            posterPath: p.poster_path,
+                            backdropPath: p.backdrop_path,
+                            mediaType: "movie" as const,
+                            releaseDate: p.release_date
+                        }));
+                    }
                 }
             } else if (collection.sourceQuery?.startsWith("network:")) {
                 const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
-                const shows = await getTmdbNetworkShows(netId);
-                candidateItems = shows.map(s => ({
-                    id: s.id,
-                    title: s.title,
-                    overview: s.overview,
-                    posterPath: s.posterPath,
-                    backdropPath: s.backdropPath,
-                    mediaType: "tv" as const,
-                    releaseDate: s.releaseDate
-                }));
+                if (!isMovieSection) {
+                    const shows = await getTmdbNetworkShows(netId);
+                    candidateItems = shows.map(s => ({
+                        id: s.id,
+                        title: s.title,
+                        overview: s.overview,
+                        posterPath: s.posterPath,
+                        backdropPath: s.backdropPath,
+                        mediaType: "tv" as const,
+                        releaseDate: s.releaseDate
+                    }));
+                }
             } else if (collection.sourceQuery?.startsWith("provider:")) {
                 const parts = collection.sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
-                const providerMedia = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+                const providerMedia = await getTmdbStreamingProviderMedia(provId, { 
+                    isKids, 
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both" 
+                });
                 candidateItems = providerMedia;
             } else if (collection.sourceQuery === "digital_releases") {
-                candidateItems = await getTmdbUpcomingMovies();
+                candidateItems = isTvSection 
+                    ? await getTmdbPopularTv(1)
+                    : await getTmdbUpcomingMovies();
             } else {
-                candidateItems = await getTmdbTrending("all", "week");
+                candidateItems = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
             }
         } else if (collection.sourceType === "trakt") {
             if (collection.sourceQuery === "trending") {
-                const trending = await getTraktTrendingMovies(40);
+                const trending = isTvSection 
+                    ? await getTraktTrendingShows(40)
+                    : await getTraktTrendingMovies(40);
                 candidateItems = trending.map((t: any) => ({
                     id: t.tmdbId || t.id,
                     title: t.title,
-                    mediaType: "movie" as const,
+                    mediaType: (isTvSection ? "tv" : "movie") as "movie" | "tv",
                     releaseDate: t.year ? `${t.year}-01-01` : undefined,
                     imdbId: t.imdbId
                 }));
             } else if (collection.sourceQuery) {
                 const listData = await getTraktUserList(collection.sourceQuery);
                 if (listData?.items) {
-                    candidateItems = listData.items.map((t: any) => ({
-                        id: t.tmdbId || t.id,
-                        title: t.title,
-                        mediaType: "movie" as const,
-                        releaseDate: t.year ? `${t.year}-01-01` : undefined,
-                        imdbId: t.imdbId
-                    }));
+                    candidateItems = listData.items
+                        .filter(t => {
+                            if (isTvSection && t.mediaType === "movie") return false;
+                            if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
+                            return true;
+                        })
+                        .map((t: any) => ({
+                            id: t.tmdbId || t.id,
+                            title: t.title,
+                            mediaType: (t.mediaType === "show" || t.mediaType === "tv" ? "tv" : "movie") as "movie" | "tv",
+                            releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                            imdbId: t.imdbId
+                        }));
                 }
             }
         } else if (collection.sourceType === "mdblist") {
             if (collection.sourceQuery) {
                 const items = await getMdblistItems(collection.sourceQuery);
                 if (items && items.length > 0) {
-                    candidateItems = items.map((t: any) => ({
-                        id: t.tmdbId || t.id,
-                        title: t.title,
-                        mediaType: "movie" as const,
-                        releaseDate: t.year ? `${t.year}-01-01` : undefined,
-                        imdbId: t.imdbId
-                    }));
+                    candidateItems = items
+                        .filter(t => {
+                            if (isTvSection && t.mediaType === "movie") return false;
+                            if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
+                            return true;
+                        })
+                        .map((t: any) => ({
+                            id: t.tmdbId || t.id,
+                            title: t.title,
+                            mediaType: (t.mediaType === "show" || t.mediaType === "tv" ? "tv" : "movie") as "movie" | "tv",
+                            releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                            imdbId: t.imdbId
+                        }));
                 }
             }
+        }
+
+        // Strict mediaType filter on candidate items
+        if (isTvSection) {
+            candidateItems = candidateItems.filter(item => item.mediaType === "tv");
+        } else if (isMovieSection) {
+            candidateItems = candidateItems.filter(item => item.mediaType === "movie");
         }
 
         // 3. Filter candidate items to only those MISSING from the library
@@ -6784,7 +7011,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
             }
         }
 
-        logger.addLog("SUCCESS", "CURATION", `Generated ${generatedCount} placeholders for collection "${collection.title}" in coming soon share "${sharePath}".`);
+        logger.addLog("SUCCESS", "CURATION", `Generated ${generatedCount} placeholders for collection "${collection.title}".`);
 
         return {
             success: true,

@@ -205,3 +205,76 @@ export async function getTraktUserList(userOrUrl: string, listId?: string): Prom
         return null;
     }
 }
+
+/**
+ * Get Trakt Trending TV Shows
+ */
+export async function getTraktTrendingShows(limit = 50): Promise<TraktMediaItem[]> {
+    try {
+        const data = await traktFetch("/shows/trending", { extended: "full", limit });
+        return (data || []).map((item: any) => ({
+            title: item.show?.title,
+            year: item.show?.year,
+            traktId: item.show?.ids?.trakt,
+            slug: item.show?.ids?.slug,
+            imdbId: item.show?.ids?.imdb,
+            tmdbId: item.show?.ids?.tmdb,
+            mediaType: "show" as const,
+            overview: item.show?.overview,
+            rating: item.show?.rating,
+            votes: item.show?.votes
+        }));
+    } catch (e: any) {
+        console.error("[TRAKT] getTrendingShows error:", e.message);
+        return [];
+    }
+}
+
+/**
+ * Get Trakt Popular TV Shows
+ */
+export async function getTraktPopularShows(limit = 50): Promise<TraktMediaItem[]> {
+    try {
+        const data = await traktFetch("/shows/popular", { extended: "full", limit });
+        return (data || []).map((item: any) => ({
+            title: item.title,
+            year: item.year,
+            traktId: item.ids?.trakt,
+            slug: item.ids?.slug,
+            imdbId: item.ids?.imdb,
+            tmdbId: item.ids?.tmdb,
+            mediaType: "show" as const,
+            overview: item.overview,
+            rating: item.rating,
+            votes: item.votes
+        }));
+    } catch (e: any) {
+        console.error("[TRAKT] getPopularShows error:", e.message);
+        return [];
+    }
+}
+
+/**
+ * Get Trakt Anticipated TV Shows (Upcoming high-demand seasons)
+ */
+export async function getTraktAnticipatedShows(limit = 50): Promise<TraktMediaItem[]> {
+    try {
+        const data = await traktFetch("/shows/anticipated", { extended: "full", limit });
+        return (data || []).map((item: any) => ({
+            title: item.show?.title,
+            year: item.show?.year,
+            traktId: item.show?.ids?.trakt,
+            slug: item.show?.ids?.slug,
+            imdbId: item.show?.ids?.imdb,
+            tmdbId: item.show?.ids?.tmdb,
+            mediaType: "show" as const,
+            overview: item.show?.overview,
+            rating: item.show?.rating,
+            votes: item.show?.votes
+        }));
+    } catch (e: any) {
+        console.error("[TRAKT] getAnticipatedShows error:", e.message);
+        return [];
+    }
+}
+

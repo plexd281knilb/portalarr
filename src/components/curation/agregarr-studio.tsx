@@ -189,6 +189,7 @@ export function AgregarrStudio() {
 
     // Presets Library Search & Filter States
     const [presetsCategoryFilter, setPresetsCategoryFilter] = useState<string>("all");
+    const [presetsMediaTypeFilter, setPresetsMediaTypeFilter] = useState<"auto" | "all" | "movie" | "show">("auto");
     const [presetsSearchQuery, setPresetsSearchQuery] = useState("");
 
     // Preset Blueprint Inspection & Live Preview States
@@ -277,7 +278,7 @@ export function AgregarrStudio() {
         radarr: Array<{ id: string; name: string; type?: string; url?: string; externalUrl?: string }>;
         sonarr: Array<{ id: string; name: string; type?: string; url?: string; externalUrl?: string }>;
     }>({ radarr: [], sonarr: [] });
-    const [serverStorageConfig, setServerStorageConfig] = useState<Record<string, { sharePath?: string; radarrId?: string; sonarrId?: string }>>({});
+    const [serverStorageConfig, setServerStorageConfig] = useState<Record<string, { sharePath?: string; movieSharePath?: string; tvSharePath?: string; radarrId?: string; sonarrId?: string }>>({});
 
     // Coming Soon Shares & Disk Settings
     const [comingSoonShares, setComingSoonShares] = useState<Record<string, string>>({});
@@ -1151,7 +1152,12 @@ export function AgregarrStudio() {
             const updatedConfig: Record<string, any> = { ...serverStorageConfig };
             for (const srv of servers) {
                 if (!updatedConfig[srv.serverId]) updatedConfig[srv.serverId] = {};
-                updatedConfig[srv.serverId].sharePath = comingSoonShares[srv.serverId] || "";
+                if (!updatedConfig[srv.serverId].movieSharePath && comingSoonShares[srv.serverId]) {
+                    updatedConfig[srv.serverId].movieSharePath = comingSoonShares[srv.serverId];
+                }
+                if (!updatedConfig[srv.serverId].sharePath && comingSoonShares[srv.serverId]) {
+                    updatedConfig[srv.serverId].sharePath = comingSoonShares[srv.serverId];
+                }
             }
             await saveServerStorageConfigAction(updatedConfig);
             setServerStorageConfig(updatedConfig);
@@ -1196,6 +1202,9 @@ export function AgregarrStudio() {
 
     const currentServer = servers.find(s => s.serverId === selectedServerId) || servers[0];
     const currentSections = currentServer?.sections || [];
+    const currentSection = currentSections.find((s: any) => String(s.key) === selectedSectionKey);
+    const isTvSection = currentSection?.type === "show" || currentSection?.type === "tv" || currentSection?.title?.toLowerCase().includes("show") || currentSection?.title?.toLowerCase().includes("tv");
+    const isMovieSection = currentSection?.type === "movie" || (!isTvSection && currentSection?.title?.toLowerCase().includes("movie"));
 
     // Filter Collections by Destination & Search
     const filteredCollections = collections.filter(coll => {
@@ -1225,6 +1234,20 @@ export function AgregarrStudio() {
 
     const filteredPresets = COLLECTION_PRESETS.filter(preset => {
         if (presetsCategoryFilter !== "all" && preset.category !== presetsCategoryFilter) return false;
+
+        let effectiveMediaTypeFilter = presetsMediaTypeFilter;
+        if (effectiveMediaTypeFilter === "auto") {
+            if (isTvSection) effectiveMediaTypeFilter = "show";
+            else if (isMovieSection) effectiveMediaTypeFilter = "movie";
+            else effectiveMediaTypeFilter = "all";
+        }
+
+        if (effectiveMediaTypeFilter === "movie") {
+            if (preset.mediaType !== "movie" && preset.mediaType !== "both") return false;
+        } else if (effectiveMediaTypeFilter === "show") {
+            if (preset.mediaType !== "show" && preset.mediaType !== "both") return false;
+        }
+
         if (presetsSearchQuery.trim()) {
             const q = presetsSearchQuery.toLowerCase().trim();
             const matchTitle = preset.title.toLowerCase().includes(q);
@@ -2005,32 +2028,87 @@ export function AgregarrStudio() {
                     </div>
 
                     {/* Presets Filter & Search Toolbar */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-900/90 rounded-2xl border border-slate-800">
-                        <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="flex flex-col gap-3 p-3 bg-slate-900/90 rounded-2xl border border-slate-800">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            {/* Media Type Scope Buttons */}
+                            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-950/80 rounded-xl border border-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={() => setPresetsMediaTypeFilter("auto")}
+                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                        presetsMediaTypeFilter === "auto"
+                                            ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                                            : "text-slate-400 hover:text-white"
+                                    }`}
+                                >
+                                    <Filter className="h-3 w-3" />
+                                    <span>🎯 Target Library ({isTvSection ? "TV Shows" : "Movies"})</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPresetsMediaTypeFilter("movie")}
+                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                        presetsMediaTypeFilter === "movie"
+                                            ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                                            : "text-slate-400 hover:text-white"
+                                    }`}
+                                >
+                                    <Film className="h-3 w-3 text-amber-400" />
+                                    <span>Movies</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPresetsMediaTypeFilter("show")}
+                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                        presetsMediaTypeFilter === "show"
+                                            ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                                            : "text-slate-400 hover:text-white"
+                                    }`}
+                                >
+                                    <Tv className="h-3 w-3 text-sky-400" />
+                                    <span>TV Shows</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPresetsMediaTypeFilter("all")}
+                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                        presetsMediaTypeFilter === "all"
+                                            ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                                            : "text-slate-400 hover:text-white"
+                                    }`}
+                                >
+                                    <Layers className="h-3 w-3" />
+                                    <span>All Media</span>
+                                </button>
+                            </div>
+
+                            <div className="relative w-full sm:w-64">
+                                <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <Input
+                                    placeholder="Search presets..."
+                                    value={presetsSearchQuery}
+                                    onChange={(e) => setPresetsSearchQuery(e.target.value)}
+                                    className="h-8 text-xs bg-slate-950 border-slate-800 pl-8 w-full"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Category Filter Chips */}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/60">
                             {presetCategories.map(cat => (
                                 <button
                                     key={cat.id}
                                     type="button"
                                     onClick={() => setPresetsCategoryFilter(cat.id)}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                                         presetsCategoryFilter === cat.id
-                                            ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                                            : "bg-slate-800 text-slate-300 hover:text-white"
+                                            ? "bg-slate-700 text-amber-300 shadow-sm font-black border border-amber-500/40"
+                                            : "bg-slate-950/60 text-slate-400 hover:text-white border border-slate-800"
                                     }`}
                                 >
                                     {cat.label}
                                 </button>
                             ))}
-                        </div>
-
-                        <div className="relative w-full sm:w-64">
-                            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <Input
-                                placeholder="Search presets..."
-                                value={presetsSearchQuery}
-                                onChange={(e) => setPresetsSearchQuery(e.target.value)}
-                                className="h-8 text-xs bg-slate-950 border-slate-800 pl-8 w-full"
-                            />
                         </div>
                     </div>
 
@@ -2053,9 +2131,18 @@ export function AgregarrStudio() {
                                                     {preset.title}
                                                 </span>
                                             </div>
-                                            <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 capitalize">
-                                                {preset.category}
-                                            </Badge>
+                                            <div className="flex items-center gap-1">
+                                                <Badge variant="outline" className={`text-[9px] px-1.5 py-0 border-slate-700 font-mono ${
+                                                    preset.mediaType === "show" ? "text-sky-300 border-sky-800/60 bg-sky-950/40" :
+                                                    preset.mediaType === "movie" ? "text-amber-300 border-amber-800/60 bg-amber-950/40" :
+                                                    "text-purple-300 border-purple-800/60 bg-purple-950/40"
+                                                }`}>
+                                                    {preset.mediaType === "show" ? "📺 TV" : preset.mediaType === "movie" ? "🎬 MOVIES" : "✨ BOTH"}
+                                                </Badge>
+                                                <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 capitalize">
+                                                    {preset.category}
+                                                </Badge>
+                                            </div>
                                         </div>
                                         <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
                                             {preset.description}
@@ -2189,10 +2276,13 @@ export function AgregarrStudio() {
                             </div>
 
                             {servers.map(srv => {
-                                const currentPath = comingSoonShares[srv.serverId] || serverStorageConfig[srv.serverId]?.sharePath || "";
-                                const checkStatus = pathCheckResults[srv.serverId];
-                                const currentRadarrId = serverStorageConfig[srv.serverId]?.radarrId || "auto";
-                                const currentSonarrId = serverStorageConfig[srv.serverId]?.sonarrId || "auto";
+                                const srvConfig = serverStorageConfig[srv.serverId] || {};
+                                const moviePath = srvConfig.movieSharePath || comingSoonShares[srv.serverId] || srvConfig.sharePath || "";
+                                const tvPath = srvConfig.tvSharePath || "";
+                                const checkMovieStatus = pathCheckResults[`${srv.serverId}_movie`];
+                                const checkTvStatus = pathCheckResults[`${srv.serverId}_tv`];
+                                const currentRadarrId = srvConfig.radarrId || "auto";
+                                const currentSonarrId = srvConfig.sonarrId || "auto";
 
                                 return (
                                     <div key={srv.serverId} className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3">
@@ -2206,19 +2296,21 @@ export function AgregarrStudio() {
                                             </Badge>
                                         </div>
 
-                                        {/* Share Path */}
+                                        {/* Movie Placeholder Share Path */}
                                         <div className="space-y-1">
-                                            <Label className="text-[11px] text-slate-300 font-semibold">Coming Soon Share Path:</Label>
+                                            <Label className="text-[11px] text-slate-300 font-semibold flex items-center gap-1">
+                                                <Film className="h-3 w-3 text-amber-400" /> Movie Placeholder Share Folder:
+                                            </Label>
                                             <div className="flex gap-2">
                                                 <Input
-                                                    placeholder="/mnt/user/media/coming_soon"
-                                                    value={currentPath}
+                                                    placeholder="/mnt/user/media/coming_soon_movies"
+                                                    value={moviePath}
                                                     onChange={(e) => {
                                                         const val = e.target.value;
                                                         setComingSoonShares(prev => ({ ...prev, [srv.serverId]: val }));
                                                         setServerStorageConfig(prev => ({
                                                             ...prev,
-                                                            [srv.serverId]: { ...(prev[srv.serverId] || {}), sharePath: val }
+                                                            [srv.serverId]: { ...(prev[srv.serverId] || {}), movieSharePath: val, sharePath: val }
                                                         }));
                                                     }}
                                                     className="text-xs bg-slate-900 border-slate-800 font-mono"
@@ -2228,18 +2320,57 @@ export function AgregarrStudio() {
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={async () => {
-                                                        setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: true } }));
-                                                        const res = await validateDirectoryPathAction(currentPath);
-                                                        setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: false, success: res.success, msg: res.message || res.error } }));
+                                                        setPathCheckResults(prev => ({ ...prev, [`${srv.serverId}_movie`]: { checking: true } }));
+                                                        const res = await validateDirectoryPathAction(moviePath);
+                                                        setPathCheckResults(prev => ({ ...prev, [`${srv.serverId}_movie`]: { checking: false, success: res.success, msg: res.message || res.error } }));
                                                     }}
                                                     className="border-slate-700 text-xs shrink-0"
                                                 >
                                                     Validate
                                                 </Button>
                                             </div>
-                                            {checkStatus && !checkStatus.checking && (
-                                                <p className={`text-[10px] ${checkStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
-                                                    {checkStatus.msg}
+                                            {checkMovieStatus && !checkMovieStatus.checking && (
+                                                <p className={`text-[10px] ${checkMovieStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
+                                                    {checkMovieStatus.msg}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* TV Show Placeholder Share Path */}
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] text-slate-300 font-semibold flex items-center gap-1">
+                                                <Tv className="h-3 w-3 text-sky-400" /> TV Show Placeholder Share Folder:
+                                            </Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    placeholder="/mnt/user/media/coming_soon_tv"
+                                                    value={tvPath}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setServerStorageConfig(prev => ({
+                                                            ...prev,
+                                                            [srv.serverId]: { ...(prev[srv.serverId] || {}), tvSharePath: val }
+                                                        }));
+                                                    }}
+                                                    className="text-xs bg-slate-900 border-slate-800 font-mono"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={async () => {
+                                                        setPathCheckResults(prev => ({ ...prev, [`${srv.serverId}_tv`]: { checking: true } }));
+                                                        const res = await validateDirectoryPathAction(tvPath);
+                                                        setPathCheckResults(prev => ({ ...prev, [`${srv.serverId}_tv`]: { checking: false, success: res.success, msg: res.message || res.error } }));
+                                                    }}
+                                                    className="border-slate-700 text-xs shrink-0"
+                                                >
+                                                    Validate
+                                                </Button>
+                                            </div>
+                                            {checkTvStatus && !checkTvStatus.checking && (
+                                                <p className={`text-[10px] ${checkTvStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
+                                                    {checkTvStatus.msg}
                                                 </p>
                                             )}
                                         </div>
@@ -2249,7 +2380,7 @@ export function AgregarrStudio() {
                                             {/* Radarr Instance */}
                                             <div className="space-y-1">
                                                 <Label className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                                                    <Film className="h-3 w-3 text-amber-400" /> Mapped Radarr:
+                                                    <Film className="h-3 w-3 text-amber-400" /> Mapped Radarr (Movies):
                                                 </Label>
                                                 <Select
                                                     value={currentRadarrId}
@@ -2277,7 +2408,7 @@ export function AgregarrStudio() {
                                             {/* Sonarr Instance */}
                                             <div className="space-y-1">
                                                 <Label className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                                                    <Tv className="h-3 w-3 text-sky-400" /> Mapped Sonarr:
+                                                    <Tv className="h-3 w-3 text-sky-400" /> Mapped Sonarr (TV Shows):
                                                 </Label>
                                                 <Select
                                                     value={currentSonarrId}

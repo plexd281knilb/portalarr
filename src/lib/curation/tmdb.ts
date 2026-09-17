@@ -394,17 +394,41 @@ export async function getTmdbStreamingProviderMedia(
 }
 
 /**
- * Get Disney+ Trending (All or Kids)
+ * Get Popular TV Shows
  */
-export async function getDisneyTrending(isKids = false, page = 1): Promise<TmdbMediaItem[]> {
-    return await getTmdbStreamingProviderMedia(337, { isKids, mediaType: "both", page, minVotes: 10 });
+export async function getTmdbPopularTv(page = 1): Promise<TmdbMediaItem[]> {
+    try {
+        const data = await tmdbFetch("/tv/popular", { page });
+        return (data?.results || []).map(mapTmdbTv);
+    } catch {
+        return [];
+    }
 }
 
 /**
- * Get Netflix Trending (All or Kids)
+ * Get Top Rated TV Shows
  */
-export async function getNetflixTrending(isKids = false, page = 1): Promise<TmdbMediaItem[]> {
-    return await getTmdbStreamingProviderMedia(8, { isKids, mediaType: "both", page, minVotes: 10 });
+export async function getTmdbTopRatedTv(page = 1): Promise<TmdbMediaItem[]> {
+    try {
+        const data = await tmdbFetch("/tv/top_rated", { page });
+        return (data?.results || []).map(mapTmdbTv);
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Get Disney+ Trending (All or Kids, Movies or TV)
+ */
+export async function getDisneyTrending(isKids = false, page = 1, mediaType: "movie" | "tv" | "both" = "both"): Promise<TmdbMediaItem[]> {
+    return await getTmdbStreamingProviderMedia(337, { isKids, mediaType, page, minVotes: 10 });
+}
+
+/**
+ * Get Netflix Trending (All or Kids, Movies or TV)
+ */
+export async function getNetflixTrending(isKids = false, page = 1, mediaType: "movie" | "tv" | "both" = "both"): Promise<TmdbMediaItem[]> {
+    return await getTmdbStreamingProviderMedia(8, { isKids, mediaType, page, minVotes: 10 });
 }
 
 export interface TmdbVideoItem {
