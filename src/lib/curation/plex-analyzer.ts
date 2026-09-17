@@ -8,6 +8,8 @@ export interface PlexMediaStreamInfo {
     key: string;
     title: string;
     editionTitle?: string;
+    librarySectionID?: string | number;
+    sectionKey?: string | number;
     year?: number;
     type: "movie" | "show" | "season" | "episode";
     thumb?: string;
@@ -1806,29 +1808,62 @@ export async function updatePlexCollectionPromotionAndOrder(
                     headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
                 }).catch(() => {});
 
-                // Hit Plex modern Section Hub management endpoints for Recommended & Home visibility
+                // 1. Initialize hub for collection visibility management on Plex
+                const initUrls = [
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?metadataItemId=${encodeURIComponent(collectionRatingKey)}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?id=${encodeURIComponent(collectionRatingKey)}&X-Plex-Token=${encodeURIComponent(token)}`
+                ];
+                for (const iUrl of initUrls) {
+                    try {
+                        await fetch(iUrl, {
+                            method: "POST",
+                            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                        });
+                    } catch (e) {}
+                }
+
+                // 2. Hit Plex modern Section Hub management endpoints for Recommended & Home visibility
                 const recVal = options.promotedToRecommended ? "1" : "0";
                 const homeVal = options.promotedToHome ? "1" : "0";
                 const sharedVal = options.promotedToSharedHome ? "1" : "0";
 
                 const hubManageUrls = [
-                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?identifier=custom.collection.${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`,
-                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?identifier=collection.${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`,
-                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?id=${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`,
-                    `${cleanBase}/hubs/promoted/manage?identifier=custom.collection.${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/custom.collection.${encodeURIComponent(String(sectionKey))}.${encodeURIComponent(collectionRatingKey)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/custom.collection.${encodeURIComponent(collectionRatingKey)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/collection.${encodeURIComponent(collectionRatingKey)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?identifier=custom.collection.${encodeURIComponent(String(sectionKey))}.${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?identifier=custom.collection.${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/promoted/manage?metadataItemId=${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/promoted/manage?identifier=custom.collection.${encodeURIComponent(String(sectionKey))}.${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`
                 ];
 
                 for (const hUrl of hubManageUrls) {
                     try {
                         await fetch(hUrl, {
-                            method: "POST",
-                            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-                        });
-                        await fetch(hUrl, {
                             method: "PUT",
                             headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
                         });
+                        await fetch(hUrl, {
+                            method: "POST",
+                            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                        });
                     } catch (e) {}
+                }
+
+                // 3. If promoted to home, move hub to top priority
+                if (options.promotedToHome) {
+                    const moveUrls = [
+                        `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/custom.collection.${encodeURIComponent(String(sectionKey))}.${encodeURIComponent(collectionRatingKey)}/move?X-Plex-Token=${encodeURIComponent(token)}`,
+                        `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/custom.collection.${encodeURIComponent(collectionRatingKey)}/move?X-Plex-Token=${encodeURIComponent(token)}`
+                    ];
+                    for (const mUrl of moveUrls) {
+                        try {
+                            await fetch(mUrl, {
+                                method: "PUT",
+                                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                            });
+                        } catch (e) {}
+                    }
                 }
             }
 

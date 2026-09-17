@@ -69,15 +69,41 @@ export async function testArrConfig(url: string, apiKey: string) {
     }
 }
 
+export async function getEnabledArrInstancesInternal(type: "radarr" | "sonarr") {
+    try {
+        const apps = await prisma.mediaApp.findMany({
+            where: { type }
+        });
+        return {
+            success: true,
+            data: apps.map(app => ({
+                id: app.id,
+                name: app.name,
+                url: app.url,
+                externalUrl: app.externalUrl,
+                allowedQualityProfileIds: app.allowedQualityProfileIds ? app.allowedQualityProfileIds.split(",").map(s => s.trim()) : [],
+                allowedRootFolderIds: app.allowedRootFolderIds ? app.allowedRootFolderIds.split(",").map(s => s.trim()) : [],
+                apiKey: decryptData(app.apiKey || "")
+            }))
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
     try {
-        const session = await getSession();
-        if (!session || (session.role !== "ADMIN" && session.role !== "SUPER_USER")) {
-            return { success: false, error: "Unauthorized" };
+        let session = null;
+        try {
+            session = await getSession();
+        } catch {}
+
+        if (session && (session.role === "ADMIN" || session.role === "SUPER_USER")) {
+            return await getEnabledArrInstancesInternal(type);
         }
-        const isAdmin = session.role === "ADMIN" || session.role === "SUPER_USER";
+
         const apps = await prisma.mediaApp.findMany({
-            where: isAdmin ? { type } : { type, enabledForUsers: true }
+            where: { type, enabledForUsers: true }
         });
         return {
             success: true,

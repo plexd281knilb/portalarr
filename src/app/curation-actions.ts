@@ -95,7 +95,7 @@ import {
     convertKometaLibraryToPortalarrOverlay,
     ParsedKometaConfig
 } from "@/lib/curation/kometa-importer";
-import { getEnabledArrInstances, arrApiGet } from "@/app/arr-actions";
+import { getEnabledArrInstances, getEnabledArrInstancesInternal, arrApiGet } from "@/app/arr-actions";
 
 // Verify admin permissions
 async function verifyAdmin() {
@@ -1963,6 +1963,49 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
                 );
             }
 
+            // Apply Leaving Soon banner overlays to all active items in Plex
+            if (serverUrl && token && leavingSoonItems.length > 0) {
+                const targetServerId = serverId || resolved.serverId || "main";
+                const bannerText = settings?.pruneBannerText || "LEAVING ON {date}";
+                const bannerTheme = settings?.pruneBannerTheme || "crimson-red";
+                const bannerPosition = settings?.pruneBannerPosition || "bottom";
+
+                for (const adv of leavingSoonItems) {
+                    try {
+                        const matched = await getPlexSingleItemMetadata(serverUrl, token, adv.ratingKey);
+                        if (matched) {
+                            matched.isLeavingSoon = true;
+                            const daysLeft = adv.leavingSoonDate 
+                                ? Math.max(1, Math.ceil((new Date(adv.leavingSoonDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+                                : (settings?.pruneDaysNotice ?? 14);
+                            const effectiveDateStr = adv.leavingSoonDate 
+                                ? new Date(adv.leavingSoonDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                                : new Date(Date.now() + daysLeft * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+                            const overlayOpts = await getActiveOverlayOptionsHelper(targetServerId, matched.librarySectionID ? String(matched.librarySectionID) : sectionKey, {
+                                showLeavingSoon: true,
+                                leavingSoonDays: daysLeft,
+                                digitalReleaseDate: effectiveDateStr,
+                                placeholderText: bannerText,
+                                placeholderTheme: bannerTheme,
+                                placeholderPosition: bannerPosition
+                            });
+
+                            await backupAndApplyOverlay(
+                                serverUrl,
+                                token,
+                                targetServerId,
+                                matched,
+                                overlayOpts,
+                                true
+                            );
+                        }
+                    } catch (itemErr: any) {
+                        console.warn(`[LEAVING-SOON] Failed applying banner overlay to item ${adv.ratingKey}:`, itemErr.message);
+                    }
+                }
+            }
+
             await prisma.mediaCollection.update({
                 where: { id: collection.id },
                 data: {
@@ -3320,7 +3363,47 @@ export async function markItemLeavingSoonAction(data: {
             }
         });
 
-        return { success: true, advisory, message: `Flagged "${data.title}" as leaving soon.` };
+        // Apply countdown banner overlay directly to Plex poster
+        try {
+            const resolved = await resolveWorkingPlexServerConnection(data.serverId);
+            if (resolved?.serverUrl && resolved?.token) {
+                const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+                const matched = await getPlexSingleItemMetadata(resolved.serverUrl, resolved.token, data.ratingKey);
+                if (matched) {
+                    matched.isLeavingSoon = true;
+                    const daysLeft = data.daysRemaining || Math.max(1, Math.ceil((effectiveDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                    const effectiveDateStr = effectiveDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    const bannerText = settings?.pruneBannerText || "LEAVING ON {date}";
+                    const bannerTheme = settings?.pruneBannerTheme || "crimson-red";
+                    const bannerPosition = settings?.pruneBannerPosition || "bottom";
+
+                    const overlayOpts = await getActiveOverlayOptionsHelper(data.serverId, matched.librarySectionID ? String(matched.librarySectionID) : undefined, {
+                        showLeavingSoon: true,
+                        leavingSoonDays: daysLeft,
+                        digitalReleaseDate: effectiveDateStr,
+                        placeholderText: bannerText,
+                        placeholderTheme: bannerTheme,
+                        placeholderPosition: bannerPosition
+                    });
+
+                    await backupAndApplyOverlay(
+                        resolved.serverUrl,
+                        resolved.token,
+                        data.serverId,
+                        matched,
+                        overlayOpts,
+                        true
+                    );
+                }
+            }
+        } catch (overlayErr: any) {
+            console.warn(`[LEAVING-SOON] Failed applying overlay for manual flagged item ${data.ratingKey}:`, overlayErr.message);
+        }
+
+        // Sync Leaving Soon collection & home hub
+        await syncLeavingSoonCollectionHubInternal(data.serverId).catch(() => {});
+
+        return { success: true, advisory, message: `Flagged "${data.title}" as leaving soon and applied banner overlay!` };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -3892,7 +3975,9 @@ export async function executePruneAction(
                 });
 
                 // Apply overlay preserving all active badges (4K, HDR, DV, Atmos, Audio, Custom Badges, etc.)
-                const canApplyOverlay = enabledServersForOverlays.length === 0 || enabledServersForOverlays.includes(it.serverId);
+                const canApplyOverlay = it.sectionKey
+                    ? await isSectionEnabledInList(enabledServersForOverlays, it.serverId, String(it.sectionKey))
+                    : (enabledServersForOverlays.length === 0 || !enabledServersForOverlays.includes(`disabled:${it.serverId}`));
                 if (shouldApplyOverlay && canApplyOverlay && serverUrl) {
                     const matched = await getPlexSingleItemMetadata(serverUrl, serverToken, it.ratingKey);
                     if (matched) {
@@ -3951,9 +4036,9 @@ export async function executePruneAction(
         // Sync Leaving Soon collection across all affected server sections
         if (shouldTagCollection) {
             for (const [sId, secKeys] of affectedServerSections.entries()) {
-                const canTagColl = enabledServersForCollections.length === 0 || enabledServersForCollections.includes(sId);
-                if (canTagColl) {
-                    for (const secKey of secKeys) {
+                for (const secKey of secKeys) {
+                    const canTagColl = await isSectionEnabledInList(enabledServersForCollections, sId, String(secKey));
+                    if (canTagColl) {
                         await syncLeavingSoonCollectionHubInternal(sId, secKey).catch(() => {});
                     }
                 }
@@ -4039,10 +4124,16 @@ export async function saveComingSoonSharesAction(shares: Record<string, string>)
 export async function saveServerStorageConfigAction(storageConfig: Record<string, any>) {
     await verifyAdmin();
     try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        let existingConfig: Record<string, any> = {};
+        if (settings?.serverStorageConfig) {
+            try { existingConfig = JSON.parse(settings.serverStorageConfig); } catch (e) {}
+        }
+        const mergedConfig = { ...existingConfig, ...storageConfig };
         await prisma.settings.upsert({
             where: { id: "global" },
-            update: { serverStorageConfig: JSON.stringify(storageConfig) },
-            create: { id: "global", serverStorageConfig: JSON.stringify(storageConfig) }
+            update: { serverStorageConfig: JSON.stringify(mergedConfig) },
+            create: { id: "global", serverStorageConfig: JSON.stringify(mergedConfig) }
         });
         return { success: true, message: "Server storage mount paths saved successfully." };
     } catch (e: any) {
@@ -4066,7 +4157,7 @@ export async function saveSelectedGlancesDiskAction(diskId: string) {
             update: { serverStorageConfig: JSON.stringify(currentStorageConfig) },
             create: { id: "global", serverStorageConfig: JSON.stringify(currentStorageConfig) }
         });
-        return { success: true, message: "Default Glances storage array saved successfully." };
+        return { success: true, selectedGlancesDiskId: diskId, message: "Default Glances storage array saved successfully." };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -5740,7 +5831,7 @@ export async function getArrMonitoredIndex(): Promise<{
     const now = new Date();
 
     try {
-        const radarrRes = await getEnabledArrInstances("radarr");
+        const radarrRes = await getEnabledArrInstancesInternal("radarr");
         if (radarrRes.success && radarrRes.data) {
             for (const app of radarrRes.data) {
                 try {
@@ -5791,7 +5882,7 @@ export async function getArrMonitoredIndex(): Promise<{
     }
 
     try {
-        const sonarrRes = await getEnabledArrInstances("sonarr");
+        const sonarrRes = await getEnabledArrInstancesInternal("sonarr");
         if (sonarrRes.success && sonarrRes.data) {
             for (const app of sonarrRes.data) {
                 try {

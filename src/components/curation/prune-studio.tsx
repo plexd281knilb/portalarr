@@ -582,7 +582,7 @@ export function PruneStudio() {
                 const targetId = savedDiskIdParam || selectedGlancesDiskId;
                 if (targetId && res.disks.some(d => d.id === targetId)) {
                     setSelectedGlancesDiskId(targetId);
-                } else if (res.disks.length > 0 && !selectedGlancesDiskId) {
+                } else if (!selectedGlancesDiskId && !savedDiskIdParam && res.disks.length > 0) {
                     setSelectedGlancesDiskId(res.disks[0].id);
                 }
             }
@@ -1859,7 +1859,7 @@ export function PruneStudio() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="combined_oldest">⚡ Combined Stagnant (Added, Watched &amp; Modified)</SelectItem>
+                                        <SelectItem value="combined_oldest">⚡ Combined (Oldest Added, Watched &amp; Modified)</SelectItem>
                                         <SelectItem value="oldest_added">📅 Oldest Added to Library</SelectItem>
                                         <SelectItem value="oldest_watched">👁️ Oldest Last Watched</SelectItem>
                                         <SelectItem value="oldest_modified">📝 Oldest Modified on Disk</SelectItem>
