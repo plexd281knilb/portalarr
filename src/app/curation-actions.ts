@@ -131,6 +131,62 @@ function setPermissionsRecursive(targetPath: string, dirMode = 0o777, fileMode =
     } catch {}
 }
 
+/**
+ * Strict verification that a media item's content rating is suitable for Kids & Family.
+ * Rejects PG-13, TV-14, TV-MA, R, NC-17, NR (if unrated adult), etc.
+ */
+function isStrictKidsRating(contentRating?: string): boolean {
+    if (!contentRating) return false;
+    const normalized = contentRating.toUpperCase().replace(/^US[:\/]/, "").trim();
+    if (normalized.includes("PG-13") || normalized.includes("TV-14") || normalized.includes("TV-MA") || normalized.includes("NC-17") || normalized === "R" || normalized.startsWith("R/")) {
+        return false;
+    }
+    const validKidsRatings = new Set(["G", "PG", "TV-Y", "TV-Y7", "TV-Y7-FV", "TV-G", "TV-PG", "APPROVED", "PASSED", "ALL", "U"]);
+    return validKidsRatings.has(normalized);
+}
+
+/**
+ * Validates whether an item qualifies as Kids & Family media based on genres and strict content ratings.
+ */
+function isStrictKidsMedia(item: any): boolean {
+    const cRating = (item.contentRating || "").toUpperCase().replace(/^US[:\/]/, "").trim();
+    if (cRating.includes("PG-13") || cRating.includes("TV-14") || cRating.includes("TV-MA") || cRating.includes("NC-17") || cRating === "R" || cRating.startsWith("R/")) {
+        return false;
+    }
+    const gList = (item.genres || item.genre || []).map((g: string) => g.toLowerCase());
+    const hasFamilyGenre = gList.some((g: string) => g.includes("family") || g.includes("children") || g.includes("kids"));
+    const hasAnimationGenre = gList.some((g: string) => g.includes("animation"));
+    const hasKidsRating = isStrictKidsRating(cRating);
+
+    if (hasFamilyGenre) return true;
+    if (hasAnimationGenre && hasKidsRating) return true;
+    return false;
+}
+
+/**
+ * Deduplicates Plex library media items by TMDb ID or title+year so multi-edition / multi-cut items only appear once in collections.
+ */
+function deduplicatePlexLibraryItems(items: any[]): any[] {
+    const seenTmdb = new Set<string>();
+    const seenTitleYear = new Set<string>();
+    const result: any[] = [];
+
+    for (const it of items) {
+        const tmdb = it.guids?.tmdb ? String(it.guids.tmdb) : null;
+        const titleYear = `${it.title?.toLowerCase().trim()}_${it.year || ''}`;
+
+        if (tmdb) {
+            if (seenTmdb.has(tmdb)) continue;
+            seenTmdb.add(tmdb);
+        } else if (it.title) {
+            if (seenTitleYear.has(titleYear)) continue;
+            seenTitleYear.add(titleYear);
+        }
+        result.push(it);
+    }
+    return result;
+}
+
 export async function getCurationSettingsAction() {
     await verifyAdmin();
     await ensureSchemaColumns();
@@ -1003,7 +1059,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             .map(s => s.trim().toLowerCase())
             .filter(Boolean);
 
-        const libraryItems = rawLibraryItems.filter(it => {
+        const libraryItems = deduplicatePlexLibraryItems(rawLibraryItems.filter(it => {
             if (isTvSection && it.type === "movie") return false;
             if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
             if (excludedList.length > 0) {
@@ -1014,7 +1070,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 if (isExcluded) return false;
             }
             return true;
-        });
+        }));
 
         // 2. Resolve matching rating keys based on collection source type with strict media-type filtering
         const matchingRatingKeys: string[] = [];
@@ -1093,29 +1149,15 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 const tmdbIds = new Set(providerMedia.map(m => String(m.id)));
                 const imdbIds = new Set(providerMedia.map(m => m.imdbId).filter(Boolean));
                 const titles = new Set(providerMedia.map(m => m.title?.toLowerCase().trim()).filter(Boolean));
-                const provMatches = libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                    (it.title && titles.has(it.title.toLowerCase().trim()))
-                ).map(it => it.ratingKey);
+                const provMatches = libraryItems.filter(it => {
+                    const isMatch = (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                                    (it.title && titles.has(it.title.toLowerCase().trim()));
+                    if (!isMatch) return false;
+                    if (isKids && !isStrictKidsMedia(it)) return false;
+                    return true;
+                }).map(it => it.ratingKey);
                 matchingRatingKeys.push(...provMatches);
-
-                // Fallback for Kids & Family collections: if direct provider matches are low or empty, match on Family/Animation/Kids genres or ratings
-                if (matchingRatingKeys.length < 5 && (isKids || collection.title.toLowerCase().includes("kids") || collection.title.toLowerCase().includes("family"))) {
-                    const kidsMatches = libraryItems.filter(it => {
-                        const gList = (it.genres || it.genre || []).map((g: string) => g.toLowerCase());
-                        const isFamilyGenre = gList.some((g: string) => g.includes("animation") || g.includes("family") || g.includes("children") || g.includes("kids"));
-                        const cRating = (it.contentRating || "").toUpperCase();
-                        const isKidsRating = ["G", "PG", "TV-Y", "TV-Y7", "TV-G", "TV-PG"].some(r => cRating.includes(r));
-                        return isFamilyGenre || isKidsRating;
-                    }).map(it => it.ratingKey);
-
-                    for (const kKey of kidsMatches) {
-                        if (!matchingRatingKeys.includes(kKey)) {
-                            matchingRatingKeys.push(kKey);
-                        }
-                    }
-                }
             } else if (collection.sourceQuery === "digital_releases") {
                 if (isTvSection) {
                     const tvShows = await getTmdbPopularTv(1);
@@ -1362,7 +1404,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
             .map(s => s.trim().toLowerCase())
             .filter(Boolean);
 
-        const libraryItems = rawLibraryItems.filter(it => {
+        const libraryItems = deduplicatePlexLibraryItems(rawLibraryItems.filter(it => {
             if (isTvSection && it.type === "movie") return false;
             if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
             if (excludedList.length > 0) {
@@ -1373,7 +1415,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 if (isExcluded) return false;
             }
             return true;
-        });
+        }));
 
         let matchedItems: any[] = [];
         let executionMethod = "";
@@ -1470,11 +1512,14 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 const tmdbIds = providerMedia.map(m => String(m.id));
                 const imdbIds = providerMedia.map(m => m.imdbId).filter(Boolean);
                 const titles = providerMedia.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
-                matchedItems = libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                    (it.title && titles.includes(it.title.toLowerCase().trim()))
-                );
+                matchedItems = libraryItems.filter(it => {
+                    const isMatch = (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                                    (it.title && titles.includes(it.title.toLowerCase().trim()));
+                    if (!isMatch) return false;
+                    if (isKids && !isStrictKidsMedia(it)) return false;
+                    return true;
+                });
             } else if (sourceQuery === "digital_releases") {
                 executionMethod = isTvSection 
                     ? `TMDb Popular TV API: Querying active television shows.`

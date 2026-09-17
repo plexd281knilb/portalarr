@@ -358,8 +358,10 @@ export async function getTmdbStreamingProviderMedia(
                 };
 
                 if (isKids) {
-                    movieParams.with_genres = "16|10751|10762"; // Animation OR Family OR Kids
-                    movieParams.without_genres = "27,53,80"; // Exclude Horror, Thriller, Crime
+                    movieParams.with_genres = "10751|16"; // Family OR Animation
+                    movieParams.without_genres = "27,53,80,18,10749"; // Exclude Horror, Thriller, Crime, Drama, Romance
+                    movieParams.certification_country = "US";
+                    movieParams["certification.lte"] = "PG";
                 }
                 return tmdbFetch("/discover/movie", movieParams);
             });
@@ -384,8 +386,9 @@ export async function getTmdbStreamingProviderMedia(
                 };
 
                 if (isKids) {
-                    tvParams.with_genres = "16|10751|10762"; // Animation OR Family OR Kids
-                    tvParams.without_genres = "27,53,80"; // Exclude Horror, Thriller, Crime
+                    // Strictly require Kids (10762) or Family (10751) - avoids pulling adult animation like BoJack Horseman or South Park
+                    tvParams.with_genres = "10762|10751";
+                    tvParams.without_genres = "27,53,80,18,10768,10767"; // Exclude Horror, Thriller, Crime, Drama, War/Politics, Soap/Talk
                 }
                 return tmdbFetch("/discover/tv", tvParams);
             });
@@ -398,11 +401,29 @@ export async function getTmdbStreamingProviderMedia(
             }
         }
 
-        // Deduplicate items by ID
+        // Deduplicate items by ID and apply strict kids content rating verification
         const seenIds = new Set<number>();
         const uniqueItems = items.filter(item => {
             if (seenIds.has(item.id)) return false;
             seenIds.add(item.id);
+
+            if (isKids) {
+                const cert = (item.certification || "").toUpperCase().replace(/^US[:\/]/, "").trim();
+                // Explicit rejection of mature or teen certifications
+                if (cert.includes("PG-13") || cert.includes("TV-14") || cert.includes("TV-MA") || cert.includes("NC-17") || cert === "R" || cert.startsWith("R/")) {
+                    return false;
+                }
+                const gIds = item.genreIds || [];
+                const isExplicitKidsGenre = gIds.includes(10751) || gIds.includes(10762);
+                if (!isExplicitKidsGenre && gIds.includes(16)) {
+                    // Animation without explicit family/kids genre: must have strict kids certification
+                    const validKidsCerts = ["G", "PG", "TV-Y", "TV-Y7", "TV-G", "TV-PG"];
+                    if (!validKidsCerts.some(c => cert === c || cert.endsWith(`/${c}`))) {
+                        return false;
+                    }
+                }
+            }
+
             return true;
         });
 

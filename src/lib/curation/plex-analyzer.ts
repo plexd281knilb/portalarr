@@ -1607,6 +1607,64 @@ export async function getPlexLibraryLabels(
 }
 
 /**
+ * Fetches all current child media item rating keys in a Plex collection.
+ */
+export async function getPlexCollectionChildRatingKeys(
+    serverUrlOrCandidates: string | string[],
+    token: string,
+    collectionRatingKey: string
+): Promise<string[]> {
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    for (const cleanBase of urlsToTry) {
+        try {
+            const url = `${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}/children?X-Plex-Token=${encodeURIComponent(token)}`;
+            const res = await fetch(url, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                cache: "no-store"
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const metadata = data.MediaContainer?.Metadata || [];
+                return metadata.map((m: any) => String(m.ratingKey)).filter(Boolean);
+            }
+        } catch {}
+    }
+    return [];
+}
+
+/**
+ * Removes a collection tag from specified item rating keys in Plex.
+ */
+export async function removeItemsFromPlexCollection(
+    serverUrlOrCandidates: string | string[],
+    token: string,
+    collectionTitle: string,
+    ratingKeysToRemove: string[]
+): Promise<number> {
+    if (!ratingKeysToRemove || ratingKeysToRemove.length === 0) return 0;
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    let removedCount = 0;
+    for (const rKey of ratingKeysToRemove) {
+        let removed = false;
+        for (const cleanBase of urlsToTry) {
+            if (removed) break;
+            try {
+                const removeUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?collection%5B%5D.tag.tag-=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
+                const res = await fetch(removeUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+                if (res.ok) {
+                    removedCount++;
+                    removed = true;
+                }
+            } catch {}
+        }
+    }
+    return removedCount;
+}
+
+/**
  * Creates or updates a Plex collection and populates it with item rating keys.
  */
 export async function syncPlexCollection(
@@ -1640,6 +1698,15 @@ export async function syncPlexCollection(
 
     if (existing) {
         collectionRatingKey = existing.ratingKey;
+
+        // Prune stale items that are no longer part of this collection
+        try {
+            const currentKeys = await getPlexCollectionChildRatingKeys(urlsToTry, token, collectionRatingKey);
+            const staleKeys = currentKeys.filter(k => !itemRatingKeys.includes(k));
+            if (staleKeys.length > 0) {
+                await removeItemsFromPlexCollection(urlsToTry, token, collectionTitle, staleKeys);
+            }
+        } catch {}
     } else {
         // Create collection by tagging the first item
         const firstKey = itemRatingKeys[0];
