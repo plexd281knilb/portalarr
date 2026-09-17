@@ -88,6 +88,11 @@ model Settings {
   placeholderCustomText            String?   // Custom subtitle text
   placeholderEnabled               Boolean   @default(true)
   
+  // Prune & Leaving Soon Banner Appearance Controls
+  pruneBannerPosition              String?   @default("bottom") // "bottom", "lower_third", "middle", "upper_third", "top", "corner"
+  pruneBannerTheme                 String?   @default("crimson-red")
+  pruneBannerText                  String?   @default("LEAVING ON {date}")
+  
   // Leaving Soon Home Hub & Schedule Controls
   leavingSoonPromotedToHome        Boolean   @default(true)
   leavingSoonPromotedToRecommended Boolean   @default(true)

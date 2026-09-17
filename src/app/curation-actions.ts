@@ -10,6 +10,7 @@ import { logger } from "@/lib/logger";
 import { getPlexServerLibrarySections, getPlexServerSections, getPlexServerList, getPlexServers, resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { 
     getPlexLibraryMediaItems, 
+    getPlexSingleItemMetadata,
     getPlexLibraryCollections, 
     syncPlexCollection, 
     deletePlexCollection, 
@@ -141,6 +142,11 @@ export async function getCurationSettingsAction() {
         placeholderBannerTheme: settings?.placeholderBannerTheme || "indigo-purple",
         placeholderCustomText: settings?.placeholderCustomText || "",
         placeholderEnabled: settings?.placeholderEnabled ?? true,
+
+        // Pruning Banner Appearance Settings
+        pruneBannerPosition: settings?.pruneBannerPosition || "bottom",
+        pruneBannerTheme: settings?.pruneBannerTheme || "crimson-red",
+        pruneBannerText: settings?.pruneBannerText || "LEAVING ON {date}",
 
         // Leaving Soon Home Hub & Schedule Settings
         leavingSoonPromotedToHome: settings?.leavingSoonPromotedToHome ?? true,
@@ -422,6 +428,9 @@ export async function saveCurationSettingsAction(data: {
     placeholderBannerTheme?: string;
     placeholderCustomText?: string;
     placeholderEnabled?: boolean;
+    pruneBannerPosition?: string;
+    pruneBannerTheme?: string;
+    pruneBannerText?: string;
     leavingSoonPromotedToHome?: boolean;
     leavingSoonPromotedToRecommended?: boolean;
     leavingSoonPromotedToSharedHome?: boolean;
@@ -477,6 +486,10 @@ export async function saveCurationSettingsAction(data: {
         if (data.placeholderBannerTheme !== undefined) updatePayload.placeholderBannerTheme = data.placeholderBannerTheme;
         if (data.placeholderCustomText !== undefined) updatePayload.placeholderCustomText = data.placeholderCustomText;
         if (data.placeholderEnabled !== undefined) updatePayload.placeholderEnabled = data.placeholderEnabled;
+
+        if (data.pruneBannerPosition !== undefined) updatePayload.pruneBannerPosition = data.pruneBannerPosition;
+        if (data.pruneBannerTheme !== undefined) updatePayload.pruneBannerTheme = data.pruneBannerTheme;
+        if (data.pruneBannerText !== undefined) updatePayload.pruneBannerText = data.pruneBannerText;
 
         if (data.leavingSoonPromotedToHome !== undefined) updatePayload.leavingSoonPromotedToHome = data.leavingSoonPromotedToHome;
         if (data.leavingSoonPromotedToRecommended !== undefined) updatePayload.leavingSoonPromotedToRecommended = data.leavingSoonPromotedToRecommended;
@@ -1012,6 +1025,32 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                         (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
                         (it.guids?.imdb && imdbIds.has(String(it.guids.imdb)))
                     ).map(it => it.ratingKey));
+                }
+            }
+
+            // Fallback for IMDb Top 250 / top-rated collections when MDBList is not configured or returns 0
+            if (matchingRatingKeys.length === 0 && (collection.title.toLowerCase().includes("top 250") || collection.sourceQuery?.includes("250") || collection.sourceQuery?.includes("top-imdb"))) {
+                try {
+                    const topRatedPages = await Promise.all([
+                        getTmdbTopRatedMovies(1),
+                        getTmdbTopRatedMovies(2),
+                        getTmdbTopRatedMovies(3),
+                        getTmdbTopRatedMovies(4),
+                        getTmdbTopRatedMovies(5),
+                        getTmdbTopRatedMovies(6),
+                        getTmdbTopRatedMovies(7),
+                        getTmdbTopRatedMovies(8)
+                    ]);
+                    const tmdbTopIds = new Set(topRatedPages.flat().map(m => String(m.id)).filter(Boolean));
+                    const tmdbMatches = libraryItems.filter(it => it.guids?.tmdb && tmdbTopIds.has(String(it.guids.tmdb))).map(it => it.ratingKey);
+                    if (tmdbMatches.length > 0) {
+                        matchingRatingKeys.push(...tmdbMatches);
+                    } else {
+                        // High-rating fallback (items rated >= 8.0 in library)
+                        matchingRatingKeys.push(...libraryItems.filter(it => it.rating && it.rating >= 8.0).map(it => it.ratingKey));
+                    }
+                } catch (e) {
+                    matchingRatingKeys.push(...libraryItems.filter(it => it.rating && it.rating >= 8.0).map(it => it.ratingKey));
                 }
             }
         }
@@ -1756,6 +1795,7 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
+        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
 
         // Query active leaving soon items
         const leavingSoonItems = await prisma.mediaContentAdvisory.findMany({
@@ -1767,6 +1807,7 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
 
         const autoHideEmpty = settings?.leavingSoonAutoHideEmpty ?? true;
         const shouldPromote = leavingSoonItems.length > 0 ? (settings?.leavingSoonPromotedToHome ?? true) : !autoHideEmpty;
+        const shouldPromoteRec = leavingSoonItems.length > 0 ? (settings?.leavingSoonPromotedToRecommended ?? true) : !autoHideEmpty;
 
         // Find or create Leaving Soon collection in DB
         let collection = await prisma.mediaCollection.findFirst({
@@ -1786,52 +1827,80 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
                     type: "dynamic",
                     category: "dynamic",
                     serverId,
-                    sectionKey,
+                    sectionKey: String(sectionKey),
                     sourceType: "plex_query",
                     sourceQuery: "tag:leaving-soon",
                     orderIndex: settings?.leavingSoonHomeOrder ?? 0,
                     sortPrefix: "!00_",
                     promotedToHome: shouldPromote,
-                    promotedToRecommended: settings?.leavingSoonPromotedToRecommended ?? true,
+                    promotedToRecommended: shouldPromoteRec,
                     promotedToSharedHome: settings?.leavingSoonPromotedToSharedHome ?? true
                 }
             });
         }
 
+        const leavingRatingKeys = leavingSoonItems.map(it => it.ratingKey);
+
         if (collection) {
+            const secKey = sectionKey || collection.sectionKey;
+            let syncResultRatingKey: string | undefined = collection.ratingKey || undefined;
+
+            if (leavingRatingKeys.length > 0 && secKey) {
+                const syncRes = await syncPlexCollection(
+                    urlsToTry,
+                    token,
+                    secKey,
+                    "⚠️ Leaving Soon",
+                    leavingRatingKeys,
+                    {
+                        summary: "Items scheduled to be removed soon from storage. Watch before they are gone!",
+                        sortTitle: "!00_LeavingSoon",
+                        promotedToHome: shouldPromote,
+                        promotedToRecommended: shouldPromoteRec,
+                        promotedToSharedHome: settings?.leavingSoonPromotedToSharedHome ?? true,
+                        collectionMode: "showItems"
+                    }
+                );
+                if (syncRes.collectionRatingKey) {
+                    syncResultRatingKey = syncRes.collectionRatingKey;
+                }
+            } else if (collection.ratingKey && secKey) {
+                // 0 items: Update promotion and hide if configured
+                await updatePlexCollectionPromotionAndOrder(
+                    urlsToTry,
+                    token,
+                    secKey,
+                    collection.ratingKey,
+                    {
+                        sortTitle: "!00_LeavingSoon",
+                        promotedToHome: shouldPromote,
+                        promotedToRecommended: shouldPromoteRec,
+                        promotedToSharedHome: false,
+                        collectionMode: shouldPromote ? "default" : "hide"
+                    }
+                );
+            }
+
             await prisma.mediaCollection.update({
                 where: { id: collection.id },
                 data: {
                     itemCount: leavingSoonItems.length,
                     promotedToHome: shouldPromote,
+                    promotedToRecommended: shouldPromoteRec,
                     orderIndex: settings?.leavingSoonHomeOrder ?? 0,
-                    sortPrefix: "!00_"
+                    sortPrefix: "!00_",
+                    ratingKey: syncResultRatingKey,
+                    lastSyncedAt: new Date()
                 }
             });
-
-            if (collection.ratingKey && serverUrl && collection.sectionKey) {
-                await updatePlexCollectionPromotionAndOrder(
-                    serverUrl,
-                    token,
-                    collection.sectionKey,
-                    collection.ratingKey,
-                    {
-                        sortTitle: "!00_LeavingSoon",
-                        promotedToHome: shouldPromote,
-                        promotedToRecommended: settings?.leavingSoonPromotedToRecommended ?? true,
-                        promotedToSharedHome: settings?.leavingSoonPromotedToSharedHome ?? true
-                    }
-                );
-            } else if (leavingSoonItems.length > 0 && collection.sectionKey) {
-                await syncCollectionToPlexAction(collection.id).catch(() => {});
-            }
         }
 
         return {
             success: true,
             leavingCount: leavingSoonItems.length,
             promotedToHome: shouldPromote,
-            message: `Leaving Soon collection synced: ${leavingSoonItems.length} items (${shouldPromote ? "Promoted to Home #1" : "Hidden from Home"}).`
+            promotedToRecommended: shouldPromoteRec,
+            message: `Leaving Soon collection synced: ${leavingSoonItems.length} items (${shouldPromote ? "Promoted to Home & Recommended" : "Hidden from Home"}).`
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -2635,6 +2704,115 @@ export async function saveOverlayRuleAction(data: {
     }
 }
 
+/**
+ * Loads the active overlay rules and custom badges from the database to create a complete OverlayOptions object,
+ * ensuring all badges (4K, HDR, DV, Atmos, audio codecs, ribbons, custom badges) are preserved when adding Leaving Soon banners.
+ */
+export async function getActiveOverlayOptionsHelper(
+    serverId?: string,
+    sectionKey?: string,
+    overrides: Partial<OverlayOptions> = {}
+): Promise<OverlayOptions> {
+    const activeCustomBadges = await prisma.customBadge.findMany({
+        where: { enabled: true }
+    }).catch(() => []);
+
+    const rule = await prisma.mediaOverlayRule.findFirst({
+        where: {
+            enabled: true,
+            ...(serverId ? { serverId } : {}),
+            ...(sectionKey ? { sectionKey: String(sectionKey) } : {})
+        }
+    }) || (serverId ? await prisma.mediaOverlayRule.findFirst({ where: { enabled: true, serverId } }) : null)
+       || await prisma.mediaOverlayRule.findFirst({ where: { enabled: true }, orderBy: { updatedAt: "desc" } });
+
+    let ruleRibbonMode: "single" | "tiered" | "auto_stack" | "waterfall" = "waterfall";
+    let ruleTieredRibbons: any[] | undefined;
+    let ruleMaxRibbonTiers = 3;
+    let ruleDovetail = true;
+
+    if (rule?.layerPriorityOrder) {
+        try {
+            const parsed = JSON.parse(rule.layerPriorityOrder);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                if (parsed.ribbonMode) ruleRibbonMode = parsed.ribbonMode;
+                if (parsed.tieredRibbons) ruleTieredRibbons = parsed.tieredRibbons;
+                if (parsed.maxRibbonTiers) ruleMaxRibbonTiers = parsed.maxRibbonTiers;
+                if (parsed.dovetailResolutionHdr !== undefined) ruleDovetail = parsed.dovetailResolutionHdr;
+            }
+        } catch (e) {}
+    }
+
+    let ruleCategoryScales: Record<string, number> | undefined;
+    if ((rule as any)?.categoryScales) {
+        try {
+            ruleCategoryScales = typeof (rule as any).categoryScales === "string" ? JSON.parse((rule as any).categoryScales) : (rule as any).categoryScales;
+        } catch (e) {}
+    }
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+
+    const defaultRibbons = [
+        { id: "tier-1", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold", enabled: true },
+        { id: "tier-2", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson", enabled: true },
+        { id: "tier-3", type: "auto_quality", text: "4K UHD", theme: "purple", enabled: true },
+        { id: "tier-4", type: "auto_edition", text: "SPECIAL EDITION", theme: "cyan", enabled: true }
+    ];
+
+    const baseOptions: OverlayOptions = {
+        showResolution: rule?.showResolution ?? true,
+        showHdr: rule?.showHdr ?? true,
+        showAudio: rule?.showAudio ?? true,
+        showAudioChannels: rule?.showAudioChannels ?? false,
+        showCodec: rule?.showCodec ?? false,
+        showEdition: rule?.showEdition ?? false,
+        showStudio: rule?.showStudio ?? false,
+        showContentRating: rule?.showContentRating ?? true,
+        showRatings: rule?.showRatings ?? false,
+        showLeavingSoon: rule?.showLeavingSoon ?? true,
+        position: (rule?.position as any) || "top-right",
+        videoPosition: (rule?.videoPosition as any) || (rule?.position as any) || "top-right",
+        audioPosition: (rule?.audioPosition as any) || "top-left",
+        editionPosition: (rule?.editionPosition as any) || "top-left",
+        ratingPosition: (rule?.ratingPosition as any) || "bottom-left",
+        resolutionPosition: (rule?.resolutionPosition as any) || (rule?.videoPosition as any) || (rule?.position as any) || "top-right",
+        hdrPosition: (rule?.hdrPosition as any) || (rule?.videoPosition as any) || (rule?.position as any) || "top-right",
+        codecPosition: (rule?.codecPosition as any) || (rule?.videoPosition as any) || (rule?.position as any) || "top-right",
+        channelsPosition: (rule?.channelsPosition as any) || (rule?.audioPosition as any) || "top-left",
+        studioPosition: (rule?.studioPosition as any) || "bottom-left",
+        contentRatingPosition: (rule?.contentRatingPosition as any) || (rule?.ratingPosition as any) || "bottom-left",
+        ratingsPosition: (rule?.ratingsPosition as any) || (rule?.ratingPosition as any) || "bottom-right",
+        showRibbon: rule?.showRibbon ?? true,
+        ribbonMode: ruleRibbonMode,
+        tieredRibbons: ruleTieredRibbons || defaultRibbons,
+        maxRibbonTiers: ruleMaxRibbonTiers,
+        ribbonPosition: (rule?.ribbonPosition as any) || "bottom-right",
+        ribbonTheme: (rule?.ribbonTheme as any) || "gold",
+        ribbonText: rule?.ribbonText || undefined,
+        ribbonType: (rule?.ribbonType as any) || "auto_quality",
+        theme: (rule?.theme as any) || "glass",
+        dovetailResolutionHdr: ruleDovetail,
+        badgeScale: (rule?.badgeScale as number) || 1.0,
+        categoryScales: ruleCategoryScales,
+        customBadges: activeCustomBadges.map(cb => ({
+            id: cb.id,
+            name: cb.name,
+            category: cb.category,
+            matchRule: cb.matchRule,
+            filePath: cb.filePath,
+            position: cb.position,
+            width: cb.width,
+            height: cb.height,
+            opacity: cb.opacity
+        })),
+        placeholderPosition: settings?.pruneBannerPosition || "bottom",
+        placeholderTheme: settings?.pruneBannerTheme || "crimson-red",
+        placeholderText: settings?.pruneBannerText || "LEAVING ON {date}"
+    };
+
+    return { ...baseOptions, ...overrides };
+}
+
 export async function applyOverlaysToLibraryInternal(
     serverId: string, 
     sectionKey: string, 
@@ -3084,6 +3262,9 @@ export async function unmarkItemLeavingSoonAction(ratingKey: string, serverId: s
             await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, ratingKey).catch(() => {});
         }
 
+        // Sync Leaving Soon collection & home hub
+        await syncLeavingSoonCollectionHubInternal(serverId).catch(() => {});
+
         return { success: true, message: "Removed leaving soon flag." };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -3390,6 +3571,9 @@ export async function recheckLeavingSoonWatchActivityAction(targetServerId?: str
         }
 
         if (unflaggedItems.length > 0) {
+            for (const sId of Object.keys(byServer)) {
+                await syncLeavingSoonCollectionHubInternal(sId).catch(() => {});
+            }
             logger.addLog("SUCCESS", "CURATION", `🎉 Unflagged ${unflaggedItems.length} items from Leaving Soon due to detected watch activity!`, unflaggedItems.map(i => `${i.title} (${i.reason})`).join(" • "));
         }
 
@@ -3548,6 +3732,9 @@ export async function executePruneAction(
         tagCollection?: boolean;
         daysNotice?: number;
         reason?: string;
+        bannerText?: string;
+        bannerTheme?: string;
+        bannerPosition?: string;
     } = {}
 ) {
     await verifyAdmin();
@@ -3563,6 +3750,9 @@ export async function executePruneAction(
         const shouldApplyOverlay = options.applyOverlay ?? settings?.pruneApplyOverlays ?? true;
         const daysNotice = options.daysNotice ?? settings?.pruneDaysNotice ?? 14;
         const reason = options.reason || `Storage capacity optimization (${daysNotice}-day notice)`;
+        const bannerText = options.bannerText || settings?.pruneBannerText || "LEAVING ON {date}";
+        const bannerTheme = options.bannerTheme || settings?.pruneBannerTheme || "crimson-red";
+        const bannerPosition = options.bannerPosition || settings?.pruneBannerPosition || "bottom";
 
         const enabledServersForOverlays: string[] = settings?.enabledServersForOverlays 
             ? JSON.parse(settings.enabledServersForOverlays) 
@@ -3572,12 +3762,18 @@ export async function executePruneAction(
             : [];
 
         const results: { ratingKey: string; title: string; serverName: string; action: string; success: boolean }[] = [];
+        const affectedServerSections = new Map<string, Set<string>>();
 
         for (const it of items) {
             const resolved = await resolveWorkingPlexServerConnection(it.serverId);
             const serverUrl = resolved?.serverUrl || "";
             const serverName = resolved?.serverName || it.serverId;
             const serverToken = resolved?.token || token;
+
+            if (it.serverId && it.sectionKey) {
+                if (!affectedServerSections.has(it.serverId)) affectedServerSections.set(it.serverId, new Set());
+                affectedServerSections.get(it.serverId)!.add(String(it.sectionKey));
+            }
 
             // 1. If dry run or deletion not explicitly armed, flag as Leaving Soon and stage
             if (isDryRun || !isMasterEnabled) {
@@ -3601,42 +3797,27 @@ export async function executePruneAction(
                     }
                 });
 
-                // Tag Plex collection if server enabled
-                const canTagCollection = enabledServersForCollections.length === 0 || enabledServersForCollections.includes(it.serverId);
-                if (shouldTagCollection && canTagCollection && serverUrl && it.sectionKey) {
-                    await syncPlexCollection(
-                        serverUrl,
-                        serverToken,
-                        it.sectionKey,
-                        "⚠️ Leaving Soon",
-                        [it.ratingKey],
-                        {
-                            summary: "These items are scheduled to be removed soon to free up disk space. Watch them while you can!",
-                            sortTitle: "!000_LeavingSoon"
-                        }
-                    );
-                }
-
-                // Apply overlay if server enabled
+                // Apply overlay preserving all active badges (4K, HDR, DV, Atmos, Audio, Custom Badges, etc.)
                 const canApplyOverlay = enabledServersForOverlays.length === 0 || enabledServersForOverlays.includes(it.serverId);
-                if (shouldApplyOverlay && canApplyOverlay && serverUrl && it.sectionKey) {
-                    const mediaItems = await getPlexLibraryMediaItems(serverUrl, serverToken, it.sectionKey, 50);
-                    const matched = mediaItems.find(m => m.ratingKey === it.ratingKey);
+                if (shouldApplyOverlay && canApplyOverlay && serverUrl) {
+                    const matched = await getPlexSingleItemMetadata(serverUrl, serverToken, it.ratingKey);
                     if (matched) {
                         matched.isLeavingSoon = true;
+                        const overlayOpts = await getActiveOverlayOptionsHelper(it.serverId, it.sectionKey, {
+                            showLeavingSoon: true,
+                            leavingSoonDays: daysNotice,
+                            placeholderText: bannerText,
+                            placeholderTheme: bannerTheme,
+                            placeholderPosition: bannerPosition
+                        });
+
                         await backupAndApplyOverlay(
                             serverUrl,
                             serverToken,
                             it.serverId,
                             matched,
-                            {
-                                showLeavingSoon: true,
-                                leavingSoonDays: daysNotice,
-                                placeholderText: `LEAVING IN ${daysNotice} DAYS`,
-                                placeholderTheme: "crimson-red",
-                                placeholderPosition: "bottom",
-                                position: "bottom-center"
-                            }
+                            overlayOpts,
+                            true
                         );
                     }
                 }
@@ -3668,6 +3849,18 @@ export async function executePruneAction(
                     action: deleted ? "Permanently deleted from disk & Plex library" : "Failed to delete from Plex",
                     success: deleted
                 });
+            }
+        }
+
+        // Sync Leaving Soon collection across all affected server sections
+        if (shouldTagCollection) {
+            for (const [sId, secKeys] of affectedServerSections.entries()) {
+                const canTagColl = enabledServersForCollections.length === 0 || enabledServersForCollections.includes(sId);
+                if (canTagColl) {
+                    for (const secKey of secKeys) {
+                        await syncLeavingSoonCollectionHubInternal(sId, secKey).catch(() => {});
+                    }
+                }
             }
         }
 

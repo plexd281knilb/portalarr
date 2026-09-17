@@ -1016,6 +1016,55 @@ export async function getPlexLibraryMediaItems(
 }
 
 /**
+ * Fetches single item metadata directly from Plex by ratingKey, with full stream analysis and detected badges.
+ */
+export async function getPlexSingleItemMetadata(
+    serverUrlOrCandidates: string | string[],
+    token: string,
+    ratingKey: string | number
+): Promise<PlexMediaStreamInfo | null> {
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        const url = `${cleanBase}/library/metadata/${encodeURIComponent(String(ratingKey))}?includeGuids=1&includeAdvanced=1&includeMeta=1&includeStreams=1&X-Plex-Token=${encodeURIComponent(token)}`;
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const res = await fetch(url, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controller.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                const text = await res.text();
+                const trimmed = text.trim();
+                let metadata: any[] = [];
+                if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                    try {
+                        const data = JSON.parse(trimmed);
+                        const m = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || data.MediaContainer?.Video || [];
+                        metadata = Array.isArray(m) ? m : [m];
+                    } catch (e) {}
+                }
+                if (metadata.length === 0 && (trimmed.includes("<MediaContainer") || trimmed.includes("<Video") || trimmed.includes("<Directory"))) {
+                    metadata = parsePlexXmlMetadata(trimmed);
+                }
+                if (metadata.length > 0 && metadata[0]) {
+                    return analyzeMediaStreamInfo(metadata[0]);
+                }
+            }
+        } catch (e: any) {}
+    }
+    return null;
+}
+
+/**
  * Fetches existing Plex collections, smart collections, and section hubs for a library section.
  */
 export async function getPlexLibraryCollections(
@@ -1584,13 +1633,22 @@ export async function syncPlexCollection(
         const firstKey = itemRatingKeys[0];
         for (const cleanBase of urlsToTry) {
             if (collectionRatingKey) break;
-            const tagUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?type=1&id=${encodeURIComponent(firstKey)}&collection%5B0%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
             try {
-                const tagRes = await fetch(tagUrl, {
+                // Try direct metadata tagging first (works across both Movies & TV)
+                const directMetaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(firstKey)}?collection%5B0%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
+                const metaRes = await fetch(directMetaUrl, {
                     method: "PUT",
                     headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
                 });
-                if (tagRes.ok) {
+
+                // Also try section update
+                const secTagUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?id=${encodeURIComponent(firstKey)}&collection%5B0%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
+                await fetch(secTagUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                }).catch(() => {});
+
+                if (metaRes.ok) {
                     const refreshed = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
                     const found = refreshed.find(c => c.title.toLowerCase() === collectionTitle.toLowerCase());
                     if (found) {
@@ -1624,72 +1682,22 @@ export async function syncPlexCollection(
         }
     }
 
-    // 3. Update collection summary, sort title, collectionMode, and Home Promotion if rating key resolved
+    // 3. Update collection summary, sort title, collectionMode, and Home & Recommended Promotion
     if (collectionRatingKey) {
-        for (const cleanBase of urlsToTry) {
-            try {
-                const params = new URLSearchParams();
-                params.set("type", "18"); // Collection metadata type
-                params.set("id", collectionRatingKey);
-                if (options?.summary) {
-                    params.set("summary.value", options.summary);
-                    params.set("summary.locked", "1");
-                }
-                if (options?.sortTitle) {
-                    params.set("titleSort.value", options.sortTitle);
-                    params.set("titleSort.locked", "1");
-                }
-                if (options?.promotedToHome !== undefined) {
-                    params.set("promotedToHome.value", options.promotedToHome ? "1" : "0");
-                    params.set("promotedToHome.locked", "1");
-                }
-                if (options?.promotedToRecommended !== undefined) {
-                    params.set("promotedToRecommended.value", options.promotedToRecommended ? "1" : "0");
-                    params.set("promotedToRecommended.locked", "1");
-                }
-                if (options?.promotedToSharedHome !== undefined) {
-                    params.set("promotedToSharedHome.value", options.promotedToSharedHome ? "1" : "0");
-                    params.set("promotedToSharedHome.locked", "1");
-                }
-                if (options?.collectionMode !== undefined) {
-                    let modeVal = "-1";
-                    if (options.collectionMode === "hide" || options.collectionMode === "1") modeVal = "1";
-                    else if (options.collectionMode === "hideItems" || options.collectionMode === "2") modeVal = "2";
-                    else if (options.collectionMode === "showItems" || options.collectionMode === "3") modeVal = "3";
-                    else if (options.collectionMode === "default" || options.collectionMode === "-1" || options.collectionMode === "0") modeVal = "-1";
-                    params.set("collectionMode.value", modeVal);
-                    params.set("collectionMode.locked", "1");
-                }
-                params.set("X-Plex-Token", token);
-
-                const res = await fetch(`${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}`, {
-                    method: "PUT",
-                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-                });
-
-                // Also try metadata endpoint directly
-                await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}?${params.toString()}`, {
-                    method: "PUT",
-                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-                }).catch(() => {});
-
-                // Also update home promotion prefs
-                if (options?.promotedToHome !== undefined || options?.promotedToRecommended !== undefined || options?.promotedToSharedHome !== undefined) {
-                    const prefsParams = new URLSearchParams();
-                    if (options.promotedToHome !== undefined) prefsParams.set("promotedToHome", options.promotedToHome ? "1" : "0");
-                    if (options.promotedToRecommended !== undefined) prefsParams.set("promotedToRecommended", options.promotedToRecommended ? "1" : "0");
-                    if (options.promotedToSharedHome !== undefined) prefsParams.set("promotedToSharedHome", options.promotedToSharedHome ? "1" : "0");
-                    prefsParams.set("X-Plex-Token", token);
-
-                    await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}/prefs?${prefsParams.toString()}`, {
-                        method: "PUT",
-                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-                    }).catch(() => {});
-                }
-
-                if (res.ok) break;
-            } catch (e) {}
-        }
+        await updatePlexCollectionPromotionAndOrder(
+            urlsToTry,
+            token,
+            sectionKey,
+            collectionRatingKey,
+            {
+                summary: options?.summary,
+                sortTitle: options?.sortTitle,
+                promotedToHome: options?.promotedToHome ?? true,
+                promotedToRecommended: options?.promotedToRecommended ?? true,
+                promotedToSharedHome: options?.promotedToSharedHome ?? true,
+                collectionMode: options?.collectionMode || "default"
+            }
+        );
     }
 
     // 4. Upload custom collection poster if provided
@@ -1717,6 +1725,7 @@ export async function updatePlexCollectionPromotionAndOrder(
     collectionRatingKey: string,
     options: {
         sortTitle?: string;
+        summary?: string;
         promotedToHome?: boolean;
         promotedToRecommended?: boolean;
         promotedToSharedHome?: boolean;
@@ -1736,6 +1745,10 @@ export async function updatePlexCollectionPromotionAndOrder(
             params.set("type", "18"); // Collection
             params.set("id", collectionRatingKey);
 
+            if (options.summary) {
+                params.set("summary.value", options.summary);
+                params.set("summary.locked", "1");
+            }
             if (options.sortTitle) {
                 params.set("titleSort.value", options.sortTitle);
                 params.set("titleSort.locked", "1");
@@ -1792,6 +1805,31 @@ export async function updatePlexCollectionPromotionAndOrder(
                     method: "PUT",
                     headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
                 }).catch(() => {});
+
+                // Hit Plex modern Section Hub management endpoints for Recommended & Home visibility
+                const recVal = options.promotedToRecommended ? "1" : "0";
+                const homeVal = options.promotedToHome ? "1" : "0";
+                const sharedVal = options.promotedToSharedHome ? "1" : "0";
+
+                const hubManageUrls = [
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?identifier=custom.collection.${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?identifier=collection.${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?id=${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/promoted/manage?identifier=custom.collection.${encodeURIComponent(collectionRatingKey)}&promotedToRecommended=${recVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`
+                ];
+
+                for (const hUrl of hubManageUrls) {
+                    try {
+                        await fetch(hUrl, {
+                            method: "POST",
+                            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                        });
+                        await fetch(hUrl, {
+                            method: "PUT",
+                            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                        });
+                    } catch (e) {}
+                }
             }
 
             if (res.ok) return { success: true };

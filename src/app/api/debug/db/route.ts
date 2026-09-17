@@ -26,14 +26,14 @@ export async function GET(req: NextRequest) {
 
         const dbUrl = process.env.DATABASE_URL || "";
         const rawPath = dbUrl.replace("file:", "").trim();
-        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(/*turbopackIgnore: true*/ process.cwd(), rawPath);
 
         const targetExists = fs.existsSync(targetPath);
         const targetSize = targetExists ? fs.statSync(targetPath).size : 0;
 
         const candidatePaths = [
-            path.join(process.cwd(), "prisma", "dev.db"),
-            path.join(process.cwd(), "dev.db"),
+            path.join(/*turbopackIgnore: true*/ process.cwd(), "prisma", "dev.db"),
+            path.join(/*turbopackIgnore: true*/ process.cwd(), "dev.db"),
             "/app/prisma/dev.db",
             "/app/dev.db"
         ];

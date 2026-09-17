@@ -74,14 +74,14 @@ import {
 } from "@/app/curation-actions";
 
 export const PRUNE_BANNER_PRESETS = [
-    { id: "leaving_date", label: "⚠️ Leaving on {date} (Bottom)", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const },
-    { id: "leaving_days", label: "⏳ Leaving in {days} Days (Lower 3rd)", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "lower_third" as const },
-    { id: "leaving_soon", label: "⚠️ Leaving Soon (45° Corner)", defaultText: "LEAVING SOON", theme: "crimson-red", pos: "corner" as const },
-    { id: "middle_banner", label: "⚠️ Leaving Soon (Middle / Center)", defaultText: "LEAVING SOON • {days} DAYS LEFT", theme: "crimson-red", pos: "middle" as const },
-    { id: "upper_third", label: "⏳ Prune Warning (Upper 3rd)", defaultText: "UNWATCHED • LEAVING SOON", theme: "amber-gold", pos: "upper_third" as const },
-    { id: "top_banner", label: "📦 Storage Cleanup (Top)", defaultText: "STORAGE CLEANUP: {reason}", theme: "indigo-purple", pos: "top" as const },
-    { id: "unwatched_warning", label: "👀 Unwatched Grace Period ({days} Days)", defaultText: "UNWATCHED • {days} DAYS LEFT", theme: "amber-gold", pos: "lower_third" as const },
-    { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} • {status}", theme: "cyber-neon", pos: "bottom" as const }
+    { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red" },
+    { id: "leaving_days", label: "⏳ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red" },
+    { id: "leaving_soon", label: "⚠️ Leaving Soon", defaultText: "LEAVING SOON", theme: "crimson-red" },
+    { id: "middle_banner", label: "⚠️ Leaving Soon & Days Left", defaultText: "LEAVING SOON • {days} DAYS LEFT", theme: "crimson-red" },
+    { id: "upper_third", label: "⏳ Prune Warning", defaultText: "UNWATCHED • LEAVING SOON", theme: "amber-gold" },
+    { id: "top_banner", label: "📦 Storage Cleanup", defaultText: "STORAGE CLEANUP: {reason}", theme: "indigo-purple" },
+    { id: "unwatched_warning", label: "👀 Unwatched Grace Period", defaultText: "UNWATCHED • {days} DAYS LEFT", theme: "amber-gold" },
+    { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} • {status}", theme: "cyber-neon" }
 ];
 
 interface PlexServerItem {
@@ -374,6 +374,28 @@ export function PruneStudio() {
     const [simTemplateStatus, setSimTemplateStatus] = useState<string>("Leaving Soon");
     const [simPreviewDataUrl, setSimPreviewDataUrl] = useState<string | null>(null);
     const [simPreviewLoading, setSimPreviewLoading] = useState<boolean>(false);
+    const [savingBannerConfig, setSavingBannerConfig] = useState<boolean>(false);
+    const [bannerConfigSavedMsg, setBannerConfigSavedMsg] = useState<boolean>(false);
+
+    const handleSaveBannerConfig = async () => {
+        setSavingBannerConfig(true);
+        setBannerConfigSavedMsg(false);
+        try {
+            const res = await saveCurationSettingsAction({
+                pruneBannerPosition: simBannerPosition,
+                pruneBannerTheme: simBannerTheme,
+                pruneBannerText: simBannerText
+            });
+            if (res.success) {
+                setBannerConfigSavedMsg(true);
+                setTimeout(() => setBannerConfigSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving banner configuration:", e);
+        } finally {
+            setSavingBannerConfig(false);
+        }
+    };
 
     const getInterpolatedSimText = (template: string) => {
         if (!template) return "";
@@ -502,6 +524,26 @@ export function PruneStudio() {
                     if (settingsRes.pruneMinAgeDays !== undefined) setPruneMinAgeDaysSetting(settingsRes.pruneMinAgeDays);
                     if (settingsRes.pruneDaysNotice !== undefined) setPruneDaysNoticeSetting(settingsRes.pruneDaysNotice);
                     if (settingsRes.pruneUnwatchedOnly !== undefined) setPruneUnwatchedOnlySetting(settingsRes.pruneUnwatchedOnly);
+
+                    const initPos = settingsRes.pruneBannerPosition || "bottom";
+                    const initTheme = settingsRes.pruneBannerTheme || "crimson-red";
+                    const initText = settingsRes.pruneBannerText || "LEAVING ON {date}";
+                    if (settingsRes.pruneBannerPosition) setSimBannerPosition(settingsRes.pruneBannerPosition as any);
+                    if (settingsRes.pruneBannerTheme) setSimBannerTheme(settingsRes.pruneBannerTheme);
+                    if (settingsRes.pruneBannerText) setSimBannerText(settingsRes.pruneBannerText);
+
+                    generatePrunePreview(
+                        null,
+                        "Sample Media",
+                        simBannerType,
+                        initText,
+                        initTheme,
+                        initPos as any,
+                        simTemplateDate,
+                        simTemplateDays,
+                        simTemplateReason,
+                        simTemplateStatus
+                    );
                 }
 
                 const vaultRes = await getArtBackupAndBadgeStatsAction();
@@ -688,7 +730,10 @@ export function PruneStudio() {
                 forceLiveDelete,
                 applyOverlay: true,
                 tagCollection: true,
-                daysNotice: simGracePeriodDays || settings.pruneDaysNotice || 14
+                daysNotice: simGracePeriodDays || settings.pruneDaysNotice || 14,
+                bannerText: simBannerText,
+                bannerTheme: simBannerTheme,
+                bannerPosition: simBannerPosition
             });
 
             if (res.success) {
@@ -1474,16 +1519,14 @@ export function PruneStudio() {
                                                 const nextText = found?.defaultText || "LEAVING ON {date}";
                                                 setSimBannerText(nextText);
                                                 const nextTheme = found?.theme || simBannerTheme;
-                                                const nextPos = found?.pos || simBannerPosition;
                                                 if (found?.theme) setSimBannerTheme(found.theme);
-                                                if (found?.pos) setSimBannerPosition(found.pos);
                                                 generatePrunePreview(
                                                     simSelectedRealItem ? simPosterUrl : null,
                                                     simSelectedRealItem?.title || "Sample Media",
                                                     val,
                                                     nextText,
                                                     nextTheme,
-                                                    nextPos,
+                                                    simBannerPosition,
                                                     simTemplateDate,
                                                     simTemplateDays,
                                                     simTemplateReason,
@@ -1699,6 +1742,28 @@ export function PruneStudio() {
                                                 />
                                             </div>
                                         </div>
+                                    </div>
+
+                                    {/* Save Banner Style Button */}
+                                    <div className="pt-2 flex items-center justify-between border-t border-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            {bannerConfigSavedMsg && (
+                                                <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                                    <span>Banner style &amp; position saved!</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            disabled={savingBannerConfig}
+                                            onClick={handleSaveBannerConfig}
+                                            className="h-8 text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold gap-1.5 shadow-md shadow-rose-950/50 cursor-pointer"
+                                        >
+                                            {savingBannerConfig ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                            <span>Save Default Banner Style</span>
+                                        </Button>
                                     </div>
                                 </div>
                             </div>

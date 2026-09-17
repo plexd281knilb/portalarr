@@ -35,8 +35,8 @@ export interface OverlayOptions {
     placeholderDays?: number;
     placeholderDate?: string;
     placeholderText?: string;
-    placeholderTheme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass";
-    placeholderPosition?: "top" | "bottom" | "corner";
+    placeholderTheme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "cyber-neon" | "glass" | "slate-frosted" | string;
+    placeholderPosition?: "top" | "bottom" | "corner" | "lower_third" | "middle" | "upper_third" | string;
     position?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
     
     // Independent Badge Placement Positions
