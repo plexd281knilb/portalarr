@@ -118,6 +118,43 @@ export function PruneStudio() {
     const [runningPruneSync, setRunningPruneSync] = useState(false);
     const [pruneSyncResult, setPruneSyncResult] = useState<{ success: boolean; text: string; details?: string[] } | null>(null);
 
+    // Global Prune & Storage Free Space Threshold States
+    const [leavingSoonDiskThreshold, setLeavingSoonDiskThreshold] = useState<number>(15);
+    const [pruneMinAgeDaysSetting, setPruneMinAgeDaysSetting] = useState<number>(90);
+    const [pruneDaysNoticeSetting, setPruneDaysNoticeSetting] = useState<number>(14);
+    const [pruneUnwatchedOnlySetting, setPruneUnwatchedOnlySetting] = useState<boolean>(true);
+    const [savingThresholds, setSavingThresholds] = useState<boolean>(false);
+    const [thresholdsSavedMsg, setThresholdsSavedMsg] = useState<boolean>(false);
+
+    // Save global pruning & storage thresholds
+    const handleSaveThresholds = async () => {
+        setSavingThresholds(true);
+        setThresholdsSavedMsg(false);
+        try {
+            const res = await saveCurationSettingsAction({
+                leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                pruneDaysNotice: Number(pruneDaysNoticeSetting),
+                pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
+            });
+            if (res.success) {
+                setSettings((prev: any) => ({
+                    ...prev,
+                    leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                    pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                    pruneDaysNotice: Number(pruneDaysNoticeSetting),
+                    pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
+                }));
+                setThresholdsSavedMsg(true);
+                setTimeout(() => setThresholdsSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving pruning thresholds:", e);
+        } finally {
+            setSavingThresholds(false);
+        }
+    };
+
     // Check if a section is enabled for pruning
     const isSectionEnabled = (srvId: string, secKey: string): boolean => {
         if (!enabledServersForPruning || enabledServersForPruning.length === 0) return true;
@@ -461,6 +498,10 @@ export function PruneStudio() {
                     if (settingsRes.enabledServersForPruning) {
                         setEnabledServersForPruning(settingsRes.enabledServersForPruning);
                     }
+                    if (settingsRes.leavingSoonDiskThreshold !== undefined) setLeavingSoonDiskThreshold(settingsRes.leavingSoonDiskThreshold);
+                    if (settingsRes.pruneMinAgeDays !== undefined) setPruneMinAgeDaysSetting(settingsRes.pruneMinAgeDays);
+                    if (settingsRes.pruneDaysNotice !== undefined) setPruneDaysNoticeSetting(settingsRes.pruneDaysNotice);
+                    if (settingsRes.pruneUnwatchedOnly !== undefined) setPruneUnwatchedOnlySetting(settingsRes.pruneUnwatchedOnly);
                 }
 
                 const vaultRes = await getArtBackupAndBadgeStatsAction();
@@ -2187,7 +2228,126 @@ export function PruneStudio() {
                         </Card>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Storage Thresholds & Pruning Policy */}
+                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
+                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <Sliders className="h-5 w-5 text-rose-400" />
+                                <span>Storage &amp; Auto-Pruning Thresholds</span>
+                            </CardTitle>
+                            <p className="text-xs text-slate-400">
+                                Configure the disk capacity trigger threshold and media age limits that govern automated pruning evaluations.
+                            </p>
+
+                            <div className="space-y-3.5 text-xs">
+                                {/* Disk Free Space Trigger Threshold */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
+                                            <span>Free Space Trigger Threshold (% Free):</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-black text-rose-400">
+                                            {leavingSoonDiskThreshold}% Free
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max="50"
+                                            value={leavingSoonDiskThreshold}
+                                            onChange={(e) => setLeavingSoonDiskThreshold(parseInt(e.target.value, 10) || 15)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Auto-pruning evaluates when array free space is below <strong className="text-white">{leavingSoonDiskThreshold}%</strong>.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Default Minimum Media Age */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Calendar className="h-3.5 w-3.5 text-amber-400" />
+                                            <span>Minimum Media Age Threshold:</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-bold text-amber-300">
+                                            {pruneMinAgeDaysSetting} Days
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="3650"
+                                            value={pruneMinAgeDaysSetting}
+                                            onChange={(e) => setPruneMinAgeDaysSetting(parseInt(e.target.value, 10) || 90)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Media must be at least <strong className="text-white">{pruneMinAgeDaysSetting} days old</strong> to qualify.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Advance Notice Grace Period */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Clock className="h-3.5 w-3.5 text-rose-400" />
+                                            <span>Advance Notice Grace Period:</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-bold text-rose-300">
+                                            {pruneDaysNoticeSetting} Days
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max="90"
+                                            value={pruneDaysNoticeSetting}
+                                            onChange={(e) => setPruneDaysNoticeSetting(parseInt(e.target.value, 10) || 14)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Staged in Leaving Soon for <strong className="text-white">{pruneDaysNoticeSetting} days</strong> before deletion.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Unwatched Only Policy */}
+                                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-bold text-slate-200 block">Unwatched Only Policy</span>
+                                        <p className="text-[10px] text-slate-400">
+                                            {pruneUnwatchedOnlySetting ? "Only media with 0 total plays can be pruned." : "Both watched and unwatched media are evaluated."}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={pruneUnwatchedOnlySetting}
+                                        onCheckedChange={setPruneUnwatchedOnlySetting}
+                                    />
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-1">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={savingThresholds}
+                                        onClick={handleSaveThresholds}
+                                        className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs gap-1.5 shadow-md shadow-rose-950/30 cursor-pointer"
+                                    >
+                                        {savingThresholds ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                        <span>Save Thresholds</span>
+                                    </Button>
+                                    {thresholdsSavedMsg && <span className="text-xs text-emerald-400 font-bold">✓ Saved!</span>}
+                                </div>
+                            </div>
+                        </Card>
+
                         {/* Storage Mounts Configuration */}
                         <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
                             <CardTitle className="text-base font-bold text-white flex items-center gap-2">
