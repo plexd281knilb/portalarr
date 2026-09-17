@@ -1015,10 +1015,10 @@ function getBannerThemeColors(theme?: string): {
 function generateBannerSvg(
     text: string,
     theme: string,
-    position: "top" | "bottom" | "corner" = "bottom"
+    position: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | string = "bottom"
 ): { svg: string; width: number; height: number; top: number; left: number } {
     const colors = getBannerThemeColors(theme);
-    const escapedText = text
+    const escapedText = (text || "LEAVING SOON")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -1028,7 +1028,7 @@ function generateBannerSvg(
     if (position === "corner") {
         const size = 520;
         const len = escapedText.length;
-        const fontSize = len > 28 ? 18 : len > 22 ? 21 : len > 16 ? 24 : len > 10 ? 28 : 32;
+        const fontSize = len > 28 ? 20 : len > 22 ? 23 : len > 16 ? 26 : len > 10 ? 30 : 34;
 
         const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -1037,23 +1037,41 @@ function generateBannerSvg(
                     <stop offset="50%" stop-color="${colors.grad2}" />
                     <stop offset="100%" stop-color="${colors.grad3}" />
                 </linearGradient>
-                <filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.85" />
-                </filter>
             </defs>
-            <g filter="url(#ribbonShadow)">
+            <g>
                 <polygon points="120,0 520,400 520,520 0,0" fill="url(#cornerGrad)" />
                 <line x1="120" y1="0" x2="520" y2="400" stroke="${colors.border}" stroke-width="4" />
                 <line x1="0" y1="0" x2="520" y2="520" stroke="${colors.border}" stroke-width="4" />
                 <line x1="60" y1="0" x2="520" y2="460" stroke="${colors.accent}" stroke-width="1.5" stroke-dasharray="8 4" opacity="0.7" />
             </g>
-            <text x="290" y="230" transform="rotate(45 290 230)" 
-                dominant-baseline="central"
-                font-family="Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
+            <!-- Shadow Layer -->
+            <text x="290" y="232" transform="rotate(45 290 232)" 
+                dominant-baseline="middle"
+                alignment-baseline="middle"
+                font-family="'Impact', 'Arial Black', Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
                 font-size="${fontSize}" 
                 font-weight="900" 
                 letter-spacing="2" 
-                fill="${colors.text}" 
+                fill="#000000" 
+                stroke="#000000"
+                stroke-width="5"
+                stroke-linejoin="round"
+                opacity="0.8"
+                text-anchor="middle">
+                ${escapedText}
+            </text>
+            <!-- Crisp Foreground Text -->
+            <text x="290" y="230" transform="rotate(45 290 230)" 
+                dominant-baseline="middle"
+                alignment-baseline="middle"
+                font-family="'Impact', 'Arial Black', Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
+                font-size="${fontSize}" 
+                font-weight="900" 
+                letter-spacing="2" 
+                fill="${colors.text || '#ffffff'}" 
+                stroke="${colors.border || 'none'}"
+                stroke-width="1"
+                paint-order="stroke fill"
                 text-anchor="middle">
                 ${escapedText}
             </text>
@@ -1064,9 +1082,20 @@ function generateBannerSvg(
     const width = 1000;
     const height = 180;
     const isTop = position === "top";
-    const topPos = isTop ? 0 : 1500 - height;
+    
+    // Position Top Offset calculation
+    let topPos = 1500 - height; // default "bottom" = 1320
+    if (position === "top") {
+        topPos = 0;
+    } else if (position === "upper_third") {
+        topPos = 380;
+    } else if (position === "middle" || position === "center") {
+        topPos = Math.round((1500 - height) / 2); // 660
+    } else if (position === "lower_third") {
+        topPos = 1060;
+    }
 
-    const fontSize = escapedText.length > 34 ? 30 : escapedText.length > 22 ? 38 : 46;
+    const fontSize = escapedText.length > 34 ? 32 : escapedText.length > 22 ? 40 : 48;
     const letterSpacing = escapedText.length > 28 ? 2 : 3.5;
 
     const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -1083,9 +1112,6 @@ function generateBannerSvg(
                 <stop offset="75%" stop-color="${colors.accent}" stop-opacity="0.9" />
                 <stop offset="100%" stop-color="${colors.border}" stop-opacity="0.2" />
             </linearGradient>
-            <filter id="textGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.9" />
-            </filter>
         </defs>
         
         <rect x="0" y="0" width="${width}" height="${height}" fill="url(#bannerGrad)" />
@@ -1094,21 +1120,42 @@ function generateBannerSvg(
             ? `<line x1="0" y1="${height - 3}" x2="${width}" y2="${height - 3}" stroke="url(#lineGrad)" stroke-width="5" />
                <line x1="50" y1="${height - 10}" x2="${width - 50}" y2="${height - 10}" stroke="${colors.accent}" stroke-width="1.5" stroke-dasharray="10 5" opacity="0.6" />`
             : `<line x1="0" y1="3" x2="${width}" y2="3" stroke="url(#lineGrad)" stroke-width="5" />
-               <line x1="50" y1="10" x2="${width - 50}" y2="10" stroke="${colors.accent}" stroke-width="1.5" stroke-dasharray="10 5" opacity="0.6" />`
+               <line x1="50" y1="10" x2="${width - 50}" y2="10" stroke="${colors.accent}" stroke-width="1.5" stroke-dasharray="10 5" opacity="0.6" />
+               <line x1="0" y1="${height - 3}" x2="${width}" y2="${height - 3}" stroke="url(#lineGrad)" stroke-width="5" opacity="0.5" />`
         }
 
-        <g filter="url(#textGlow)">
-            <text x="500" y="95" 
-                dominant-baseline="central"
-                font-family="Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
-                font-size="${fontSize}" 
-                font-weight="900" 
-                letter-spacing="${letterSpacing}" 
-                fill="${colors.text}" 
-                text-anchor="middle">
-                ${escapedText}
-            </text>
-        </g>
+        <!-- Drop Shadow Outline Layer -->
+        <text x="500" y="98" 
+            dominant-baseline="middle"
+            alignment-baseline="middle"
+            font-family="'Impact', 'Arial Black', Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
+            font-size="${fontSize}" 
+            font-weight="900" 
+            letter-spacing="${letterSpacing}" 
+            fill="#000000"
+            stroke="#000000"
+            stroke-width="8"
+            stroke-linejoin="round"
+            opacity="0.9"
+            text-anchor="middle">
+            ${escapedText}
+        </text>
+
+        <!-- Crisp High-Contrast Foreground Text Layer -->
+        <text x="500" y="96" 
+            dominant-baseline="middle"
+            alignment-baseline="middle"
+            font-family="'Impact', 'Arial Black', Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
+            font-size="${fontSize}" 
+            font-weight="900" 
+            letter-spacing="${letterSpacing}" 
+            fill="${colors.text || '#ffffff'}" 
+            stroke="${colors.border || '#ffffff'}"
+            stroke-width="1.5"
+            paint-order="stroke fill"
+            text-anchor="middle">
+            ${escapedText}
+        </text>
     </svg>`;
 
     return { svg, width, height, top: topPos, left: 0 };
@@ -1232,7 +1279,7 @@ export async function generatePlaceholderPosterBuffer(
         status?: string;
         reason?: string;
         theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted" | "cyber-neon" | string;
-        position?: "top" | "bottom" | "corner";
+        position?: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | string;
     } = {}
 ): Promise<Buffer> {
     const width = 1000;

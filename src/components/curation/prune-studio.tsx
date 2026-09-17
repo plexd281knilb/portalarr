@@ -68,16 +68,19 @@ import {
     saveServerStorageConfigAction,
     validateDirectoryPathAction,
     getArtBackupAndBadgeStatsAction,
-    getPlaceholderPreviewDataUrlAction
+    getPlaceholderPreviewDataUrlAction,
+    getGlancesDisksAction,
+    recheckLeavingSoonWatchActivityAction
 } from "@/app/curation-actions";
 
 export const PRUNE_BANNER_PRESETS = [
-    { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const },
-    { id: "leaving_days", label: "⏳ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "bottom" as const },
-    { id: "leaving_soon", label: "⚠️ Leaving Soon (Plex Collection)", defaultText: "LEAVING SOON", theme: "crimson-red", pos: "corner" as const },
-    { id: "auto_prune", label: "⏳ Auto-Pruning on {date}", defaultText: "AUTO-PRUNE ON {date}", theme: "amber-gold", pos: "bottom" as const },
-    { id: "storage_cleanup", label: "📦 Storage Reclaim: {reason}", defaultText: "STORAGE CLEANUP: {reason}", theme: "indigo-purple", pos: "bottom" as const },
-    { id: "unwatched_warning", label: "👀 Unwatched Grace Period ({days} Days)", defaultText: "UNWATCHED • {days} DAYS LEFT", theme: "amber-gold", pos: "bottom" as const },
+    { id: "leaving_date", label: "⚠️ Leaving on {date} (Bottom)", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const },
+    { id: "leaving_days", label: "⏳ Leaving in {days} Days (Lower 3rd)", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "lower_third" as const },
+    { id: "leaving_soon", label: "⚠️ Leaving Soon (45° Corner)", defaultText: "LEAVING SOON", theme: "crimson-red", pos: "corner" as const },
+    { id: "middle_banner", label: "⚠️ Leaving Soon (Middle / Center)", defaultText: "LEAVING SOON • {days} DAYS LEFT", theme: "crimson-red", pos: "middle" as const },
+    { id: "upper_third", label: "⏳ Prune Warning (Upper 3rd)", defaultText: "UNWATCHED • LEAVING SOON", theme: "amber-gold", pos: "upper_third" as const },
+    { id: "top_banner", label: "📦 Storage Cleanup (Top)", defaultText: "STORAGE CLEANUP: {reason}", theme: "indigo-purple", pos: "top" as const },
+    { id: "unwatched_warning", label: "👀 Unwatched Grace Period ({days} Days)", defaultText: "UNWATCHED • {days} DAYS LEFT", theme: "amber-gold", pos: "lower_third" as const },
     { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} • {status}", theme: "cyber-neon", pos: "bottom" as const }
 ];
 
@@ -254,6 +257,36 @@ export function PruneStudio() {
     const [clearingFlags, setClearingFlags] = useState(false);
     const [clearFlagsMsg, setClearFlagsMsg] = useState<string | null>(null);
 
+    // Recheck Watch Activity State
+    const [recheckingWatchActivity, setRecheckingWatchActivity] = useState(false);
+    const [recheckWatchResult, setRecheckWatchResult] = useState<{
+        success: boolean;
+        message: string;
+        checkedCount?: number;
+        unflaggedCount?: number;
+        unflaggedItems?: Array<{ ratingKey: string; title: string; reason: string }>;
+    } | null>(null);
+
+    // Glances Storage Disks & Live Capacity
+    const [glancesDisks, setGlancesDisks] = useState<Array<{
+        id: string;
+        instanceId: string;
+        instanceName: string;
+        mntPoint: string;
+        deviceName: string;
+        fsType: string;
+        sizeBytes: number;
+        usedBytes: number;
+        freeBytes: number;
+        totalGb: number;
+        usedGb: number;
+        freeGb: number;
+        percent: number;
+        isOnline: boolean;
+    }>>([]);
+    const [selectedGlancesDiskId, setSelectedGlancesDiskId] = useState<string>("");
+    const [glancesLoading, setGlancesLoading] = useState<boolean>(false);
+
     // Manual Leaving Soon Modal
     const [manualFlagModalOpen, setManualFlagModalOpen] = useState(false);
     const [manualRatingKey, setManualRatingKey] = useState("");
@@ -262,10 +295,14 @@ export function PruneStudio() {
     const [manualReason, setManualReason] = useState("Storage capacity threshold optimization");
     const [flaggingItem, setFlaggingItem] = useState(false);
 
-    // Simulation States
-    const [simMinAgeDays, setSimMinAgeDays] = useState(90);
-    const [simUnwatchedOnly, setSimUnwatchedOnly] = useState(true);
-    const [simMaxCandidates, setSimMaxCandidates] = useState(50);
+    // Simulation & Oldest Files Explorer States
+    const [simSortBy, setSimSortBy] = useState<"oldest_added" | "oldest_watched" | "oldest_modified" | "largest_size" | "least_plays">("oldest_added");
+    const [simOldestLimit, setSimOldestLimit] = useState<number>(50);
+    const [simBatchFlagAmount, setSimBatchFlagAmount] = useState<number>(10);
+    const [simGracePeriodDays, setSimGracePeriodDays] = useState<number>(14);
+    const [simFilterSearch, setSimFilterSearch] = useState<string>("");
+    const [simMinAgeDays, setSimMinAgeDays] = useState(30);
+    const [simUnwatchedOnly, setSimUnwatchedOnly] = useState(false);
     const [simulatingPrune, setSimulatingPrune] = useState(false);
     const [pruneSimResults, setPruneSimResults] = useState<{
         candidates: any[];
@@ -293,7 +330,7 @@ export function PruneStudio() {
     const [simBannerType, setSimBannerType] = useState<string>("leaving_date");
     const [simBannerText, setSimBannerText] = useState<string>("LEAVING ON {date}");
     const [simBannerTheme, setSimBannerTheme] = useState<string>("crimson-red");
-    const [simBannerPosition, setSimBannerPosition] = useState<"bottom" | "top" | "corner">("bottom");
+    const [simBannerPosition, setSimBannerPosition] = useState<"bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner">("bottom");
     const [simTemplateDate, setSimTemplateDate] = useState<string>("10/31/2026");
     const [simTemplateDays, setSimTemplateDays] = useState<number>(14);
     const [simTemplateReason, setSimTemplateReason] = useState<string>("Unwatched for 180+ Days");
@@ -431,7 +468,10 @@ export function PruneStudio() {
                     setVaultStats(vaultRes as any);
                 }
 
-                await loadLeavingSoonItems();
+                await Promise.all([
+                    loadLeavingSoonItems(),
+                    loadGlancesDisks()
+                ]);
             } catch (err) {
                 console.error("Failed loading Maintainerr Prune studio data:", err);
             } finally {
@@ -441,6 +481,23 @@ export function PruneStudio() {
 
         loadInitialData();
     }, []);
+
+    const loadGlancesDisks = async () => {
+        setGlancesLoading(true);
+        try {
+            const res = await getGlancesDisksAction();
+            if (res.success && Array.isArray(res.disks)) {
+                setGlancesDisks(res.disks);
+                if (res.disks.length > 0 && !selectedGlancesDiskId) {
+                    setSelectedGlancesDiskId(res.disks[0].id);
+                }
+            }
+        } catch (e) {
+            console.error("Failed loading Glances disks:", e);
+        } finally {
+            setGlancesLoading(false);
+        }
+    };
 
     const loadLeavingSoonItems = async (srvId = selectedServerId) => {
         setLeavingSoonLoading(true);
@@ -453,6 +510,39 @@ export function PruneStudio() {
             console.error("Failed loading leaving soon items:", e);
         } finally {
             setLeavingSoonLoading(false);
+        }
+    };
+
+    // Recheck watch activity across flagged Leaving Soon items
+    const handleRecheckWatchActivity = async () => {
+        setRecheckingWatchActivity(true);
+        setRecheckWatchResult(null);
+        try {
+            const res = await recheckLeavingSoonWatchActivityAction(selectedServerId || undefined);
+            if (res.success) {
+                setRecheckWatchResult({
+                    success: true,
+                    message: res.message || "Watch activity recheck completed.",
+                    checkedCount: res.checkedCount,
+                    unflaggedCount: res.unflaggedCount,
+                    unflaggedItems: res.unflaggedItems
+                });
+                if ((res.unflaggedCount ?? 0) > 0) {
+                    await loadLeavingSoonItems();
+                }
+            } else {
+                setRecheckWatchResult({
+                    success: false,
+                    message: res.error || "Failed rechecking watch activity."
+                });
+            }
+        } catch (e: any) {
+            setRecheckWatchResult({
+                success: false,
+                message: e.message || "An error occurred during watch activity recheck."
+            });
+        } finally {
+            setRecheckingWatchActivity(false);
         }
     };
 
@@ -495,6 +585,14 @@ export function PruneStudio() {
         }
     };
 
+    // Helper: Select first N candidate items
+    const handleSelectFirstNCandidates = (count: number) => {
+        if (!pruneSimResults?.candidates) return;
+        const targetList = pruneSimResults.candidates;
+        const toSelect = count === 0 ? targetList : targetList.slice(0, count);
+        setSelectedCandidateKeys(toSelect.map((c: any) => c.ratingKey));
+    };
+
     // Run Prune Simulation Sandbox
     const handleRunSimulation = async () => {
         setSimulatingPrune(true);
@@ -504,13 +602,15 @@ export function PruneStudio() {
             const res = await runPruneSimulationAction(selectedServerId, {
                 minAgeDays: simMinAgeDays,
                 unwatchedOnly: simUnwatchedOnly,
-                maxCandidates: simMaxCandidates
-            });
+                maxCandidates: simOldestLimit === 0 ? 500 : simOldestLimit,
+                sortBy: simSortBy
+            }, selectedSectionKey || undefined);
 
             if (res.success) {
                 setPruneSimResults(res as any);
                 if (res.candidates && res.candidates.length > 0) {
-                    setSelectedCandidateKeys(res.candidates.map((c: any) => c.ratingKey));
+                    const defaultBatch = simBatchFlagAmount === 0 ? res.candidates.length : Math.min(simBatchFlagAmount, res.candidates.length);
+                    setSelectedCandidateKeys(res.candidates.slice(0, defaultBatch).map((c: any) => c.ratingKey));
                 }
             }
         } catch (e) {
@@ -525,8 +625,8 @@ export function PruneStudio() {
         if (!pruneSimResults || selectedCandidateKeys.length === 0) return;
 
         const targetItems = pruneSimResults.candidates
-            .filter(c => selectedCandidateKeys.includes(c.ratingKey))
-            .map(c => ({
+            .filter((c: any) => selectedCandidateKeys.includes(c.ratingKey))
+            .map((c: any) => ({
                 ratingKey: c.ratingKey,
                 serverId: c.serverId || selectedServerId,
                 sectionKey: c.sectionKey,
@@ -547,7 +647,7 @@ export function PruneStudio() {
                 forceLiveDelete,
                 applyOverlay: true,
                 tagCollection: true,
-                daysNotice: settings.pruneDaysNotice || 14
+                daysNotice: simGracePeriodDays || settings.pruneDaysNotice || 14
             });
 
             if (res.success) {
@@ -555,7 +655,7 @@ export function PruneStudio() {
                     success: true,
                     text: forceLiveDelete && isMasterEnabled
                         ? `Permanently deleted ${res.processedCount} media files from disk & Plex.`
-                        : `Staged ${res.processedCount} items with ${settings.pruneDaysNotice || 14}-day Leaving Soon warning & overlays.`,
+                        : `Staged ${res.processedCount} items with ${simGracePeriodDays || settings.pruneDaysNotice || 14}-day Leaving Soon warning & overlays.`,
                     details: res.results
                 });
                 loadLeavingSoonItems();
@@ -982,10 +1082,22 @@ export function PruneStudio() {
                                 <span>Pinned "Leaving Soon" Plex Collection Hub</span>
                             </h2>
                             <p className="text-xs text-slate-400">
-                                Give household members a 7-14 day grace period warning before media files are pruned.
+                                Give household members a grace period warning before media files are pruned. Automatically unflags items if someone watches them!
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={recheckingWatchActivity}
+                                onClick={handleRecheckWatchActivity}
+                                title="Recheck all Leaving Soon items in Plex to see if anyone has watched them, and restore their original artwork"
+                                className="border-emerald-500/40 hover:bg-emerald-950/40 text-emerald-300 hover:text-emerald-200 text-xs h-8 px-3 gap-1.5 font-bold"
+                            >
+                                {recheckingWatchActivity ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" /> : <Eye className="h-3.5 w-3.5 text-emerald-400" />}
+                                <span>Recheck Watch Activity</span>
+                            </Button>
                             <Button
                                 type="button"
                                 size="sm"
@@ -1019,6 +1131,111 @@ export function PruneStudio() {
                             </Button>
                         </div>
                     </div>
+
+                    {/* Glances Live Storage Array & Capacity Display */}
+                    {glancesDisks.length > 0 && (
+                        <div className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl space-y-3 backdrop-blur-md">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                    <HardDrive className="h-4 w-4 text-cyan-400" />
+                                    <span className="text-xs font-bold text-white">Glances Storage Array &amp; Live Capacity:</span>
+                                    {glancesLoading && <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />}
+                                </div>
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <Select
+                                        value={selectedGlancesDiskId || (glancesDisks[0]?.id || "")}
+                                        onValueChange={setSelectedGlancesDiskId}
+                                    >
+                                        <SelectTrigger className="bg-slate-950 border-slate-700 text-xs h-8 min-w-[260px] text-slate-200">
+                                            <SelectValue placeholder="Select Glances Storage Array..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {glancesDisks.map(d => (
+                                                <SelectItem key={d.id} value={d.id}>
+                                                    <span className="font-bold text-white">{d.instanceName}:</span> <span className="font-mono text-cyan-300">{d.mntPoint}</span> ({d.freeGb >= 1000 ? `${(d.freeGb / 1024).toFixed(1)} TB` : `${d.freeGb} GB`} free, {d.percent}% used)
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={loadGlancesDisks}
+                                        disabled={glancesLoading}
+                                        title="Refresh Glances Storage Telemetry"
+                                        className="h-8 w-8 p-0 border-slate-700 text-slate-300 hover:text-white"
+                                    >
+                                        <RefreshCw className={`h-3.5 w-3.5 ${glancesLoading ? 'animate-spin' : ''}`} />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {(() => {
+                                const selectedDisk = glancesDisks.find(d => d.id === selectedGlancesDiskId) || glancesDisks[0];
+                                if (!selectedDisk) return null;
+                                return (
+                                    <div className="space-y-2 pt-1 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-slate-400 font-mono text-[11px]">
+                                                    Mount: <strong className="text-white">{selectedDisk.mntPoint}</strong> ({selectedDisk.deviceName || selectedDisk.fsType})
+                                                </span>
+                                                <Badge variant="outline" className="text-[10px] border-slate-700 text-slate-300">
+                                                    {selectedDisk.instanceName}
+                                                </Badge>
+                                            </div>
+                                            <div className="font-mono font-bold text-xs flex items-center gap-2">
+                                                <span className={selectedDisk.percent >= 90 ? 'text-rose-400' : selectedDisk.percent >= 75 ? 'text-amber-400' : 'text-emerald-400'}>
+                                                    {selectedDisk.percent}% Capacity Used
+                                                </span>
+                                                <span className="text-slate-400 font-normal text-[11px]">
+                                                    • {selectedDisk.freeGb >= 1000 ? `${(selectedDisk.freeGb / 1024).toFixed(2)} TB` : `${selectedDisk.freeGb} GB`} Free of {selectedDisk.totalGb >= 1000 ? `${(selectedDisk.totalGb / 1024).toFixed(2)} TB` : `${selectedDisk.totalGb} GB`}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                            <div 
+                                                className={`h-full transition-all rounded-full ${
+                                                    selectedDisk.percent >= 90 ? 'bg-gradient-to-r from-amber-500 to-rose-600' :
+                                                    selectedDisk.percent >= 75 ? 'bg-gradient-to-r from-emerald-500 to-amber-500' :
+                                                    'bg-gradient-to-r from-cyan-500 to-emerald-500'
+                                                }`}
+                                                style={{ width: `${Math.min(100, Math.max(0, selectedDisk.percent))}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    )}
+
+                    {/* Recheck Watch Results Banner */}
+                    {recheckWatchResult && (
+                        <div className={`p-4 rounded-xl border text-xs space-y-1.5 animate-in fade-in-50 ${
+                            recheckWatchResult.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                        }`}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 font-bold">
+                                    {recheckWatchResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                                    <span>{recheckWatchResult.message}</span>
+                                </div>
+                                <button type="button" onClick={() => setRecheckWatchResult(null)} className="text-slate-400 hover:text-white">
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
+                            {recheckWatchResult.unflaggedItems && recheckWatchResult.unflaggedItems.length > 0 && (
+                                <div className="pt-1 pl-6 space-y-1 text-[11px] text-emerald-200/90 font-mono">
+                                    {recheckWatchResult.unflaggedItems.map(item => (
+                                        <div key={item.ratingKey} className="flex items-center gap-2">
+                                            <span>✨ {item.title}:</span>
+                                            <span className="text-emerald-400">{item.reason}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {leavingSoonHubMsg && (
                         <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in-50 ${
@@ -1356,6 +1573,9 @@ export function PruneStudio() {
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="bottom">Bottom Overlay</SelectItem>
+                                                    <SelectItem value="lower_third">Lower 3rd (Above Title)</SelectItem>
+                                                    <SelectItem value="middle">Middle / Center 3rd</SelectItem>
+                                                    <SelectItem value="upper_third">Upper 3rd (Below Header)</SelectItem>
                                                     <SelectItem value="top">Top Overlay</SelectItem>
                                                     <SelectItem value="corner">45° Corner Ribbon</SelectItem>
                                                 </SelectContent>
@@ -1446,19 +1666,19 @@ export function PruneStudio() {
                 </div>
             )}
 
-            {/* TAB 2: PRUNE SANDBOX SIMULATOR */}
+            {/* TAB 2: PRUNE SANDBOX & OLDEST FILES EXPLORER */}
             {subTab === "simulation" && (
                 <div className="space-y-6">
-                    {/* Sandbox Criteria Controls */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
+                    {/* Sandbox & Discovery Criteria Controls */}
+                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4 backdrop-blur-md">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
                             <div className="space-y-0.5">
                                 <CardTitle className="text-base font-bold text-white flex items-center gap-2">
                                     <Sliders className="h-5 w-5 text-rose-400" />
-                                    <span>Maintainerr Rule Builder &amp; Simulation Sandbox</span>
+                                    <span>Oldest Files Discovery &amp; Maintainerr Rule Sandbox</span>
                                 </CardTitle>
                                 <CardDescription className="text-xs text-slate-400">
-                                    Evaluate libraries in safe dry-run mode to simulate disk capacity recovery without modifying files.
+                                    Scan libraries to discover the oldest, least watched, or largest media items. Verify full telemetry (last watched, modified date, codec, disk path) before staging.
                                 </CardDescription>
                             </div>
                             <Button
@@ -1466,46 +1686,89 @@ export function PruneStudio() {
                                 size="sm"
                                 disabled={simulatingPrune}
                                 onClick={handleRunSimulation}
-                                className="bg-rose-600 hover:bg-rose-500 text-white font-black text-xs h-9 px-4 gap-2 shadow-lg cursor-pointer"
+                                className="bg-rose-600 hover:bg-rose-500 text-white font-black text-xs h-9 px-4 gap-2 shadow-lg cursor-pointer shrink-0"
                             >
                                 {simulatingPrune ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                                <span>Run Prune Simulation</span>
+                                <span>Discover Oldest Candidates</span>
                             </Button>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                            {/* Sort / Discovery Mode */}
                             <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                                <Label className="text-xs text-slate-300 font-semibold">Minimum Age in Library:</Label>
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                                    <Clock className="h-3.5 w-3.5 text-rose-400" />
+                                    <span>Sort Strategy:</span>
+                                </Label>
+                                <Select
+                                    value={simSortBy}
+                                    onValueChange={(val: any) => setSimSortBy(val)}
+                                >
+                                    <SelectTrigger className="bg-slate-900 border-slate-700 h-8 text-xs text-slate-200">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="oldest_added">📅 Oldest Added to Library</SelectItem>
+                                        <SelectItem value="oldest_watched">👁️ Oldest Last Watched</SelectItem>
+                                        <SelectItem value="oldest_modified">📝 Oldest Modified on Disk</SelectItem>
+                                        <SelectItem value="largest_size">📦 Largest File Size First</SelectItem>
+                                        <SelectItem value="least_plays">📉 Least Plays / Unwatched</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Show Oldest Limit */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                                    <Filter className="h-3.5 w-3.5 text-sky-400" />
+                                    <span>Show Oldest Amount:</span>
+                                </Label>
+                                <Select
+                                    value={String(simOldestLimit)}
+                                    onValueChange={(val) => setSimOldestLimit(parseInt(val, 10))}
+                                >
+                                    <SelectTrigger className="bg-slate-900 border-slate-700 h-8 text-xs font-mono text-slate-200">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">Show Oldest 10 Files</SelectItem>
+                                        <SelectItem value="25">Show Oldest 25 Files</SelectItem>
+                                        <SelectItem value="50">Show Oldest 50 Files</SelectItem>
+                                        <SelectItem value="100">Show Oldest 100 Files</SelectItem>
+                                        <SelectItem value="200">Show Oldest 200 Files</SelectItem>
+                                        <SelectItem value="0">Show All Matching Candidates</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Minimum Age in Days */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                                    <Calendar className="h-3.5 w-3.5 text-amber-400" />
+                                    <span>Minimum Age (Days):</span>
+                                </Label>
                                 <div className="flex items-center gap-2">
                                     <Input
                                         type="number"
-                                        min="1"
+                                        min="0"
+                                        max="3650"
                                         value={simMinAgeDays}
-                                        onChange={(e) => setSimMinAgeDays(parseInt(e.target.value, 10) || 30)}
+                                        onChange={(e) => setSimMinAgeDays(parseInt(e.target.value, 10) || 0)}
                                         className="bg-slate-900 border-slate-700 h-8 text-xs font-mono"
                                     />
-                                    <span className="text-slate-400 text-xs">days</span>
+                                    <span className="text-slate-400 text-xs shrink-0">days old</span>
                                 </div>
                             </div>
 
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                            {/* Unwatched Only Toggle */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between">
                                 <div className="flex items-center justify-between">
-                                    <Label className="text-xs text-slate-300 font-semibold">Unwatched Items Only:</Label>
+                                    <Label className="text-xs text-slate-300 font-semibold">Unwatched Only:</Label>
                                     <Switch checked={simUnwatchedOnly} onCheckedChange={setSimUnwatchedOnly} />
                                 </div>
-                                <p className="text-[10px] text-slate-400">Exclude items watched by any Plex user</p>
-                            </div>
-
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                                <Label className="text-xs text-slate-300 font-semibold">Max Candidate Limit:</Label>
-                                <Input
-                                    type="number"
-                                    min="5"
-                                    max="200"
-                                    value={simMaxCandidates}
-                                    onChange={(e) => setSimMaxCandidates(parseInt(e.target.value, 10) || 50)}
-                                    className="bg-slate-900 border-slate-700 h-8 text-xs font-mono"
-                                />
+                                <p className="text-[10px] text-slate-400">
+                                    {simUnwatchedOnly ? "Only items with 0 plays" : "Include watched & unwatched"}
+                                </p>
                             </div>
                         </div>
                     </Card>
@@ -1518,91 +1781,252 @@ export function PruneStudio() {
                                     <div className="space-y-0.5">
                                         <CardTitle className="text-base font-bold text-white flex items-center gap-2">
                                             <Archive className="h-4 w-4 text-emerald-400" />
-                                            <span>Simulation Results: {pruneSimResults.candidates.length} Candidates Identified</span>
+                                            <span>Oldest Candidates Identified: {pruneSimResults.candidates.length} Files</span>
                                         </CardTitle>
-                                        <p className="text-xs text-slate-400">Evaluated {pruneSimResults.evaluatedCount} media items</p>
+                                        <p className="text-xs text-slate-400">
+                                            Evaluated {pruneSimResults.evaluatedCount} media items across enabled library sections
+                                        </p>
                                     </div>
-                                    <Badge className="bg-emerald-950 text-emerald-300 border-emerald-500/40 text-sm font-mono font-bold px-3 py-1">
-                                        Recoverable Space: {pruneSimResults.totalRecoverableGb} GB
-                                    </Badge>
+                                    <div className="flex items-center gap-2">
+                                        <Badge className="bg-emerald-950 text-emerald-300 border-emerald-500/40 text-xs font-mono font-bold px-3 py-1">
+                                            Recoverable Space: {pruneSimResults.totalRecoverableGb} GB
+                                        </Badge>
+                                    </div>
                                 </div>
-                            </CardHeader>
 
-                            <CardContent className="p-4 space-y-2.5">
-                                {pruneSimResults.candidates.length === 0 ? (
-                                    <p className="text-xs text-slate-500 text-center py-6">No candidates met the prune criteria.</p>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-xs text-slate-400">
-                                            <span>Select candidates to stage or delete:</span>
-                                            <div className="flex gap-2">
+                                {/* Batch Flagging, Grace Period & Filter Bar */}
+                                {pruneSimResults.candidates.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                                        {/* Left: Quick Batch Selectors */}
+                                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                            <span className="text-[11px] font-bold text-slate-400 mr-1">Flag Candidates:</span>
+                                            {[5, 10, 25, 50].map(n => (
                                                 <button
+                                                    key={n}
                                                     type="button"
-                                                    onClick={() => setSelectedCandidateKeys(pruneSimResults.candidates.map(c => c.ratingKey))}
-                                                    className="text-[11px] text-purple-400 hover:underline"
+                                                    onClick={() => handleSelectFirstNCandidates(n)}
+                                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                                                        selectedCandidateKeys.length === n
+                                                            ? "bg-rose-600 text-white border-rose-500"
+                                                            : "bg-slate-800/80 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700"
+                                                    }`}
                                                 >
-                                                    Select All
+                                                    Top {n}
                                                 </button>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSelectFirstNCandidates(0)}
+                                                className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                                                    selectedCandidateKeys.length === pruneSimResults.candidates.length
+                                                        ? "bg-rose-600 text-white border-rose-500"
+                                                        : "bg-slate-800/80 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700"
+                                                }`}
+                                            >
+                                                Select All ({pruneSimResults.candidates.length})
+                                            </button>
+                                            {selectedCandidateKeys.length > 0 && (
                                                 <button
                                                     type="button"
                                                     onClick={() => setSelectedCandidateKeys([])}
-                                                    className="text-[11px] text-slate-500 hover:underline"
+                                                    className="px-2 py-1 text-xs text-slate-400 hover:text-rose-300 hover:underline ml-1"
                                                 >
-                                                    Clear Selection
+                                                    Clear ({selectedCandidateKeys.length})
                                                 </button>
-                                            </div>
+                                            )}
                                         </div>
 
-                                        {pruneSimResults.candidates.map((c: any) => {
-                                            const isSelected = selectedCandidateKeys.includes(c.ratingKey);
-                                            return (
-                                                <div
-                                                    key={c.ratingKey}
-                                                    onClick={() => {
-                                                        setSelectedCandidateKeys(prev =>
-                                                            isSelected ? prev.filter(k => k !== c.ratingKey) : [...prev, c.ratingKey]
-                                                        );
-                                                    }}
-                                                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                                                        isSelected
-                                                            ? "bg-rose-950/30 border-rose-500/50"
-                                                            : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
-                                                    }`}
+                                        {/* Right: Grace Period & Stage Button */}
+                                        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-end">
+                                            {/* Grace Period Dropdown */}
+                                            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800">
+                                                <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                                <span className="text-[11px] font-bold text-slate-300">Grace Period:</span>
+                                                <Select
+                                                    value={String(simGracePeriodDays)}
+                                                    onValueChange={(val) => setSimGracePeriodDays(parseInt(val, 10))}
                                                 >
-                                                    <div className="flex items-center gap-3">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isSelected}
-                                                            onChange={() => {}}
-                                                            className="rounded border-slate-700 accent-rose-500"
-                                                        />
-                                                        <div className="space-y-0.5">
-                                                            <span className="font-bold text-white text-xs">{c.title} ({c.year || "Unknown"})</span>
-                                                            <p className="text-[10px] text-slate-400">
-                                                                Age: {c.ageDays} days in library • {c.viewCount === 0 ? "Never watched" : `Watched ${c.viewCount}x`}
-                                                            </p>
-                                                        </div>
-                                                    </div>
+                                                    <SelectTrigger className="bg-transparent border-0 h-6 text-xs font-mono font-bold text-amber-300 p-0 focus:ring-0 w-[80px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="7">7 Days</SelectItem>
+                                                        <SelectItem value="14">14 Days</SelectItem>
+                                                        <SelectItem value="21">21 Days</SelectItem>
+                                                        <SelectItem value="30">30 Days</SelectItem>
+                                                        <SelectItem value="60">60 Days</SelectItem>
+                                                        <SelectItem value="90">90 Days</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
 
-                                                    <Badge variant="outline" className="text-xs font-mono border-slate-700 text-slate-300">
-                                                        {c.sizeGb ? `${c.sizeGb} GB` : "Size N/A"}
-                                                    </Badge>
-                                                </div>
-                                            );
-                                        })}
+                                            {/* Search Filter Input */}
+                                            <div className="relative">
+                                                <Search className="h-3 w-3 absolute left-2.5 top-2.5 text-slate-500" />
+                                                <Input
+                                                    placeholder="Filter candidates..."
+                                                    value={simFilterSearch}
+                                                    onChange={(e) => setSimFilterSearch(e.target.value)}
+                                                    className="h-8 text-xs pl-7 bg-slate-950 border-slate-800 w-[150px] sm:w-[180px]"
+                                                />
+                                            </div>
 
-                                        <div className="pt-3 flex justify-end gap-2">
+                                            {/* Stage Selected Button */}
                                             <Button
                                                 type="button"
                                                 size="sm"
                                                 disabled={executingPrune || selectedCandidateKeys.length === 0}
                                                 onClick={() => handleExecutePrune(false)}
-                                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs gap-1.5 cursor-pointer"
+                                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0"
                                             >
                                                 <AlertTriangle className="h-3.5 w-3.5" />
-                                                <span>Stage {selectedCandidateKeys.length} Items (14-Day Notice)</span>
+                                                <span>Stage {selectedCandidateKeys.length} Items ({simGracePeriodDays}d Notice)</span>
                                             </Button>
                                         </div>
+                                    </div>
+                                )}
+                            </CardHeader>
+
+                            <CardContent className="p-4 space-y-3">
+                                {pruneSimResults.candidates.length === 0 ? (
+                                    <div className="text-center py-12 text-slate-500 space-y-2">
+                                        <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500/50" />
+                                        <p className="text-xs font-semibold text-slate-300">No media items met the prune criteria.</p>
+                                        <p className="text-[11px] text-slate-500">Try lowering the minimum age or changing the sort strategy.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2.5">
+                                        {pruneSimResults.candidates
+                                            .filter((c: any) => {
+                                                if (!simFilterSearch.trim()) return true;
+                                                const q = simFilterSearch.toLowerCase();
+                                                return (
+                                                    c.title?.toLowerCase().includes(q) ||
+                                                    c.filePath?.toLowerCase().includes(q) ||
+                                                    c.resolution?.toLowerCase().includes(q) ||
+                                                    c.reason?.toLowerCase().includes(q)
+                                                );
+                                            })
+                                            .map((c: any) => {
+                                                const isSelected = selectedCandidateKeys.includes(c.ratingKey);
+                                                const addedDateStr = c.addedAt ? new Date(c.addedAt * 1000).toLocaleDateString() : "Unknown";
+                                                const modifiedDateStr = c.updatedAt ? new Date(c.updatedAt * 1000).toLocaleDateString() : (c.addedAt ? new Date(c.addedAt * 1000).toLocaleDateString() : "Unknown");
+                                                const lastWatchedDateStr = c.lastViewedAt ? new Date(c.lastViewedAt * 1000).toLocaleDateString() : null;
+                                                const daysSinceViewed = c.lastViewedAt ? Math.floor((Date.now() - c.lastViewedAt * 1000) / (1000 * 60 * 60 * 24)) : null;
+
+                                                return (
+                                                    <div
+                                                        key={c.ratingKey}
+                                                        onClick={() => {
+                                                            setSelectedCandidateKeys(prev =>
+                                                                isSelected ? prev.filter(k => k !== c.ratingKey) : [...prev, c.ratingKey]
+                                                            );
+                                                        }}
+                                                        className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
+                                                            isSelected
+                                                                ? "bg-rose-950/30 border-rose-500/60 shadow-lg shadow-rose-950/20"
+                                                                : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
+                                                        }`}
+                                                    >
+                                                        {/* Top Row: Checkbox, Title, Badges, Size */}
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => {}}
+                                                                    className="h-4 w-4 rounded border-slate-700 accent-rose-500 shrink-0 cursor-pointer"
+                                                                />
+                                                                <div className="min-w-0">
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        <span className="font-bold text-white text-xs sm:text-sm truncate">
+                                                                            {c.title}
+                                                                        </span>
+                                                                        {c.year && (
+                                                                            <span className="text-xs text-slate-400 font-mono">
+                                                                                ({c.year})
+                                                                            </span>
+                                                                        )}
+                                                                        {c.serverName && (
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-slate-700 text-slate-400">
+                                                                                {c.serverName}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {c.resolution && (
+                                                                            <Badge className="bg-sky-950 text-sky-300 border-sky-600/40 text-[10px] font-mono py-0 px-1.5">
+                                                                                {c.resolution}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {c.hdr && (
+                                                                            <Badge className="bg-amber-950 text-amber-300 border-amber-600/40 text-[10px] font-mono py-0 px-1.5">
+                                                                                {c.hdr}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {c.audio && (
+                                                                            <Badge className="bg-slate-900 text-slate-300 border-slate-700 text-[10px] font-mono py-0 px-1.5 uppercase">
+                                                                                {c.audio}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                                                <Badge variant="outline" className="text-xs font-mono font-bold border-emerald-500/40 text-emerald-300 bg-emerald-950/40 px-2 py-0.5">
+                                                                    {c.fileSizeGb ? `${c.fileSizeGb} GB` : "Size N/A"}
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Verification Telemetry Grid: Added, Last Modified, Last Watched, Play Count */}
+                                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-900 text-[11px] font-mono">
+                                                            {/* Added to Library */}
+                                                            <div className="flex items-center gap-1.5 text-slate-300">
+                                                                <Calendar className="h-3 w-3 text-sky-400 shrink-0" />
+                                                                <span>Added: <strong className="text-white">{addedDateStr}</strong> ({c.daysOld ?? c.ageDays}d ago)</span>
+                                                            </div>
+
+                                                            {/* Last Modified Date */}
+                                                            <div className="flex items-center gap-1.5 text-slate-300">
+                                                                <Clock3 className="h-3 w-3 text-purple-400 shrink-0" />
+                                                                <span>Modified: <strong className="text-white">{modifiedDateStr}</strong></span>
+                                                            </div>
+
+                                                            {/* Last Watched Date & Plays */}
+                                                            <div className="flex items-center gap-1.5 text-slate-300">
+                                                                <Eye className="h-3 w-3 text-amber-400 shrink-0" />
+                                                                {c.viewCount > 0 && lastWatchedDateStr ? (
+                                                                    <span>Watched: <strong className="text-white">{lastWatchedDateStr}</strong> ({daysSinceViewed}d ago)</span>
+                                                                ) : (
+                                                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px] py-0 px-1.5">
+                                                                        Never Watched
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Play Count */}
+                                                            <div className="flex items-center gap-1.5 text-slate-300">
+                                                                <Play className="h-3 w-3 text-emerald-400 shrink-0" />
+                                                                <span>Plays: <strong className="text-white">{c.viewCount || 0}</strong> {c.viewCount === 1 ? "play" : "plays"}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Disk Path & Prune Reason */}
+                                                        <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-slate-400 border-t border-slate-900/80">
+                                                            {c.filePath ? (
+                                                                <span className="font-mono truncate text-slate-400">
+                                                                    📁 <span className="text-slate-300">{c.filePath}</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="italic text-slate-600">Disk path not provided</span>
+                                                            )}
+                                                            <span className="font-bold text-rose-400 shrink-0">
+                                                                ⚠️ {c.reason || "Oldest candidate match"}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                     </div>
                                 )}
                             </CardContent>
@@ -1679,109 +2103,192 @@ export function PruneStudio() {
                 </Card>
             )}
 
-            {/* TAB 4: MOUNTS & BACKUP VAULT */}
+            {/* TAB 4: MOUNTS, GLANCES STORAGE & BACKUP VAULT */}
             {subTab === "storage" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Storage Mounts Configuration */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
-                        <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <HardDrive className="h-5 w-5 text-cyan-400" />
-                            <span>Storage Mounts Configuration</span>
-                        </CardTitle>
-                        <p className="text-xs text-slate-400">
-                            Configure physical disk mount paths for storage capacity monitoring and free space warning calculations.
-                        </p>
+                <div className="space-y-6">
+                    {/* Glances Real-Time Disk Arrays Card */}
+                    {glancesDisks.length > 0 && (
+                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4 backdrop-blur-md">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                                <div className="space-y-0.5">
+                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                        <HardDrive className="h-5 w-5 text-cyan-400" />
+                                        <span>Glances Storage Arrays &amp; Real-Time Capacity</span>
+                                    </CardTitle>
+                                    <p className="text-xs text-slate-400">
+                                        Live disk arrays, used space, and free capacity telemetry polled directly from your connected Glances instances.
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={glancesLoading}
+                                    onClick={loadGlancesDisks}
+                                    className="border-slate-700 text-xs h-8 gap-1.5 text-slate-300 hover:text-white"
+                                >
+                                    <RefreshCw className={`h-3.5 w-3.5 ${glancesLoading ? 'animate-spin' : ''}`} />
+                                    <span>Refresh Glances</span>
+                                </Button>
+                            </div>
 
-                        <div className="space-y-3">
-                            {servers.map(srv => {
-                                const currentPath = serverStorageConfig[srv.serverId] || "";
-                                const checkStatus = pathCheckResults[srv.serverId];
-
-                                return (
-                                    <div key={srv.serverId} className="space-y-1.5">
-                                        <Label className="text-xs text-slate-300 font-semibold">{srv.serverName} Mount Path:</Label>
-                                        <div className="flex gap-2">
-                                            <Input
-                                                placeholder="/mnt/user/data/media"
-                                                value={currentPath}
-                                                onChange={(e) => {
-                                                    const updated = { ...serverStorageConfig, [srv.serverId]: e.target.value };
-                                                    setServerStorageConfig(updated);
-                                                }}
-                                                className="text-xs bg-slate-950 border-slate-800 font-mono"
-                                            />
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={async () => {
-                                                    setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: true } }));
-                                                    const res = await validateDirectoryPathAction(currentPath);
-                                                    setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: false, success: res.success, msg: res.message || res.error } }));
-                                                }}
-                                                className="border-slate-700 text-xs shrink-0"
-                                            >
-                                                Validate
-                                            </Button>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {glancesDisks.map(disk => (
+                                    <div
+                                        key={disk.id}
+                                        onClick={() => setSelectedGlancesDiskId(disk.id)}
+                                        className={`p-4 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
+                                            selectedGlancesDiskId === disk.id
+                                                ? "bg-cyan-950/30 border-cyan-500/50 shadow-md ring-1 ring-cyan-500/30"
+                                                : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <HardDrive className="h-4 w-4 text-cyan-400" />
+                                                <span className="font-bold text-white text-xs">{disk.instanceName}</span>
+                                            </div>
+                                            <Badge variant="outline" className="text-[10px] font-mono border-slate-700 text-slate-400">
+                                                {disk.fsType}
+                                            </Badge>
                                         </div>
-                                        {checkStatus && !checkStatus.checking && (
-                                            <p className={`text-[10px] ${checkStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
-                                                {checkStatus.msg}
-                                            </p>
-                                        )}
+
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="font-mono text-cyan-300 font-bold text-[11px] truncate max-w-[180px]">
+                                                    {disk.mntPoint}
+                                                </span>
+                                                <span className={`font-mono font-bold text-[11px] ${
+                                                    disk.percent >= 90 ? 'text-rose-400' : disk.percent >= 75 ? 'text-amber-400' : 'text-emerald-400'
+                                                }`}>
+                                                    {disk.percent}% Used
+                                                </span>
+                                            </div>
+
+                                            <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                                <div 
+                                                    className={`h-full transition-all rounded-full ${
+                                                        disk.percent >= 90 ? 'bg-gradient-to-r from-amber-500 to-rose-600' :
+                                                        disk.percent >= 75 ? 'bg-gradient-to-r from-emerald-500 to-amber-500' :
+                                                        'bg-gradient-to-r from-cyan-500 to-emerald-500'
+                                                    }`}
+                                                    style={{ width: `${Math.min(100, Math.max(0, disk.percent))}%` }}
+                                                />
+                                            </div>
+
+                                            <div className="flex justify-between text-[10px] text-slate-400 pt-0.5 font-mono">
+                                                <span>Free: <strong className="text-white">{disk.freeGb >= 1000 ? `${(disk.freeGb / 1024).toFixed(1)} TB` : `${disk.freeGb} GB`}</strong></span>
+                                                <span>Total: {disk.totalGb >= 1000 ? `${(disk.totalGb / 1024).toFixed(1)} TB` : `${disk.totalGb} GB`}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                );
-                            })}
+                                ))}
+                            </div>
+                        </Card>
+                    )}
 
-                            <Button
-                                type="button"
-                                size="sm"
-                                disabled={savingStorageConfig}
-                                onClick={async () => {
-                                    setSavingStorageConfig(true);
-                                    await saveServerStorageConfigAction(serverStorageConfig);
-                                    setSavingStorageConfig(false);
-                                    setStorageConfigSavedMsg(true);
-                                    setTimeout(() => setStorageConfigSavedMsg(false), 3000);
-                                }}
-                                className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs gap-1.5"
-                            >
-                                <Save className="h-3.5 w-3.5" />
-                                <span>Save Storage Config</span>
-                            </Button>
-                            {storageConfigSavedMsg && <span className="text-xs text-emerald-400 font-bold ml-2">✓ Saved!</span>}
-                        </div>
-                    </Card>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Storage Mounts Configuration */}
+                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
+                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <HardDrive className="h-5 w-5 text-cyan-400" />
+                                <span>Storage Mounts Configuration</span>
+                            </CardTitle>
+                            <p className="text-xs text-slate-400">
+                                Configure physical disk mount paths for storage capacity monitoring and free space warning calculations.
+                            </p>
 
-                    {/* Artwork Backup Vault Stats */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
-                        <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <Archive className="h-5 w-5 text-purple-400" />
-                            <span>Artwork Backup Vault Health</span>
-                        </CardTitle>
-                        <p className="text-xs text-slate-400">
-                            Portalarr automatically archives pristine original poster artworks before applying overlays, allowing 0-loss rollback anytime.
-                        </p>
+                            <div className="space-y-3">
+                                {servers.map(srv => {
+                                    const currentPath = serverStorageConfig[srv.serverId] || "";
+                                    const checkStatus = pathCheckResults[srv.serverId];
 
-                        <div className="space-y-3 font-mono text-xs">
-                            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                                <div className="flex justify-between">
-                                    <span className="text-slate-400">Original Posters Backed Up:</span>
-                                    <strong className="text-purple-300">{vaultStats?.backupCount || 0} files</strong>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-slate-400">Vault Disk Usage:</span>
-                                    <strong className="text-purple-300">
-                                        {vaultStats?.backupBytes ? `${(vaultStats.backupBytes / (1024 * 1024)).toFixed(1)} MB` : "0 MB"}
-                                    </strong>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-slate-400">Custom Badges Vault:</span>
-                                    <strong className="text-purple-300">{vaultStats?.badgeCount || 0} badges</strong>
+                                    return (
+                                        <div key={srv.serverId} className="space-y-1.5">
+                                            <Label className="text-xs text-slate-300 font-semibold">{srv.serverName} Mount Path:</Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    placeholder="/mnt/user/data/media"
+                                                    value={currentPath}
+                                                    onChange={(e) => {
+                                                        const updated = { ...serverStorageConfig, [srv.serverId]: e.target.value };
+                                                        setServerStorageConfig(updated);
+                                                    }}
+                                                    className="text-xs bg-slate-950 border-slate-800 font-mono"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={async () => {
+                                                        setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: true } }));
+                                                        const res = await validateDirectoryPathAction(currentPath);
+                                                        setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: false, success: res.success, msg: res.message || res.error } }));
+                                                    }}
+                                                    className="border-slate-700 text-xs shrink-0"
+                                                >
+                                                    Validate
+                                                </Button>
+                                            </div>
+                                            {checkStatus && !checkStatus.checking && (
+                                                <p className={`text-[10px] ${checkStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
+                                                    {checkStatus.msg}
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={savingStorageConfig}
+                                    onClick={async () => {
+                                        setSavingStorageConfig(true);
+                                        await saveServerStorageConfigAction(serverStorageConfig);
+                                        setSavingStorageConfig(false);
+                                        setStorageConfigSavedMsg(true);
+                                        setTimeout(() => setStorageConfigSavedMsg(false), 3000);
+                                    }}
+                                    className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs gap-1.5"
+                                >
+                                    <Save className="h-3.5 w-3.5" />
+                                    <span>Save Storage Config</span>
+                                </Button>
+                                {storageConfigSavedMsg && <span className="text-xs text-emerald-400 font-bold ml-2">✓ Saved!</span>}
+                            </div>
+                        </Card>
+
+                        {/* Artwork Backup Vault Stats */}
+                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
+                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <Archive className="h-5 w-5 text-purple-400" />
+                                <span>Artwork Backup Vault Health</span>
+                            </CardTitle>
+                            <p className="text-xs text-slate-400">
+                                Portalarr automatically archives pristine original poster artworks before applying overlays, allowing 0-loss rollback anytime.
+                            </p>
+
+                            <div className="space-y-3 font-mono text-xs">
+                                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-400">Original Posters Backed Up:</span>
+                                        <strong className="text-purple-300">{vaultStats?.backupCount || 0} files</strong>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-400">Vault Disk Usage:</span>
+                                        <strong className="text-purple-300">
+                                            {vaultStats?.backupBytes ? `${(vaultStats.backupBytes / (1024 * 1024)).toFixed(1)} MB` : "0 MB"}
+                                        </strong>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-400">Custom Badges Vault:</span>
+                                        <strong className="text-purple-300">{vaultStats?.badgeCount || 0} badges</strong>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </Card>
+                        </Card>
+                    </div>
                 </div>
             )}
 

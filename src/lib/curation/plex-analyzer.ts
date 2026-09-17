@@ -26,6 +26,7 @@ export interface PlexMediaStreamInfo {
     rtCriticsRating?: number;
     rtAudienceRating?: number;
     addedAt?: number;
+    updatedAt?: number;
     lastViewedAt?: number;
     viewCount?: number;
     fileSize?: number;
@@ -505,6 +506,7 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         rating: metadata.rating ? parseFloat(metadata.rating) : undefined,
         audienceRating: metadata.audienceRating ? parseFloat(metadata.audienceRating) : undefined,
         addedAt: metadata.addedAt ? parseInt(metadata.addedAt, 10) * 1000 : undefined,
+        updatedAt: metadata.updatedAt ? parseInt(metadata.updatedAt, 10) * 1000 : (metadata.addedAt ? parseInt(metadata.addedAt, 10) * 1000 : undefined),
         lastViewedAt: metadata.lastViewedAt ? parseInt(metadata.lastViewedAt, 10) * 1000 : undefined,
         viewCount: metadata.viewCount ? parseInt(metadata.viewCount, 10) : 0,
         fileSize: totalSize > 0 ? totalSize : undefined,
@@ -1939,10 +1941,16 @@ export interface PruneCandidateItem {
     serverId: string;
     serverName?: string;
     addedAt?: number;
+    updatedAt?: number;
     lastViewedAt?: number;
     viewCount: number;
     fileSizeGb: number;
     filePath?: string;
+    thumb?: string;
+    resolution?: string;
+    hdr?: string;
+    videoFormatLabel?: string;
+    audio?: string;
     imdbId?: string;
     tmdbId?: string;
     reason: string;
@@ -1964,6 +1972,7 @@ export async function evaluatePruneCandidatesForServer(
         maxCandidates?: number;
         sectionKeys?: string[];
         enabledSectionKeys?: string[];
+        sortBy?: "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     } = {}
 ): Promise<{
     candidates: PruneCandidateItem[];
@@ -1971,8 +1980,9 @@ export async function evaluatePruneCandidatesForServer(
     evaluatedCount: number;
 }> {
     const minAgeDays = options.minAgeDays ?? 90;
-    const unwatchedOnly = options.unwatchedOnly ?? true;
+    const unwatchedOnly = options.unwatchedOnly ?? false;
     const maxCandidates = options.maxCandidates ?? 50;
+    const sortBy = options.sortBy ?? "oldest_added";
 
     const cleanBase = serverUrl.replace(/\/+$/, "");
     const sectionsUrl = `${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`;
@@ -2002,7 +2012,6 @@ export async function evaluatePruneCandidatesForServer(
     const allCandidates: PruneCandidateItem[] = [];
     let totalEvaluated = 0;
     const nowMs = Date.now();
-    const minAgeMs = minAgeDays * 24 * 60 * 60 * 1000;
 
     for (const sec of sections) {
         const items = await getPlexLibraryMediaItems(serverUrl, token, sec.key, 1000);
@@ -2030,10 +2039,12 @@ export async function evaluatePruneCandidatesForServer(
             const sizeBytes = item.fileSize || 0;
             const sizeGb = parseFloat((sizeBytes / (1024 * 1024 * 1024)).toFixed(2));
 
-            let reason = `Added ${daysOld} days ago (Unwatched)`;
+            let reason = `Added ${daysOld} days ago (Never Watched)`;
             if (viewCount > 0 && lastViewedAtMs) {
                 const daysSinceViewed = Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000));
-                reason = `Last watched ${daysSinceViewed} days ago (${viewCount} total plays)`;
+                reason = `Last watched ${daysSinceViewed} days ago (${viewCount} total ${viewCount === 1 ? 'play' : 'plays'})`;
+            } else if (viewCount > 0) {
+                reason = `View count: ${viewCount} plays`;
             }
 
             allCandidates.push({
@@ -2046,22 +2057,44 @@ export async function evaluatePruneCandidatesForServer(
                 serverId,
                 serverName,
                 addedAt: item.addedAt,
+                updatedAt: item.updatedAt || item.addedAt,
                 lastViewedAt: item.lastViewedAt,
                 viewCount,
                 fileSizeGb: sizeGb > 0 ? sizeGb : (item.type === "movie" ? 4.5 : 12.0),
                 filePath: item.filePath,
-                imdbId: item.guids.imdb,
-                tmdbId: item.guids.tmdb,
+                thumb: item.thumb,
+                resolution: item.detectedBadges?.resolution,
+                hdr: item.detectedBadges?.hdr,
+                videoFormatLabel: item.detectedBadges?.videoFormatLabel,
+                audio: item.detectedBadges?.audio,
+                imdbId: item.guids?.imdb,
+                tmdbId: item.guids?.tmdb,
                 reason,
                 daysOld
             });
         }
     }
 
-    // Sort by oldest addedAt ascending (oldest first)
-    allCandidates.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+    // Sort candidates according to specified sort option
+    if (sortBy === "oldest_watched") {
+        allCandidates.sort((a, b) => {
+            if (!a.lastViewedAt && !b.lastViewedAt) return (a.addedAt || 0) - (b.addedAt || 0);
+            if (!a.lastViewedAt) return -1;
+            if (!b.lastViewedAt) return 1;
+            return a.lastViewedAt - b.lastViewedAt;
+        });
+    } else if (sortBy === "largest_size") {
+        allCandidates.sort((a, b) => b.fileSizeGb - a.fileSizeGb);
+    } else if (sortBy === "least_plays") {
+        allCandidates.sort((a, b) => a.viewCount - b.viewCount || (a.addedAt || 0) - (b.addedAt || 0));
+    } else if (sortBy === "oldest_modified") {
+        allCandidates.sort((a, b) => (a.updatedAt || a.addedAt || 0) - (b.updatedAt || b.addedAt || 0));
+    } else {
+        // Default: oldest addedAt ascending (oldest first)
+        allCandidates.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+    }
 
-    const selected = allCandidates.slice(0, maxCandidates);
+    const selected = maxCandidates === 0 ? allCandidates : allCandidates.slice(0, maxCandidates);
     const totalRecoverableGb = parseFloat(selected.reduce((acc, c) => acc + c.fileSizeGb, 0).toFixed(2));
 
     return {

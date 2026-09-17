@@ -3204,6 +3204,209 @@ export async function testCurationApiKeysAction(tmdbKey?: string, traktKey?: str
     };
 }
 
+export async function getGlancesDisksAction() {
+    await verifyAdmin();
+    try {
+        const instances = await prisma.glancesInstance.findMany({ orderBy: { createdAt: "asc" } });
+        if (!instances || instances.length === 0) {
+            return { success: true, disks: [], instances: [] };
+        }
+
+        const allDisks: Array<{
+            id: string;
+            instanceId: string;
+            instanceName: string;
+            mntPoint: string;
+            deviceName: string;
+            fsType: string;
+            sizeBytes: number;
+            usedBytes: number;
+            freeBytes: number;
+            totalGb: number;
+            usedGb: number;
+            freeGb: number;
+            percent: number;
+            isOnline: boolean;
+        }> = [];
+
+        for (const inst of instances) {
+            let clean = (inst.url?.trim() || "").replace(/\/+$/, "");
+            if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+                clean = `http://${clean}`;
+            }
+            const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
+
+            const fetchGlancesMetric = async (endpoint: string) => {
+                const versions = [4, 3, 2];
+                for (const v of versions) {
+                    try {
+                        const url = `${baseGlances}/api/${v}/${endpoint}`;
+                        const res = await fetch(url, { signal: AbortSignal.timeout(3000), cache: "no-store" });
+                        if (res.ok) return await res.json();
+                    } catch (e) {}
+                }
+                try {
+                    const url = `${baseGlances}/${endpoint}`;
+                    const res = await fetch(url, { signal: AbortSignal.timeout(3000), cache: "no-store" });
+                    if (res.ok) return await res.json();
+                } catch (e) {}
+                return null;
+            };
+
+            try {
+                const fsData = await fetchGlancesMetric("fs");
+                if (Array.isArray(fsData)) {
+                    for (const disk of fsData) {
+                        const mntPoint = disk.mnt_point || disk.mountpoint || disk.dir_name || disk.name || "/";
+                        const deviceName = disk.device_name || disk.device || disk.fs || "disk";
+                        const fsType = disk.fs_type || disk.type || "fs";
+                        const sizeBytes = Number(disk.size || disk.total || 0);
+                        const usedBytes = Number(disk.used || 0);
+                        const freeBytes = Number(disk.free || disk.avail || Math.max(0, sizeBytes - usedBytes));
+                        const percent = typeof disk.percent === "number" ? Math.round(disk.percent) : (sizeBytes > 0 ? Math.round((usedBytes / sizeBytes) * 100) : 0);
+
+                        const totalGb = parseFloat((sizeBytes / (1024 * 1024 * 1024)).toFixed(1));
+                        const usedGb = parseFloat((usedBytes / (1024 * 1024 * 1024)).toFixed(1));
+                        const freeGb = parseFloat((freeBytes / (1024 * 1024 * 1024)).toFixed(1));
+
+                        allDisks.push({
+                            id: `${inst.id}:${mntPoint}`,
+                            instanceId: inst.id,
+                            instanceName: inst.name,
+                            mntPoint,
+                            deviceName,
+                            fsType,
+                            sizeBytes,
+                            usedBytes,
+                            freeBytes,
+                            totalGb,
+                            usedGb,
+                            freeGb,
+                            percent,
+                            isOnline: true
+                        });
+                    }
+                }
+            } catch (e) {}
+        }
+
+        return {
+            success: true,
+            disks: allDisks,
+            instances: instances.map(i => ({ id: i.id, name: i.name, url: i.url }))
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message, disks: [], instances: [] };
+    }
+}
+
+export async function recheckLeavingSoonWatchActivityAction(targetServerId?: string) {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
+
+        // Fetch all items currently flagged as leaving soon in DB
+        const leavingSoonRecords = await prisma.mediaContentAdvisory.findMany({
+            where: {
+                isLeavingSoon: true,
+                ...(targetServerId ? { serverId: targetServerId } : {})
+            }
+        });
+
+        if (leavingSoonRecords.length === 0) {
+            return {
+                success: true,
+                checkedCount: 0,
+                unflaggedCount: 0,
+                unflaggedItems: [],
+                message: "No items currently flagged as Leaving Soon."
+            };
+        }
+
+        const unflaggedItems: Array<{ ratingKey: string; title: string; reason: string; lastViewedAt?: string }> = [];
+
+        // Group by serverId
+        const byServer: Record<string, typeof leavingSoonRecords> = {};
+        for (const rec of leavingSoonRecords) {
+            const sId = rec.serverId || "default";
+            if (!byServer[sId]) byServer[sId] = [];
+            byServer[sId].push(rec);
+        }
+
+        for (const [sId, records] of Object.entries(byServer)) {
+            const resolved = await resolveWorkingPlexServerConnection(sId);
+            if (!resolved || !resolved.serverUrl || !resolved.token) continue;
+
+            for (const rec of records) {
+                try {
+                    // Query Plex item metadata directly
+                    const metaUrl = `${resolved.serverUrl}/library/metadata/${encodeURIComponent(rec.ratingKey)}?X-Plex-Token=${encodeURIComponent(resolved.token)}`;
+                    const res = await fetch(metaUrl, {
+                        headers: { "Accept": "application/json", "X-Plex-Token": resolved.token },
+                        signal: AbortSignal.timeout(4000),
+                        cache: "no-store"
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        const itemMeta = data.MediaContainer?.Metadata?.[0];
+                        if (itemMeta) {
+                            const currentViewCount = parseInt(itemMeta.viewCount || "0", 10);
+                            const currentLastViewedAt = itemMeta.lastViewedAt ? parseInt(itemMeta.lastViewedAt, 10) * 1000 : null;
+                            const flaggedAt = rec.updatedAt ? rec.updatedAt.getTime() : rec.createdAt.getTime();
+
+                            // Item is watched if viewCount > 0 AND (lastViewedAt > flaggedAt - 1 day OR viewCount increased)
+                            const isRecentlyWatched = currentLastViewedAt && (currentLastViewedAt >= (flaggedAt - 86400000));
+
+                            if (isRecentlyWatched || currentViewCount > 0) {
+                                // Unflag in database
+                                await prisma.mediaContentAdvisory.update({
+                                    where: { id: rec.id },
+                                    data: {
+                                        isLeavingSoon: false,
+                                        leavingSoonDate: null,
+                                        leavingReason: `Unflagged: Watched by user on ${currentLastViewedAt ? new Date(currentLastViewedAt).toLocaleDateString() : 'recently'}`
+                                    }
+                                });
+
+                                // Restore original poster artwork
+                                await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, sId, rec.ratingKey);
+
+                                unflaggedItems.push({
+                                    ratingKey: rec.ratingKey,
+                                    title: rec.title || itemMeta.title || rec.ratingKey,
+                                    reason: `Watched (${currentViewCount} plays, last on ${currentLastViewedAt ? new Date(currentLastViewedAt).toLocaleString() : 'recently'})`,
+                                    lastViewedAt: currentLastViewedAt ? new Date(currentLastViewedAt).toISOString() : undefined
+                                });
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error(`Error checking watch status for ${rec.ratingKey}:`, e);
+                }
+            }
+        }
+
+        if (unflaggedItems.length > 0) {
+            logger.addLog("SUCCESS", "CURATION", `🎉 Unflagged ${unflaggedItems.length} items from Leaving Soon due to detected watch activity!`, unflaggedItems.map(i => `${i.title} (${i.reason})`).join(" • "));
+        }
+
+        return {
+            success: true,
+            checkedCount: leavingSoonRecords.length,
+            unflaggedCount: unflaggedItems.length,
+            unflaggedItems,
+            message: unflaggedItems.length > 0
+                ? `Successfully verified ${leavingSoonRecords.length} items: unflagged and restored ${unflaggedItems.length} watched ${unflaggedItems.length === 1 ? 'title' : 'titles'}!`
+                : `Verified ${leavingSoonRecords.length} items: no new watch activity detected.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function getPrunePreviewAction(options?: {
     targetServerId?: string;
     targetSectionKey?: string;
@@ -3211,6 +3414,7 @@ export async function getPrunePreviewAction(options?: {
         minAgeDays?: number;
         unwatchedOnly?: boolean;
         maxCandidates?: number;
+        sortBy?: "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     };
 }) {
     await verifyAdmin();
@@ -3274,8 +3478,9 @@ export async function getPrunePreviewAction(options?: {
 
             const res = await evaluatePruneCandidatesForServer(resolved.serverUrl, resolved.token, s.clientIdentifier, s.name, {
                 minAgeDays: criteria?.minAgeDays ?? settings?.pruneMinAgeDays ?? 90,
-                unwatchedOnly: criteria?.unwatchedOnly ?? settings?.pruneUnwatchedOnly ?? true,
+                unwatchedOnly: criteria?.unwatchedOnly ?? settings?.pruneUnwatchedOnly ?? false,
                 maxCandidates: criteria?.maxCandidates ?? 50,
+                sortBy: criteria?.sortBy ?? "oldest_added",
                 sectionKeys: eligibleSectionKeys
             });
 
@@ -3284,7 +3489,24 @@ export async function getPrunePreviewAction(options?: {
             totalEvaluated += res.evaluatedCount;
         }
 
-        allCandidates.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+        // Sort candidates
+        const sortBy = criteria?.sortBy ?? "oldest_added";
+        if (sortBy === "oldest_watched") {
+            allCandidates.sort((a, b) => {
+                if (!a.lastViewedAt && !b.lastViewedAt) return (a.addedAt || 0) - (b.addedAt || 0);
+                if (!a.lastViewedAt) return -1;
+                if (!b.lastViewedAt) return 1;
+                return a.lastViewedAt - b.lastViewedAt;
+            });
+        } else if (sortBy === "largest_size") {
+            allCandidates.sort((a, b) => b.fileSizeGb - a.fileSizeGb);
+        } else if (sortBy === "least_plays") {
+            allCandidates.sort((a, b) => a.viewCount - b.viewCount || (a.addedAt || 0) - (b.addedAt || 0));
+        } else if (sortBy === "oldest_modified") {
+            allCandidates.sort((a, b) => (a.updatedAt || a.addedAt || 0) - (b.updatedAt || b.addedAt || 0));
+        } else {
+            allCandidates.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+        }
 
         return {
             success: true,
@@ -3307,6 +3529,7 @@ export async function runPruneSimulationAction(
         minAgeDays?: number;
         unwatchedOnly?: boolean;
         maxCandidates?: number;
+        sortBy?: "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     },
     targetSectionKey?: string
 ) {
@@ -5536,7 +5759,7 @@ export async function getPlaceholderPreviewDataUrlAction(
         bannerType?: string;
         bannerText?: string;
         bannerTheme?: string;
-        bannerPosition?: "top" | "bottom" | "corner";
+        bannerPosition?: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | string;
         daysRemaining?: number | string;
         formattedDate?: string;
         date?: string;
