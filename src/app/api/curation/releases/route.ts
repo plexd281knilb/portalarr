@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getTmdbUpcomingMovies, getTmdbNowPlayingMovies, TmdbMediaItem } from "@/lib/curation/tmdb";
+import { getTmdbApiKey, getTmdbUpcomingMovies, getTmdbNowPlayingMovies, TmdbMediaItem } from "@/lib/curation/tmdb";
 
 export async function GET(req: NextRequest) {
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const apiKey = settings?.tmdbApiKey || process.env.TMDB_API_KEY || "";
+        const apiKey = await getTmdbApiKey();
 
         const [upcoming, nowPlaying] = await Promise.allSettled([
             getTmdbUpcomingMovies(),

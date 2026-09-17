@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 // Built-in public TMDb read-access token & fallback keys
-const DEFAULT_TMDB_API_KEY = "45dbb6348bb95b211a1a5cf8a6efb462";
+const DEFAULT_TMDB_API_KEY = "431a8708161bcd1f1fbe7536137e61ed";
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/original";
 
@@ -47,7 +47,7 @@ export async function getTmdbApiKey(): Promise<string> {
             return settings.tmdbApiKey.trim();
         }
     } catch (e) {}
-    return process.env.TMDB_API_KEY || "";
+    return process.env.TMDB_API_KEY || DEFAULT_TMDB_API_KEY;
 }
 
 async function tmdbFetch(endpoint: string, params: Record<string, string | number> = {}): Promise<any> {
@@ -354,9 +354,8 @@ export async function getTmdbStreamingProviderMedia(
             };
 
             if (isKids) {
-                movieParams.with_genres = "16,10751"; // Animation, Family
-                movieParams.certification_country = "US";
-                movieParams["certification.lte"] = "PG";
+                movieParams.with_genres = "16|10751"; // Animation OR Family
+                movieParams.without_genres = "27,53"; // Exclude Horror and Thriller
             }
 
             const movieData = await tmdbFetch("/discover/movie", movieParams);
@@ -376,7 +375,8 @@ export async function getTmdbStreamingProviderMedia(
             };
 
             if (isKids) {
-                tvParams.with_genres = "16,10751,10762"; // Animation, Family, Kids
+                tvParams.with_genres = "16|10751|10762"; // Animation OR Family OR Kids
+                tvParams.without_genres = "27,53"; // Exclude Horror and Thriller
             }
 
             const tvData = await tmdbFetch("/discover/tv", tvParams);

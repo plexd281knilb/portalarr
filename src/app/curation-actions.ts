@@ -32,6 +32,7 @@ import {
     generatePlaceholderRibbonSvg
 } from "@/lib/curation/overlay-engine";
 import { 
+    getTmdbApiKey,
     getTmdbTrending, 
     getTmdbPopularMovies, 
     getTmdbTopRatedMovies, 
@@ -970,64 +971,102 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 matchingRatingKeys.push(...libraryItems.filter(it => lKeys.includes(it.ratingKey)).map(it => it.ratingKey));
             }
         } else if (collection.sourceType === "tmdb") {
-            const tmdbKey = settings?.tmdbApiKey || "";
+            const tmdbKey = await getTmdbApiKey();
             if (collection.sourceQuery?.startsWith("collection:")) {
                 // Franchise collection
                 const collId = collection.sourceQuery.replace("collection:", "");
-                const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
-                if (tmdbRes.ok) {
-                    const data = await tmdbRes.json();
-                    const parts = data.parts || [];
-                    const tmdbIds = new Set(parts.map((p: any) => String(p.id)));
-                    matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
+                if (tmdbKey) {
+                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
+                    if (tmdbRes.ok) {
+                        const data = await tmdbRes.json();
+                        const parts = data.parts || [];
+                        const tmdbIds = new Set(parts.map((p: any) => String(p.id)));
+                        const titles = new Set(parts.map((p: any) => p.title?.toLowerCase().trim()).filter(Boolean));
+                        matchingRatingKeys.push(...libraryItems.filter(it => 
+                            (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                            (it.title && titles.has(it.title.toLowerCase().trim()))
+                        ).map(it => it.ratingKey));
+                    }
                 }
             } else if (collection.sourceQuery?.startsWith("company:")) {
                 const compId = collection.sourceQuery.replace("company:", "");
-                const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
-                if (tmdbRes.ok) {
-                    const data = await tmdbRes.json();
-                    const tmdbIds = new Set((data.results || []).map((p: any) => String(p.id)));
-                    matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
+                if (tmdbKey) {
+                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
+                    if (tmdbRes.ok) {
+                        const data = await tmdbRes.json();
+                        const tmdbIds = new Set((data.results || []).map((p: any) => String(p.id)));
+                        const titles = new Set((data.results || []).map((p: any) => p.title?.toLowerCase().trim()).filter(Boolean));
+                        matchingRatingKeys.push(...libraryItems.filter(it => 
+                            (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                            (it.title && titles.has(it.title.toLowerCase().trim()))
+                        ).map(it => it.ratingKey));
+                    }
                 }
             } else if (collection.sourceQuery?.startsWith("network:")) {
                 const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
                 const shows = await getTmdbNetworkShows(netId);
                 const tmdbIds = new Set(shows.map(s => String(s.id)));
-                matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
+                const titles = new Set(shows.map(s => s.title?.toLowerCase().trim()).filter(Boolean));
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                ).map(it => it.ratingKey));
             } else if (collection.sourceQuery?.startsWith("provider:")) {
                 const parts = collection.sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
                 const providerMedia = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
                 const tmdbIds = new Set(providerMedia.map(m => String(m.id)));
-                matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
+                const imdbIds = new Set(providerMedia.map(m => m.imdbId).filter(Boolean));
+                const titles = new Set(providerMedia.map(m => m.title?.toLowerCase().trim()).filter(Boolean));
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                ).map(it => it.ratingKey));
             } else if (collection.sourceQuery === "digital_releases") {
                 const upcoming = await getTmdbUpcomingMovies();
                 const tmdbIds = new Set(upcoming.map(u => String(u.id)));
-                matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
+                const imdbIds = new Set(upcoming.map(u => u.imdbId).filter(Boolean));
+                const titles = new Set(upcoming.map(u => u.title?.toLowerCase().trim()).filter(Boolean));
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                ).map(it => it.ratingKey));
             } else {
                 // Trending / Popular
                 const trending = await getTmdbTrending("all", "week");
                 const tmdbIds = new Set(trending.map(t => String(t.id)));
-                matchingRatingKeys.push(...libraryItems.filter(it => it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))).map(it => it.ratingKey));
+                const imdbIds = new Set(trending.map(t => t.imdbId).filter(Boolean));
+                const titles = new Set(trending.map(t => t.title?.toLowerCase().trim()).filter(Boolean));
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                ).map(it => it.ratingKey));
             }
         } else if (collection.sourceType === "trakt") {
             if (collection.sourceQuery === "trending") {
                 const trending = await getTraktTrendingMovies(40);
                 const tmdbIds = new Set(trending.map((t: any) => String(t.tmdbId)).filter(Boolean));
                 const imdbIds = new Set(trending.map((t: any) => String(t.imdbId)).filter(Boolean));
+                const titles = new Set(trending.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
                 matchingRatingKeys.push(...libraryItems.filter(it => 
                     (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb)))
+                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                    (it.title && titles.has(it.title.toLowerCase().trim()))
                 ).map(it => it.ratingKey));
             } else if (collection.sourceQuery) {
                 const listData = await getTraktUserList(collection.sourceQuery);
                 if (listData?.items) {
                     const tmdbIds = new Set(listData.items.map((t: any) => String(t.tmdbId)).filter(Boolean));
                     const imdbIds = new Set(listData.items.map((t: any) => String(t.imdbId)).filter(Boolean));
+                    const titles = new Set(listData.items.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
                     matchingRatingKeys.push(...libraryItems.filter(it => 
                         (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb)))
+                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                        (it.title && titles.has(it.title.toLowerCase().trim()))
                     ).map(it => it.ratingKey));
                 }
             }
@@ -1233,7 +1272,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 executionMethod = `Plex Smart Filter: ${sourceQuery}`;
             }
         } else if (sourceType === "tmdb") {
-            const tmdbKey = settings?.tmdbApiKey || "";
+            const tmdbKey = await getTmdbApiKey();
             if (sourceQuery.startsWith("collection:")) {
                 const collId = sourceQuery.replace("collection:", "");
                 executionMethod = `TMDb Franchise API: Querying collection ID #${collId} parts list.`;
@@ -1242,30 +1281,40 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
                         const parts: any[] = data.parts || [];
-                        const titles = parts.map((p: any) => p.title.toLowerCase());
+                        const titles = parts.map((p: any) => p.title?.toLowerCase().trim()).filter(Boolean);
                         const tmdbIds = parts.map((p: any) => String(p.id));
                         matchedItems = libraryItems.filter(it => 
-                            (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
-                            titles.includes(it.title.toLowerCase())
+                            (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                            (it.title && titles.includes(it.title.toLowerCase().trim()))
                         );
                     }
                 }
-            } else if (sourceQuery.startsWith("company:") || sourceQuery.startsWith("network:")) {
-                const compId = sourceQuery.replace(/^(company|network):/, "");
-                executionMethod = `TMDb Studio/Network API: Querying company/network ID #${compId} filmography.`;
+            } else if (sourceQuery.startsWith("company:")) {
+                const compId = sourceQuery.replace("company:", "");
+                executionMethod = `TMDb Studio API: Querying company ID #${compId} filmography.`;
                 if (tmdbKey) {
                     const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
                         const results: any[] = data.results || [];
                         const tmdbIds = results.map((r: any) => String(r.id));
-                        const titles = results.map((r: any) => r.title.toLowerCase());
+                        const titles = results.map((r: any) => r.title?.toLowerCase().trim()).filter(Boolean);
                         matchedItems = libraryItems.filter(it => 
-                            (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
-                            titles.includes(it.title.toLowerCase())
+                            (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                            (it.title && titles.includes(it.title.toLowerCase().trim()))
                         );
                     }
                 }
+            } else if (sourceQuery.startsWith("network:")) {
+                const netId = parseInt(sourceQuery.replace("network:", ""), 10) || 213;
+                executionMethod = `TMDb TV Network API: Querying network ID #${netId} shows.`;
+                const shows = await getTmdbNetworkShows(netId);
+                const tmdbIds = shows.map(s => String(s.id));
+                const titles = shows.map(s => s.title?.toLowerCase().trim()).filter(Boolean);
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
+                );
             } else if (sourceQuery.startsWith("provider:")) {
                 const parts = sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
@@ -1274,32 +1323,47 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 executionMethod = `TMDb Streaming Provider API: Querying ${provName} ${isKids ? "(Kids & Family)" : "Trending Top Charts"}. Matches against Plex library metadata.`;
                 const providerMedia = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
                 const tmdbIds = providerMedia.map(m => String(m.id));
-                const titles = providerMedia.map(m => m.title.toLowerCase());
+                const imdbIds = providerMedia.map(m => m.imdbId).filter(Boolean);
+                const titles = providerMedia.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
                 matchedItems = libraryItems.filter(it => 
-                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
-                    (it.title && titles.includes(it.title.toLowerCase()))
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
             } else if (sourceQuery === "digital_releases") {
                 executionMethod = `TMDb Releases API: Querying new digital streaming releases.`;
                 const upcoming = await getTmdbUpcomingMovies();
                 const tmdbIds = upcoming.map(m => String(m.id));
-                const titles = upcoming.map(m => m.title.toLowerCase());
+                const imdbIds = upcoming.map(m => m.imdbId).filter(Boolean);
+                const titles = upcoming.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
                 matchedItems = libraryItems.filter(it => 
-                    (it.guids.tmdb && tmdbIds.includes(it.guids.tmdb)) ||
-                    (it.title && titles.includes(it.title.toLowerCase()))
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
             } else {
                 executionMethod = `TMDb Query: ${sourceQuery}`;
+                const trending = await getTmdbTrending("all", "week");
+                const tmdbIds = trending.map(t => String(t.id));
+                const imdbIds = trending.map(t => t.imdbId).filter(Boolean);
+                const titles = trending.map(t => t.title?.toLowerCase().trim()).filter(Boolean);
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
+                );
             }
         } else if (sourceType === "mdblist") {
             executionMethod = `MDBList API: Resolving curated chart "${sourceQuery}". Matches against Plex IMDb/TMDb metadata.`;
             const items = await getMdblistItems(sourceQuery);
             if (items && items.length > 0) {
                 const imdbIds = items.map((t: any) => t.imdbId).filter(Boolean);
-                const titles = items.map((t: any) => t.title?.toLowerCase()).filter(Boolean);
+                const tmdbIds = items.map((t: any) => String(t.tmdbId)).filter(Boolean);
+                const titles = items.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
                 matchedItems = libraryItems.filter(it => 
-                    (it.guids.imdb && imdbIds.includes(it.guids.imdb)) ||
-                    (it.title && titles.includes(it.title.toLowerCase()))
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
             } else {
                 if (sourceQuery === "top-imdb-250" || sourceQuery === "top-imdb-tv") {
@@ -1314,10 +1378,12 @@ export async function generateCollectionCandidateItemsPreviewAction(
             if (sourceQuery === "trending") {
                 const trending = await getTraktTrendingMovies(50);
                 const imdbIds = trending.map((t: any) => t.imdbId).filter(Boolean);
-                const titles = trending.map((t: any) => t.title?.toLowerCase()).filter(Boolean);
+                const tmdbIds = trending.map((t: any) => String(t.tmdbId)).filter(Boolean);
+                const titles = trending.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
                 matchedItems = libraryItems.filter(it => 
-                    (it.guids.imdb && imdbIds.includes(it.guids.imdb)) ||
-                    (it.title && titles.includes(it.title.toLowerCase()))
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
             }
         }
@@ -6053,10 +6119,10 @@ export async function getTmdbTrailerAction(tmdbId: number, mediaType: "movie" | 
 }
 
 /**
- * Server action to create/deploy a placeholder item for a title not currently in the Plex library.
+ * Internal core worker to create/deploy a placeholder item for a title not currently in the Plex library.
  * Writes to the configured coming soon share folder and saves the advisory record.
  */
-export async function createPlaceholderItemAction(
+export async function createPlaceholderItemInternal(
     serverId: string,
     sectionKey: string,
     itemData: {
@@ -6078,7 +6144,6 @@ export async function createPlaceholderItemAction(
         reason?: string;
     }
 ) {
-    await verifyAdmin();
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const comingSoonShares: Record<string, string> = settings?.comingSoonShares 
@@ -6089,6 +6154,15 @@ export async function createPlaceholderItemAction(
         if (!sharePath || !fs.existsSync(sharePath)) {
             const valid = Object.values(comingSoonShares).find(p => p && fs.existsSync(p));
             if (valid) sharePath = valid;
+        }
+        if (!sharePath || !fs.existsSync(sharePath)) {
+            const defaultShare = path.resolve("./data/coming_soon");
+            if (!fs.existsSync(defaultShare)) {
+                try { fs.mkdirSync(defaultShare, { recursive: true }); } catch {}
+            }
+            if (fs.existsSync(defaultShare)) {
+                sharePath = defaultShare;
+            }
         }
 
         const bannerText = itemData.bannerText?.trim() || "NOT REQUESTED";
@@ -6232,6 +6306,35 @@ export async function createPlaceholderItemAction(
 }
 
 /**
+ * Server action to create/deploy a placeholder item for a title not currently in the Plex library.
+ */
+export async function createPlaceholderItemAction(
+    serverId: string,
+    sectionKey: string,
+    itemData: {
+        tmdbId: number;
+        title: string;
+        year?: number;
+        mediaType: "movie" | "tv";
+        posterPath: string | null;
+        overview?: string;
+        bannerType?: string;
+        bannerText?: string;
+        bannerTheme?: string;
+        bannerPosition?: "top" | "bottom" | "corner";
+        daysRemaining?: number | string;
+        formattedDate?: string;
+        date?: string;
+        source?: string;
+        status?: string;
+        reason?: string;
+    }
+) {
+    await verifyAdmin();
+    return await createPlaceholderItemInternal(serverId, sectionKey, itemData);
+}
+
+/**
  * Internal worker to batch-generate Coming Soon placeholder trailers & banner posters for missing items in a collection.
  */
 export async function generateCollectionPlaceholdersInternal(collection: any): Promise<{ success: boolean; generatedCount: number; message: string; error?: string }> {
@@ -6247,13 +6350,14 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
             const valid = Object.values(comingSoonShares).find(p => p && fs.existsSync(p));
             if (valid) sharePath = valid;
         }
-
         if (!sharePath || !fs.existsSync(sharePath)) {
-            return {
-                success: false,
-                generatedCount: 0,
-                message: `Coming Soon share folder is not configured or does not exist on disk for server "${serverId}". Please set and validate a share directory under Coming Soon Shares Configuration.`
-            };
+            const defaultShare = path.resolve("./data/coming_soon");
+            if (!fs.existsSync(defaultShare)) {
+                try { fs.mkdirSync(defaultShare, { recursive: true }); } catch {}
+            }
+            if (fs.existsSync(defaultShare)) {
+                sharePath = defaultShare;
+            }
         }
 
         // Auto-cleanup any previously created placeholders whose full media is now available in Plex
@@ -6283,7 +6387,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
 
         // 2. Fetch candidates from Collection Source Query
         let candidateItems: any[] = [];
-        const tmdbKey = settings?.tmdbApiKey || "";
+        const tmdbKey = await getTmdbApiKey();
 
         if (collection.sourceType === "tmdb") {
             if (collection.sourceQuery?.startsWith("collection:")) {
@@ -6453,7 +6557,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
 
                 const year = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
 
-                await createPlaceholderItemAction(serverId, collection.sectionKey || "", {
+                await createPlaceholderItemInternal(serverId, collection.sectionKey || "", {
                     tmdbId: item.id,
                     title: item.title,
                     year,
