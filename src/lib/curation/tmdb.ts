@@ -336,58 +336,79 @@ export async function getTmdbStreamingProviderMedia(
         isKids?: boolean;
         mediaType?: "movie" | "tv" | "both";
         page?: number;
+        maxPages?: number;
         minVotes?: number;
     } = {}
 ): Promise<TmdbMediaItem[]> {
-    const { isKids = false, mediaType = "both", page = 1, minVotes = 10 } = options;
+    const { isKids = false, mediaType = "both", page = 1, maxPages = 3, minVotes = 10 } = options;
     const items: TmdbMediaItem[] = [];
 
     try {
+        const pagesToFetch = maxPages > 1 ? Array.from({ length: maxPages }, (_, i) => page + i) : [page];
+
         // Fetch Movies
         if (mediaType === "movie" || mediaType === "both") {
-            const movieParams: Record<string, string | number> = {
-                with_watch_providers: providerId,
-                watch_region: "US",
-                sort_by: "popularity.desc",
-                "vote_count.gte": minVotes,
-                page
-            };
+            const moviePromises = pagesToFetch.map(p => {
+                const movieParams: Record<string, string | number> = {
+                    with_watch_providers: providerId,
+                    watch_region: "US",
+                    sort_by: "popularity.desc",
+                    "vote_count.gte": minVotes,
+                    page: p
+                };
 
-            if (isKids) {
-                movieParams.with_genres = "16|10751"; // Animation OR Family
-                movieParams.without_genres = "27,53"; // Exclude Horror and Thriller
-            }
+                if (isKids) {
+                    movieParams.with_genres = "16|10751|10762"; // Animation OR Family OR Kids
+                    movieParams.without_genres = "27,53,80"; // Exclude Horror, Thriller, Crime
+                }
+                return tmdbFetch("/discover/movie", movieParams);
+            });
 
-            const movieData = await tmdbFetch("/discover/movie", movieParams);
-            if (movieData?.results) {
-                items.push(...movieData.results.map(mapTmdbMovie));
+            const movieResults = await Promise.all(moviePromises);
+            for (const movieData of movieResults) {
+                if (movieData?.results) {
+                    items.push(...movieData.results.map(mapTmdbMovie));
+                }
             }
         }
 
         // Fetch TV Shows
         if (mediaType === "tv" || mediaType === "both") {
-            const tvParams: Record<string, string | number> = {
-                with_watch_providers: providerId,
-                watch_region: "US",
-                sort_by: "popularity.desc",
-                "vote_count.gte": Math.max(5, Math.floor(minVotes / 2)),
-                page
-            };
+            const tvPromises = pagesToFetch.map(p => {
+                const tvParams: Record<string, string | number> = {
+                    with_watch_providers: providerId,
+                    watch_region: "US",
+                    sort_by: "popularity.desc",
+                    "vote_count.gte": Math.max(5, Math.floor(minVotes / 2)),
+                    page: p
+                };
 
-            if (isKids) {
-                tvParams.with_genres = "16|10751|10762"; // Animation OR Family OR Kids
-                tvParams.without_genres = "27,53"; // Exclude Horror and Thriller
-            }
+                if (isKids) {
+                    tvParams.with_genres = "16|10751|10762"; // Animation OR Family OR Kids
+                    tvParams.without_genres = "27,53,80"; // Exclude Horror, Thriller, Crime
+                }
+                return tmdbFetch("/discover/tv", tvParams);
+            });
 
-            const tvData = await tmdbFetch("/discover/tv", tvParams);
-            if (tvData?.results) {
-                items.push(...tvData.results.map(mapTmdbTv));
+            const tvResults = await Promise.all(tvPromises);
+            for (const tvData of tvResults) {
+                if (tvData?.results) {
+                    items.push(...tvData.results.map(mapTmdbTv));
+                }
             }
         }
 
+        // Deduplicate items by ID
+        const seenIds = new Set<number>();
+        const uniqueItems = items.filter(item => {
+            if (seenIds.has(item.id)) return false;
+            seenIds.add(item.id);
+            return true;
+        });
+
         // Sort combined list by popularity descending
-        items.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-        return items;
+        uniqueItems.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+        return uniqueItems;
     } catch {
         return items;
     }

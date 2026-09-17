@@ -79,6 +79,7 @@ model Settings {
   serverGuardRails            String?   // JSON map of serverId -> ServerGuardRailConfig
 
   // Agregarr Placeholder Overlay & Timing Controls
+  placeholderDaysThreshold         Int?      @default(90) // Max future days window for generating placeholders (0 = unlimited)
   placeholderTheatricalNoticeDays  Int?      @default(60) // Days before theatrical release to generate placeholder
   placeholderDigitalCountdownDays  Int?      @default(30) // Switch to "Streaming in X Days" within 30 days
   placeholderNowStreamingGraceDays Int?      @default(7)  // Keep "Now Streaming" for 7 days post-digital

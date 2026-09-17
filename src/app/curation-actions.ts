@@ -141,6 +141,7 @@ export async function getCurationSettingsAction() {
         selectedGlancesDiskId: (settings?.serverStorageConfig ? JSON.parse(settings.serverStorageConfig) : {})?.selectedGlancesDiskId || "",
 
         // Placeholder Timing & Overlay Settings
+        placeholderDaysThreshold: settings?.placeholderDaysThreshold ?? 90,
         placeholderTheatricalNoticeDays: settings?.placeholderTheatricalNoticeDays ?? 60,
         placeholderDigitalCountdownDays: settings?.placeholderDigitalCountdownDays ?? 30,
         placeholderNowStreamingGraceDays: settings?.placeholderNowStreamingGraceDays ?? 7,
@@ -430,6 +431,7 @@ export async function saveCurationSettingsAction(data: {
     comingSoonShares?: Record<string, string>;
     serverStorageConfig?: Record<string, any>;
     selectedGlancesDiskId?: string;
+    placeholderDaysThreshold?: number;
     placeholderTheatricalNoticeDays?: number;
     placeholderDigitalCountdownDays?: number;
     placeholderNowStreamingGraceDays?: number;
@@ -504,6 +506,7 @@ export async function saveCurationSettingsAction(data: {
         }
 
         // Placeholder & Leaving Soon Settings
+        if (data.placeholderDaysThreshold !== undefined) updatePayload.placeholderDaysThreshold = data.placeholderDaysThreshold;
         if (data.placeholderTheatricalNoticeDays !== undefined) updatePayload.placeholderTheatricalNoticeDays = data.placeholderTheatricalNoticeDays;
         if (data.placeholderDigitalCountdownDays !== undefined) updatePayload.placeholderDigitalCountdownDays = data.placeholderDigitalCountdownDays;
         if (data.placeholderNowStreamingGraceDays !== undefined) updatePayload.placeholderNowStreamingGraceDays = data.placeholderNowStreamingGraceDays;
@@ -1047,16 +1050,35 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 const isKids = parts.length > 2 && parts[2] === "kids";
                 const providerMedia = await getTmdbStreamingProviderMedia(provId, { 
                     isKids, 
-                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both" 
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3
                 });
                 const tmdbIds = new Set(providerMedia.map(m => String(m.id)));
                 const imdbIds = new Set(providerMedia.map(m => m.imdbId).filter(Boolean));
                 const titles = new Set(providerMedia.map(m => m.title?.toLowerCase().trim()).filter(Boolean));
-                matchingRatingKeys.push(...libraryItems.filter(it => 
+                const provMatches = libraryItems.filter(it => 
                     (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
                     (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
                     (it.title && titles.has(it.title.toLowerCase().trim()))
-                ).map(it => it.ratingKey));
+                ).map(it => it.ratingKey);
+                matchingRatingKeys.push(...provMatches);
+
+                // Fallback for Kids & Family collections: if direct provider matches are low or empty, match on Family/Animation/Kids genres or ratings
+                if (matchingRatingKeys.length < 5 && (isKids || collection.title.toLowerCase().includes("kids") || collection.title.toLowerCase().includes("family"))) {
+                    const kidsMatches = libraryItems.filter(it => {
+                        const gList = (it.genres || it.genre || []).map((g: string) => g.toLowerCase());
+                        const isFamilyGenre = gList.some((g: string) => g.includes("animation") || g.includes("family") || g.includes("children") || g.includes("kids"));
+                        const cRating = (it.contentRating || "").toUpperCase();
+                        const isKidsRating = ["G", "PG", "TV-Y", "TV-Y7", "TV-G", "TV-PG"].some(r => cRating.includes(r));
+                        return isFamilyGenre || isKidsRating;
+                    }).map(it => it.ratingKey);
+
+                    for (const kKey of kidsMatches) {
+                        if (!matchingRatingKeys.includes(kKey)) {
+                            matchingRatingKeys.push(kKey);
+                        }
+                    }
+                }
             } else if (collection.sourceQuery === "digital_releases") {
                 if (isTvSection) {
                     const tvShows = await getTmdbPopularTv(1);
@@ -6257,10 +6279,10 @@ export async function getTrendingAndPlaceholderMediaAction(
 
             // Smart Banner Suggestion Logic
             let arrStatus: "NOT_REQUESTED" | "COMING_SOON" | "MONITORED_RELEASED" | "IN_LIBRARY" | "UPCOMING_UNREQUESTED";
-            let suggestedBannerType = "not_requested";
-            let suggestedBannerText = "NOT REQUESTED";
+            let suggestedBannerType = "not_requested_yet";
+            let suggestedBannerText = "NOT REQUESTED YET";
             let suggestedBannerTheme = category?.includes("netflix") ? "netflix-red" : "crimson-red";
-            let statusBadgeText = "NOT REQUESTED";
+            let statusBadgeText = "NOT REQUESTED YET";
             let statusBadgeColor = "rose";
 
             if (inLibrary) {
@@ -6273,34 +6295,40 @@ export async function getTrendingAndPlaceholderMediaAction(
             } else if (!isMonitored) {
                 // Media item is NOT requested / NOT in Radarr or Sonarr
                 arrStatus = "NOT_REQUESTED";
-                suggestedBannerType = "not_requested";
-                suggestedBannerText = "NOT REQUESTED";
+                suggestedBannerType = "not_requested_yet";
+                suggestedBannerText = "NOT REQUESTED YET";
                 suggestedBannerTheme = category?.includes("netflix") ? "netflix-red" : "crimson-red";
-                statusBadgeText = "NOT REQUESTED";
+                statusBadgeText = "NOT REQUESTED YET";
                 statusBadgeColor = "rose";
             } else if (!isReleased) {
-                // Requested / monitored in Radarr or Sonarr, but NOT released yet -> COMING SOON
+                // Requested / monitored in Radarr or Sonarr, but NOT released yet -> COMING SOON MONITORED
                 arrStatus = "COMING_SOON";
-                suggestedBannerType = "coming_soon";
                 if (item.digitalReleaseDate) {
                     const daysToRel = Math.ceil((new Date(item.digitalReleaseDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                    suggestedBannerText = daysToRel > 0 && daysToRel <= 30
-                        ? `STREAMING IN ${daysToRel} DAYS`
-                        : `STREAMING ${formatNiceDate(item.digitalReleaseDate).toUpperCase()}`;
+                    if (daysToRel > 0 && daysToRel <= 30) {
+                        suggestedBannerType = "countdown";
+                        suggestedBannerText = `STREAMING IN ${daysToRel} DAYS`;
+                        suggestedBannerTheme = "indigo-purple";
+                    } else {
+                        suggestedBannerType = "digital_release";
+                        suggestedBannerText = `DIGITAL RELEASE ON ${formatNiceDate(item.digitalReleaseDate).toUpperCase()}`;
+                        suggestedBannerTheme = "cinematic-blue";
+                    }
                 } else {
-                    suggestedBannerText = "COMING SOON";
+                    suggestedBannerType = "coming_soon_monitored";
+                    suggestedBannerText = "COMING SOON MONITORED";
+                    suggestedBannerTheme = "amber-gold";
                 }
-                suggestedBannerTheme = "indigo-purple";
-                statusBadgeText = inRadarr ? "IN RADARR (COMING SOON)" : inSonarr ? "IN SONARR (COMING SOON)" : "COMING SOON";
+                statusBadgeText = "COMING SOON MONITORED";
                 statusBadgeColor = "amber";
             } else {
                 // Requested / monitored in Radarr or Sonarr AND already released -> DOWNLOADING SOON
                 arrStatus = "MONITORED_RELEASED";
-                suggestedBannerType = "now_streaming";
+                suggestedBannerType = "downloading_soon";
                 suggestedBannerText = "DOWNLOADING SOON";
                 suggestedBannerTheme = "emerald-green";
-                statusBadgeText = inRadarr ? "IN RADARR (DOWNLOADING)" : inSonarr ? "IN SONARR (DOWNLOADING)" : "DOWNLOADING";
-                statusBadgeColor = "cyan";
+                statusBadgeText = "DOWNLOADING SOON";
+                statusBadgeColor = "emerald";
             }
 
             const releaseYear = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
@@ -6938,6 +6966,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
         // 4. Query Radarr and Sonarr monitored index with server-specific mapping
         const arrIndex = await getArrMonitoredIndex({ targetServerId: collection.serverId });
         const now = new Date();
+        const placeholderDaysThreshold = settings?.placeholderDaysThreshold ?? 90;
         let generatedCount = 0;
 
         for (const item of itemsToGenerate) {
@@ -6960,34 +6989,50 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
                 const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : null;
                 const theDate = item.theatricalReleaseDate ? new Date(item.theatricalReleaseDate) : null;
+
+                // Threshold Check: If release date is further into the future than placeholderDaysThreshold, skip!
+                const futureTargetDate = digDate || relDate || theDate;
+                if (futureTargetDate && futureTargetDate > now && placeholderDaysThreshold > 0) {
+                    const daysToRelease = Math.ceil((futureTargetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    if (daysToRelease > placeholderDaysThreshold) {
+                        continue;
+                    }
+                }
+
                 const isReleased = Boolean(item.inTheaters || (relDate && relDate <= now) || (digDate && digDate <= now) || (theDate && theDate <= now) || arrItem?.isReleased);
 
-                let bannerText = "NOT REQUESTED";
+                let bannerText = "NOT REQUESTED YET";
                 let bannerTheme = (collection.sourceQuery?.includes("netflix") || collection.title?.toLowerCase().includes("netflix")) ? "netflix-red" : "crimson-red";
-                let bannerType = "not_requested";
+                let bannerType = "not_requested_yet";
 
                 if (!isMonitored) {
-                    // Not in Radarr or Sonarr -> NOT REQUESTED
-                    bannerText = "NOT REQUESTED";
+                    // Not in Radarr or Sonarr -> NOT REQUESTED YET
+                    bannerText = "NOT REQUESTED YET";
                     bannerTheme = (collection.sourceQuery?.includes("netflix") || collection.title?.toLowerCase().includes("netflix")) ? "netflix-red" : "crimson-red";
-                    bannerType = "not_requested";
+                    bannerType = "not_requested_yet";
                 } else if (!isReleased) {
-                    // Monitored in Radarr/Sonarr, but unreleased -> COMING SOON
+                    // Monitored in Radarr/Sonarr, but unreleased -> COMING SOON MONITORED
                     if (item.digitalReleaseDate) {
                         const daysToRel = Math.ceil((new Date(item.digitalReleaseDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                        bannerText = daysToRel > 0 && daysToRel <= 30
-                            ? `STREAMING IN ${daysToRel} DAYS`
-                            : `STREAMING ${new Date(item.digitalReleaseDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`;
+                        if (daysToRel > 0 && daysToRel <= 30) {
+                            bannerText = `STREAMING IN ${daysToRel} DAYS`;
+                            bannerTheme = "indigo-purple";
+                            bannerType = "countdown";
+                        } else {
+                            bannerText = `DIGITAL RELEASE ON ${new Date(item.digitalReleaseDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`;
+                            bannerTheme = "cinematic-blue";
+                            bannerType = "digital_release";
+                        }
                     } else {
-                        bannerText = "COMING SOON";
+                        bannerText = "COMING SOON MONITORED";
+                        bannerTheme = "amber-gold";
+                        bannerType = "coming_soon_monitored";
                     }
-                    bannerTheme = "indigo-purple";
-                    bannerType = "coming_soon";
                 } else {
                     // Monitored in Radarr/Sonarr and already released -> DOWNLOADING SOON
                     bannerText = "DOWNLOADING SOON";
                     bannerTheme = "emerald-green";
-                    bannerType = "now_streaming";
+                    bannerType = "downloading_soon";
                 }
 
                 const year = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;

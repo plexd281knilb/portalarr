@@ -108,17 +108,12 @@ import {
 } from "@/lib/curation/presets";
 
 export const AGREGARR_BANNER_PRESETS = [
-    { id: "downloading_soon", label: "⏳ Downloading Soon", defaultText: "DOWNLOADING SOON", theme: "amber-gold", pos: "bottom" as const },
-    { id: "in_radarr", label: "🎬 Monitored in Radarr", defaultText: "MONITORED IN RADARR", theme: "amber-gold", pos: "bottom" as const },
-    { id: "in_sonarr", label: "📺 Monitored in Sonarr", defaultText: "MONITORED IN SONARR", theme: "cinematic-blue", pos: "bottom" as const },
+    { id: "downloading_soon", label: "⏳ Downloading Soon", defaultText: "DOWNLOADING SOON", theme: "emerald-green", pos: "bottom" as const },
+    { id: "coming_soon_monitored", label: "⏳ Coming Soon Monitored", defaultText: "COMING SOON MONITORED", theme: "amber-gold", pos: "bottom" as const },
+    { id: "not_requested_yet", label: "🔥 Not Requested Yet", defaultText: "NOT REQUESTED YET", theme: "crimson-red", pos: "bottom" as const },
     { id: "digital_release", label: "⚡ Digital Release on {date}", defaultText: "DIGITAL RELEASE ON {date}", theme: "cinematic-blue", pos: "bottom" as const },
     { id: "countdown", label: "⏳ Streaming in {days} Days", defaultText: "STREAMING IN {days} DAYS", theme: "indigo-purple", pos: "bottom" as const },
-    { id: "in_theaters", label: "🍿 In Theaters ({year})", defaultText: "IN THEATERS ({year})", theme: "amber-gold", pos: "bottom" as const },
     { id: "streaming_on", label: "✨ Popular on {source}", defaultText: "POPULAR ON {source}", theme: "indigo-purple", pos: "bottom" as const },
-    { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const },
-    { id: "leaving_days", label: "⚠️ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "bottom" as const },
-    { id: "trending_not_requested", label: "🔥 Trending • Not Requested", defaultText: "TRENDING • NOT REQUESTED", theme: "crimson-red", pos: "bottom" as const },
-    { id: "missing_library", label: "❌ Missing from Library", defaultText: "MISSING FROM LIBRARY", theme: "crimson-red", pos: "bottom" as const },
     { id: "quality_edition", label: "💎 {quality} • {edition}", defaultText: "{quality} • {edition}", theme: "cyber-neon", pos: "bottom" as const },
     { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} ({year}) • {status}", theme: "cyber-neon", pos: "bottom" as const }
 ];
@@ -241,11 +236,12 @@ export function AgregarrStudio() {
     // Placeholder Creator Modal States
     const [placeholderModalOpen, setPlaceholderModalOpen] = useState(false);
     const [selectedPlaceholderItem, setSelectedPlaceholderItem] = useState<any | null>(null);
-    const [placeholderModalBannerType, setPlaceholderModalBannerType] = useState<string>("not_requested");
-    const [placeholderModalBannerText, setPlaceholderModalBannerText] = useState("NOT REQUESTED");
+    const [placeholderModalBannerType, setPlaceholderModalBannerType] = useState<string>("not_requested_yet");
+    const [placeholderModalBannerText, setPlaceholderModalBannerText] = useState("NOT REQUESTED YET");
     const [placeholderModalBannerTheme, setPlaceholderModalBannerTheme] = useState<string>("crimson-red");
     const [placeholderModalBannerPosition, setPlaceholderModalBannerPosition] = useState<"bottom" | "top" | "corner">("bottom");
     const [placeholderModalBannerFontSize, setPlaceholderModalBannerFontSize] = useState<number>(44);
+    const [placeholderDaysThreshold, setPlaceholderDaysThreshold] = useState<number>(90);
     const [generatingPlaceholder, setGeneratingPlaceholder] = useState(false);
     const [placeholderPreviewDataUrl, setPlaceholderPreviewDataUrl] = useState<string | null>(null);
     const [placeholderPreviewLoading, setPlaceholderPreviewLoading] = useState<boolean>(false);
@@ -445,6 +441,7 @@ export function AgregarrStudio() {
                     if (settingsRes.placeholderBannerPosition) setPlaceholderModalBannerPosition(settingsRes.placeholderBannerPosition as any);
                     if (settingsRes.placeholderBannerTheme) setPlaceholderModalBannerTheme(settingsRes.placeholderBannerTheme);
                     if (settingsRes.placeholderCustomText) setPlaceholderModalBannerText(settingsRes.placeholderCustomText);
+                    if (settingsRes.placeholderDaysThreshold !== undefined) setPlaceholderDaysThreshold(settingsRes.placeholderDaysThreshold);
                     setCurationSyncCollections(settingsRes.curationSyncCollections ?? true);
                     setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
                     setCurationLastRunAt(settingsRes.curationLastRunAt || null);
@@ -954,9 +951,9 @@ export function AgregarrStudio() {
         setPlaceholderSuccessMsg(null);
         setPlaceholderModalOpen(true);
 
-        const bannerText = item.suggestedBannerText || (!item.isMonitored ? "NOT REQUESTED" : item.isReleased ? "DOWNLOADING SOON" : "COMING SOON");
-        const bannerType = item.suggestedBannerType || (!item.isMonitored ? "not_requested" : item.isReleased ? "now_streaming" : "coming_soon");
-        const bannerTheme = item.suggestedBannerTheme || (!item.isMonitored ? "crimson-red" : item.isReleased ? "emerald-green" : "indigo-purple");
+        const bannerText = item.suggestedBannerText || (!item.isMonitored ? "NOT REQUESTED YET" : item.isReleased ? "DOWNLOADING SOON" : "COMING SOON MONITORED");
+        const bannerType = item.suggestedBannerType || (!item.isMonitored ? "not_requested_yet" : item.isReleased ? "downloading_soon" : "coming_soon_monitored");
+        const bannerTheme = item.suggestedBannerTheme || (!item.isMonitored ? "crimson-red" : item.isReleased ? "emerald-green" : "amber-gold");
 
         setPlaceholderModalBannerText(bannerText);
         setPlaceholderModalBannerType(bannerType);
@@ -1149,6 +1146,9 @@ export function AgregarrStudio() {
         setSharesSavedMsg(false);
         try {
             await saveComingSoonSharesAction(comingSoonShares);
+            await saveCurationSettingsAction({
+                placeholderDaysThreshold: Number(placeholderDaysThreshold)
+            });
             const updatedConfig: Record<string, any> = { ...serverStorageConfig };
             for (const srv of servers) {
                 if (!updatedConfig[srv.serverId]) updatedConfig[srv.serverId] = {};
@@ -2437,6 +2437,57 @@ export function AgregarrStudio() {
                                 );
                             })}
 
+                            {/* Coming Soon Future Days Threshold */}
+                            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-2.5">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                    <Label className="text-xs text-slate-200 font-semibold flex items-center gap-1.5">
+                                        <Clock className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Future Window Threshold
+                                    </Label>
+                                    <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/50">
+                                        {placeholderDaysThreshold === 0 ? "Unlimited (All Future)" : `${placeholderDaysThreshold} Days Max`}
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    Specify how far into the future unreleased titles can be before generating placeholder stubs and posters on disk. Titles releasing beyond this window are skipped until they enter the timeframe.
+                                </p>
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                    {[
+                                        { label: "30 Days", val: 30 },
+                                        { label: "60 Days", val: 60 },
+                                        { label: "90 Days (Default)", val: 90 },
+                                        { label: "180 Days (6 Mo)", val: 180 },
+                                        { label: "365 Days (1 Yr)", val: 365 },
+                                        { label: "Unlimited", val: 0 },
+                                    ].map((opt) => (
+                                        <Button
+                                            key={opt.val}
+                                            type="button"
+                                            size="sm"
+                                            variant={placeholderDaysThreshold === opt.val ? "default" : "outline"}
+                                            onClick={() => setPlaceholderDaysThreshold(opt.val)}
+                                            className={`h-6 text-[10px] px-2.5 rounded-lg font-medium cursor-pointer transition-colors ${
+                                                placeholderDaysThreshold === opt.val
+                                                    ? "bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold"
+                                                    : "border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300"
+                                            }`}
+                                        >
+                                            {opt.label}
+                                        </Button>
+                                    ))}
+                                    <div className="flex items-center gap-1 ml-auto">
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="1825"
+                                            value={placeholderDaysThreshold}
+                                            onChange={(e) => setPlaceholderDaysThreshold(Math.max(0, parseInt(e.target.value) || 0))}
+                                            className="w-16 h-6 text-[10px] bg-slate-900 border-slate-800 text-center font-mono"
+                                        />
+                                        <span className="text-[10px] text-slate-500 font-mono">days</span>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80">
                                 <Button
                                     type="button"
@@ -2585,7 +2636,7 @@ export function AgregarrStudio() {
                                             onValueChange={(val) => {
                                                 const found = AGREGARR_BANNER_PRESETS.find(p => p.id === val);
                                                 setPlaceholderModalBannerType(val);
-                                                const nextText = found?.defaultText || "NOT REQUESTED";
+                                                const nextText = found?.defaultText || "NOT REQUESTED YET";
                                                 setPlaceholderModalBannerText(nextText);
                                                 if (found?.theme) setPlaceholderModalBannerTheme(found.theme);
                                                 if (found?.pos) setPlaceholderModalBannerPosition(found.pos);
@@ -4210,7 +4261,7 @@ export function AgregarrStudio() {
                                         onValueChange={(val: any) => {
                                             const found = AGREGARR_BANNER_PRESETS.find(p => p.id === val);
                                             setPlaceholderModalBannerType(val);
-                                            const defaultText = found?.defaultText || "NOT REQUESTED";
+                                            const defaultText = found?.defaultText || "NOT REQUESTED YET";
                                             setPlaceholderModalBannerText(defaultText);
                                             if (found?.theme) setPlaceholderModalBannerTheme(found.theme);
                                             if (found?.pos) setPlaceholderModalBannerPosition(found.pos);
