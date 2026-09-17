@@ -1027,7 +1027,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                              collection.ratingKey?.startsWith("hub:") ||
                              (collection.sourceType === "plex_query" && !collection.sourceQuery?.includes("hdr:") && !collection.sourceQuery?.includes("audio:") && !collection.sourceQuery?.includes("1980") && !collection.sourceQuery?.includes("1990") && !collection.sourceQuery?.includes("tag:"));
 
-        if (isNativePlex || collection.ratingKey) {
+        if (isNativePlex) {
             const existingCollections = await getPlexLibraryCollections(urlsToTry, token, collection.sectionKey || "");
             const found = existingCollections.find(c => 
                 (collection.ratingKey && c.ratingKey === collection.ratingKey) || 
