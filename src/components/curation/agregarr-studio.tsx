@@ -54,7 +54,10 @@ import {
     Shield,
     ShieldCheck,
     ShieldAlert,
-    Play
+    Play,
+    Filter,
+    Clapperboard,
+    ListFilter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,7 +86,7 @@ import {
     updateCollectionPlacementAction,
     syncSeasonalAndScheduledCollectionsAction,
     previewCollectionMatchingAction,
-    getTrendingAndPlaceholderMediaAction,
+    getCollectionMediaPreviewAction,
     getPlaceholderPreviewDataUrlAction,
     createPlaceholderItemAction,
     getTmdbTrailerAction,
@@ -123,7 +126,7 @@ interface PlexServerItem {
 }
 
 export function AgregarrStudio() {
-    const [subTab, setSubTab] = useState<"collections" | "trending" | "releases" | "placeholders">("collections");
+    const [subTab, setSubTab] = useState<"collections" | "presets" | "coming_soon">("collections");
     const [loading, setLoading] = useState(true);
     const [isPending, startTransition] = useTransition();
 
@@ -136,8 +139,12 @@ export function AgregarrStudio() {
     // Collections & Ordering
     const [collections, setCollections] = useState<any[]>([]);
     const [collectionsLoading, setCollectionsLoading] = useState(false);
+    const [collectionsFilter, setCollectionsFilter] = useState<"all" | "home" | "recommended" | "library">("all");
+    const [collectionSearchQuery, setCollectionSearchQuery] = useState("");
     const [syncingCollId, setSyncingCollId] = useState<string | null>(null);
     const [syncMessage, setSyncMessage] = useState<{ id: string; success: boolean; text: string } | null>(null);
+    
+    // Create Custom Collection Modal States
     const [createModalOpen, setCreateModalOpen] = useState(false);
     const [newCollTitle, setNewCollTitle] = useState("");
     const [newCollSummary, setNewCollSummary] = useState("");
@@ -149,6 +156,16 @@ export function AgregarrStudio() {
     const [newCollStartDay, setNewCollStartDay] = useState(1);
     const [newCollEndMonth, setNewCollEndMonth] = useState(11);
     const [newCollEndDay, setNewCollEndDay] = useState(5);
+    const [newCollPromotedHome, setNewCollPromotedHome] = useState(true);
+    const [newCollPromotedShared, setNewCollPromotedShared] = useState(true);
+    const [newCollPromotedRecommended, setNewCollPromotedRecommended] = useState(true);
+    const [newCollMode, setNewCollMode] = useState<string>("default");
+    const [newCollActiveDays, setNewCollActiveDays] = useState<string>("all");
+    const [newCollActiveTimeRange, setNewCollActiveTimeRange] = useState<string>("all_day");
+    const [newCollMaxItems, setNewCollMaxItems] = useState<number>(0);
+    const [newCollExcludedLabels, setNewCollExcludedLabels] = useState<string>("");
+    const [newCollIncludePlaceholders, setNewCollIncludePlaceholders] = useState<boolean>(false);
+    const [creatingCollection, setCreatingCollection] = useState(false);
 
     // Collection Ordering & Seasonal Sync States
     const [savingOrder, setSavingOrder] = useState(false);
@@ -157,6 +174,18 @@ export function AgregarrStudio() {
     const [seasonalSyncMsg, setSeasonalSyncMsg] = useState<{ success: boolean; text: string } | null>(null);
     const [importingPlexCollections, setImportingPlexCollections] = useState(false);
     const [plexImportMsg, setPlexImportMsg] = useState<{ success: boolean; text: string } | null>(null);
+
+    // Collection Media Inspector Modal States
+    const [mediaInspectorModalOpen, setMediaInspectorModalOpen] = useState(false);
+    const [inspectingCollection, setInspectingCollection] = useState<any | null>(null);
+    const [collectionMediaLoading, setCollectionMediaLoading] = useState(false);
+    const [collectionMediaData, setCollectionMediaData] = useState<{ totalCount: number; inLibraryCount: number; missingCount: number; items: any[] } | null>(null);
+    const [collectionMediaSearch, setCollectionMediaSearch] = useState("");
+    const [collectionMediaFilter, setCollectionMediaFilter] = useState<"all" | "in_library" | "missing" | "coming_soon" | "not_requested">("all");
+
+    // Presets Library Search & Filter States
+    const [presetsCategoryFilter, setPresetsCategoryFilter] = useState<string>("all");
+    const [presetsSearchQuery, setPresetsSearchQuery] = useState("");
 
     // Preset Blueprint Inspection & Live Preview States
     const [inspectModalOpen, setInspectModalOpen] = useState(false);
@@ -171,7 +200,7 @@ export function AgregarrStudio() {
     const [inspectExcludedLabels, setInspectExcludedLabels] = useState<string>("");
     const [inspectIncludePlaceholders, setInspectIncludePlaceholders] = useState<boolean>(false);
 
-    // Comprehensive Placement & Visibility Modal States (Where collections show up in Plex)
+    // Comprehensive Placement & Visibility Modal States
     const [placementModalOpen, setPlacementModalOpen] = useState(false);
     const [editingCollection, setEditingCollection] = useState<any | null>(null);
     const [placementHome, setPlacementHome] = useState(true);
@@ -198,29 +227,13 @@ export function AgregarrStudio() {
     const [generatingCollPlaceholdersId, setGeneratingCollPlaceholdersId] = useState<string | null>(null);
     const [collPlaceholderMsg, setCollPlaceholderMsg] = useState<{ id: string; success: boolean; text: string } | null>(null);
 
-    // Create Modal Placement Controls
-    const [newCollPromotedHome, setNewCollPromotedHome] = useState(true);
-    const [newCollPromotedShared, setNewCollPromotedShared] = useState(true);
-    const [newCollPromotedRecommended, setNewCollPromotedRecommended] = useState(true);
-    const [newCollMode, setNewCollMode] = useState<string>("default");
-    const [newCollActiveDays, setNewCollActiveDays] = useState<string>("all");
-    const [newCollActiveTimeRange, setNewCollActiveTimeRange] = useState<string>("all_day");
-    const [newCollMaxItems, setNewCollMaxItems] = useState<number>(0);
-    const [newCollExcludedLabels, setNewCollExcludedLabels] = useState<string>("");
-    const [newCollIncludePlaceholders, setNewCollIncludePlaceholders] = useState<boolean>(false);
-
     // YouTube Trailer Player Modal States
     const [trailerModalOpen, setTrailerModalOpen] = useState(false);
     const [trailerLoading, setTrailerLoading] = useState(false);
     const [activeTrailer, setActiveTrailer] = useState<any | null>(null);
     const [activeTrailerTitle, setActiveTrailerTitle] = useState<string>("");
 
-    // Trending Media & Placeholder Hub States
-    const [trendingCategory, setTrendingCategory] = useState<"all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "digital" | "theatrical">("all");
-    const [trendingMedia, setTrendingMedia] = useState<any[]>([]);
-    const [trendingLoading, setTrendingLoading] = useState(false);
-    const [trendingSearchQuery, setTrendingSearchQuery] = useState("");
-    const [trendingLibraryFilter, setTrendingLibraryFilter] = useState<"all" | "in_library" | "missing">("all");
+    // Placeholder Creator Modal States
     const [placeholderModalOpen, setPlaceholderModalOpen] = useState(false);
     const [selectedPlaceholderItem, setSelectedPlaceholderItem] = useState<any | null>(null);
     const [placeholderModalBannerType, setPlaceholderModalBannerType] = useState<string>("not_requested");
@@ -293,7 +306,7 @@ export function AgregarrStudio() {
         }
     };
 
-    // Toggle ALL sections on the selected server for Agregarr (Enable All / Disable All)
+    // Toggle ALL sections on the selected server for Agregarr
     const handleToggleAllSectionsOnServer = async (enableAll: boolean) => {
         const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
         const allSecKeys = currentSections.map(s => String(s.key));
@@ -472,27 +485,6 @@ export function AgregarrStudio() {
         loadCollections(selectedServerId, secKey);
     };
 
-    // Load Trending Media when Tab Changes
-    useEffect(() => {
-        if (subTab === "trending" || subTab === "releases" || subTab === "placeholders") {
-            loadTrendingMedia(trendingCategory);
-        }
-    }, [subTab, trendingCategory, selectedServerId, selectedSectionKey]);
-
-    const loadTrendingMedia = async (cat = trendingCategory) => {
-        setTrendingLoading(true);
-        try {
-            const res = await getTrendingAndPlaceholderMediaAction(selectedServerId, selectedSectionKey, cat);
-            if (res.success && res.items) {
-                setTrendingMedia(res.items);
-            }
-        } catch (e) {
-            console.error("Failed loading trending media:", e);
-        } finally {
-            setTrendingLoading(false);
-        }
-    };
-
     // Reorder Collections Handlers
     const handleMoveCollection = (index: number, direction: "up" | "down") => {
         const targetIndex = direction === "up" ? index - 1 : index + 1;
@@ -503,7 +495,6 @@ export function AgregarrStudio() {
         copy[index] = copy[targetIndex];
         copy[targetIndex] = temp;
 
-        // Re-assign order indices
         const reordered = copy.map((c, i) => ({
             ...c,
             orderIndex: i + 1,
@@ -657,6 +648,9 @@ export function AgregarrStudio() {
             if (res.success) {
                 setCollPlaceholderMsg({ id: collId, success: true, text: res.message || "Generated Coming Soon placeholders in share folder!" });
                 setTimeout(() => setCollPlaceholderMsg(null), 6000);
+                if (mediaInspectorModalOpen && inspectingCollection?.id === collId) {
+                    handleInspectCollectionMedia(inspectingCollection);
+                }
             } else {
                 setCollPlaceholderMsg({ id: collId, success: false, text: res.error || res.message || "Failed generating placeholders." });
             }
@@ -820,6 +814,82 @@ export function AgregarrStudio() {
         }
     };
 
+    // Create Custom Collection Handler
+    const handleCreateCustomCollection = async () => {
+        if (!newCollTitle.trim()) return;
+        setCreatingCollection(true);
+        try {
+            const maxOrder = collections.reduce((max, c) => Math.max(max, c.orderIndex || 0), 0);
+            const nextOrder = maxOrder + 1;
+            const sortPrefix = `!${String(nextOrder).padStart(2, '0')}_`;
+
+            const res = await saveMediaCollectionAction({
+                title: newCollTitle.trim(),
+                summary: newCollSummary.trim(),
+                type: "movie",
+                category: "custom",
+                serverId: selectedServerId,
+                sectionKey: selectedSectionKey,
+                sourceType: newCollSourceType,
+                sourceQuery: newCollSourceQuery.trim(),
+                posterUrl: newCollPosterUrl.trim() || undefined,
+                orderIndex: nextOrder,
+                sortPrefix,
+                promotedToHome: newCollPromotedHome,
+                promotedToRecommended: newCollPromotedRecommended,
+                promotedToSharedHome: newCollPromotedShared,
+                collectionMode: newCollMode,
+                activeDays: newCollActiveDays,
+                activeTimeRange: newCollActiveTimeRange,
+                isSeasonal: newCollIsSeasonal,
+                scheduleStartMonth: newCollIsSeasonal ? Number(newCollStartMonth) : null,
+                scheduleStartDay: newCollIsSeasonal ? Number(newCollStartDay) : null,
+                scheduleEndMonth: newCollIsSeasonal ? Number(newCollEndMonth) : null,
+                scheduleEndDay: newCollIsSeasonal ? Number(newCollEndDay) : null,
+                maxItems: Number(newCollMaxItems),
+                excludedLabels: newCollExcludedLabels.trim(),
+                includePlaceholders: newCollIncludePlaceholders
+            });
+
+            if (res.success && res.collection) {
+                await syncCollectionToPlexAction(res.collection.id);
+                loadCollections();
+                setCreateModalOpen(false);
+                setNewCollTitle("");
+                setNewCollSummary("");
+                setNewCollSourceQuery("");
+                setNewCollPosterUrl("");
+            }
+        } catch (e) {
+            console.error("Failed creating collection:", e);
+        } finally {
+            setCreatingCollection(false);
+        }
+    };
+
+    // Inspect Collection Media Action (Collection Media Inspector Modal)
+    const handleInspectCollectionMedia = async (coll: any) => {
+        setInspectingCollection(coll);
+        setCollectionMediaLoading(true);
+        setCollectionMediaData(null);
+        setCollectionMediaSearch("");
+        setCollectionMediaFilter("all");
+        setMediaInspectorModalOpen(true);
+        try {
+            const res = await getCollectionMediaPreviewAction(coll.id);
+            if (res.success) {
+                setCollectionMediaData(res as any);
+            } else {
+                setCollectionMediaData({ totalCount: 0, inLibraryCount: 0, missingCount: 0, items: [] });
+            }
+        } catch (e) {
+            console.error("Failed inspecting collection media:", e);
+            setCollectionMediaData({ totalCount: 0, inLibraryCount: 0, missingCount: 0, items: [] });
+        } finally {
+            setCollectionMediaLoading(false);
+        }
+    };
+
     // YouTube Trailer Watcher
     const handleWatchTrailer = async (tmdbId: number, mediaType: "movie" | "tv" = "movie", title: string) => {
         setActiveTrailerTitle(title);
@@ -960,7 +1030,9 @@ export function AgregarrStudio() {
                 setPlaceholderSuccessMsg(res.message || `Created placeholder for "${selectedPlaceholderItem.title}"!`);
                 setTimeout(() => {
                     setPlaceholderModalOpen(false);
-                    loadTrendingMedia();
+                    if (mediaInspectorModalOpen && inspectingCollection) {
+                        handleInspectCollectionMedia(inspectingCollection);
+                    }
                 }, 1500);
             }
         } catch (e: any) {
@@ -972,6 +1044,59 @@ export function AgregarrStudio() {
 
     const currentServer = servers.find(s => s.serverId === selectedServerId) || servers[0];
     const currentSections = currentServer?.sections || [];
+
+    // Filter Collections by Destination & Search
+    const filteredCollections = collections.filter(coll => {
+        if (collectionsFilter === "home" && !(coll.promotedToHome || coll.promotedToSharedHome)) return false;
+        if (collectionsFilter === "recommended" && !coll.promotedToRecommended) return false;
+        if (collectionsFilter === "library" && coll.collectionMode === "hide") return false;
+        if (collectionSearchQuery.trim()) {
+            const q = collectionSearchQuery.toLowerCase().trim();
+            const matchTitle = coll.title?.toLowerCase().includes(q);
+            const matchSummary = coll.summary?.toLowerCase().includes(q);
+            const matchCat = coll.category?.toLowerCase().includes(q) || coll.sourceType?.toLowerCase().includes(q);
+            if (!matchTitle && !matchSummary && !matchCat) return false;
+        }
+        return true;
+    });
+
+    // Preset Blueprints Filtering
+    const presetCategories = [
+        { id: "all", label: "🌟 All Presets" },
+        { id: "awards", label: "🏆 Awards & Charts" },
+        { id: "dynamic", label: "🔥 Trending & Streaming" },
+        { id: "studio", label: "🏰 Networks & Studios" },
+        { id: "franchise", label: "🎬 Franchises & Sagas" },
+        { id: "decade", label: "⏳ Decades & Eras" },
+        { id: "holiday", label: "🎃 Seasonal & Holidays" }
+    ];
+
+    const filteredPresets = COLLECTION_PRESETS.filter(preset => {
+        if (presetsCategoryFilter !== "all" && preset.category !== presetsCategoryFilter) return false;
+        if (presetsSearchQuery.trim()) {
+            const q = presetsSearchQuery.toLowerCase().trim();
+            const matchTitle = preset.title.toLowerCase().includes(q);
+            const matchDesc = preset.description.toLowerCase().includes(q);
+            const matchCat = preset.category.toLowerCase().includes(q);
+            if (!matchTitle && !matchDesc && !matchCat) return false;
+        }
+        return true;
+    });
+
+    // Collection Media Inspector Filtered Items
+    const filteredCollectionItems = (collectionMediaData?.items || []).filter(item => {
+        if (collectionMediaFilter === "in_library" && !item.inLibrary) return false;
+        if (collectionMediaFilter === "missing" && item.inLibrary) return false;
+        if (collectionMediaFilter === "coming_soon" && (item.inLibrary || !item.isMonitored)) return false;
+        if (collectionMediaFilter === "not_requested" && (item.inLibrary || item.isMonitored)) return false;
+        if (collectionMediaSearch.trim()) {
+            const q = collectionMediaSearch.toLowerCase().trim();
+            const matchTitle = item.title?.toLowerCase().includes(q);
+            const matchYear = String(item.year || "").includes(q);
+            if (!matchTitle && !matchYear) return false;
+        }
+        return true;
+    });
 
     if (loading) {
         return (
@@ -987,7 +1112,7 @@ export function AgregarrStudio() {
             <CurationNavHeader 
                 serversCount={servers.length}
                 title="Agregarr Collections & Coming Soon Hub"
-                description="Automated TMDb/Trakt/MDBList collections, Plex Home screen ranking (#1-#99), seasonal schedules, upcoming releases, and coming soon banners."
+                description="Automated TMDb/Trakt/MDBList collections, Plex Home screen ranking (#1-#99), seasonal schedules, and Coming Soon trailer placeholders."
                 servers={servers}
                 selectedServerId={selectedServerId}
             />
@@ -1187,105 +1312,19 @@ export function AgregarrStudio() {
                 </Card>
             )}
 
-            {/* Automated Collections & Hubs Schedule & Automation Card */}
-            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                <CardContent className="p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
-                    <div className="space-y-1 max-w-xl">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <Clock className="h-4 w-4 text-amber-400" />
-                            <span className="font-bold text-white text-sm">Collections &amp; Hubs Schedule &amp; Automation</span>
-                            <Badge variant="outline" className={`text-[10px] font-semibold ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
-                                {curationSyncCollections ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
-                            </Badge>
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                            Automatically updates TMDb &amp; Trakt dynamic smart collections, promotes seasonal hubs based on active calendar rules, and ranks items on Plex Home across enabled libraries.
-                        </p>
-                        {curationLastRunAt && (
-                            <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                                <Clock3 className="h-3 w-3 text-amber-400" />
-                                Last automated run: <span className="text-slate-300 font-mono">{new Date(curationLastRunAt).toLocaleString()}</span>
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                        <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
-                            <span className="text-[11px] font-bold text-slate-200">Timer</span>
-                            <Switch 
-                                checked={curationSyncCollections}
-                                onCheckedChange={checked => setCurationSyncCollections(checked)}
-                            />
-                        </div>
-
-                        <div className="space-y-0.5">
-                            <Select 
-                                value={curationSyncSchedule} 
-                                onValueChange={val => setCurationSyncSchedule(val)}
-                            >
-                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8 w-[155px]">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
-                                    <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
-                                    <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
-                                    <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
-                                    <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
-                                    <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <Button 
-                            size="sm"
-                            onClick={handleSaveSchedule}
-                            disabled={savingSchedule}
-                            variant="outline"
-                            className="border-slate-700 text-slate-300 hover:text-white text-xs h-8 px-3 cursor-pointer"
-                        >
-                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved!" : "Save Schedule"}
-                        </Button>
-
-                        <Button 
-                            size="sm"
-                            onClick={handleRunCollectionSync}
-                            disabled={runningCollectionSync}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer"
-                        >
-                            {runningCollectionSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                            <span>Sync Collections Now</span>
-                        </Button>
-                    </div>
-                </CardContent>
-
-                {collectionSyncResult && (
-                    <div className={`p-3 text-xs border-t ${collectionSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
-                        {collectionSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
-                        <div className="space-y-0.5">
-                            <span className="font-bold">{collectionSyncResult.text}</span>
-                            {collectionSyncResult.details && collectionSyncResult.details.length > 0 && (
-                                <p className="text-[11px] opacity-80">{collectionSyncResult.details.join(" • ")}</p>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </Card>
-
-            {/* Agregarr Sub-Navigation Tabs */}
-            <div className="grid grid-cols-2 md:flex md:items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
+            {/* Agregarr Top Navigation Sub-Tabs */}
+            <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
                 <button
                     type="button"
                     onClick={() => setSubTab("collections")}
-                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         subTab === "collections"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
                     <Trophy className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Collections</span>
+                    <span>Collections &amp; Hubs</span>
                     <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "collections" ? "border-amber-900 text-slate-950 bg-amber-400" : "border-slate-700 text-slate-400"}`}>
                         {collections.length}
                     </Badge>
@@ -1293,45 +1332,37 @@ export function AgregarrStudio() {
 
                 <button
                     type="button"
-                    onClick={() => setSubTab("trending")}
-                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        subTab === "trending"
+                    onClick={() => setSubTab("presets")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        subTab === "presets"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <Flame className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Trending</span>
+                    <Sparkles className="h-4 w-4 shrink-0" />
+                    <span>Curated Presets</span>
+                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "presets" ? "border-amber-900 text-slate-950 bg-amber-400" : "border-slate-700 text-slate-400"}`}>
+                        {COLLECTION_PRESETS.length}
+                    </Badge>
                 </button>
 
                 <button
                     type="button"
-                    onClick={() => setSubTab("releases")}
-                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        subTab === "releases"
+                    onClick={() => setSubTab("coming_soon")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        subTab === "coming_soon"
                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                 >
-                    <CalendarClock className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Releases</span>
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => setSubTab("placeholders")}
-                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        subTab === "placeholders"
-                            ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-                    }`}
-                >
-                    <Tag className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Coming Soon</span>
+                    <Settings2 className="h-4 w-4 shrink-0" />
+                    <span>Coming Soon &amp; Settings</span>
                 </button>
             </div>
 
-            {/* TAB 1: COLLECTIONS & HOME SCREEN HUBS */}
+            {/* ========================================================================= */}
+            {/* SUB-TAB 1: COLLECTIONS & HUBS (Plex Home Hubs, Library Tabs, Matrix) */}
+            {/* ========================================================================= */}
             {subTab === "collections" && (
                 <div className="space-y-6">
                     {/* Actions Bar */}
@@ -1342,10 +1373,19 @@ export function AgregarrStudio() {
                                 <span>Plex Home Screen Collections &amp; Hubs Manager</span>
                             </h2>
                             <p className="text-xs text-slate-400">
-                                Reorder collection ranking (#1-#99), configure seasonal schedules, and sync smart hubs directly to your Plex client home screens.
+                                Reorder collection ranking (#1-#99), inspect collection media, toggle Home/Shared visibility, and sync hubs directly to Plex.
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => setCreateModalOpen(true)}
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-md"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                <span>Custom Collection</span>
+                            </Button>
                             <Button
                                 type="button"
                                 size="sm"
@@ -1404,26 +1444,111 @@ export function AgregarrStudio() {
                         </div>
                     )}
 
+                    {/* Filter & Search Bar */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-900/90 rounded-2xl border border-slate-800">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setCollectionsFilter("all")}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    collectionsFilter === "all"
+                                        ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                                        : "bg-slate-800 text-slate-300 hover:text-white"
+                                }`}
+                            >
+                                All Collections ({collections.length})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCollectionsFilter("home")}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    collectionsFilter === "home"
+                                        ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                                        : "bg-slate-800 text-slate-300 hover:text-white"
+                                }`}
+                            >
+                                <Home className="h-3.5 w-3.5" />
+                                <span>Home Hubs ({collections.filter(c => c.promotedToHome || c.promotedToSharedHome).length})</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCollectionsFilter("recommended")}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    collectionsFilter === "recommended"
+                                        ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                                        : "bg-slate-800 text-slate-300 hover:text-white"
+                                }`}
+                            >
+                                <Star className="h-3.5 w-3.5" />
+                                <span>Recommended Hubs ({collections.filter(c => c.promotedToRecommended).length})</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCollectionsFilter("library")}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    collectionsFilter === "library"
+                                        ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                                        : "bg-slate-800 text-slate-300 hover:text-white"
+                                }`}
+                            >
+                                <Layers className="h-3.5 w-3.5" />
+                                <span>Library Tab ({collections.filter(c => c.collectionMode !== "hide").length})</span>
+                            </button>
+                        </div>
+
+                        <div className="relative w-full sm:w-64">
+                            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <Input
+                                placeholder="Filter collections..."
+                                value={collectionSearchQuery}
+                                onChange={(e) => setCollectionSearchQuery(e.target.value)}
+                                className="h-8 text-xs bg-slate-950 border-slate-800 pl-8 w-full"
+                            />
+                        </div>
+                    </div>
+
                     {/* Active Collections List */}
                     <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
                         <CardHeader className="p-4 border-b border-slate-800/80">
                             <div className="flex items-center justify-between">
                                 <CardTitle className="text-base font-bold text-white flex items-center gap-2">
                                     <Layers className="h-4 w-4 text-amber-400" />
-                                    <span>Active Library Collections ({collections.length})</span>
+                                    <span>Active Collections ({filteredCollections.length})</span>
                                 </CardTitle>
-                                <span className="text-xs text-slate-400">Use Up/Down arrows to position on Plex Home Screen</span>
+                                <span className="text-xs text-slate-400">
+                                    Click <span className="text-amber-300 font-bold">Inspect Media</span> (👁️) to preview live items, release dates, and trailer stubs
+                                </span>
                             </div>
                         </CardHeader>
                         <CardContent className="p-4 space-y-2.5">
-                            {collections.length === 0 ? (
-                                <div className="text-center py-10 text-slate-500 space-y-2">
+                            {filteredCollections.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500 space-y-3">
                                     <Trophy className="h-10 w-10 mx-auto text-slate-700" />
-                                    <p className="text-xs">No collections configured for this library section yet.</p>
-                                    <p className="text-[11px]">Click "Import from Plex" or install one of the curated presets below.</p>
+                                    <p className="text-xs font-bold text-slate-400">No collections found matching your current filter.</p>
+                                    <div className="flex items-center justify-center gap-2 pt-1">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => setSubTab("presets")}
+                                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-7 gap-1"
+                                        >
+                                            <Sparkles className="h-3 w-3" />
+                                            <span>Explore Curated Presets</span>
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleImportPlexCollections}
+                                            className="border-slate-700 text-xs h-7 gap-1"
+                                        >
+                                            <RefreshCw className="h-3 w-3" />
+                                            <span>Import from Plex</span>
+                                        </Button>
+                                    </div>
                                 </div>
                             ) : (
-                                collections.map((coll, idx) => {
+                                filteredCollections.map((coll, idx) => {
                                     const isSyncing = syncingCollId === coll.id;
                                     const isHomeActive = coll.promotedToHome ?? true;
                                     const isSharedActive = coll.promotedToSharedHome ?? true;
@@ -1435,7 +1560,7 @@ export function AgregarrStudio() {
                                             key={coll.id}
                                             className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors shadow-sm"
                                         >
-                                            <div className="flex items-center gap-3 min-w-0">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
                                                 {/* Reorder Buttons */}
                                                 <div className="flex flex-col gap-0.5 shrink-0">
                                                     <button
@@ -1449,7 +1574,7 @@ export function AgregarrStudio() {
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        disabled={idx === collections.length - 1}
+                                                        disabled={idx === filteredCollections.length - 1}
                                                         onClick={() => handleMoveCollection(idx, "down")}
                                                         className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
                                                         title="Move Down on Home Screen"
@@ -1460,16 +1585,16 @@ export function AgregarrStudio() {
 
                                                 {/* Position Ranking Pill */}
                                                 <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-mono font-bold px-2 py-0.5 shrink-0">
-                                                    #{idx + 1}
+                                                    #{coll.orderIndex || idx + 1}
                                                 </Badge>
 
                                                 {/* Collection Details */}
-                                                <div className="space-y-1 min-w-0">
+                                                <div className="space-y-1 min-w-0 flex-1">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="font-bold text-white text-xs truncate max-w-[170px] xs:max-w-[240px] sm:max-w-[360px] lg:max-w-[420px]" title={coll.title}>
+                                                        <span className="font-bold text-white text-xs truncate max-w-[200px] xs:max-w-[280px] sm:max-w-[380px]" title={coll.title}>
                                                             {coll.title}
                                                         </span>
-                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400 shrink-0">
+                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400 shrink-0 capitalize">
                                                             {coll.category || coll.sourceType || "Curated"}
                                                         </Badge>
                                                         {coll.isSeasonal && (
@@ -1495,11 +1620,6 @@ export function AgregarrStudio() {
                                                                 <span>Limit: {coll.maxItems}</span>
                                                             </Badge>
                                                         )}
-                                                        {coll.excludedLabels && (
-                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-rose-900/60 bg-rose-950/30 text-rose-300 gap-1 font-mono shrink-0" title={`Excludes: ${coll.excludedLabels}`}>
-                                                                <span>Excludes: {coll.excludedLabels.split(",").slice(0, 2).join(", ")}{coll.excludedLabels.split(",").length > 2 ? "..." : ""}</span>
-                                                            </Badge>
-                                                        )}
                                                         {coll.includePlaceholders && (
                                                             <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/60 bg-amber-950/40 text-amber-300 gap-1 font-mono shrink-0" title="Coming Soon placeholders and trailer stubs enabled">
                                                                 <Sparkles className="h-2.5 w-2.5 text-amber-400" />
@@ -1507,7 +1627,7 @@ export function AgregarrStudio() {
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <p className="text-[11px] text-slate-400 truncate max-w-[200px] xs:max-w-[300px] sm:max-w-[420px]">
+                                                    <p className="text-[11px] text-slate-400 truncate max-w-[240px] xs:max-w-[360px] sm:max-w-[500px]">
                                                         {coll.summary || coll.sourceQuery || "No summary configured."}
                                                     </p>
                                                     {collPlaceholderMsg && collPlaceholderMsg.id === coll.id && (
@@ -1521,10 +1641,22 @@ export function AgregarrStudio() {
                                                 </div>
                                             </div>
 
-                                            {/* Agregarr Placement & Visibility Matrix */}
+                                            {/* Action Bar & Visibility Controls */}
                                             <div className="flex flex-wrap items-center gap-2 self-start sm:self-end lg:self-center w-full sm:w-auto justify-between sm:justify-end shrink-0">
+                                                {/* 1-Click Inspect Media Button */}
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={() => handleInspectCollectionMedia(coll)}
+                                                    className="h-8 px-3 text-[11px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 gap-1.5 shadow-sm cursor-pointer shrink-0"
+                                                    title="Inspect Collection Media, TMDb items, release dates, and missing stubs"
+                                                >
+                                                    <Eye className="h-3.5 w-3.5 text-slate-950" />
+                                                    <span>Inspect Media</span>
+                                                </Button>
+
                                                 {/* Screen Visibility Targets */}
-                                                <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+                                                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
                                                     {/* Home Screen Toggle */}
                                                     <button
                                                         type="button"
@@ -1678,76 +1810,37 @@ export function AgregarrStudio() {
                             )}
                         </CardContent>
                     </Card>
-
-                    {/* Curated Preset Blueprints Library */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                                <Sparkles className="h-4 w-4 text-amber-400" /> Curated Agregarr Preset Blueprints ({COLLECTION_PRESETS.length})
-                            </h3>
-                            <span className="text-[11px] text-slate-400">Click any preset to inspect rules and preview library matches</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {COLLECTION_PRESETS.map(preset => {
-                                return (
-                                    <div
-                                        key={preset.id}
-                                        onClick={() => handleInspectPreset(preset)}
-                                        className="p-3.5 bg-slate-900/90 hover:bg-slate-800/90 rounded-xl border border-slate-800 hover:border-amber-500/50 transition-all cursor-pointer space-y-2 group shadow-lg"
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                                    <Trophy className="h-3.5 w-3.5" />
-                                                </div>
-                                                <span className="font-bold text-white text-xs group-hover:text-amber-300 transition-colors">{preset.title}</span>
-                                            </div>
-                                            <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 capitalize">
-                                                {preset.category}
-                                            </Badge>
-                                        </div>
-                                        <p className="text-[11px] text-slate-400 line-clamp-2">
-                                            {preset.description}
-                                        </p>
-                                        <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[10px] text-slate-500">
-                                            <span className="font-mono">Source: {preset.sourceType.toUpperCase()}</span>
-                                            <span className="text-amber-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
-                                                Inspect &amp; Install →
-                                            </span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
                 </div>
             )}
 
-            {/* TAB 2: TRENDING MEDIA HUB */}
-            {subTab === "trending" && (
-                <div className="space-y-4">
-                    {/* Category Filter Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-900/90 rounded-2xl border border-slate-800">
+            {/* ========================================================================= */}
+            {/* SUB-TAB 2: CURATED PRESETS (Oscars, IMDb, Netflix, Disney+, Franchises) */}
+            {/* ========================================================================= */}
+            {subTab === "presets" && (
+                <div className="space-y-6">
+                    {/* Header & Description */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
+                        <div className="space-y-0.5">
+                            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-amber-400" />
+                                <span>Curated Agregarr Preset Blueprints ({filteredPresets.length})</span>
+                            </h2>
+                            <p className="text-xs text-slate-400">
+                                Ready-to-install smart collections for trending streaming drops, top-rated award winners, studio hubs, decades, and seasonal calendars.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Presets Filter & Search Toolbar */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-900/90 rounded-2xl border border-slate-800">
                         <div className="flex flex-wrap items-center gap-1.5">
-                            {[
-                                { id: "all", label: "🔥 All Trending" },
-                                { id: "disney", label: "🏰 Disney+" },
-                                { id: "disney_kids", label: "👶 Disney Kids" },
-                                { id: "netflix", label: "🔴 Netflix" },
-                                { id: "netflix_kids", label: "🧸 Netflix Kids" },
-                                { id: "digital", label: "⚡ Digital Streaming" },
-                                { id: "theatrical", label: "🍿 In Theaters" }
-                            ].map(cat => (
+                            {presetCategories.map(cat => (
                                 <button
                                     key={cat.id}
                                     type="button"
-                                    onClick={() => {
-                                        setTrendingCategory(cat.id as any);
-                                        loadTrendingMedia(cat.id as any);
-                                    }}
+                                    onClick={() => setPresetsCategoryFilter(cat.id)}
                                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                        trendingCategory === cat.id
+                                        presetsCategoryFilter === cat.id
                                             ? "bg-amber-500 text-slate-950 shadow-md font-black"
                                             : "bg-slate-800 text-slate-300 hover:text-white"
                                     }`}
@@ -1757,191 +1850,170 @@ export function AgregarrStudio() {
                             ))}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="relative w-full sm:w-64">
+                            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                             <Input
-                                placeholder="Search trending..."
-                                value={trendingSearchQuery}
-                                onChange={(e) => setTrendingSearchQuery(e.target.value)}
-                                className="h-8 text-xs bg-slate-950 border-slate-800 w-44"
+                                placeholder="Search presets..."
+                                value={presetsSearchQuery}
+                                onChange={(e) => setPresetsSearchQuery(e.target.value)}
+                                className="h-8 text-xs bg-slate-950 border-slate-800 pl-8 w-full"
                             />
                         </div>
                     </div>
 
-                    {/* Media Grid */}
-                    {trendingLoading ? (
-                        <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
-                            <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
-                            <span className="text-xs">Loading trending media from TMDb...</span>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
-                            {trendingMedia
-                                .filter(m => !trendingSearchQuery || m.title?.toLowerCase().includes(trendingSearchQuery.toLowerCase()))
-                                .map(item => {
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            className="group relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 hover:border-amber-500/50 transition-all flex flex-col shadow-lg"
-                                        >
-                                            {/* Poster */}
-                                            <div className="relative aspect-[2/3] overflow-hidden bg-slate-900">
-                                                <img
-                                                    src={item.posterPath ? `https://image.tmdb.org/t/p/w500${item.posterPath}` : "/placeholder-poster.png"}
-                                                    alt={item.title}
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                                />
-                                                {/* Smart Status Badge */}
-                                                <div className="absolute top-2 left-2 z-10">
-                                                    <Badge className={`${item.statusBadgeColor || (item.inLibrary ? "bg-emerald-600" : "bg-rose-600")}/95 text-white text-[9px] font-black px-1.5 py-0.5 border-none shadow-md gap-1 flex items-center`}>
-                                                        {item.arrStatus === "COMING_SOON" && <Clock className="h-2.5 w-2.5" />}
-                                                        {item.arrStatus === "MONITORED_RELEASED" && <Zap className="h-2.5 w-2.5" />}
-                                                        {item.arrStatus === "NOT_REQUESTED" && <Flame className="h-2.5 w-2.5" />}
-                                                        <span>{item.statusBadgeText || (item.inLibrary ? "✓ IN LIBRARY" : "NOT REQUESTED")}</span>
-                                                    </Badge>
-                                                </div>
-                                            </div>
-
-                                            {/* Info & Action */}
-                                            <div className="p-2.5 space-y-1.5 flex-1 flex flex-col justify-between">
-                                                <div>
-                                                    <h4 className="font-bold text-white text-xs truncate" title={item.title}>
-                                                        {item.title}
-                                                    </h4>
-                                                    <p className="text-[10px] text-slate-400">
-                                                        {item.year || item.releaseDate?.split("-")[0] || "Unknown"}
-                                                    </p>
-                                                </div>
-
-                                                <div className="flex gap-1.5 pt-1">
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        onClick={() => handleWatchTrailer(item.id, item.mediaType || "movie", item.title)}
-                                                        className="h-7 px-2 text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 gap-1 cursor-pointer shrink-0"
-                                                        title="Watch Official YouTube Trailer"
-                                                    >
-                                                        <Play className="h-3 w-3 text-rose-500 fill-rose-500" />
-                                                        <span className="hidden sm:inline">Trailer</span>
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        onClick={() => handleOpenPlaceholderModal(item)}
-                                                        className="flex-1 h-7 text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 gap-1 cursor-pointer"
-                                                    >
-                                                        <Tag className="h-3 w-3" />
-                                                        <span>{item.inLibrary ? "Overlay" : "Placeholder"}</span>
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* TAB 3: UPCOMING RELEASES CALENDAR */}
-            {subTab === "releases" && (
-                <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <div className="space-y-0.5">
-                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <CalendarClock className="h-5 w-5 text-amber-400" />
-                                <span>Upcoming Theatrical &amp; Digital Streaming Releases</span>
-                            </CardTitle>
-                            <CardDescription className="text-xs text-slate-400">
-                                Real-time release calendar tracking upcoming box office debuts and VOD/SVOD drops.
-                            </CardDescription>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {trendingMedia.filter(m => m.releaseDate || m.digitalReleaseDate).slice(0, 18).map(item => {
+                    {/* Presets Card Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        {filteredPresets.map(preset => {
                             return (
-                                <div key={item.id} className="flex gap-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                                    <div className="relative shrink-0">
-                                        <img
-                                            src={item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : "/placeholder-poster.png"}
-                                            alt={item.title}
-                                            className="w-16 h-24 object-cover rounded-lg shadow-md"
-                                        />
-                                        <div className="absolute top-1 left-1">
-                                            <Badge className={`${item.statusBadgeColor || (item.inLibrary ? "bg-emerald-600" : "bg-rose-600")}/95 text-white text-[8px] font-bold px-1 py-0 border-none shadow-sm`}>
-                                                {item.statusBadgeText || (item.inLibrary ? "IN LIBRARY" : "UPCOMING")}
+                                <div
+                                    key={preset.id}
+                                    onClick={() => handleInspectPreset(preset)}
+                                    className="p-4 bg-slate-900/90 hover:bg-slate-800/90 rounded-2xl border border-slate-800 hover:border-amber-500/50 transition-all cursor-pointer space-y-3 group shadow-xl flex flex-col justify-between"
+                                >
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                                    <Trophy className="h-4 w-4" />
+                                                </div>
+                                                <span className="font-bold text-white text-xs group-hover:text-amber-300 transition-colors">
+                                                    {preset.title}
+                                                </span>
+                                            </div>
+                                            <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 capitalize">
+                                                {preset.category}
                                             </Badge>
                                         </div>
+                                        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                                            {preset.description}
+                                        </p>
                                     </div>
-                                    <div className="space-y-1.5 flex-1 overflow-hidden flex flex-col justify-between">
-                                        <div>
-                                            <h4 className="font-bold text-white text-xs truncate" title={item.title}>{item.title}</h4>
-                                            <div className="flex flex-col gap-1 text-[10px] mt-1">
-                                                {item.releaseDate && (
-                                                    <span className="text-amber-300 flex items-center gap-1 font-mono">
-                                                        🍿 Theatrical: {item.releaseDate}
-                                                    </span>
-                                                )}
-                                                {item.digitalReleaseDate && (
-                                                    <span className="text-cyan-300 flex items-center gap-1 font-mono">
-                                                        ⚡ Digital: {item.digitalReleaseDate}
-                                                    </span>
-                                                )}
-                                            </div>
+
+                                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[10px] text-slate-500">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-slate-400">
+                                                {preset.sourceType.toUpperCase()}
+                                            </span>
+                                            {preset.isSeasonal && (
+                                                <span className="text-amber-400 flex items-center gap-0.5">
+                                                    <Calendar className="h-2.5 w-2.5" /> Seasonal
+                                                </span>
+                                            )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 pt-1">
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                onClick={() => handleWatchTrailer(item.id, item.mediaType || "movie", item.title)}
-                                                className="h-6 text-[10px] bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 font-bold px-2 gap-1 cursor-pointer"
-                                                title="Watch YouTube Trailer"
-                                            >
-                                                <Play className="h-2.5 w-2.5 text-rose-500 fill-rose-500" />
-                                                <span>Trailer</span>
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                onClick={() => handleOpenPlaceholderModal(item)}
-                                                className="h-6 text-[10px] bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 font-bold px-2 gap-1 cursor-pointer flex-1"
-                                            >
-                                                <Tag className="h-2.5 w-2.5" />
-                                                <span>Deploy Card</span>
-                                            </Button>
-                                        </div>
+                                        <span className="text-amber-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                                            Inspect &amp; Install →
+                                        </span>
                                     </div>
                                 </div>
                             );
                         })}
                     </div>
-                </Card>
+                </div>
             )}
 
-            {/* TAB 4: COMING SOON BANNERS & PLACEHOLDERS */}
-            {subTab === "placeholders" && (
-                <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-6">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <div className="space-y-0.5">
-                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Tag className="h-5 w-5 text-amber-400" />
-                                <span>Coming Soon Banners &amp; Placeholder Share Folders</span>
-                            </CardTitle>
-                            <CardDescription className="text-xs text-slate-400">
-                                Configure dedicated Coming Soon share folders mapped into your Plex libraries for unreleased media placeholders.
-                            </CardDescription>
-                        </div>
-                    </div>
+            {/* ========================================================================= */}
+            {/* SUB-TAB 3: COMING SOON & SETTINGS (Schedule, Shares, Live Simulator) */}
+            {/* ========================================================================= */}
+            {subTab === "coming_soon" && (
+                <div className="space-y-6">
+                    {/* Automated Collections & Hubs Schedule Card */}
+                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                        <CardContent className="p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
+                            <div className="space-y-1 max-w-xl">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <Clock className="h-4 w-4 text-amber-400" />
+                                    <span className="font-bold text-white text-sm">Collections &amp; Hubs Schedule &amp; Automation</span>
+                                    <Badge variant="outline" className={`text-[10px] font-semibold ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                        {curationSyncCollections ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-slate-400">
+                                    Automatically updates dynamic smart collections, evaluates seasonal schedules, and updates Home screen rankings on Plex across enabled libraries.
+                                </p>
+                                {curationLastRunAt && (
+                                    <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                                        <Clock3 className="h-3 w-3 text-amber-400" />
+                                        Last automated run: <span className="text-slate-300 font-mono">{new Date(curationLastRunAt).toLocaleString()}</span>
+                                    </p>
+                                )}
+                            </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                                <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                                    <span className="text-[11px] font-bold text-slate-200">Timer</span>
+                                    <Switch 
+                                        checked={curationSyncCollections}
+                                        onCheckedChange={checked => setCurationSyncCollections(checked)}
+                                    />
+                                </div>
+
+                                <div className="space-y-0.5">
+                                    <Select 
+                                        value={curationSyncSchedule} 
+                                        onValueChange={val => setCurationSyncSchedule(val)}
+                                    >
+                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8 w-[155px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
+                                            <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
+                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
+                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                            <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
+                                            <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <Button 
+                                    size="sm"
+                                    onClick={handleSaveSchedule}
+                                    disabled={savingSchedule}
+                                    variant="outline"
+                                    className="border-slate-700 text-slate-300 hover:text-white text-xs h-8 px-3 cursor-pointer"
+                                >
+                                    {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+                                    {scheduleSavedMsg ? "Saved!" : "Save Schedule"}
+                                </Button>
+
+                                <Button 
+                                    size="sm"
+                                    onClick={handleRunCollectionSync}
+                                    disabled={runningCollectionSync}
+                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer"
+                                >
+                                    {runningCollectionSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                                    <span>Sync Collections Now</span>
+                                </Button>
+                            </div>
+                        </CardContent>
+
+                        {collectionSyncResult && (
+                            <div className={`p-3 text-xs border-t ${collectionSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
+                                {collectionSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                                <div className="space-y-0.5">
+                                    <span className="font-bold">{collectionSyncResult.text}</span>
+                                    {collectionSyncResult.details && collectionSyncResult.details.length > 0 && (
+                                        <p className="text-[11px] opacity-80">{collectionSyncResult.details.join(" • ")}</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </Card>
+
+                    {/* Coming Soon Shares Setup & Simulator */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Server Shares Setup */}
-                        <div className="space-y-4 p-4 bg-slate-950/60 rounded-xl border border-slate-800">
-                            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                                <HardDrive className="h-4 w-4 text-cyan-400" /> Coming Soon Shares Configuration
-                            </h4>
-                            <p className="text-[11px] text-slate-400">
-                                Specify the disk folder where lightweight placeholder stubs and composite banner posters are generated.
-                            </p>
+                        <div className="lg:col-span-5 space-y-4 p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
+                            <div className="space-y-1 border-b border-slate-800/80 pb-3">
+                                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <HardDrive className="h-4 w-4 text-cyan-400" /> Coming Soon Shares Configuration
+                                </h4>
+                                <p className="text-[11px] text-slate-400">
+                                    Specify the disk folder where lightweight placeholder stubs (.strm) and composite banner posters are generated.
+                                </p>
+                            </div>
 
                             {servers.map(srv => {
                                 const currentPath = comingSoonShares[srv.serverId] || "";
@@ -1958,7 +2030,7 @@ export function AgregarrStudio() {
                                                     const updated = { ...comingSoonShares, [srv.serverId]: e.target.value };
                                                     setComingSoonShares(updated);
                                                 }}
-                                                className="text-xs bg-slate-900 border-slate-700 font-mono"
+                                                className="text-xs bg-slate-950 border-slate-800 font-mono"
                                             />
                                             <Button
                                                 type="button"
@@ -1983,7 +2055,7 @@ export function AgregarrStudio() {
                                 );
                             })}
 
-                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80">
                                 <Button
                                     type="button"
                                     size="sm"
@@ -2008,7 +2080,7 @@ export function AgregarrStudio() {
                                     disabled={cleaningPlaceholders}
                                     onClick={handleCleanupPlaceholders}
                                     className="border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs gap-1.5 cursor-pointer"
-                                    title="Scans Coming Soon shares and automatically removes placeholder folders for movies & shows that are now downloaded/in your Plex library"
+                                    title="Scans Coming Soon shares and automatically removes placeholder folders for items now acquired in Plex"
                                 >
                                     {cleaningPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <RotateCcw className="h-3.5 w-3.5 text-amber-400" />}
                                     <span>Clean Acquired Placeholders</span>
@@ -2029,15 +2101,15 @@ export function AgregarrStudio() {
                             )}
                         </div>
 
-                        {/* Agregarr Banner & Poster Simulator Studio */}
-                        <div className="space-y-4 p-5 bg-slate-950/80 rounded-2xl border border-slate-800 shadow-xl">
+                        {/* Agregarr Banner & Poster Live Simulator Studio */}
+                        <div className="lg:col-span-7 space-y-4 p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
                                 <div>
                                     <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                                         <Sparkles className="h-4 w-4 text-amber-400" /> Agregarr Banner &amp; Poster Live Simulator
                                     </h4>
                                     <p className="text-[11px] text-slate-400">
-                                        Preview dynamic composite banners, template variables, and pull real posters from your Plex library.
+                                        Preview dynamic composite banners, variable chips, and pull real posters from your Plex library.
                                     </p>
                                 </div>
                                 <Button
@@ -2137,7 +2209,7 @@ export function AgregarrStudio() {
                                                 );
                                             }}
                                         >
-                                            <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8">
+                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="max-h-64">
@@ -2165,7 +2237,7 @@ export function AgregarrStudio() {
                                                     e.target.value
                                                 );
                                             }}
-                                            className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-white"
+                                            className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
                                             placeholder="e.g. DIGITAL RELEASE ON {date}"
                                         />
 
@@ -2209,7 +2281,7 @@ export function AgregarrStudio() {
                                                     );
                                                 }}
                                             >
-                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-7">
+                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -2242,7 +2314,7 @@ export function AgregarrStudio() {
                                                     );
                                                 }}
                                             >
-                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-7">
+                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -2255,7 +2327,7 @@ export function AgregarrStudio() {
                                     </div>
 
                                     {/* Live Variable Test Values */}
-                                    <div className="p-2.5 bg-slate-900/90 rounded-xl border border-slate-800/80 space-y-2">
+                                    <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-2">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                                             Live Test Variables:
                                         </span>
@@ -2276,7 +2348,7 @@ export function AgregarrStudio() {
                                                             e.target.value
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-950 border-slate-800 font-mono"
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -2298,7 +2370,7 @@ export function AgregarrStudio() {
                                                             num
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-950 border-slate-800 font-mono"
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -2319,7 +2391,7 @@ export function AgregarrStudio() {
                                                             e.target.value
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-950 border-slate-800 font-mono"
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -2341,7 +2413,7 @@ export function AgregarrStudio() {
                                                             e.target.value
                                                         );
                                                     }}
-                                                    className="h-6 text-[10px] bg-slate-950 border-slate-800 font-mono"
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
                                                 />
                                             </div>
                                         </div>
@@ -2350,10 +2422,362 @@ export function AgregarrStudio() {
                             </div>
                         </div>
                     </div>
-                </Card>
+                </div>
             )}
 
-            {/* Inspect Preset Blueprint Modal */}
+            {/* ========================================================================= */}
+            {/* MODAL 1: COLLECTION MEDIA INSPECTOR MODAL (Live items, dates, stubs) */}
+            {/* ========================================================================= */}
+            <Dialog open={mediaInspectorModalOpen} onOpenChange={setMediaInspectorModalOpen}>
+                <DialogContent className="max-w-5xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between">
+                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <Eye className="h-5 w-5 text-amber-400" />
+                                <span>Collection Media Inspector: {inspectingCollection?.title}</span>
+                            </DialogTitle>
+                            <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-xs uppercase font-mono">
+                                    {inspectingCollection?.sourceType || "TMDB"}
+                                </Badge>
+                                <Badge className="bg-slate-800 text-slate-300 border-slate-700 text-xs font-mono">
+                                    Rank #{inspectingCollection?.orderIndex || 1}
+                                </Badge>
+                            </div>
+                        </div>
+                        <DialogDescription className="text-xs text-slate-400">
+                            {inspectingCollection?.summary || inspectingCollection?.sourceQuery || "Live media items evaluated for this collection query."}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {/* Stats & Filter Bar */}
+                    <div className="space-y-3 pt-2">
+                        {/* Stats Pills */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                            <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <span className="text-slate-400 font-medium">Total Items:</span>
+                                <span className="font-bold font-mono text-white text-sm">{collectionMediaData?.totalCount || 0}</span>
+                            </div>
+                            <div className="p-2.5 bg-emerald-950/30 rounded-xl border border-emerald-800/40 flex items-center justify-between">
+                                <span className="text-emerald-300 font-medium">In Library:</span>
+                                <span className="font-bold font-mono text-emerald-400 text-sm">{collectionMediaData?.inLibraryCount || 0}</span>
+                            </div>
+                            <div className="p-2.5 bg-rose-950/30 rounded-xl border border-rose-800/40 flex items-center justify-between">
+                                <span className="text-rose-300 font-medium">Missing / Unacquired:</span>
+                                <span className="font-bold font-mono text-rose-400 text-sm">{collectionMediaData?.missingCount || 0}</span>
+                            </div>
+                            <div className="p-2.5 bg-amber-950/30 rounded-xl border border-amber-800/40 flex items-center justify-between">
+                                <span className="text-amber-300 font-medium">Coming Soon (Arr):</span>
+                                <span className="font-bold font-mono text-amber-400 text-sm">
+                                    {(collectionMediaData?.items || []).filter(i => !i.inLibrary && i.isMonitored).length}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Search & Filter Buttons */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-2 bg-slate-950/80 rounded-xl border border-slate-800">
+                            <div className="flex flex-wrap items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setCollectionMediaFilter("all")}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                        collectionMediaFilter === "all" ? "bg-amber-500 text-slate-950 font-black" : "text-slate-400 hover:text-white"
+                                    }`}
+                                >
+                                    All ({collectionMediaData?.items?.length || 0})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCollectionMediaFilter("in_library")}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                        collectionMediaFilter === "in_library" ? "bg-emerald-600 text-white font-black" : "text-slate-400 hover:text-emerald-300"
+                                    }`}
+                                >
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    <span>In Library ({collectionMediaData?.inLibraryCount || 0})</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCollectionMediaFilter("missing")}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                        collectionMediaFilter === "missing" ? "bg-rose-600 text-white font-black" : "text-slate-400 hover:text-rose-300"
+                                    }`}
+                                >
+                                    <XCircle className="h-3 w-3" />
+                                    <span>Missing ({collectionMediaData?.missingCount || 0})</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCollectionMediaFilter("coming_soon")}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                        collectionMediaFilter === "coming_soon" ? "bg-amber-500 text-slate-950 font-black" : "text-slate-400 hover:text-amber-300"
+                                    }`}
+                                >
+                                    <Clock className="h-3 w-3" />
+                                    <span>Coming Soon</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCollectionMediaFilter("not_requested")}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                        collectionMediaFilter === "not_requested" ? "bg-rose-900 text-rose-200 font-black" : "text-slate-400 hover:text-rose-300"
+                                    }`}
+                                >
+                                    <Flame className="h-3 w-3" />
+                                    <span>Not Requested</span>
+                                </button>
+                            </div>
+
+                            <div className="relative w-full sm:w-56">
+                                <Search className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
+                                <Input
+                                    placeholder="Search items..."
+                                    value={collectionMediaSearch}
+                                    onChange={(e) => setCollectionMediaSearch(e.target.value)}
+                                    className="h-7 text-xs bg-slate-900 border-slate-800 pl-7 w-full"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Media Items Grid */}
+                    <div className="flex-1 overflow-y-auto py-3 text-xs pr-1">
+                        {collectionMediaLoading ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                                <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+                                <p className="text-xs font-bold">Querying and evaluating collection items from {inspectingCollection?.sourceType?.toUpperCase()}...</p>
+                            </div>
+                        ) : filteredCollectionItems.length === 0 ? (
+                            <div className="text-center py-16 text-slate-500 space-y-2">
+                                <Film className="h-10 w-10 mx-auto text-slate-700" />
+                                <p className="text-xs font-bold text-slate-400">No media items found matching this filter.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+                                {filteredCollectionItems.map(item => {
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className="group relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 hover:border-amber-500/50 transition-all flex flex-col shadow-lg"
+                                        >
+                                            {/* Poster Image & Smart Status Badge */}
+                                            <div className="relative aspect-[2/3] overflow-hidden bg-slate-900">
+                                                <img
+                                                    src={item.posterPath ? `https://image.tmdb.org/t/p/w500${item.posterPath}` : "/placeholder-poster.png"}
+                                                    alt={item.title}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                />
+                                                <div className="absolute top-2 left-2 z-10">
+                                                    <Badge className={`${
+                                                        item.arrStatus === "IN_LIBRARY" ? "bg-emerald-600" :
+                                                        item.arrStatus === "COMING_SOON" ? "bg-amber-600" :
+                                                        item.arrStatus === "MONITORED_RELEASED" ? "bg-cyan-600" :
+                                                        "bg-rose-600"
+                                                    }/95 text-white text-[9px] font-black px-1.5 py-0.5 border-none shadow-md gap-1 flex items-center`}>
+                                                        {item.arrStatus === "COMING_SOON" && <Clock className="h-2.5 w-2.5" />}
+                                                        {item.arrStatus === "MONITORED_RELEASED" && <Zap className="h-2.5 w-2.5" />}
+                                                        {item.arrStatus === "NOT_REQUESTED" && <Flame className="h-2.5 w-2.5" />}
+                                                        <span>{item.statusBadgeText || (item.inLibrary ? "✓ IN LIBRARY" : "NOT REQUESTED")}</span>
+                                                    </Badge>
+                                                </div>
+                                            </div>
+
+                                            {/* Media Info & Action Buttons */}
+                                            <div className="p-2.5 space-y-1.5 flex-1 flex flex-col justify-between">
+                                                <div>
+                                                    <h4 className="font-bold text-white text-xs truncate" title={item.title}>
+                                                        {item.title}
+                                                    </h4>
+                                                    <p className="text-[10px] text-slate-400">
+                                                        {item.year || item.releaseDate?.split("-")[0] || "Upcoming"}
+                                                    </p>
+                                                    {item.digitalReleaseDate && (
+                                                        <p className="text-[9px] text-cyan-300 font-mono truncate mt-0.5" title={`Digital: ${item.digitalReleaseDate}`}>
+                                                            ⚡ Dig: {item.digitalReleaseDate}
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex gap-1.5 pt-1">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => handleWatchTrailer(item.id, item.mediaType || "movie", item.title)}
+                                                        className="h-7 px-2 text-[10px] font-bold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 gap-1 cursor-pointer shrink-0"
+                                                        title="Watch Official YouTube Trailer"
+                                                    >
+                                                        <Play className="h-3 w-3 text-rose-500 fill-rose-500" />
+                                                        <span className="hidden sm:inline">Trailer</span>
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => handleOpenPlaceholderModal(item)}
+                                                        className="flex-1 h-7 text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 gap-1 cursor-pointer"
+                                                    >
+                                                        <Tag className="h-3 w-3" />
+                                                        <span>{item.inLibrary ? "Overlay" : "Placeholder"}</span>
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={!inspectingCollection || generatingCollPlaceholdersId === inspectingCollection?.id}
+                            onClick={() => inspectingCollection && handleGenerateCollectionPlaceholders(inspectingCollection.id)}
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer w-full sm:w-auto"
+                        >
+                            {generatingCollPlaceholdersId === inspectingCollection?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-950" /> : <Tag className="h-3.5 w-3.5" />}
+                            <span>Generate Missing Placeholders in Share Folder</span>
+                        </Button>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={!inspectingCollection || syncingCollId === inspectingCollection?.id}
+                                onClick={() => inspectingCollection && handleSyncCollection(inspectingCollection.id)}
+                                className="border-slate-700 text-slate-200 text-xs h-8 gap-1"
+                            >
+                                <RefreshCw className="h-3.5 w-3.5 text-amber-400" />
+                                <span>Sync to Plex</span>
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setMediaInspectorModalOpen(false)}>
+                                Close
+                            </Button>
+                        </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ========================================================================= */}
+            {/* MODAL 2: CREATE CUSTOM COLLECTION MODAL */}
+            {/* ========================================================================= */}
+            <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <Plus className="h-5 w-5 text-amber-400" />
+                            <span>Create Custom Collection</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Build a custom smart collection rule connected to TMDb, Trakt, or MDBList queries.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto space-y-4 py-3 text-xs pr-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label className="text-xs text-slate-300">Collection Title:</Label>
+                                <Input
+                                    value={newCollTitle}
+                                    onChange={(e) => setNewCollTitle(e.target.value)}
+                                    placeholder="e.g. Netflix Trending Movies"
+                                    className="bg-slate-950 border-slate-800 text-xs text-white"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs text-slate-300">Source Provider:</Label>
+                                <Select value={newCollSourceType} onValueChange={setNewCollSourceType}>
+                                    <SelectTrigger className="bg-slate-950 border-slate-800 text-xs">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="tmdb">TMDb (The Movie Database)</SelectItem>
+                                        <SelectItem value="trakt">Trakt.tv</SelectItem>
+                                        <SelectItem value="mdblist">MDBList</SelectItem>
+                                        <SelectItem value="plex_query">Plex Smart Query</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-300">Source Query / Identifier:</Label>
+                            <Input
+                                value={newCollSourceQuery}
+                                onChange={(e) => setNewCollSourceQuery(e.target.value)}
+                                placeholder="e.g. provider:8 (Netflix), provider:337 (Disney+), trending, or collection:86311"
+                                className="bg-slate-950 border-slate-800 text-xs font-mono text-amber-300"
+                            />
+                            <p className="text-[10px] text-slate-500">
+                                Supports provider:8 (Netflix), provider:337 (Disney+), provider:350 (Apple TV+), network:213, or MDBList list slugs.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-300">Description / Summary:</Label>
+                            <Textarea
+                                value={newCollSummary}
+                                onChange={(e) => setNewCollSummary(e.target.value)}
+                                placeholder="Summary displayed inside Plex..."
+                                className="bg-slate-950 border-slate-800 text-xs resize-none h-16 text-slate-300"
+                            />
+                        </div>
+
+                        {/* Screen Visibility Targets */}
+                        <div className="space-y-2 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                            <span className="font-bold text-white text-xs block">Where It Shows Up (Plex Hubs):</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                                    <span className="text-xs text-slate-200">Owner Home</span>
+                                    <Switch checked={newCollPromotedHome} onCheckedChange={setNewCollPromotedHome} />
+                                </div>
+                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                                    <span className="text-xs text-slate-200">Shared Home</span>
+                                    <Switch checked={newCollPromotedShared} onCheckedChange={setNewCollPromotedShared} />
+                                </div>
+                                <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                                    <span className="text-xs text-slate-200">Library Recs</span>
+                                    <Switch checked={newCollPromotedRecommended} onCheckedChange={setNewCollPromotedRecommended} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Placeholders Toggle */}
+                        <div className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
+                            <div>
+                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
+                                </Label>
+                                <p className="text-[10px] text-slate-400">
+                                    Automatically generate lightweight trailer stubs and banners in Coming Soon share for missing unacquired titles.
+                                </p>
+                            </div>
+                            <Switch checked={newCollIncludePlaceholders} onCheckedChange={setNewCollIncludePlaceholders} />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setCreateModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={!newCollTitle.trim() || creatingCollection}
+                            onClick={handleCreateCustomCollection}
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                        >
+                            {creatingCollection ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-950" /> : <Plus className="h-3.5 w-3.5" />}
+                            <span>Create &amp; Sync Collection</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ========================================================================= */}
+            {/* MODAL 3: INSPECT PRESET BLUEPRINT MODAL */}
+            {/* ========================================================================= */}
             <Dialog open={inspectModalOpen} onOpenChange={setInspectModalOpen}>
                 <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
                     <DialogHeader className="pb-2 border-b border-slate-800">
@@ -2486,7 +2910,7 @@ export function AgregarrStudio() {
                                 </span>
                             </div>
                             <p className="text-[10px] text-slate-400">
-                                Control how many items appear in this collection (e.g. top 5, 10, or 20 trending items). 0 means unlimited.
+                                Control how many items appear in this collection. 0 means unlimited.
                             </p>
                             <div className="flex items-center gap-2">
                                 <Input
@@ -2541,33 +2965,6 @@ export function AgregarrStudio() {
                                 placeholder="e.g. trailers, coming_soon, leaving_soon, extras"
                                 className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-600"
                             />
-                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                <span className="text-[10px] text-slate-500">Quick chips:</span>
-                                {["trailers", "coming_soon", "leaving_soon", "extras", "sample", "archive"].map(tag => {
-                                    const isSelected = inspectExcludedLabels.toLowerCase().includes(tag);
-                                    return (
-                                        <button
-                                            key={tag}
-                                            type="button"
-                                            onClick={() => {
-                                                const list = inspectExcludedLabels ? inspectExcludedLabels.split(",").map(s => s.trim().toLowerCase()).filter(Boolean) : [];
-                                                if (list.includes(tag)) {
-                                                    setInspectExcludedLabels(list.filter(s => s !== tag).join(", "));
-                                                } else {
-                                                    setInspectExcludedLabels([...list, tag].join(", "));
-                                                }
-                                            }}
-                                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
-                                                isSelected
-                                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm"
-                                                    : "bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300 hover:border-slate-700"
-                                            }`}
-                                        >
-                                            {isSelected ? "✓ " : "+ "}{tag}
-                                        </button>
-                                    );
-                                })}
-                            </div>
                         </div>
 
                         {/* Coming Soon Placeholders & Trailer Stubs */}
@@ -2578,7 +2975,7 @@ export function AgregarrStudio() {
                                         <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
                                     </Label>
                                     <p className="text-[10px] text-slate-400">
-                                        Automatically generate lightweight trailer stubs and composite banners in your Coming Soon share for missing unacquired titles in this collection.
+                                        Automatically generate lightweight trailer stubs and composite banners in your Coming Soon share for missing unacquired titles.
                                     </p>
                                 </div>
                                 <Switch
@@ -2606,7 +3003,9 @@ export function AgregarrStudio() {
                 </DialogContent>
             </Dialog>
 
-            {/* Agregarr Collection Placement & Visibility Modal */}
+            {/* ========================================================================= */}
+            {/* MODAL 4: AGREGARR COLLECTION PLACEMENT & VISIBILITY MODAL */}
+            {/* ========================================================================= */}
             <Dialog open={placementModalOpen} onOpenChange={setPlacementModalOpen}>
                 <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
                     <DialogHeader className="pb-3 border-b border-slate-800">
@@ -2746,7 +3145,7 @@ export function AgregarrStudio() {
                             </div>
                         </div>
 
-                        {/* Section 3: Day of the Week Scheduling (Agregarr Day Rules) */}
+                        {/* Section 3: Day of the Week Scheduling */}
                         <div className="space-y-2.5 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
                             <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                                 <Label className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -2816,7 +3215,7 @@ export function AgregarrStudio() {
                             </div>
                         </div>
 
-                        {/* Section 4: Time of Day Scheduling (Agregarr Time Rules) */}
+                        {/* Section 4: Time of Day Scheduling */}
                         <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
                             <Label className="text-xs font-bold text-white flex items-center gap-1.5">
                                 <Clock className="h-3.5 w-3.5 text-indigo-400" /> Time of Day Scheduling
@@ -2847,7 +3246,7 @@ export function AgregarrStudio() {
                                     <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
                                         <CalendarClock className="h-3.5 w-3.5 text-amber-400" /> Seasonal Date Window
                                     </h4>
-                                    <p className="text-[10px] text-slate-400">Enable automatic promotion only during specific months of the year (e.g. Halloween or Holiday seasons).</p>
+                                    <p className="text-[10px] text-slate-400">Enable automatic promotion only during specific months of the year.</p>
                                 </div>
                                 <Switch
                                     checked={placementIsSeasonal}
@@ -2916,7 +3315,7 @@ export function AgregarrStudio() {
                                 </span>
                             </div>
                             <p className="text-[10px] text-slate-400">
-                                Control how many items appear in this collection (e.g. top 5, 10, or 20 trending items). 0 means unlimited.
+                                Control how many items appear in this collection. 0 means unlimited.
                             </p>
                             <div className="flex items-center gap-2">
                                 <Input
@@ -2963,7 +3362,7 @@ export function AgregarrStudio() {
                                 <span className="text-[10px] text-slate-400 font-mono">Ignore matching media</span>
                             </div>
                             <p className="text-[10px] text-slate-400">
-                                Exclude media items tagged with these Plex labels (e.g. placeholder trailers, leaving soon, extras). Items with these labels will never be added to this collection.
+                                Exclude media items tagged with these Plex labels (e.g. placeholder trailers, leaving soon, extras).
                             </p>
                             <Input
                                 value={placementExcludedLabels}
@@ -2971,33 +3370,6 @@ export function AgregarrStudio() {
                                 placeholder="e.g. trailers, coming_soon, leaving_soon, extras"
                                 className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-600"
                             />
-                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                <span className="text-[10px] text-slate-500">Quick chips:</span>
-                                {["trailers", "coming_soon", "leaving_soon", "extras", "sample", "archive"].map(tag => {
-                                    const isSelected = placementExcludedLabels.toLowerCase().includes(tag);
-                                    return (
-                                        <button
-                                            key={tag}
-                                            type="button"
-                                            onClick={() => {
-                                                const list = placementExcludedLabels ? placementExcludedLabels.split(",").map(s => s.trim().toLowerCase()).filter(Boolean) : [];
-                                                if (list.includes(tag)) {
-                                                    setPlacementExcludedLabels(list.filter(s => s !== tag).join(", "));
-                                                } else {
-                                                    setPlacementExcludedLabels([...list, tag].join(", "));
-                                                }
-                                            }}
-                                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
-                                                isSelected
-                                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm"
-                                                    : "bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300 hover:border-slate-700"
-                                            }`}
-                                        >
-                                            {isSelected ? "✓ " : "+ "}{tag}
-                                        </button>
-                                    );
-                                })}
-                            </div>
                         </div>
 
                         {/* Section 8: Coming Soon Placeholders & Trailer Stubs */}
@@ -3008,7 +3380,7 @@ export function AgregarrStudio() {
                                         <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Coming Soon Placeholders &amp; Trailer Stubs
                                     </Label>
                                     <p className="text-[10px] text-slate-400">
-                                        When enabled, items in this collection missing from your library will automatically generate trailer stubs (.strm), poster banners, and metadata in your Coming Soon share.
+                                        When enabled, items in this collection missing from your library will automatically generate trailer stubs (.strm) and banner posters in your Coming Soon share.
                                     </p>
                                 </div>
                                 <Switch
@@ -3044,7 +3416,9 @@ export function AgregarrStudio() {
                 </DialogContent>
             </Dialog>
 
-            {/* Placeholder Creation Modal */}
+            {/* ========================================================================= */}
+            {/* MODAL 5: PLACEHOLDER / BANNER CREATION MODAL */}
+            {/* ========================================================================= */}
             <Dialog open={placeholderModalOpen} onOpenChange={setPlaceholderModalOpen}>
                 <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
                     <DialogHeader className="pb-2 border-b border-slate-800 flex flex-row items-center justify-between">
@@ -3265,7 +3639,9 @@ export function AgregarrStudio() {
                 </DialogContent>
             </Dialog>
 
-            {/* YouTube Trailer Player Modal */}
+            {/* ========================================================================= */}
+            {/* MODAL 6: YOUTUBE TRAILER PLAYER MODAL */}
+            {/* ========================================================================= */}
             <Dialog open={trailerModalOpen} onOpenChange={setTrailerModalOpen}>
                 <DialogContent className="max-w-4xl bg-slate-950 border-slate-800 text-slate-100 p-6 overflow-hidden">
                     <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between">
@@ -3336,7 +3712,9 @@ export function AgregarrStudio() {
                 </DialogContent>
             </Dialog>
 
-            {/* Plex Real Media Poster Picker Modal */}
+            {/* ========================================================================= */}
+            {/* MODAL 7: PLEX REAL MEDIA POSTER PICKER MODAL */}
+            {/* ========================================================================= */}
             <PlexPosterPickerModal
                 open={posterPickerModalOpen}
                 onOpenChange={setPosterPickerModalOpen}

@@ -6689,6 +6689,266 @@ export async function generateCollectionPlaceholdersAction(collectionId: string)
 }
 
 /**
+ * Server action to fetch all media items for a collection, enriched with real-time Plex library status,
+ * Radarr/Sonarr monitored status, release dates, trailers, and smart banner suggestions.
+ */
+export async function getCollectionMediaPreviewAction(collectionId: string) {
+    await verifyAdmin();
+    try {
+        const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
+        if (!collection) return { success: false, error: "Collection not found.", items: [] };
+
+        // 1. Fetch library items to know what is already present in Plex
+        let libraryItems: any[] = [];
+        if (collection.serverId && collection.sectionKey) {
+            try {
+                const resolved = await resolveWorkingPlexServerConnection(collection.serverId);
+                if (resolved && resolved.serverUrl) {
+                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000, undefined, false);
+                }
+            } catch (err: any) {
+                console.warn("[COLL-PREVIEW] Failed fetching library items:", err.message);
+            }
+        }
+
+        const libraryTmdbIds = new Set(libraryItems.map(it => it.guids?.tmdb).filter(Boolean));
+        const libraryImdbIds = new Set(libraryItems.map(it => it.guids?.imdb).filter(Boolean));
+        const libraryTitles = new Map(libraryItems.map(it => [it.title?.toLowerCase().trim(), it]));
+
+        // 2. Fetch candidates from Collection Source Query
+        let candidateItems: any[] = [];
+        const tmdbKey = await getTmdbApiKey();
+
+        if (collection.sourceType === "tmdb") {
+            if (collection.sourceQuery?.startsWith("collection:")) {
+                const collId = collection.sourceQuery.replace("collection:", "");
+                const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
+                if (tmdbRes.ok) {
+                    const data = await tmdbRes.json();
+                    candidateItems = (data.parts || []).map((p: any) => ({
+                        id: p.id,
+                        title: p.title,
+                        overview: p.overview,
+                        posterPath: p.poster_path,
+                        backdropPath: p.backdrop_path,
+                        mediaType: "movie" as const,
+                        releaseDate: p.release_date
+                    }));
+                }
+            } else if (collection.sourceQuery?.startsWith("company:")) {
+                const compId = collection.sourceQuery.replace("company:", "");
+                const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
+                if (tmdbRes.ok) {
+                    const data = await tmdbRes.json();
+                    candidateItems = (data.results || []).map((p: any) => ({
+                        id: p.id,
+                        title: p.title,
+                        overview: p.overview,
+                        posterPath: p.poster_path,
+                        backdropPath: p.backdrop_path,
+                        mediaType: "movie" as const,
+                        releaseDate: p.release_date
+                    }));
+                }
+            } else if (collection.sourceQuery?.startsWith("network:")) {
+                const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
+                const shows = await getTmdbNetworkShows(netId);
+                candidateItems = shows.map(s => ({
+                    id: s.id,
+                    title: s.title,
+                    overview: s.overview,
+                    posterPath: s.posterPath,
+                    backdropPath: s.backdropPath,
+                    mediaType: "tv" as const,
+                    releaseDate: s.releaseDate
+                }));
+            } else if (collection.sourceQuery?.startsWith("provider:")) {
+                const parts = collection.sourceQuery.split(":");
+                const provId = parseInt(parts[1], 10) || 8;
+                const isKids = parts.length > 2 && parts[2] === "kids";
+                candidateItems = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+            } else if (collection.sourceQuery === "digital_releases") {
+                candidateItems = await getTmdbUpcomingMovies();
+            } else {
+                candidateItems = await getTmdbTrending("all", "week");
+            }
+        } else if (collection.sourceType === "trakt") {
+            if (collection.sourceQuery === "trending") {
+                const trending = await getTraktTrendingMovies(40);
+                candidateItems = trending.map((t: any) => ({
+                    id: t.tmdbId || t.id,
+                    title: t.title,
+                    mediaType: "movie" as const,
+                    releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                    imdbId: t.imdbId
+                }));
+            } else if (collection.sourceQuery) {
+                const listData = await getTraktUserList(collection.sourceQuery);
+                if (listData?.items) {
+                    candidateItems = listData.items.map((t: any) => ({
+                        id: t.tmdbId || t.id,
+                        title: t.title,
+                        mediaType: "movie" as const,
+                        releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                        imdbId: t.imdbId
+                    }));
+                }
+            }
+        } else if (collection.sourceType === "mdblist") {
+            if (collection.sourceQuery) {
+                const items = await getMdblistItems(collection.sourceQuery);
+                if (items && items.length > 0) {
+                    candidateItems = items.map((t: any) => ({
+                        id: t.tmdbId || t.id,
+                        title: t.title,
+                        mediaType: "movie" as const,
+                        releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                        imdbId: t.imdbId
+                    }));
+                }
+            }
+        }
+
+        // Limit if maxItems is set
+        if (collection.maxItems && collection.maxItems > 0) {
+            candidateItems = candidateItems.slice(0, collection.maxItems);
+        }
+
+        const arrIndex = await getArrMonitoredIndex();
+        const now = new Date();
+
+        const formatNiceDate = (dStr?: string) => {
+            if (!dStr) return "";
+            try {
+                const d = new Date(dStr);
+                return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            } catch { return dStr; }
+        };
+
+        const enrichedItems = candidateItems.map(item => {
+            const tmdbStr = String(item.id);
+            let match = null;
+
+            if (libraryTmdbIds.has(tmdbStr)) {
+                match = libraryItems.find(it => it.guids?.tmdb === tmdbStr);
+            } else if (item.imdbId && libraryImdbIds.has(item.imdbId)) {
+                match = libraryItems.find(it => it.guids?.imdb === item.imdbId);
+            } else if (item.title) {
+                const clean = item.title.toLowerCase().trim();
+                if (libraryTitles.has(clean)) {
+                    match = libraryTitles.get(clean);
+                }
+            }
+
+            const inLibrary = Boolean(match);
+
+            // Arr status
+            let arrItem: ArrItemStatus | undefined;
+            if (item.mediaType === "tv") {
+                arrItem = (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                          (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
+            } else {
+                arrItem = arrIndex.moviesByTmdb.get(tmdbStr) ||
+                          (item.imdbId ? arrIndex.moviesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                          (item.title ? arrIndex.moviesByTitle.get(item.title.toLowerCase().trim()) : undefined);
+            }
+
+            const inRadarr = arrItem?.appType === "radarr";
+            const inSonarr = arrItem?.appType === "sonarr";
+            const isMonitored = Boolean(arrItem?.monitored);
+
+            const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
+            const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : null;
+            const theDate = item.theatricalReleaseDate ? new Date(item.theatricalReleaseDate) : null;
+            const isReleased = Boolean(item.inTheaters || (relDate && relDate <= now) || (digDate && digDate <= now) || (theDate && theDate <= now) || arrItem?.isReleased);
+
+            let arrStatus: "NOT_REQUESTED" | "COMING_SOON" | "MONITORED_RELEASED" | "IN_LIBRARY" | "UPCOMING_UNREQUESTED";
+            let suggestedBannerType = "not_requested";
+            let suggestedBannerText = "NOT REQUESTED";
+            let suggestedBannerTheme = collection.sourceQuery?.includes("netflix") || collection.title?.toLowerCase().includes("netflix") ? "netflix-red" : "crimson-red";
+            let statusBadgeText = "NOT REQUESTED";
+            let statusBadgeColor = "rose";
+
+            if (inLibrary) {
+                arrStatus = "IN_LIBRARY";
+                suggestedBannerType = "in_library";
+                suggestedBannerText = "IN LIBRARY";
+                suggestedBannerTheme = "emerald-green";
+                statusBadgeText = "✓ IN LIBRARY";
+                statusBadgeColor = "emerald";
+            } else if (!isMonitored) {
+                arrStatus = "NOT_REQUESTED";
+                suggestedBannerType = "not_requested";
+                suggestedBannerText = "NOT REQUESTED";
+                suggestedBannerTheme = collection.sourceQuery?.includes("netflix") || collection.title?.toLowerCase().includes("netflix") ? "netflix-red" : "crimson-red";
+                statusBadgeText = "NOT REQUESTED";
+                statusBadgeColor = "rose";
+            } else if (!isReleased) {
+                arrStatus = "COMING_SOON";
+                suggestedBannerType = "coming_soon";
+                if (item.digitalReleaseDate) {
+                    const daysToRel = Math.ceil((new Date(item.digitalReleaseDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    suggestedBannerText = daysToRel > 0 && daysToRel <= 30
+                        ? `STREAMING IN ${daysToRel} DAYS`
+                        : `STREAMING ${formatNiceDate(item.digitalReleaseDate).toUpperCase()}`;
+                } else {
+                    suggestedBannerText = "COMING SOON";
+                }
+                suggestedBannerTheme = "indigo-purple";
+                statusBadgeText = inRadarr ? "IN RADARR (COMING SOON)" : inSonarr ? "IN SONARR (COMING SOON)" : "COMING SOON";
+                statusBadgeColor = "amber";
+            } else {
+                arrStatus = "MONITORED_RELEASED";
+                suggestedBannerType = "now_streaming";
+                suggestedBannerText = "DOWNLOADING SOON";
+                suggestedBannerTheme = "emerald-green";
+                statusBadgeText = inRadarr ? "IN RADARR (DOWNLOADING)" : inSonarr ? "IN SONARR (DOWNLOADING)" : "DOWNLOADING";
+                statusBadgeColor = "cyan";
+            }
+
+            const releaseYear = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
+
+            return {
+                id: item.id,
+                title: item.title,
+                overview: item.overview,
+                posterPath: item.posterPath,
+                backdropPath: item.backdropPath,
+                mediaType: item.mediaType || "movie",
+                releaseDate: item.releaseDate,
+                year: releaseYear,
+                theatricalReleaseDate: item.theatricalReleaseDate,
+                digitalReleaseDate: item.digitalReleaseDate,
+                inLibrary,
+                libraryRatingKey: match?.ratingKey,
+                inRadarr,
+                inSonarr,
+                isMonitored,
+                arrStatus,
+                isReleased,
+                suggestedBannerType,
+                suggestedBannerText,
+                suggestedBannerTheme,
+                statusBadgeText,
+                statusBadgeColor
+            };
+        });
+
+        return {
+            success: true,
+            collection,
+            totalCount: enrichedItems.length,
+            inLibraryCount: enrichedItems.filter(i => i.inLibrary).length,
+            missingCount: enrichedItems.filter(i => !i.inLibrary).length,
+            items: enrichedItems
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message, items: [] };
+    }
+}
+
+/**
  * Scans Coming Soon share directories on disk, checks if any media items have now been
  * downloaded / acquired into the Plex library, and automatically purges the placeholder
  * directories (.strm, .disc, poster.png) and database tracking records.
