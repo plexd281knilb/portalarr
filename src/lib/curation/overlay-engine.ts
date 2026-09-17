@@ -2,6 +2,7 @@ import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import * as opentype from "opentype.js";
 import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { fetchPlexPosterBuffer, uploadPlexItemPoster, PlexMediaStreamInfo } from "./plex-analyzer";
@@ -1012,24 +1013,61 @@ function getBannerThemeColors(theme?: string): {
     };
 }
 
+let cachedOverlayFont: opentype.Font | null = null;
+
+function getOverlayFont(): opentype.Font | null {
+    if (cachedOverlayFont) return cachedOverlayFont;
+    const candidates = [
+        path.join(process.cwd(), "public", "fonts", "arialbd.ttf"),
+        path.resolve("./public/fonts/arialbd.ttf"),
+        path.resolve("/app/public/fonts/arialbd.ttf")
+    ];
+    for (const fontPath of candidates) {
+        if (fs.existsSync(fontPath)) {
+            try {
+                const buf = fs.readFileSync(fontPath);
+                const arrayBuf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+                cachedOverlayFont = opentype.parse(arrayBuf);
+                return cachedOverlayFont;
+            } catch (e: any) {
+                console.warn("[OVERLAY] Failed to parse TrueType font from:", fontPath, e.message);
+            }
+        }
+    }
+    return null;
+}
+
+function getTextVectorPathData(font: opentype.Font, text: string, x: number, y: number, fontSize: number): string {
+    const pathObj = font.getPath(text, x, y, fontSize);
+    return pathObj.toPathData(2);
+}
+
+function getTextAdvanceWidth(font: opentype.Font, text: string, fontSize: number): number {
+    let width = 0;
+    const glyphs = font.stringToGlyphs(text);
+    const scale = (1 / font.unitsPerEm) * fontSize;
+    for (const glyph of glyphs) {
+        if (glyph.advanceWidth) {
+            width += glyph.advanceWidth * scale;
+        }
+    }
+    return width;
+}
+
 function generateBannerSvg(
     text: string,
     theme: string,
     position: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | "top-right" | "top-left" | "bottom-right" | "bottom-left" | string = "bottom"
 ): { svg: string; width: number; height: number; top: number; left: number } {
     const colors = getBannerThemeColors(theme);
-    const escapedText = (text || "LEAVING SOON")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&apos;");
+    const cleanText = (text || "LEAVING SOON").trim().toUpperCase();
+    const font = getOverlayFont();
 
     const isCorner = position === "corner" || position.includes("corner") || position === "top-right" || position === "top-left" || position === "bottom-right" || position === "bottom-left";
 
     if (isCorner) {
         const size = 420;
-        const len = escapedText.length;
+        const len = cleanText.length;
         const fontSize = len > 26 ? 20 : len > 20 ? 23 : len > 14 ? 26 : len > 8 ? 30 : 34;
 
         let polyPoints = "";
@@ -1070,6 +1108,31 @@ function generateBannerSvg(
             left = 0;
         }
 
+        let contentSvg = "";
+        if (font) {
+            const textWidth = getTextAdvanceWidth(font, cleanText, fontSize);
+            const textStartX = cx - (textWidth / 2);
+            const textBaselineY = cy + (fontSize * 0.35);
+
+            const fgPathData = getTextVectorPathData(font, cleanText, textStartX, textBaselineY, fontSize);
+            const shadowPathData = getTextVectorPathData(font, cleanText, textStartX, textBaselineY + 2, fontSize);
+
+            contentSvg = `
+                <g transform="rotate(${rotAngle} ${cx} ${cy})">
+                    <path d="${shadowPathData}" fill="#000000" opacity="0.95" />
+                    <path d="${fgPathData}" fill="${colors.text || '#ffffff'}" stroke="${colors.accent || '#fca5a5'}" stroke-width="0.8" />
+                </g>
+            `;
+        } else {
+            const escaped = cleanText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            contentSvg = `
+                <g transform="rotate(${rotAngle} ${cx} ${cy})">
+                    <text x="${cx + 1}" y="${cy + 2}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.95">${escaped}</text>
+                    <text x="${cx}" y="${cy}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="${colors.text || '#ffffff'}" stroke="${colors.accent || '#fca5a5'}" stroke-width="0.8px">${escaped}</text>
+                </g>
+            `;
+        }
+
         const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <linearGradient id="cornerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1079,11 +1142,7 @@ function generateBannerSvg(
                 </linearGradient>
             </defs>
             <polygon points="${polyPoints}" fill="url(#cornerGrad)" />
-            <g transform="rotate(${rotAngle} ${cx} ${cy})">
-                <text x="${cx + 1}" y="${cy + 2}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.95">${escapedText}</text>
-                <text x="${cx - 1}" y="${cy + 2}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.95">${escapedText}</text>
-                <text x="${cx}" y="${cy}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="${colors.text || '#ffffff'}" stroke="${colors.accent || '#fca5a5'}" stroke-width="0.8px">${escapedText}</text>
-            </g>
+            ${contentSvg}
         </svg>`;
 
         return { svg, width: size, height: size, top, left };
@@ -1105,9 +1164,30 @@ function generateBannerSvg(
         topPos = 1060;
     }
 
-    const len = escapedText.length;
+    const len = cleanText.length;
     const fontSize = len > 34 ? 32 : len > 22 ? 40 : 46;
-    const textY = Math.round(height / 2);
+
+    let bannerContentSvg = "";
+    if (font) {
+        const textWidth = getTextAdvanceWidth(font, cleanText, fontSize);
+        const textStartX = (width - textWidth) / 2;
+        const textBaselineY = (height / 2) + (fontSize * 0.35);
+
+        const fgPathData = getTextVectorPathData(font, cleanText, textStartX, textBaselineY, fontSize);
+        const shadowPathData = getTextVectorPathData(font, cleanText, textStartX, textBaselineY + 3, fontSize);
+
+        bannerContentSvg = `
+            <path d="${shadowPathData}" fill="#000000" opacity="0.95" />
+            <path d="${fgPathData}" fill="${colors.text || '#ffffff'}" stroke="${colors.accent || '#fca5a5'}" stroke-width="0.8" />
+        `;
+    } else {
+        const textY = Math.round(height / 2);
+        const escaped = cleanText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        bannerContentSvg = `
+            <text x="502" y="${textY + 3}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.9">${escaped}</text>
+            <text x="500" y="${textY}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="${colors.text || '#ffffff'}" stroke="${colors.accent || '#fca5a5'}" stroke-width="1px">${escaped}</text>
+        `;
+    }
 
     const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -1135,25 +1215,48 @@ function generateBannerSvg(
                <line x1="0" y1="${height - 3}" x2="${width}" y2="${height - 3}" stroke="url(#lineGrad)" stroke-width="5" opacity="0.5" />`
         }
 
-        <!-- Deep Drop Shadows -->
-        <text x="502" y="${textY + 3}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.9">${escapedText}</text>
-        <text x="498" y="${textY + 3}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.9">${escapedText}</text>
-        <text x="500" y="${textY + 4}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.95">${escapedText}</text>
-
-        <!-- Crisp High-Contrast Foreground Text Layer -->
-        <text x="500" y="${textY}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="${colors.text || '#ffffff'}" stroke="${colors.accent || '#fca5a5'}" stroke-width="1px">${escapedText}</text>
+        ${bannerContentSvg}
     </svg>`;
 
     return { svg, width, height, top: topPos, left: 0 };
 }
 
 function generatePlaceholderBackdropSvg(title: string): string {
-    const escapedTitle = (title || "UPCOMING RELEASE")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&apos;");
+    const cleanTitle = (title || "UPCOMING RELEASE").trim().toUpperCase();
+    const subText = "PORTALARR PREVIEW";
+    const font = getOverlayFont();
+
+    let textPathsSvg = "";
+    if (font) {
+        const titleFontSize = cleanTitle.length > 30 ? 32 : cleanTitle.length > 20 ? 38 : 44;
+        const titleWidth = getTextAdvanceWidth(font, cleanTitle, titleFontSize);
+        const titleStartX = (1000 - titleWidth) / 2;
+        const titleY = 780 + (titleFontSize * 0.35);
+
+        const titlePath = getTextVectorPathData(font, cleanTitle, titleStartX, titleY, titleFontSize);
+        const titleShadowPath = getTextVectorPathData(font, cleanTitle, titleStartX, titleY + 3, titleFontSize);
+
+        const subFontSize = 20;
+        const subWidth = getTextAdvanceWidth(font, subText, subFontSize);
+        const subStartX = (1000 - subWidth) / 2;
+        const subY = 830 + (subFontSize * 0.35);
+
+        const subPath = getTextVectorPathData(font, subText, subStartX, subY, subFontSize);
+
+        textPathsSvg = `
+            <path d="${titleShadowPath}" fill="#000000" opacity="0.95" />
+            <path d="${titlePath}" fill="#f8fafc" />
+            <path d="${subPath}" fill="#94a3b8" />
+        `;
+    } else {
+        const escaped = cleanTitle.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        textPathsSvg = `
+            <g filter="url(#posterGlow)">
+                <text x="500" y="780" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="44px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#f8fafc">${escaped}</text>
+                <text x="500" y="830" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="20px" font-weight="700" letter-spacing="3px" text-anchor="middle" dominant-baseline="central" fill="#94a3b8">PORTALARR PREVIEW</text>
+            </g>
+        `;
+    }
 
     return `<svg width="1000" height="1500" viewBox="0 0 1000 1500" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -1183,10 +1286,7 @@ function generatePlaceholderBackdropSvg(title: string): string {
             <circle cx="190" cy="125" r="16" fill="#f8fafc" />
         </g>
 
-        <g filter="url(#posterGlow)">
-            <text x="500" y="780" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="44px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#f8fafc">${escapedTitle}</text>
-            <text x="500" y="830" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="20px" font-weight="700" letter-spacing="3px" text-anchor="middle" dominant-baseline="central" fill="#94a3b8">PORTALARR PREVIEW</text>
-        </g>
+        ${textPathsSvg}
     </svg>`;
 }
 
