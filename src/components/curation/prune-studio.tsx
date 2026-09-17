@@ -75,14 +75,14 @@ import {
 } from "@/app/curation-actions";
 
 export const PRUNE_BANNER_PRESETS = [
-    { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red" },
-    { id: "leaving_days", label: "⏳ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red" },
-    { id: "leaving_soon", label: "⚠️ Leaving Soon", defaultText: "LEAVING SOON", theme: "crimson-red" },
-    { id: "middle_banner", label: "⚠️ Leaving Soon & Days Left", defaultText: "LEAVING SOON • {days} DAYS LEFT", theme: "crimson-red" },
-    { id: "upper_third", label: "⏳ Prune Warning", defaultText: "UNWATCHED • LEAVING SOON", theme: "amber-gold" },
-    { id: "top_banner", label: "📦 Storage Cleanup", defaultText: "STORAGE CLEANUP: {reason}", theme: "indigo-purple" },
-    { id: "unwatched_warning", label: "👀 Unwatched Grace Period", defaultText: "UNWATCHED • {days} DAYS LEFT", theme: "amber-gold" },
-    { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} • {status}", theme: "cyber-neon" }
+    { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
+    { id: "leaving_days", label: "⏳ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
+    { id: "leaving_soon", label: "⚠️ Leaving Soon", defaultText: "LEAVING SOON", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
+    { id: "middle_banner", label: "⚠️ Leaving Soon & Days Left", defaultText: "LEAVING SOON • {days} DAYS LEFT", theme: "crimson-red", pos: "middle" as const, fontSize: 44 },
+    { id: "upper_third", label: "⏳ Prune Warning", defaultText: "UNWATCHED • LEAVING SOON", theme: "amber-gold", pos: "upper_third" as const, fontSize: 44 },
+    { id: "top_banner", label: "📦 Storage Cleanup", defaultText: "STORAGE CLEANUP: {reason}", theme: "indigo-purple", pos: "top" as const, fontSize: 44 },
+    { id: "unwatched_warning", label: "👀 Unwatched Grace Period", defaultText: "UNWATCHED • {days} DAYS LEFT", theme: "amber-gold", pos: "bottom" as const, fontSize: 44 },
+    { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} • {status}", theme: "cyber-neon", pos: "bottom" as const, fontSize: 44 }
 ];
 
 interface PlexServerItem {
@@ -376,31 +376,242 @@ export function PruneStudio() {
     const [simTemplateDays, setSimTemplateDays] = useState<number>(14);
     const [simTemplateReason, setSimTemplateReason] = useState<string>("Unwatched for 180+ Days");
     const [simTemplateStatus, setSimTemplateStatus] = useState<string>("Leaving Soon");
+    const [bannerTemplates, setBannerTemplates] = useState<Record<string, { text?: string; theme?: string; pos?: "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner"; fontSize?: number }>>({});
     const [simPreviewDataUrl, setSimPreviewDataUrl] = useState<string | null>(null);
     const [simPreviewLoading, setSimPreviewLoading] = useState<boolean>(false);
     const [savingBannerConfig, setSavingBannerConfig] = useState<boolean>(false);
     const [bannerConfigSavedMsg, setBannerConfigSavedMsg] = useState<boolean>(false);
 
-    const handleSaveBannerConfig = async () => {
+    // Effective Banner Config Resolver for any Preset ID
+    const getEffectivePruneBannerConfig = (presetId: string, customTemplates = bannerTemplates) => {
+        const preset = PRUNE_BANNER_PRESETS.find(p => p.id === presetId);
+        const custom = customTemplates[presetId] || {};
+        return {
+            text: custom.text !== undefined ? custom.text : (preset?.defaultText || "LEAVING ON {date}"),
+            theme: custom.theme || preset?.theme || "crimson-red",
+            pos: (custom.pos || preset?.pos || "bottom") as "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner",
+            fontSize: custom.fontSize || (preset as any)?.fontSize || 44
+        };
+    };
+
+    // Preset Selection Handler
+    const handleSelectPruneBannerPreset = (val: string) => {
+        setSimBannerType(val);
+        const config = getEffectivePruneBannerConfig(val);
+        setSimBannerText(config.text);
+        setSimBannerTheme(config.theme);
+        setSimBannerPosition(config.pos);
+        setSimBannerFontSize(config.fontSize);
+
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            val,
+            config.text,
+            config.theme,
+            config.pos,
+            config.fontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Text Change Handler (updates active preset in bannerTemplates)
+    const handlePruneBannerTextChange = (text: string) => {
+        setSimBannerText(text);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [simBannerType]: {
+                ...(prev[simBannerType] || {}),
+                text,
+                theme: simBannerTheme,
+                pos: simBannerPosition,
+                fontSize: simBannerFontSize
+            }
+        }));
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            text,
+            simBannerTheme,
+            simBannerPosition,
+            simBannerFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Theme Change Handler (updates active preset in bannerTemplates)
+    const handlePruneBannerThemeChange = (theme: string) => {
+        setSimBannerTheme(theme);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [simBannerType]: {
+                ...(prev[simBannerType] || {}),
+                text: simBannerText,
+                theme,
+                pos: simBannerPosition,
+                fontSize: simBannerFontSize
+            }
+        }));
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            simBannerText,
+            theme,
+            simBannerPosition,
+            simBannerFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Position Change Handler (updates active preset in bannerTemplates)
+    const handlePruneBannerPositionChange = (pos: "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner") => {
+        setSimBannerPosition(pos);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [simBannerType]: {
+                ...(prev[simBannerType] || {}),
+                text: simBannerText,
+                theme: simBannerTheme,
+                pos,
+                fontSize: simBannerFontSize
+            }
+        }));
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            simBannerText,
+            simBannerTheme,
+            pos,
+            simBannerFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Font Size Change Handler (updates active preset in bannerTemplates)
+    const handlePruneBannerFontSizeChange = (fontSize: number) => {
+        setSimBannerFontSize(fontSize);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [simBannerType]: {
+                ...(prev[simBannerType] || {}),
+                text: simBannerText,
+                theme: simBannerTheme,
+                pos: simBannerPosition,
+                fontSize
+            }
+        }));
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            simBannerText,
+            simBannerTheme,
+            simBannerPosition,
+            fontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Save Current Banner Template Preset
+    const handleSaveDefaultPruneBannerTemplate = async () => {
         setSavingBannerConfig(true);
         setBannerConfigSavedMsg(false);
         try {
+            const updatedTemplates = {
+                ...bannerTemplates,
+                [simBannerType]: {
+                    text: simBannerText,
+                    theme: simBannerTheme,
+                    pos: simBannerPosition,
+                    fontSize: simBannerFontSize
+                }
+            };
+            setBannerTemplates(updatedTemplates);
+
             const res = await saveCurationSettingsAction({
+                pruneBannerType: simBannerType,
                 pruneBannerPosition: simBannerPosition,
                 pruneBannerTheme: simBannerTheme,
                 pruneBannerText: simBannerText,
-                pruneBannerFontSize: simBannerFontSize
+                pruneBannerFontSize: simBannerFontSize,
+                pruneBannerTemplates: JSON.stringify(updatedTemplates)
             });
             if (res.success) {
                 setBannerConfigSavedMsg(true);
-                setTimeout(() => setBannerConfigSavedMsg(false), 3000);
+                setTimeout(() => setBannerConfigSavedMsg(false), 3500);
             }
         } catch (e) {
-            console.error("Failed saving banner configuration:", e);
+            console.error("Failed saving default prune banner template:", e);
         } finally {
             setSavingBannerConfig(false);
         }
     };
+
+    // Reset Active Preset to Default
+    const handleResetCurrentPruneBannerTemplate = async () => {
+        const preset = PRUNE_BANNER_PRESETS.find(p => p.id === simBannerType);
+        const defaultText = preset?.defaultText || "LEAVING ON {date}";
+        const defaultTheme = preset?.theme || "crimson-red";
+        const defaultPos = (preset?.pos || "bottom") as "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner";
+        const defaultFontSize = (preset as any)?.fontSize || 44;
+
+        const updatedTemplates = { ...bannerTemplates };
+        delete updatedTemplates[simBannerType];
+        setBannerTemplates(updatedTemplates);
+
+        setSimBannerText(defaultText);
+        setSimBannerTheme(defaultTheme);
+        setSimBannerPosition(defaultPos);
+        setSimBannerFontSize(defaultFontSize);
+
+        try {
+            await saveCurationSettingsAction({
+                pruneBannerPosition: defaultPos,
+                pruneBannerTheme: defaultTheme,
+                pruneBannerText: defaultText,
+                pruneBannerFontSize: defaultFontSize,
+                pruneBannerTemplates: JSON.stringify(updatedTemplates)
+            });
+            setBannerConfigSavedMsg(true);
+            setTimeout(() => setBannerConfigSavedMsg(false), 3500);
+        } catch (e) {
+            console.error("Failed resetting template:", e);
+        }
+
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            defaultText,
+            defaultTheme,
+            defaultPos,
+            defaultFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    const handleSaveBannerConfig = handleSaveDefaultPruneBannerTemplate;
 
     const getInterpolatedSimText = (template: string) => {
         if (!template) return "";
@@ -472,20 +683,7 @@ export function PruneStudio() {
 
     const handleInsertToken = (token: string) => {
         const next = simBannerText ? `${simBannerText} ${token}` : token;
-        setSimBannerText(next);
-        generatePrunePreview(
-            simSelectedRealItem ? simPosterUrl : null,
-            simSelectedRealItem?.title || "Sample Media",
-            simBannerType,
-            next,
-            simBannerTheme,
-            simBannerPosition,
-            simBannerFontSize,
-            simTemplateDate,
-            simTemplateDays,
-            simTemplateReason,
-            simTemplateStatus
-        );
+        handlePruneBannerTextChange(next);
     };
 
     // Initial Data Fetch
@@ -537,29 +735,62 @@ export function PruneStudio() {
                         setEnabledServersForPruning(settingsRes.enabledServersForPruning);
                     }
                     if (settingsRes.leavingSoonDiskThreshold !== undefined) setLeavingSoonDiskThreshold(settingsRes.leavingSoonDiskThreshold);
-                    if (settingsRes.pruneMinAgeDays !== undefined) setPruneMinAgeDaysSetting(settingsRes.pruneMinAgeDays);
-                    if (settingsRes.pruneDaysNotice !== undefined) setPruneDaysNoticeSetting(settingsRes.pruneDaysNotice);
-                    if (settingsRes.pruneUnwatchedOnly !== undefined) setPruneUnwatchedOnlySetting(settingsRes.pruneUnwatchedOnly);
+                    if (settingsRes.pruneMinAgeDays !== undefined) {
+                        setPruneMinAgeDaysSetting(settingsRes.pruneMinAgeDays);
+                        setSimMinAgeDays(settingsRes.pruneMinAgeDays);
+                    }
+                    if (settingsRes.pruneDaysNotice !== undefined) {
+                        setPruneDaysNoticeSetting(settingsRes.pruneDaysNotice);
+                        setSimGracePeriodDays(settingsRes.pruneDaysNotice);
+                        setSimTemplateDays(settingsRes.pruneDaysNotice);
+                    }
+                    if (settingsRes.pruneUnwatchedOnly !== undefined) {
+                        setPruneUnwatchedOnlySetting(settingsRes.pruneUnwatchedOnly);
+                        setSimUnwatchedOnly(settingsRes.pruneUnwatchedOnly);
+                    }
 
-                    const initPos = settingsRes.pruneBannerPosition || "bottom";
-                    const initTheme = settingsRes.pruneBannerTheme || "crimson-red";
-                    const initText = settingsRes.pruneBannerText || "LEAVING ON {date}";
-                    const initFontSize = settingsRes.pruneBannerFontSize || 44;
-                    if (settingsRes.pruneBannerPosition) setSimBannerPosition(settingsRes.pruneBannerPosition as any);
-                    if (settingsRes.pruneBannerTheme) setSimBannerTheme(settingsRes.pruneBannerTheme);
-                    if (settingsRes.pruneBannerText) setSimBannerText(settingsRes.pruneBannerText);
-                    if (settingsRes.pruneBannerFontSize) setSimBannerFontSize(settingsRes.pruneBannerFontSize);
+                    let activeBannerType = settingsRes.pruneBannerType || "leaving_date";
+                    let initPos = (settingsRes.pruneBannerPosition || "bottom") as "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner";
+                    let initTheme = settingsRes.pruneBannerTheme || "crimson-red";
+                    let initText = settingsRes.pruneBannerText || "LEAVING ON {date}";
+                    let initFontSize = settingsRes.pruneBannerFontSize || 44;
+
+                    if (settingsRes.pruneBannerTemplates) {
+                        try {
+                            const parsed = typeof settingsRes.pruneBannerTemplates === "string"
+                                ? JSON.parse(settingsRes.pruneBannerTemplates)
+                                : settingsRes.pruneBannerTemplates;
+                            if (parsed && typeof parsed === "object") {
+                                setBannerTemplates(parsed);
+                                const currentTpl = parsed[activeBannerType];
+                                if (currentTpl) {
+                                    if (currentTpl.text !== undefined) initText = currentTpl.text;
+                                    if (currentTpl.theme) initTheme = currentTpl.theme;
+                                    if (currentTpl.pos) initPos = currentTpl.pos;
+                                    if (currentTpl.fontSize) initFontSize = currentTpl.fontSize;
+                                }
+                            }
+                        } catch (e) {
+                            console.warn("Failed parsing prune banner templates:", e);
+                        }
+                    }
+
+                    setSimBannerType(activeBannerType);
+                    setSimBannerPosition(initPos);
+                    setSimBannerTheme(initTheme);
+                    setSimBannerText(initText);
+                    setSimBannerFontSize(initFontSize);
 
                     generatePrunePreview(
                         null,
                         "Sample Media",
-                        simBannerType,
+                        activeBannerType,
                         initText,
                         initTheme,
-                        initPos as any,
+                        initPos,
                         initFontSize,
                         simTemplateDate,
-                        simTemplateDays,
+                        settingsRes.pruneDaysNotice ?? 14,
                         simTemplateReason,
                         simTemplateStatus
                     );
@@ -1569,35 +1800,27 @@ export function PruneStudio() {
                                         <Label className="text-[11px] text-slate-300 font-semibold">Banner Style Preset:</Label>
                                         <Select
                                             value={simBannerType}
-                                            onValueChange={(val) => {
-                                                const found = PRUNE_BANNER_PRESETS.find(p => p.id === val);
-                                                setSimBannerType(val);
-                                                const nextText = found?.defaultText || "LEAVING ON {date}";
-                                                setSimBannerText(nextText);
-                                                const nextTheme = found?.theme || simBannerTheme;
-                                                if (found?.theme) setSimBannerTheme(found.theme);
-                                                generatePrunePreview(
-                                                    simSelectedRealItem ? simPosterUrl : null,
-                                                    simSelectedRealItem?.title || "Sample Media",
-                                                    val,
-                                                    nextText,
-                                                    nextTheme,
-                                                    simBannerPosition,
-                                                    simBannerFontSize,
-                                                    simTemplateDate,
-                                                    simTemplateDays,
-                                                    simTemplateReason,
-                                                    simTemplateStatus
-                                                );
-                                            }}
+                                            onValueChange={handleSelectPruneBannerPreset}
                                         >
                                             <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="max-h-64">
-                                                {PRUNE_BANNER_PRESETS.map(p => (
-                                                    <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-                                                ))}
+                                                {PRUNE_BANNER_PRESETS.map(p => {
+                                                    const isCustomized = Boolean(bannerTemplates[p.id]);
+                                                    return (
+                                                        <SelectItem key={p.id} value={p.id}>
+                                                            <div className="flex items-center justify-between gap-2 w-full">
+                                                                <span>{p.label}</span>
+                                                                {isCustomized && (
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 border-rose-500/40 text-rose-400 bg-rose-950/40 font-normal">
+                                                                        Custom
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        </SelectItem>
+                                                    );
+                                                })}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -1610,22 +1833,7 @@ export function PruneStudio() {
                                         </div>
                                         <Input
                                             value={simBannerText}
-                                            onChange={(e) => {
-                                                setSimBannerText(e.target.value);
-                                                generatePrunePreview(
-                                                    simSelectedRealItem ? simPosterUrl : null,
-                                                    simSelectedRealItem?.title || "Sample Media",
-                                                    simBannerType,
-                                                    e.target.value,
-                                                    simBannerTheme,
-                                                    simBannerPosition,
-                                                    simBannerFontSize,
-                                                    simTemplateDate,
-                                                    simTemplateDays,
-                                                    simTemplateReason,
-                                                    simTemplateStatus
-                                                );
-                                            }}
+                                            onChange={(e) => handlePruneBannerTextChange(e.target.value)}
                                             className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
                                             placeholder="e.g. LEAVING ON {date}"
                                         />
@@ -1658,22 +1866,7 @@ export function PruneStudio() {
                                             <Label className="text-[10px] text-slate-400">Color Theme:</Label>
                                             <Select
                                                 value={simBannerTheme}
-                                                onValueChange={(val) => {
-                                                    setSimBannerTheme(val);
-                                                    generatePrunePreview(
-                                                        simSelectedRealItem ? simPosterUrl : null,
-                                                        simSelectedRealItem?.title || "Sample Media",
-                                                        simBannerType,
-                                                        simBannerText,
-                                                        val,
-                                                        simBannerPosition,
-                                                        simBannerFontSize,
-                                                        simTemplateDate,
-                                                        simTemplateDays,
-                                                        simTemplateReason,
-                                                        simTemplateStatus
-                                                    );
-                                                }}
+                                                onValueChange={handlePruneBannerThemeChange}
                                             >
                                                 <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
                                                     <SelectValue />
@@ -1695,22 +1888,7 @@ export function PruneStudio() {
                                             <Label className="text-[10px] text-slate-400">Position:</Label>
                                             <Select
                                                 value={simBannerPosition}
-                                                onValueChange={(val: any) => {
-                                                    setSimBannerPosition(val);
-                                                    generatePrunePreview(
-                                                        simSelectedRealItem ? simPosterUrl : null,
-                                                        simSelectedRealItem?.title || "Sample Media",
-                                                        simBannerType,
-                                                        simBannerText,
-                                                        simBannerTheme,
-                                                        val,
-                                                        simBannerFontSize,
-                                                        simTemplateDate,
-                                                        simTemplateDays,
-                                                        simTemplateReason,
-                                                        simTemplateStatus
-                                                    );
-                                                }}
+                                                onValueChange={(val: any) => handlePruneBannerPositionChange(val)}
                                             >
                                                 <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
                                                     <SelectValue />
@@ -1743,23 +1921,7 @@ export function PruneStudio() {
                                                 max="72"
                                                 step="2"
                                                 value={simBannerFontSize}
-                                                onChange={(e) => {
-                                                    const val = parseInt(e.target.value, 10);
-                                                    setSimBannerFontSize(val);
-                                                    generatePrunePreview(
-                                                        simSelectedRealItem ? simPosterUrl : null,
-                                                        simSelectedRealItem?.title || "Sample Media",
-                                                        simBannerType,
-                                                        simBannerText,
-                                                        simBannerTheme,
-                                                        simBannerPosition,
-                                                        val,
-                                                        simTemplateDate,
-                                                        simTemplateDays,
-                                                        simTemplateReason,
-                                                        simTemplateStatus
-                                                    );
-                                                }}
+                                                onChange={(e) => handlePruneBannerFontSizeChange(parseInt(e.target.value, 10))}
                                                 className="w-full accent-rose-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
                                             />
                                             <span className="text-[9px] text-slate-500 font-mono">72px</span>
@@ -1774,22 +1936,7 @@ export function PruneStudio() {
                                                 <button
                                                     key={preset.size}
                                                     type="button"
-                                                    onClick={() => {
-                                                        setSimBannerFontSize(preset.size);
-                                                        generatePrunePreview(
-                                                            simSelectedRealItem ? simPosterUrl : null,
-                                                            simSelectedRealItem?.title || "Sample Media",
-                                                            simBannerType,
-                                                            simBannerText,
-                                                            simBannerTheme,
-                                                            simBannerPosition,
-                                                            preset.size,
-                                                            simTemplateDate,
-                                                            simTemplateDays,
-                                                            simTemplateReason,
-                                                            simTemplateStatus
-                                                        );
-                                                    }}
+                                                    onClick={() => handlePruneBannerFontSizeChange(preset.size)}
                                                     className={`flex-1 py-0.5 text-[9px] font-mono rounded border transition-all ${
                                                         simBannerFontSize === preset.size
                                                             ? "bg-rose-600 text-white border-rose-500 font-bold"
@@ -1882,26 +2029,40 @@ export function PruneStudio() {
                                         </div>
                                     </div>
 
-                                    {/* Save Banner Style Button */}
-                                    <div className="pt-2 flex items-center justify-between border-t border-slate-800">
+                                    {/* Save Banner Style Button & Reset */}
+                                    <div className="pt-2 flex items-center justify-between border-t border-slate-800 gap-2 flex-wrap">
                                         <div className="flex items-center gap-2">
                                             {bannerConfigSavedMsg && (
                                                 <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
                                                     <CheckCircle2 className="h-3.5 w-3.5" />
-                                                    <span>Banner style &amp; position saved!</span>
+                                                    <span>Banner template saved!</span>
                                                 </span>
                                             )}
                                         </div>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            disabled={savingBannerConfig}
-                                            onClick={handleSaveBannerConfig}
-                                            className="h-8 text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold gap-1.5 shadow-md shadow-rose-950/50 cursor-pointer"
-                                        >
-                                            {savingBannerConfig ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                                            <span>Save Default Banner Style</span>
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                            {bannerTemplates[simBannerType] && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleResetCurrentPruneBannerTemplate}
+                                                    className="h-8 text-xs border-slate-700 hover:bg-slate-800 text-slate-300 gap-1.5 cursor-pointer"
+                                                >
+                                                    <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
+                                                    <span>Reset to Preset Default</span>
+                                                </Button>
+                                            )}
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                disabled={savingBannerConfig}
+                                                onClick={handleSaveDefaultPruneBannerTemplate}
+                                                className="h-8 text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold gap-1.5 shadow-md shadow-rose-950/50 cursor-pointer"
+                                            >
+                                                {savingBannerConfig ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                                <span>Save Banner Template</span>
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

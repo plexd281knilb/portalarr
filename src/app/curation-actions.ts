@@ -158,6 +158,8 @@ export async function getCurationSettingsAction() {
         pruneBannerTheme: settings?.pruneBannerTheme || "crimson-red",
         pruneBannerText: settings?.pruneBannerText || "LEAVING ON {date}",
         pruneBannerFontSize: settings?.pruneBannerFontSize ?? 44,
+        pruneBannerType: (settings as any)?.pruneBannerType || "leaving_date",
+        pruneBannerTemplates: (settings as any)?.pruneBannerTemplates ? JSON.parse((settings as any).pruneBannerTemplates) : {},
 
         // Leaving Soon Home Hub & Schedule Settings
         leavingSoonPromotedToHome: settings?.leavingSoonPromotedToHome ?? true,
@@ -447,6 +449,8 @@ export async function saveCurationSettingsAction(data: {
     pruneBannerTheme?: string;
     pruneBannerText?: string;
     pruneBannerFontSize?: number;
+    pruneBannerType?: string;
+    pruneBannerTemplates?: string | Record<string, any>;
     leavingSoonPromotedToHome?: boolean;
     leavingSoonPromotedToRecommended?: boolean;
     leavingSoonPromotedToSharedHome?: boolean;
@@ -528,6 +532,12 @@ export async function saveCurationSettingsAction(data: {
         if (data.pruneBannerTheme !== undefined) updatePayload.pruneBannerTheme = data.pruneBannerTheme;
         if (data.pruneBannerText !== undefined) updatePayload.pruneBannerText = data.pruneBannerText;
         if (data.pruneBannerFontSize !== undefined) updatePayload.pruneBannerFontSize = data.pruneBannerFontSize;
+        if (data.pruneBannerType !== undefined) updatePayload.pruneBannerType = data.pruneBannerType;
+        if (data.pruneBannerTemplates !== undefined) {
+            updatePayload.pruneBannerTemplates = typeof data.pruneBannerTemplates === "string"
+                ? data.pruneBannerTemplates
+                : JSON.stringify(data.pruneBannerTemplates);
+        }
 
         if (data.leavingSoonPromotedToHome !== undefined) updatePayload.leavingSoonPromotedToHome = data.leavingSoonPromotedToHome;
         if (data.leavingSoonPromotedToRecommended !== undefined) updatePayload.leavingSoonPromotedToRecommended = data.leavingSoonPromotedToRecommended;
