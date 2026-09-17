@@ -142,6 +142,7 @@ export async function getCurationSettingsAction() {
         placeholderAutoPruneDays: settings?.placeholderAutoPruneDays ?? 14,
         placeholderBannerPosition: settings?.placeholderBannerPosition || "bottom",
         placeholderBannerTheme: settings?.placeholderBannerTheme || "indigo-purple",
+        placeholderBannerFontSize: settings?.placeholderBannerFontSize ?? 44,
         placeholderCustomText: settings?.placeholderCustomText || "",
         placeholderEnabled: settings?.placeholderEnabled ?? true,
 
@@ -149,6 +150,7 @@ export async function getCurationSettingsAction() {
         pruneBannerPosition: settings?.pruneBannerPosition || "bottom",
         pruneBannerTheme: settings?.pruneBannerTheme || "crimson-red",
         pruneBannerText: settings?.pruneBannerText || "LEAVING ON {date}",
+        pruneBannerFontSize: settings?.pruneBannerFontSize ?? 44,
 
         // Leaving Soon Home Hub & Schedule Settings
         leavingSoonPromotedToHome: settings?.leavingSoonPromotedToHome ?? true,
@@ -429,11 +431,13 @@ export async function saveCurationSettingsAction(data: {
     placeholderAutoPruneDays?: number;
     placeholderBannerPosition?: string;
     placeholderBannerTheme?: string;
+    placeholderBannerFontSize?: number;
     placeholderCustomText?: string;
     placeholderEnabled?: boolean;
     pruneBannerPosition?: string;
     pruneBannerTheme?: string;
     pruneBannerText?: string;
+    pruneBannerFontSize?: number;
     leavingSoonPromotedToHome?: boolean;
     leavingSoonPromotedToRecommended?: boolean;
     leavingSoonPromotedToSharedHome?: boolean;
@@ -501,12 +505,14 @@ export async function saveCurationSettingsAction(data: {
         if (data.placeholderAutoPruneDays !== undefined) updatePayload.placeholderAutoPruneDays = data.placeholderAutoPruneDays;
         if (data.placeholderBannerPosition !== undefined) updatePayload.placeholderBannerPosition = data.placeholderBannerPosition;
         if (data.placeholderBannerTheme !== undefined) updatePayload.placeholderBannerTheme = data.placeholderBannerTheme;
+        if (data.placeholderBannerFontSize !== undefined) updatePayload.placeholderBannerFontSize = data.placeholderBannerFontSize;
         if (data.placeholderCustomText !== undefined) updatePayload.placeholderCustomText = data.placeholderCustomText;
         if (data.placeholderEnabled !== undefined) updatePayload.placeholderEnabled = data.placeholderEnabled;
 
         if (data.pruneBannerPosition !== undefined) updatePayload.pruneBannerPosition = data.pruneBannerPosition;
         if (data.pruneBannerTheme !== undefined) updatePayload.pruneBannerTheme = data.pruneBannerTheme;
         if (data.pruneBannerText !== undefined) updatePayload.pruneBannerText = data.pruneBannerText;
+        if (data.pruneBannerFontSize !== undefined) updatePayload.pruneBannerFontSize = data.pruneBannerFontSize;
 
         if (data.leavingSoonPromotedToHome !== undefined) updatePayload.leavingSoonPromotedToHome = data.leavingSoonPromotedToHome;
         if (data.leavingSoonPromotedToRecommended !== undefined) updatePayload.leavingSoonPromotedToRecommended = data.leavingSoonPromotedToRecommended;
@@ -2932,7 +2938,9 @@ export async function getActiveOverlayOptionsHelper(
         })),
         placeholderPosition: settings?.pruneBannerPosition || "bottom",
         placeholderTheme: settings?.pruneBannerTheme || "crimson-red",
-        placeholderText: settings?.pruneBannerText || "LEAVING ON {date}"
+        placeholderText: settings?.pruneBannerText || "LEAVING ON {date}",
+        bannerFontSize: settings?.pruneBannerFontSize ?? 44,
+        placeholderFontSize: settings?.pruneBannerFontSize ?? 44
     };
 
     return { ...baseOptions, ...overrides };
@@ -6156,6 +6164,8 @@ export async function getPlaceholderPreviewDataUrlAction(
         bannerText?: string;
         bannerTheme?: string;
         bannerPosition?: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | string;
+        bannerFontSize?: number;
+        fontSize?: number;
         daysRemaining?: number | string;
         formattedDate?: string;
         date?: string;
@@ -6171,6 +6181,8 @@ export async function getPlaceholderPreviewDataUrlAction(
             customText: options.bannerText || "NOT REQUESTED",
             theme: options.bannerTheme || "crimson-red",
             position: options.bannerPosition || "bottom",
+            bannerFontSize: options.bannerFontSize || options.fontSize,
+            fontSize: options.fontSize || options.bannerFontSize,
             daysRemaining: options.daysRemaining ?? 14,
             formattedDate: options.formattedDate || options.date || "10/31/2026",
             date: options.date || options.formattedDate || "10/31/2026",
@@ -6220,7 +6232,9 @@ export async function createPlaceholderItemInternal(
         bannerType?: string;
         bannerText?: string;
         bannerTheme?: string;
-        bannerPosition?: "top" | "bottom" | "corner";
+        bannerPosition?: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | string;
+        bannerFontSize?: number;
+        fontSize?: number;
         daysRemaining?: number | string;
         formattedDate?: string;
         date?: string;
@@ -6254,6 +6268,7 @@ export async function createPlaceholderItemInternal(
         const bannerType = itemData.bannerType || "not_requested";
         const bannerTheme = itemData.bannerTheme || "crimson-red";
         const bannerPosition = itemData.bannerPosition || "bottom";
+        const bannerFontSize = itemData.bannerFontSize || itemData.fontSize || settings?.placeholderBannerFontSize || 44;
 
         // Lookup official YouTube trailer for the title to write .strm and attach trailer metadata
         let trailerKey = "";
@@ -6275,6 +6290,8 @@ export async function createPlaceholderItemInternal(
             customText: bannerText,
             theme: bannerTheme,
             position: bannerPosition,
+            bannerFontSize,
+            fontSize: bannerFontSize,
             daysRemaining: itemData.daysRemaining,
             formattedDate: itemData.formattedDate,
             date: itemData.date,
@@ -6337,6 +6354,7 @@ export async function createPlaceholderItemInternal(
                     bannerText,
                     bannerTheme,
                     bannerPosition,
+                    bannerFontSize,
                     bannerType,
                     mediaType: itemData.mediaType,
                     year: itemData.year,
@@ -6358,6 +6376,7 @@ export async function createPlaceholderItemInternal(
                     bannerText,
                     bannerTheme,
                     bannerPosition,
+                    bannerFontSize,
                     bannerType,
                     mediaType: itemData.mediaType,
                     year: itemData.year,
@@ -6406,7 +6425,9 @@ export async function createPlaceholderItemAction(
         bannerType?: string;
         bannerText?: string;
         bannerTheme?: string;
-        bannerPosition?: "top" | "bottom" | "corner";
+        bannerPosition?: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | string;
+        bannerFontSize?: number;
+        fontSize?: number;
         daysRemaining?: number | string;
         formattedDate?: string;
         date?: string;

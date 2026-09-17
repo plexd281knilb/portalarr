@@ -240,6 +240,7 @@ export function AgregarrStudio() {
     const [placeholderModalBannerText, setPlaceholderModalBannerText] = useState("NOT REQUESTED");
     const [placeholderModalBannerTheme, setPlaceholderModalBannerTheme] = useState<string>("crimson-red");
     const [placeholderModalBannerPosition, setPlaceholderModalBannerPosition] = useState<"bottom" | "top" | "corner">("bottom");
+    const [placeholderModalBannerFontSize, setPlaceholderModalBannerFontSize] = useState<number>(44);
     const [generatingPlaceholder, setGeneratingPlaceholder] = useState(false);
     const [placeholderPreviewDataUrl, setPlaceholderPreviewDataUrl] = useState<string | null>(null);
     const [placeholderPreviewLoading, setPlaceholderPreviewLoading] = useState<boolean>(false);
@@ -415,6 +416,7 @@ export function AgregarrStudio() {
                 const settingsRes = await getCurationSettingsAction();
                 if (settingsRes.success) {
                     if (settingsRes.comingSoonShares) setComingSoonShares(settingsRes.comingSoonShares);
+                    if (settingsRes.placeholderBannerFontSize) setPlaceholderModalBannerFontSize(settingsRes.placeholderBannerFontSize);
                     setCurationSyncCollections(settingsRes.curationSyncCollections ?? true);
                     setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
                     setCurationLastRunAt(settingsRes.curationLastRunAt || null);
@@ -923,7 +925,7 @@ export function AgregarrStudio() {
         setPlaceholderModalBannerText(bannerText);
         setPlaceholderModalBannerType(bannerType);
         setPlaceholderModalBannerTheme(bannerTheme);
-        generatePlaceholderPreview(item.posterPath, item.title, bannerType, bannerText, bannerTheme, placeholderModalBannerPosition);
+        generatePlaceholderPreview(item.posterPath, item.title, bannerType, bannerText, bannerTheme, placeholderModalBannerPosition, placeholderModalBannerFontSize);
     };
 
     const generatePlaceholderPreview = async (
@@ -933,6 +935,7 @@ export function AgregarrStudio() {
         text = placeholderModalBannerText,
         theme = placeholderModalBannerTheme,
         position = placeholderModalBannerPosition,
+        fontSize = placeholderModalBannerFontSize,
         date = templateVarDate,
         days = templateVarDays,
         source = templateVarSource,
@@ -946,6 +949,8 @@ export function AgregarrStudio() {
                 bannerText: text,
                 bannerTheme: theme,
                 bannerPosition: position,
+                bannerFontSize: fontSize,
+                fontSize,
                 date,
                 formattedDate: date,
                 daysRemaining: days,
@@ -976,6 +981,7 @@ export function AgregarrStudio() {
             placeholderModalBannerText,
             placeholderModalBannerTheme,
             placeholderModalBannerPosition,
+            placeholderModalBannerFontSize,
             templateVarDate,
             templateVarDays,
             templateVarSource,
@@ -994,6 +1000,7 @@ export function AgregarrStudio() {
             next,
             placeholderModalBannerTheme,
             placeholderModalBannerPosition,
+            placeholderModalBannerFontSize,
             templateVarDate,
             templateVarDays,
             templateVarSource,
@@ -1018,6 +1025,8 @@ export function AgregarrStudio() {
                 bannerText: placeholderModalBannerText,
                 bannerTheme: placeholderModalBannerTheme,
                 bannerPosition: placeholderModalBannerPosition,
+                bannerFontSize: placeholderModalBannerFontSize,
+                fontSize: placeholderModalBannerFontSize,
                 date: templateVarDate,
                 formattedDate: templateVarDate,
                 daysRemaining: templateVarDays,
@@ -2277,7 +2286,9 @@ export function AgregarrStudio() {
                                                         simSelectedRealItem?.title || "Sample Media",
                                                         placeholderModalBannerType,
                                                         placeholderModalBannerText,
-                                                        val
+                                                        val,
+                                                        placeholderModalBannerPosition,
+                                                        placeholderModalBannerFontSize
                                                     );
                                                 }}
                                             >
@@ -2310,7 +2321,8 @@ export function AgregarrStudio() {
                                                         placeholderModalBannerType,
                                                         placeholderModalBannerText,
                                                         placeholderModalBannerTheme,
-                                                        val
+                                                        val,
+                                                        placeholderModalBannerFontSize
                                                     );
                                                 }}
                                             >
@@ -2323,6 +2335,73 @@ export function AgregarrStudio() {
                                                     <SelectItem value="corner">45° Corner Ribbon</SelectItem>
                                                 </SelectContent>
                                             </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Font Size Slider & Presets */}
+                                    <div className="space-y-1.5 p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-[10px] text-slate-300 font-semibold">Banner Font Size:</Label>
+                                            <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                                {placeholderModalBannerFontSize}px
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[9px] text-slate-500 font-mono">18px</span>
+                                            <input
+                                                type="range"
+                                                min="18"
+                                                max="72"
+                                                step="2"
+                                                value={placeholderModalBannerFontSize}
+                                                onChange={(e) => {
+                                                    const val = parseInt(e.target.value, 10);
+                                                    setPlaceholderModalBannerFontSize(val);
+                                                    generatePlaceholderPreview(
+                                                        simSelectedRealItem ? simPosterUrl : (selectedPlaceholderItem?.posterPath || null),
+                                                        selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
+                                                        placeholderModalBannerType,
+                                                        placeholderModalBannerText,
+                                                        placeholderModalBannerTheme,
+                                                        placeholderModalBannerPosition,
+                                                        val
+                                                    );
+                                                }}
+                                                className="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
+                                            />
+                                            <span className="text-[9px] text-slate-500 font-mono">72px</span>
+                                        </div>
+                                        <div className="flex items-center justify-between pt-1 gap-1">
+                                            {[
+                                                { label: "Compact 28px", size: 28 },
+                                                { label: "Standard 44px", size: 44 },
+                                                { label: "Bold 54px", size: 54 },
+                                                { label: "Max 68px", size: 68 }
+                                            ].map((preset) => (
+                                                <button
+                                                    key={preset.size}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPlaceholderModalBannerFontSize(preset.size);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : (selectedPlaceholderItem?.posterPath || null),
+                                                            selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            preset.size
+                                                        );
+                                                    }}
+                                                    className={`flex-1 py-0.5 text-[9px] font-mono rounded border transition-all ${
+                                                        placeholderModalBannerFontSize === preset.size
+                                                            ? "bg-amber-600 text-slate-950 border-amber-500 font-bold"
+                                                            : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800"
+                                                    }`}
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
 
@@ -2345,7 +2424,12 @@ export function AgregarrStudio() {
                                                             placeholderModalBannerText,
                                                             placeholderModalBannerTheme,
                                                             placeholderModalBannerPosition,
-                                                            e.target.value
+                                                            placeholderModalBannerFontSize,
+                                                            e.target.value,
+                                                            templateVarDays,
+                                                            templateVarSource,
+                                                            templateVarStatus,
+                                                            templateVarReason
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
@@ -2366,8 +2450,12 @@ export function AgregarrStudio() {
                                                             placeholderModalBannerText,
                                                             placeholderModalBannerTheme,
                                                             placeholderModalBannerPosition,
+                                                            placeholderModalBannerFontSize,
                                                             templateVarDate,
-                                                            num
+                                                            num,
+                                                            templateVarSource,
+                                                            templateVarStatus,
+                                                            templateVarReason
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
@@ -2386,9 +2474,12 @@ export function AgregarrStudio() {
                                                             placeholderModalBannerText,
                                                             placeholderModalBannerTheme,
                                                             placeholderModalBannerPosition,
+                                                            placeholderModalBannerFontSize,
                                                             templateVarDate,
                                                             templateVarDays,
-                                                            e.target.value
+                                                            e.target.value,
+                                                            templateVarStatus,
+                                                            templateVarReason
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
@@ -2407,10 +2498,12 @@ export function AgregarrStudio() {
                                                             placeholderModalBannerText,
                                                             placeholderModalBannerTheme,
                                                             placeholderModalBannerPosition,
+                                                            placeholderModalBannerFontSize,
                                                             templateVarDate,
                                                             templateVarDays,
                                                             templateVarSource,
-                                                            e.target.value
+                                                            e.target.value,
+                                                            templateVarReason
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"

@@ -371,6 +371,7 @@ export function PruneStudio() {
     const [simBannerText, setSimBannerText] = useState<string>("LEAVING ON {date}");
     const [simBannerTheme, setSimBannerTheme] = useState<string>("crimson-red");
     const [simBannerPosition, setSimBannerPosition] = useState<"bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner">("bottom");
+    const [simBannerFontSize, setSimBannerFontSize] = useState<number>(44);
     const [simTemplateDate, setSimTemplateDate] = useState<string>("10/31/2026");
     const [simTemplateDays, setSimTemplateDays] = useState<number>(14);
     const [simTemplateReason, setSimTemplateReason] = useState<string>("Unwatched for 180+ Days");
@@ -387,7 +388,8 @@ export function PruneStudio() {
             const res = await saveCurationSettingsAction({
                 pruneBannerPosition: simBannerPosition,
                 pruneBannerTheme: simBannerTheme,
-                pruneBannerText: simBannerText
+                pruneBannerText: simBannerText,
+                pruneBannerFontSize: simBannerFontSize
             });
             if (res.success) {
                 setBannerConfigSavedMsg(true);
@@ -419,6 +421,7 @@ export function PruneStudio() {
         text = simBannerText,
         theme = simBannerTheme,
         position = simBannerPosition,
+        fontSize = simBannerFontSize,
         date = simTemplateDate,
         days = simTemplateDays,
         reason = simTemplateReason,
@@ -431,6 +434,8 @@ export function PruneStudio() {
                 bannerText: text,
                 bannerTheme: theme,
                 bannerPosition: position,
+                bannerFontSize: fontSize,
+                fontSize,
                 date: date || "10/31/2026",
                 formattedDate: date || "10/31/2026",
                 daysRemaining: days ?? 14,
@@ -457,6 +462,7 @@ export function PruneStudio() {
             simBannerText,
             simBannerTheme,
             simBannerPosition,
+            simBannerFontSize,
             simTemplateDate,
             simTemplateDays,
             simTemplateReason,
@@ -474,6 +480,7 @@ export function PruneStudio() {
             next,
             simBannerTheme,
             simBannerPosition,
+            simBannerFontSize,
             simTemplateDate,
             simTemplateDays,
             simTemplateReason,
@@ -491,6 +498,7 @@ export function PruneStudio() {
             simBannerText,
             simBannerTheme,
             simBannerPosition,
+            simBannerFontSize,
             simTemplateDate,
             simTemplateDays,
             simTemplateReason,
@@ -536,9 +544,11 @@ export function PruneStudio() {
                     const initPos = settingsRes.pruneBannerPosition || "bottom";
                     const initTheme = settingsRes.pruneBannerTheme || "crimson-red";
                     const initText = settingsRes.pruneBannerText || "LEAVING ON {date}";
+                    const initFontSize = settingsRes.pruneBannerFontSize || 44;
                     if (settingsRes.pruneBannerPosition) setSimBannerPosition(settingsRes.pruneBannerPosition as any);
                     if (settingsRes.pruneBannerTheme) setSimBannerTheme(settingsRes.pruneBannerTheme);
                     if (settingsRes.pruneBannerText) setSimBannerText(settingsRes.pruneBannerText);
+                    if (settingsRes.pruneBannerFontSize) setSimBannerFontSize(settingsRes.pruneBannerFontSize);
 
                     generatePrunePreview(
                         null,
@@ -547,6 +557,7 @@ export function PruneStudio() {
                         initText,
                         initTheme,
                         initPos as any,
+                        initFontSize,
                         simTemplateDate,
                         simTemplateDays,
                         simTemplateReason,
@@ -1572,6 +1583,7 @@ export function PruneStudio() {
                                                     nextText,
                                                     nextTheme,
                                                     simBannerPosition,
+                                                    simBannerFontSize,
                                                     simTemplateDate,
                                                     simTemplateDays,
                                                     simTemplateReason,
@@ -1607,6 +1619,7 @@ export function PruneStudio() {
                                                     e.target.value,
                                                     simBannerTheme,
                                                     simBannerPosition,
+                                                    simBannerFontSize,
                                                     simTemplateDate,
                                                     simTemplateDays,
                                                     simTemplateReason,
@@ -1654,6 +1667,7 @@ export function PruneStudio() {
                                                         simBannerText,
                                                         val,
                                                         simBannerPosition,
+                                                        simBannerFontSize,
                                                         simTemplateDate,
                                                         simTemplateDays,
                                                         simTemplateReason,
@@ -1690,6 +1704,7 @@ export function PruneStudio() {
                                                         simBannerText,
                                                         simBannerTheme,
                                                         val,
+                                                        simBannerFontSize,
                                                         simTemplateDate,
                                                         simTemplateDays,
                                                         simTemplateReason,
@@ -1712,6 +1727,81 @@ export function PruneStudio() {
                                         </div>
                                     </div>
 
+                                    {/* Font Size Slider & Presets */}
+                                    <div className="space-y-1.5 p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-[10px] text-slate-300 font-semibold">Banner Font Size:</Label>
+                                            <span className="text-[10px] font-mono font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                                                {simBannerFontSize}px
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[9px] text-slate-500 font-mono">18px</span>
+                                            <input
+                                                type="range"
+                                                min="18"
+                                                max="72"
+                                                step="2"
+                                                value={simBannerFontSize}
+                                                onChange={(e) => {
+                                                    const val = parseInt(e.target.value, 10);
+                                                    setSimBannerFontSize(val);
+                                                    generatePrunePreview(
+                                                        simSelectedRealItem ? simPosterUrl : null,
+                                                        simSelectedRealItem?.title || "Sample Media",
+                                                        simBannerType,
+                                                        simBannerText,
+                                                        simBannerTheme,
+                                                        simBannerPosition,
+                                                        val,
+                                                        simTemplateDate,
+                                                        simTemplateDays,
+                                                        simTemplateReason,
+                                                        simTemplateStatus
+                                                    );
+                                                }}
+                                                className="w-full accent-rose-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
+                                            />
+                                            <span className="text-[9px] text-slate-500 font-mono">72px</span>
+                                        </div>
+                                        <div className="flex items-center justify-between pt-1 gap-1">
+                                            {[
+                                                { label: "Compact 28px", size: 28 },
+                                                { label: "Standard 44px", size: 44 },
+                                                { label: "Bold 54px", size: 54 },
+                                                { label: "Max 68px", size: 68 }
+                                            ].map((preset) => (
+                                                <button
+                                                    key={preset.size}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSimBannerFontSize(preset.size);
+                                                        generatePrunePreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simBannerType,
+                                                            simBannerText,
+                                                            simBannerTheme,
+                                                            simBannerPosition,
+                                                            preset.size,
+                                                            simTemplateDate,
+                                                            simTemplateDays,
+                                                            simTemplateReason,
+                                                            simTemplateStatus
+                                                        );
+                                                    }}
+                                                    className={`flex-1 py-0.5 text-[9px] font-mono rounded border transition-all ${
+                                                        simBannerFontSize === preset.size
+                                                            ? "bg-rose-600 text-white border-rose-500 font-bold"
+                                                            : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800"
+                                                    }`}
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
                                     {/* Live Variable Test Values */}
                                     <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-2">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -1731,6 +1821,7 @@ export function PruneStudio() {
                                                             simBannerText,
                                                             simBannerTheme,
                                                             simBannerPosition,
+                                                            simBannerFontSize,
                                                             e.target.value,
                                                             simTemplateDays,
                                                             simTemplateReason,
@@ -1755,6 +1846,7 @@ export function PruneStudio() {
                                                             simBannerText,
                                                             simBannerTheme,
                                                             simBannerPosition,
+                                                            simBannerFontSize,
                                                             simTemplateDate,
                                                             num,
                                                             simTemplateReason,
@@ -1777,6 +1869,7 @@ export function PruneStudio() {
                                                             simBannerText,
                                                             simBannerTheme,
                                                             simBannerPosition,
+                                                            simBannerFontSize,
                                                             simTemplateDate,
                                                             simTemplateDays,
                                                             e.target.value,

@@ -38,6 +38,9 @@ export interface OverlayOptions {
     placeholderText?: string;
     placeholderTheme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "cyber-neon" | "glass" | "slate-frosted" | string;
     placeholderPosition?: "top" | "bottom" | "corner" | "lower_third" | "middle" | "upper_third" | string;
+    placeholderFontSize?: number;
+    bannerFontSize?: number;
+    ribbonFontSize?: number;
     position?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
     
     // Independent Badge Placement Positions
@@ -1057,7 +1060,8 @@ function getTextAdvanceWidth(font: opentype.Font, text: string, fontSize: number
 function generateBannerSvg(
     text: string,
     theme: string,
-    position: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | "top-right" | "top-left" | "bottom-right" | "bottom-left" | string = "bottom"
+    position: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | "top-right" | "top-left" | "bottom-right" | "bottom-left" | string = "bottom",
+    customFontSize?: number
 ): { svg: string; width: number; height: number; top: number; left: number } {
     const colors = getBannerThemeColors(theme);
     const cleanText = (text || "LEAVING SOON").trim().toUpperCase();
@@ -1068,7 +1072,8 @@ function generateBannerSvg(
     if (isCorner) {
         const size = 420;
         const len = cleanText.length;
-        const fontSize = len > 26 ? 20 : len > 20 ? 23 : len > 14 ? 26 : len > 8 ? 30 : 34;
+        const defaultFontSize = len > 26 ? 20 : len > 20 ? 23 : len > 14 ? 26 : len > 8 ? 30 : 34;
+        const fontSize = (customFontSize && customFontSize > 0) ? Math.min(Math.max(customFontSize, 14), 52) : defaultFontSize;
 
         let polyPoints = "";
         let cx = 210, cy = 210;
@@ -1165,7 +1170,8 @@ function generateBannerSvg(
     }
 
     const len = cleanText.length;
-    const fontSize = len > 34 ? 32 : len > 22 ? 40 : 46;
+    const defaultFontSize = len > 34 ? 32 : len > 22 ? 40 : 46;
+    const fontSize = (customFontSize && customFontSize > 0) ? Math.min(Math.max(customFontSize, 16), 72) : defaultFontSize;
 
     let bannerContentSvg = "";
     if (font) {
@@ -1366,6 +1372,8 @@ export async function generatePlaceholderPosterBuffer(
     options: {
         type?: string;
         customText?: string;
+        fontSize?: number;
+        bannerFontSize?: number;
         daysRemaining?: number | string;
         formattedDate?: string;
         date?: string;
@@ -1403,8 +1411,9 @@ export async function generatePlaceholderPosterBuffer(
 
     const bannerPos = options.position || "bottom";
     const bannerTheme = options.theme || "indigo-purple";
+    const bannerFontSize = options.fontSize || options.bannerFontSize;
 
-    const bannerInfo = generateBannerSvg(interpolatedText, bannerTheme, bannerPos);
+    const bannerInfo = generateBannerSvg(interpolatedText, bannerTheme, bannerPos, bannerFontSize);
     const bannerBuffer = await sharp(Buffer.from(bannerInfo.svg)).png().toBuffer();
 
     const composites = [
@@ -1461,7 +1470,7 @@ export async function applyOverlaysToPoster(
         const bannerPos = options.placeholderPosition || (options.position === "top-right" || options.position === "top-left" ? "corner" : "bottom");
         const bannerTheme = options.placeholderTheme || "crimson-red";
 
-        const bannerInfo = generateBannerSvg(leavingText, bannerTheme, bannerPos as any);
+        const bannerInfo = generateBannerSvg(leavingText, bannerTheme, bannerPos as any, options.bannerFontSize || options.placeholderFontSize);
         const bannerBuf = await sharp(Buffer.from(bannerInfo.svg)).png().toBuffer();
         overlays.push({
             input: bannerBuf,
@@ -1533,7 +1542,7 @@ export async function applyOverlaysToPoster(
                         : (options.ribbonText || winningRibbonName).replace(/_/g, " ").toUpperCase();
 
                     const bannerTheme = winningTheme === "gold" ? "amber-gold" : winningTheme === "crimson" ? "crimson-red" : winningTheme === "purple" ? "indigo-purple" : "amber-gold";
-                    const bannerInfo = generateBannerSvg(ribbonText, bannerTheme, rPos);
+                    const bannerInfo = generateBannerSvg(ribbonText, bannerTheme, rPos, options.ribbonFontSize || options.bannerFontSize);
                     const ribbonBuf = await sharp(Buffer.from(bannerInfo.svg)).png().toBuffer();
 
                     overlays.push({
